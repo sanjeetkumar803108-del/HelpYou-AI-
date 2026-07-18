@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "PocketItem": {
+      "title": "Pocket Item",
+      "description": "An item saved in the user's pocket teacher, such as a note or scan chat.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "text": { "type": "string" },
+        "audioData": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "type", "text"]
+    },
+    "AITutorChat": {
+      "title": "AI Tutor Chat",
+      "description": "A saved structured chat session with the AI Tutor.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "title", "messages"]
+    },
+    "QuizResult": {
+      "title": "Quiz Result",
+      "description": "The result of an interactive quiz session taken by the student.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "topic": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "averageTimePerQuestion": { "type": "number" },
+        "questionDurations": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "topic", "score", "totalQuestions", "accuracy", "averageTimePerQuestion"]
+    },
+    "Mistake": {
+      "title": "Mistake",
+      "description": "An academic mistake or misconception logged for the student to review.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "sourceFeature": { "type": "string" },
+        "question": { "type": "string" },
+        "wrongInput": { "type": "string" },
+        "correctConcept": { "type": "string" },
+        "aiFix": {
+          "type": "object",
+          "properties": {
+            "why_it_happened": { "type": "string" },
+            "the_fix": { "type": "string" },
+            "pro_memory_trick": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "sourceFeature", "question", "wrongInput", "correctConcept"]
+    }
+  },
+  "firestore": {
+    "/pocket_items/{itemId}": {
+      "schema": { "$ref": "#/entities/PocketItem" },
+      "description": "Stores user saved items like notes and chats."
+    },
+    "/ai_tutor_chats/{chatId}": {
+      "schema": { "$ref": "#/entities/AITutorChat" },
+      "description": "Stores user AI Tutor interactive chat history sessions."
+    },
+    "/quiz_results/{resultId}": {
+      "schema": { "$ref": "#/entities/QuizResult" },
+      "description": "Stores the user's detailed performance metrics on completed quizzes."
+    },
+    "/MistakeVault/{mistakeId}": {
+      "schema": { "$ref": "#/entities/Mistake" },
+      "description": "Stores logged user academic errors and misconceptions."
+    }
+  }
+}

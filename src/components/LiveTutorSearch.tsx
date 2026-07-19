@@ -12,7 +12,7 @@ import { detectAndLogMistake } from '../utils/mistakes';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query as fsQuery, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 
-interface LiveTutorSearchProps {
+interface torSearchProps {
   onBack: () => void;
 }
 
@@ -80,7 +80,7 @@ const parseSavedSearch = (text: string, title: string): SearchResult => {
   };
 };
 
-export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
+export default function torSearch({ onBack }: torSearchProps) {
   const [query, setQuery] = useState('');
   const [localNotes, setLocalNotes] = useState('');
   const [loading, setLoading] = useState(false);

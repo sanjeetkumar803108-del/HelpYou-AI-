@@ -25,7 +25,9 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = 3000;
 
-app.use(cors());
+app.use(cors({
+    origin: '*'
+}));
 
 // 1. Strict Rate Limiting (Brute Force Protection)
 const apiLimiter = rateLimit({

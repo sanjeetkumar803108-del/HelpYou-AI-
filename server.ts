@@ -9,6 +9,10 @@ import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
 import { createRequire } from "module";
+import dotenv from "dotenv";
+
+// Load .env variables (important for Vercel cloud deployment)
+dotenv.config();
 
 const requireModule = typeof require !== "undefined" ? require : createRequire(import.meta.url);
 const pdf = requireModule("pdf-parse");
@@ -2798,5 +2802,12 @@ async function startServer() {
   server.timeout = 300000;
 }
 
-startServer();
+// Export app for Vercel serverless environment
+export default app;
+
+// Only start the server when running locally (not on Vercel)
+// VERCEL env variable is automatically set by Vercel's build environment
+if (!process.env.VERCEL) {
+  startServer();
+}
 

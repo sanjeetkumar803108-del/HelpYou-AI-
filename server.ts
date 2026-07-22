@@ -3,7 +3,6 @@ import path from "path";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
@@ -2781,6 +2780,7 @@ app.post("/api/verify-subscription", (req, res) => {
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+   const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

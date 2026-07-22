@@ -8,14 +8,12 @@ import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
-import { createRequire } from "module";
 import dotenv from "dotenv";
+import pdf from "pdf-parse";
 
 // Load .env variables (important for Vercel cloud deployment)
 dotenv.config();
 
-const requireModule = typeof require !== "undefined" ? require : createRequire(import.meta.url);
-const pdf = requireModule("pdf-parse");
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);

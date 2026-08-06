@@ -5,6 +5,10 @@ import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
 import { saveMistakeToVault } from '../utils/mistakes';
 import { safeGetItem } from '../utils/storage';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
+import { auth } from '../lib/firebase';
+import { getCoins, deductCoins, isProUser } from '../utils/coins';
 
 interface DailyTriviaProps {
   onBack: () => void;
@@ -19,6 +23,14 @@ interface TriviaQuestion {
 }
 
 export default function DailyTrivia({ onBack }: DailyTriviaProps) {
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (isCustomizing) {
+      setIsCustomizing(false);
+    } else {
+      onBack();
+    }
+  };
   const [trivia, setTrivia] = useState<TriviaQuestion | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -37,6 +49,8 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
 
   const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
   const academicStream = safeGetItem('academic_stream') || 'STEM / Engineering';
+  const uid = auth.currentUser?.uid;
+  const country = safeGetItem('academic_country') || (uid ? safeGetItem(`academic_country_${uid}`) : null) || 'United States';
 
   const getStreamSuggestions = () => {
     if (academicStream.includes('STEM')) {
@@ -50,6 +64,16 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
   };
 
   const fetchTrivia = async (forcedTopic?: string) => {
+    // Check if user has sufficient coins first
+    if (!isProUser()) {
+      const currentCoins = getCoins();
+      if (currentCoins < 1) {
+        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "Daily Trivia Booster", cost: 1 } }));
+        onBack();
+        return;
+      }
+    }
+
     setLoading(true);
     setSelectedOption(null);
     setHasAnswered(false);
@@ -67,6 +91,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
           academicStream,
           topic: activeTopic,
           excludeQuestions: excludeList,
+          country,
         }),
       });
 
@@ -76,11 +101,17 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
 
       const data = await response.json();
       if (data.trivia) {
-        setTrivia(data.trivia);
-        // Track the question to prevent repetition
-        const updatedExcludes = [...excludeList, data.trivia.question].slice(-30);
-        setExcludeList(updatedExcludes);
-        localStorage.setItem('study_trivia_excludes', JSON.stringify(updatedExcludes));
+        const deducted = deductCoins(1, "Daily Trivia Booster");
+        if (deducted) {
+          setTrivia(data.trivia);
+          // Track the question to prevent repetition
+          const updatedExcludes = [...excludeList, data.trivia.question].slice(-30);
+          setExcludeList(updatedExcludes);
+          localStorage.setItem('study_trivia_excludes', JSON.stringify(updatedExcludes));
+        } else {
+          onBack();
+          return;
+        }
       }
     } catch (error) {
       console.error('Failed to generate dynamic trivia:', error);
@@ -132,9 +163,23 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
   const handleShareTrivia = async () => {
     if (!trivia) return;
     triggerVibration(15);
-    const optionsText = trivia.options.map((opt, i) => `${i + 1}. ${opt}`).join('\n');
+    const optionsText = (trivia?.options || []).map((opt, i) => `${i + 1}. ${opt}`).join('\n');
     const shareText = `🧠 Daily Trivia Challenge:\n${trivia.question}\n\nOptions:\n${optionsText}\n\nQuiz made by HelpYou AI`;
     
+    // Check if running on a native platform (Android/iOS)
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Share.share({
+          title: 'Daily Trivia Challenge',
+          text: shareText,
+          url: window.location.origin
+        });
+        return;
+      } catch (e) {
+        console.error("Native sharing failed, falling back to clipboard:", e);
+      }
+    }
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -173,10 +218,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
       {/* Header */}
       <header className="px-6 py-5 bg-white border-b border-zinc-100 flex justify-between items-center sticky top-0 z-10">
         <button 
-          onClick={() => {
-            triggerVibration(15);
-            onBack();
-          }}
+          onClick={handleHeaderBack}
           className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-950 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -352,7 +394,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
 
               {/* Option Buttons */}
               <div className="flex flex-col gap-2.5 mb-5">
-                {trivia.options.map((option, idx) => {
+                {(trivia?.options || []).map((option, idx) => {
                   let btnStyle = "border border-zinc-200/80 bg-white hover:bg-zinc-50 hover:border-zinc-300 font-extrabold text-zinc-800 shadow-sm";
                   
                   if (hasAnswered) {

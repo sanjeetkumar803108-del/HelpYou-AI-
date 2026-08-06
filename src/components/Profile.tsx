@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserCircle, Settings, LogOut, X, Crown, Lock, Mail, Shield, 
   HelpCircle, Star, Bug, FileText, Trash2, ChevronRight, ChevronDown,
   Check, MessageSquare, AlertTriangle, Eye, EyeOff, Sparkles, Send, Moon,
   GraduationCap, Calendar, Trophy, Edit3, Save, Flame, User, Info, Target, Zap,
-  Loader2
+  Loader2, Download, CreditCard, Bell, Share2, Play, Pause, Square
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
+import { App as CapApp } from '@capacitor/app';
 import { auth, db } from '../lib/firebase';
+import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { 
   signOut, 
   User as FirebaseUser, 
@@ -19,10 +23,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
 import { safeGetItem, safeSetItem, safeClearAll } from '../utils/storage';
-import { getCoins } from '../utils/coins';
+import { getCoins, addCoins } from '../utils/coins';
 import { useSettings } from '../hooks/useSettings';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { billingService } from '../services/BillingService';
+import { REGIONAL_TRACKS } from './AcademicSetup';
 
 interface ProfileProps {
   user: FirebaseUser | null;
@@ -33,7 +38,115 @@ interface ProfileProps {
   onToggleDarkMode: () => void;
   isTabMode?: boolean;
   onOpenLogin?: () => void;
+  onNavigateToCoinPage?: () => void;
+  onNavigateToStreakPage?: () => void;
+  onOpenPdfHistory?: () => void;
 }
+
+interface PassiveUsageItem {
+  day: string;
+  focusTime: number; // minutes spent
+  dateString: string;
+}
+
+const ActivityIndicator = ({ color }: { color?: string }) => {
+  return (
+    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke={color || "currentColor"} strokeWidth="4"></circle>
+      <path className="opacity-75" fill={color || "currentColor"} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  );
+};
+
+const Linking = {
+  openURL: (url: string) => {
+    window.open(url, '_blank');
+  }
+};
+
+const Alert = {
+  alert: (title: string, message: string, buttons?: { text: string; style?: string; onPress?: () => void }[]) => {
+    const confirmed = window.confirm(`${title}\n\n${message}`);
+    if (confirmed && buttons) {
+      const okButton = buttons.find(b => b.style === 'destructive' || b.text === 'Yes, Delete' || b.text === 'OK' || b.text === 'Delete');
+      if (okButton && okButton.onPress) {
+        okButton.onPress();
+      }
+    }
+  }
+};
+
+const getTodayDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getLast7Dates = () => {
+  const dates = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+    
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayLabel = daysOfWeek[d.getDay()];
+    
+    dates.push({ dateString, dayLabel });
+  }
+  return dates;
+};
+
+const cleanAndGetUsageData = (): Record<string, number> => {
+  const raw = safeGetItem('study_passive_usage_data');
+  let data: Record<string, number> = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      data = {};
+    }
+  }
+  
+  // Calculate allowed dates (last 7 days)
+  const last7 = getLast7Dates();
+  const allowedDates = new Set(last7.map(item => item.dateString));
+  
+  // Keep only allowed dates (clean up older ones)
+  const cleaned: Record<string, number> = {};
+  let changed = false;
+  for (const key in data) {
+    if (allowedDates.has(key)) {
+      cleaned[key] = data[key];
+    } else {
+      changed = true;
+    }
+  }
+  
+  if (changed || !raw) {
+    safeSetItem('study_passive_usage_data', JSON.stringify(cleaned));
+  }
+  return cleaned;
+};
+
+const generateChartData = (storedData: Record<string, number>): PassiveUsageItem[] => {
+  const last7 = getLast7Dates();
+  return last7.map(item => {
+    const rawTime = storedData[item.dateString] || 0;
+    // Round to 1 decimal place
+    const focusTime = Math.round(rawTime * 10) / 10;
+    return {
+      day: item.dayLabel,
+      focusTime,
+      dateString: item.dateString
+    };
+  });
+};
 
 export default function Profile({ 
   user, 
@@ -43,18 +156,62 @@ export default function Profile({
   isDarkMode, 
   onToggleDarkMode,
   isTabMode = false,
-  onOpenLogin
+  onOpenLogin,
+  onNavigateToCoinPage,
+  onNavigateToStreakPage,
+  onOpenPdfHistory
 }: ProfileProps) {
   // App Settings Toggles
-  const [saveHistory, setSaveHistory] = useState<boolean>(() => {
-    return safeGetItem('study_save_history') !== 'false';
+  const [saveHistory] = useState<boolean>(true);
+  const [dailyReminders, setDailyReminders] = useState<boolean>(() => {
+    return safeGetItem('pref_daily_reminders') !== 'false';
+  });
+  const [streakAlerts, setStreakAlerts] = useState<boolean>(() => {
+    return safeGetItem('pref_streak_alerts') !== 'false';
+  });
+  const [specialOffers, setSpecialOffers] = useState<boolean>(() => {
+    return safeGetItem('pref_special_offers') !== 'false';
   });
 
   // Settings Slideover Panel
   const [showSettings, setShowSettings] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showStreakDetails, setShowStreakDetails] = useState(false);
+
+  const [claimedMilestones, setClaimedMilestones] = useState<{ [key: number]: boolean }>(() => {
+    return {
+      3: safeGetItem('study_claimed_milestone_3') === 'true',
+      7: safeGetItem('study_claimed_milestone_7') === 'true',
+      15: safeGetItem('study_claimed_milestone_15') === 'true',
+      30: safeGetItem('study_claimed_milestone_30') === 'true',
+    };
+  });
+
+  const handleClaimMilestone = (days: number, reward: number) => {
+    triggerVibration(15);
+    safeSetItem(`study_claimed_milestone_${days}`, 'true');
+    setClaimedMilestones(prev => ({ ...prev, [days]: true }));
+    if (!isVip) {
+      addCoins(reward, `${days}-Day Streak Achievement! 🏆`);
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.7 }
+      });
+      showToast(`🎉 Shandaar! Aapne +${reward} coins claim kar liye hain! 🚀`);
+    } else {
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.7 }
+      });
+      showToast(`🎉 Shandaar! Milestone unlocked successfully! 🚀`);
+    }
+  };
 
   // Profile Edit State
   const [isEditingName, setIsEditingName] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [studentName, setStudentName] = useState(() => {
     return user?.displayName || safeGetItem('student_name') || 'Guest Student';
   });
@@ -71,8 +228,12 @@ export default function Profile({
   const [streamMajor, setStreamMajor] = useState(() => {
     return safeGetItem('academic_stream') || 'STEM / Engineering';
   });
+  const [selectedCountryName, setSelectedCountryName] = useState(() => {
+    return safeGetItem('academic_country') || 'United States';
+  });
   const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
   const [isTrackDropdownOpen, setIsTrackDropdownOpen] = useState(false);
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
 
   const { visualLearner, setVisualLearner, deepFocus, setDeepFocus } = useSettings();
 
@@ -107,14 +268,232 @@ export default function Profile({
   // Interactive Toast
   const [toast, setToast] = useState<string | null>(null);
 
+  // 7-Day Passive App Usage Tracker State
+  const [chartData, setChartData] = useState<PassiveUsageItem[]>(() => {
+    const stored = cleanAndGetUsageData();
+    return generateChartData(stored);
+  });
+
+  const lastActiveTimeRef = useRef<number>(Date.now());
+
+  const accumulateTime = (mins: number) => {
+    if (mins <= 0) return;
+    const todayStr = getTodayDateString();
+    
+    const currentData = cleanAndGetUsageData();
+    currentData[todayStr] = (currentData[todayStr] || 0) + mins;
+    
+    safeSetItem('study_passive_usage_data', JSON.stringify(currentData));
+    setChartData(generateChartData(currentData));
+  };
+
+  // 1. Periodic Flush Interval (every 5 seconds) to update active session time in real-time
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsedMs = now - lastActiveTimeRef.current;
+      lastActiveTimeRef.current = now;
+      
+      if (elapsedMs > 0) {
+        const elapsedMins = elapsedMs / 60000;
+        accumulateTime(elapsedMins);
+      }
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // 2. AppState / Visibility Change Event Listeners to flush on pause/background
+  useEffect(() => {
+    const handleAppStateChange = (isActive: boolean) => {
+      const now = Date.now();
+      if (isActive) {
+        lastActiveTimeRef.current = now;
+      } else {
+        const elapsedMs = now - lastActiveTimeRef.current;
+        if (elapsedMs > 0) {
+          const elapsedMins = elapsedMs / 60000;
+          accumulateTime(elapsedMins);
+        }
+        lastActiveTimeRef.current = now;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleAppStateChange(true);
+      } else {
+        handleAppStateChange(false);
+      }
+    };
+
+    let appStateListener: any = null;
+    if (Capacitor.isNativePlatform()) {
+      try {
+        appStateListener = CapApp.addListener('appStateChange', ({ isActive }) => {
+          handleAppStateChange(isActive);
+        });
+      } catch (err) {
+        console.warn("Failed to attach CapApp listener:", err);
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (appStateListener) {
+        appStateListener.remove();
+      }
+    };
+  }, []);
+
   // Fetch coins & streak
   const coinsBalance = getCoins();
-  const studyStreak = Number(safeGetItem('study_punches') || '0');
+  const [studyStreak, setStudyStreak] = useState<number>(() => {
+    return Number(safeGetItem('study_punches') || '0');
+  });
+
+  const generateStreakCalendar = () => {
+    const days = [];
+    const today = new Date();
+    const lastPunchDate = safeGetItem('study_last_punch_date');
+    const todayString = today.toDateString();
+
+    for (let i = 27; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(today.getDate() - i);
+      const dateString = date.toDateString();
+      
+      let isActive = false;
+      if (lastPunchDate) {
+        const lastDateObj = new Date(lastPunchDate);
+        lastDateObj.setHours(0, 0, 0, 0);
+        
+        const currentCheckDateObj = new Date(dateString);
+        currentCheckDateObj.setHours(0, 0, 0, 0);
+
+        const diffTime = lastDateObj.getTime() - currentCheckDateObj.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays >= 0 && diffDays < studyStreak) {
+          isActive = true;
+        }
+      }
+
+      days.push({
+        dateLabel: date.getDate(),
+        monthLabel: date.toLocaleString('default', { month: 'short' }),
+        dayName: date.toLocaleString('default', { weekday: 'narrow' }),
+        isToday: dateString === todayString,
+        isActive,
+        dateString,
+      });
+    }
+    return days;
+  };
+
+  const handleDailyPunch = () => {
+    triggerVibration(20);
+    const today = new Date().toDateString();
+    const lastPunchDate = safeGetItem('study_last_punch_date');
+    
+    if (lastPunchDate === today) {
+      showToast("✨ Today's attendance already punched!");
+      return;
+    }
+
+    let newStreak = 1;
+    if (lastPunchDate) {
+      const lastDate = new Date(lastPunchDate);
+      const currentDate = new Date(today);
+      lastDate.setHours(0, 0, 0, 0);
+      currentDate.setHours(0, 0, 0, 0);
+      
+      const diffTime = currentDate.getTime() - lastDate.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) {
+        newStreak = studyStreak + 1;
+      }
+    }
+
+    safeSetItem('study_punches', String(newStreak));
+    safeSetItem('study_last_punch_date', today);
+    setStudyStreak(newStreak);
+
+    if (!isVip) {
+      addCoins(2, "Daily Streak Punch-In 🎯");
+    }
+
+    confetti({
+      particleCount: 120,
+      spread: 80,
+      origin: { y: 0.6 }
+    });
+
+    if (!isVip) {
+      showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! +2 Coins Added! 🚀`);
+    } else {
+      showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! 🚀`);
+    }
+  };
+
+  // Automatically check & update study streak
+  useEffect(() => {
+    try {
+      const today = new Date().toDateString();
+      const lastPunchDate = safeGetItem('study_last_punch_date');
+      const currentStreak = Number(safeGetItem('study_punches') || '0');
+
+      if (!lastPunchDate) {
+        // First ever visit
+        safeSetItem('study_punches', '1');
+        safeSetItem('study_last_punch_date', today);
+        setStudyStreak(1);
+      } else if (lastPunchDate !== today) {
+        const lastDate = new Date(lastPunchDate);
+        const currentDate = new Date(today);
+        
+        // Normalize dates to midnight to compute precise difference in days
+        lastDate.setHours(0, 0, 0, 0);
+        currentDate.setHours(0, 0, 0, 0);
+        
+        const diffTime = currentDate.getTime() - lastDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 1) {
+          // Consecutive daily visit - increment streak!
+          const newStreak = currentStreak + 1;
+          safeSetItem('study_punches', String(newStreak));
+          setStudyStreak(newStreak);
+        } else if (diffDays > 1) {
+          // More than a day gap - reset streak to 1
+          safeSetItem('study_punches', '1');
+          setStudyStreak(1);
+        }
+        safeSetItem('study_last_punch_date', today);
+      }
+    } catch (error) {
+      console.error("Error updating streak:", error);
+    }
+  }, []);
 
   // Sync state to local storage
   useEffect(() => {
-    safeSetItem('study_save_history', String(saveHistory));
-  }, [saveHistory]);
+    safeSetItem('study_save_history', 'true');
+  }, []);
+
+  useEffect(() => {
+    safeSetItem('pref_daily_reminders', String(dailyReminders));
+  }, [dailyReminders]);
+
+  useEffect(() => {
+    safeSetItem('pref_streak_alerts', String(streakAlerts));
+  }, [streakAlerts]);
+
+  useEffect(() => {
+    safeSetItem('pref_special_offers', String(specialOffers));
+  }, [specialOffers]);
 
   // Keep student name in sync if user changes
   useEffect(() => {
@@ -126,6 +505,106 @@ export default function Profile({
   const showToast = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleRestorePurchases = async () => {
+    triggerVibration(10);
+    setIsRestoring(true);
+    try {
+      const restored = await billingService.restorePurchases();
+      if (restored) {
+        setIsVip(true);
+        showToast("✨ Pro status restored successfully!");
+      } else {
+        showToast("❌ No active Pro subscription found.");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("❌ Failed to restore purchases.");
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const handleShare = async (title: string, text: string, url: string, toastSuccessMsg: string) => {
+    triggerVibration(15);
+    
+    // 1. Native Capacitor Share (Mobile App)
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Share.share({
+          title,
+          text,
+          url,
+          dialogTitle: 'Share your progress'
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error("Failed to share via Capacitor:", err);
+      }
+    }
+
+    // 2. Web Share API (Mobile & Desktop Web Browsers)
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text,
+          url
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error("Failed to share via navigator.share:", err);
+      }
+    }
+
+    // 3. Fallback to Clipboard Copy (if Web Share API is not supported)
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast(toastSuccessMsg);
+      } catch (err) {
+        showToast("Could not copy stats.");
+      }
+    } else {
+      showToast("Sharing is not supported on this browser.");
+    }
+  };
+
+  const handleShareStreak = async () => {
+    const shareText = `🔥 I have kept my daily study streak alive for ${studyStreak} days in HelpYou AI Study Tutor! Join me and boost your grades! 🎓🎯`;
+    await handleShare(
+      'My Study Streak',
+      shareText,
+      window.location.origin,
+      "🔥 Streak stats copied to clipboard! Share it anywhere! 🚀"
+    );
+  };
+
+  const handleShareMastery = async () => {
+    const shareText = `📊 Check out my Skill Mastery progress in HelpYou AI: Math (85%), Chemistry (90%), Physics (70%)! Personalized AI tutoring really works! 🧠🚀`;
+    await handleShare(
+      'My Skill Mastery',
+      shareText,
+      window.location.origin,
+      "📊 Mastery stats copied to clipboard! Share it anywhere! 🚀"
+    );
+  };
+
+  const handleExportData = () => {
+    triggerVibration(15);
+    try {
+      const userIdentifier = user ? (user.email || user.uid) : "Anonymous Guest";
+      const subject = encodeURIComponent(`Data Export Request - ${userIdentifier}`);
+      const body = encodeURIComponent("Hello HelpYou AI Support, I would like to exercise my right to data portability. Please provide a complete export of my account data, including my profile, study notes, and history. Thank you.");
+      window.location.href = `mailto:helpyou.ai.support@gmail.com?subject=${subject}&body=${body}`;
+      showToast("✉️ Drafted data export email support request!");
+    } catch (err) {
+      console.error(err);
+      showToast("❌ Failed to initiate data export request.");
+    }
   };
 
   const handleSaveName = () => {
@@ -256,14 +735,85 @@ export default function Profile({
     }
   };
 
-  const handleDeleteAccount = () => {
-    triggerVibration([30, 50, 30]);
-    showToast("🗑️ Account and data permanently deleted.");
-    setActiveModal(null);
-    setIsVip(false);
-    safeClearAll();
-    signOut(auth);
-    setShowSettings(false);
+  const handleDeleteAccount = async () => {
+    if (!user) {
+      showToast("❌ No user signed in");
+      return;
+    }
+    
+    const proceedWithDeletion = async () => {
+      setLoading(true);
+      setIsDeleting(true);
+      triggerVibration([30, 50, 30]);
+      
+      try {
+        const uid = user.uid;
+        
+        // 1. Wipe user document from the primary "users" collection
+        try {
+          await deleteDoc(doc(db, 'users', uid));
+        } catch (err) {
+          console.error("Error deleting user doc:", err);
+        }
+        
+        // List of all collections where userId maps to uid
+        const collectionsToWipe = [
+          'pocket_items',
+          'ai_tutor_chats',
+          'quiz_results',
+          'generated_questions',
+          'MistakeVault'
+        ];
+        
+        // 2. Query and delete all user documents across all related collections
+        for (const colName of collectionsToWipe) {
+          try {
+            const q = query(collection(db, colName), where('userId', '==', uid));
+            const querySnapshot = await getDocs(q);
+            const deletePromises = querySnapshot.docs.map(docSnap => deleteDoc(docSnap.ref));
+            await Promise.all(deletePromises);
+          } catch (err) {
+            console.error(`Error wiping collection ${colName}:`, err);
+          }
+        }
+        
+        // 3. Delete the Authentication record permanently
+        let authDeleted = false;
+        try {
+          await user.delete();
+          authDeleted = true;
+        } catch (authErr: any) {
+          console.warn("Auth delete failed (may require recent login):", authErr);
+        }
+        
+        if (authDeleted) {
+          showToast("🗑️ Account and data permanently deleted.");
+        } else {
+          showToast("🧹 Data wiped! Log out and in again to fully delete account login.");
+        }
+        
+        setActiveModal(null);
+        setIsVip(false);
+        safeClearAll();
+        await signOut(auth);
+        setShowSettings(false);
+      } catch (error: any) {
+        console.error("Error during account deletion:", error);
+        showToast("❌ Failed to complete data deletion.");
+      } finally {
+        setLoading(false);
+        setIsDeleting(false);
+      }
+    };
+
+    Alert.alert(
+      "Confirm Deletion",
+      "Are you sure? This will permanently wipe your data.\n\n⚠️ WARNING: Deleting your account does NOT cancel your active Pro Subscription. You must manually cancel it in your device's App Store settings to avoid future charges.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: proceedWithDeletion }
+      ]
+    );
   };
 
   return (
@@ -456,6 +1006,9 @@ export default function Profile({
                               onClick={() => {
                                 setGradeLevel(grade);
                                 safeSetItem('academic_grade', grade);
+                                if (auth.currentUser?.uid) {
+                                  safeSetItem(`academic_grade_${auth.currentUser.uid}`, grade);
+                                }
                                 setIsGradeDropdownOpen(false);
                                 triggerVibration(10);
                               }}
@@ -473,60 +1026,155 @@ export default function Profile({
                 
                 <div className="space-y-1.5 relative">
                   <label className="text-[10px] font-bold text-zinc-500">Academic Track</label>
-                  <button 
-                    onClick={() => {
-                      setIsTrackDropdownOpen(!isTrackDropdownOpen);
-                      setIsGradeDropdownOpen(false);
-                    }}
-                    className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
-                  >
-                    <span className="truncate pr-2">{streamMajor}</span>
-                    <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
-                  </button>
+                  {(() => {
+                    const activeTracks = REGIONAL_TRACKS[selectedCountryName] || REGIONAL_TRACKS['Others / International'];
+                    const currentTrackObj = activeTracks.find(t => t.id === streamMajor || t.title === streamMajor) || activeTracks[0];
+                    const displayTitle = currentTrackObj ? currentTrackObj.title : streamMajor;
 
-                  <AnimatePresence>
-                    {isTrackDropdownOpen && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute top-full right-0 w-48 sm:w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
-                      >
-                        <div className="max-h-48 overflow-y-auto overscroll-contain py-1">
-                          {[
-                            'STEM / Engineering', 'Pre-Med / AP Sciences', 
-                            'Business / Economics', 'Humanities / Liberal Arts', 
-                            'Computer Science'
-                          ].map((track) => (
-                            <div 
-                              key={track}
-                              onClick={() => {
-                                setStreamMajor(track);
-                                safeSetItem('academic_stream', track);
-                                setIsTrackDropdownOpen(false);
-                                triggerVibration(10);
-                              }}
-                              className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${streamMajor === track ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
+                    return (
+                      <>
+                        <button 
+                          onClick={() => {
+                            setIsTrackDropdownOpen(!isTrackDropdownOpen);
+                            setIsGradeDropdownOpen(false);
+                            setIsCountryDropdownOpen(false);
+                          }}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
+                        >
+                          <span className="truncate pr-2">{displayTitle}</span>
+                          <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                        </button>
+
+                        <AnimatePresence>
+                          {isTrackDropdownOpen && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute top-full right-0 w-64 sm:w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
                             >
-                              <span>{track}</span>
-                              {streamMajor === track && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                              <div className="max-h-56 overflow-y-auto overscroll-contain py-1">
+                                {activeTracks.map((trackObj) => {
+                                  const isSelected = streamMajor === trackObj.id || streamMajor === trackObj.title;
+                                  return (
+                                    <div 
+                                      key={trackObj.title}
+                                      onClick={() => {
+                                        setStreamMajor(trackObj.id);
+                                        safeSetItem('academic_stream', trackObj.id);
+                                        if (auth.currentUser?.uid) {
+                                          safeSetItem(`academic_stream_${auth.currentUser.uid}`, trackObj.id);
+                                        }
+                                        setIsTrackDropdownOpen(false);
+                                        triggerVibration(10);
+                                      }}
+                                      className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${isSelected ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
+                                    >
+                                      <div className="flex flex-col pr-2">
+                                        <span className="font-bold text-zinc-800">{trackObj.title}</span>
+                                        <span className="text-[10px] text-zinc-400 font-normal">{trackObj.subtitle}</span>
+                                      </div>
+                                      {isSelected && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </>
+                    );
+                  })()}
                 </div>
+              </div>
+
+              {/* Country / Educational Region Selection */}
+              <div className="space-y-1.5 pt-1 relative">
+                <label className="text-[10px] font-bold text-zinc-500">Country / Curriculum System</label>
+                <button 
+                  onClick={() => {
+                    setIsCountryDropdownOpen(!isCountryDropdownOpen);
+                    setIsGradeDropdownOpen(false);
+                    setIsTrackDropdownOpen(false);
+                  }}
+                  className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
+                >
+                  <span className="truncate pr-2">{selectedCountryName}</span>
+                  <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                </button>
+
+                <AnimatePresence>
+                  {isCountryDropdownOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full left-0 w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
+                    >
+                      <div className="max-h-52 overflow-y-auto overscroll-contain py-1">
+                        {[
+                          { name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
+                          { name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
+                          { name: 'Canada', flag: '🇨🇦', regionSystem: 'USA' },
+                          { name: 'Australia', flag: '🇦🇺', regionSystem: 'UK' },
+                          { name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
+                        ].map((c) => (
+                          <div 
+                            key={c.name}
+                            onClick={() => {
+                              setSelectedCountryName(c.name);
+                              safeSetItem('academic_country', c.name);
+                              safeSetItem('academic_region', c.regionSystem);
+                              if (auth.currentUser?.uid) {
+                                safeSetItem(`academic_country_${auth.currentUser.uid}`, c.name);
+                                safeSetItem(`academic_region_${auth.currentUser.uid}`, c.regionSystem);
+                              }
+
+                              // Auto-sync track to match newly selected country
+                              const newTracks = REGIONAL_TRACKS[c.name] || REGIONAL_TRACKS['Others / International'];
+                              const matchedTrack = newTracks.find(t => t.id === streamMajor) || newTracks[0];
+                              setStreamMajor(matchedTrack.id);
+                              safeSetItem('academic_stream', matchedTrack.id);
+                              if (auth.currentUser?.uid) {
+                                safeSetItem(`academic_stream_${auth.currentUser.uid}`, matchedTrack.id);
+                              }
+
+                              setIsCountryDropdownOpen(false);
+                              triggerVibration(10);
+                            }}
+                            className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${selectedCountryName === c.name ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span>{c.flag}</span>
+                              <span>{c.name}</span>
+                            </span>
+                            {selectedCountryName === c.name && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
 
           {/* Mastery Radar Chart */}
-          <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm">
-            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2 mb-4">
-              <Target className="w-4 h-4 text-zinc-400" /> Skill Mastery
-            </h3>
+          <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm relative">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                <Target className="w-4 h-4 text-zinc-400" /> Skill Mastery
+              </h3>
+              <button 
+                onClick={handleShareMastery}
+                className="p-2 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-purple-600 transition-colors cursor-pointer active:scale-95"
+                title="Share Skill Mastery"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            </div>
             
             <div className="w-full h-48 -mt-2">
               <ResponsiveContainer width="100%" height="100%">
@@ -548,6 +1196,83 @@ export default function Profile({
             <p className="text-[10px] text-zinc-400 font-medium text-center mt-2">
               AI-generated mapping based on your recent quiz scores.
             </p>
+          </div>
+
+          {/* Passive 7-Day App Usage Tracker Card */}
+          <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-zinc-400" /> App Usage Tracker
+              </h3>
+              <span className="text-[10px] font-black text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                Passive 7-Day Log
+              </span>
+            </div>
+
+            <p className="text-[11px] font-bold text-zinc-500 leading-relaxed">
+              Tracks total active time spent in the app. Updates passively as you study, solve quizzes, and interact with the AI tutor.
+            </p>
+
+            {/* Passive Usage Line Chart */}
+            <div className="w-full h-48 -mt-1 select-none">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
+                  <XAxis 
+                    dataKey="day" 
+                    tick={{ fill: '#a1a1aa', fontSize: 10, fontWeight: 700 }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                  />
+                  <YAxis 
+                    stroke="#a1a1aa" 
+                    tick={{ fill: '#71717a', fontSize: 9, fontWeight: 700 }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                    unit="m"
+                  />
+                  <Tooltip 
+                    content={({ active, payload, label }: any) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-zinc-900/95 backdrop-blur-md text-white rounded-2xl p-3 shadow-xl border border-zinc-800 text-[11px] font-sans">
+                            <p className="font-black text-xs text-zinc-300 mb-1">{label} Report</p>
+                            <p className="flex items-center gap-1.5 font-bold text-purple-300">
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                              Usage: {payload[0].value} mins
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="focusTime" 
+                    name="Active Time (Mins)" 
+                    stroke="#8b5cf6" 
+                    strokeWidth={3.5} 
+                    activeDot={{ r: 6 }} 
+                    dot={{ r: 3, fill: '#8b5cf6', strokeWidth: 0 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-black text-zinc-800 block">Today's Focus Time</span>
+                <span className="text-[9px] font-bold text-zinc-400">Recorded passively in background</span>
+              </div>
+              <span className="text-sm font-black text-zinc-900 bg-white border border-zinc-200/60 shadow-sm px-3.5 py-1.5 rounded-xl font-mono">
+                {(() => {
+                  const todayStr = getTodayDateString();
+                  const todayMins = chartData.find(item => item.dateString === todayStr)?.focusTime || 0;
+                  return `${todayMins}m`;
+                })()}
+              </span>
+            </div>
           </div>
 
           {/* Learning Preferences */}
@@ -610,7 +1335,16 @@ export default function Profile({
                 </div>
               </div>
             ) : (
-              <div className="bg-white rounded-[2.25rem] p-5 border border-zinc-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+              <div 
+                onClick={() => {
+                  triggerVibration(10);
+                  if (onNavigateToCoinPage) {
+                    onNavigateToCoinPage();
+                  }
+                }}
+                className="bg-white rounded-[2.25rem] p-5 border border-zinc-200 shadow-sm relative overflow-hidden flex flex-col justify-between cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all"
+                title="Click to view Coins & Rewards"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 border border-amber-100">
                     <Trophy className="w-4 h-4 fill-amber-100" />
@@ -625,12 +1359,35 @@ export default function Profile({
             )}
 
             {/* Study Streak Card */}
-            <div className="bg-white rounded-[2.25rem] p-5 border border-zinc-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+            <div 
+              onClick={() => {
+                triggerVibration(15);
+                if (onNavigateToStreakPage) {
+                  onNavigateToStreakPage();
+                } else {
+                  setShowStreakDetails(true);
+                }
+              }}
+              className="bg-white rounded-[2.25rem] p-5 border border-zinc-200 shadow-sm relative overflow-hidden flex flex-col justify-between cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all"
+              title="Click to view Streak details"
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 border border-orange-100">
                   <Flame className="w-4 h-4 fill-orange-100" />
                 </div>
-                <span className="text-[9px] uppercase font-black tracking-wider text-zinc-400 font-bold">Streak</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] uppercase font-black tracking-wider text-zinc-400 font-bold">Streak</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleShareStreak();
+                    }}
+                    className="p-1.5 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-orange-500 transition-colors cursor-pointer active:scale-95 z-10"
+                    title="Share Streak"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div>
                 <p className="text-xl font-black text-zinc-850 leading-none">{studyStreak} Days</p>
@@ -644,7 +1401,7 @@ export default function Profile({
           <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 flex items-start gap-3">
             <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
             <p className="text-[10px] font-medium text-blue-700 leading-relaxed">
-              HelpYou AI customizes solutions, vocabulary, and tutor responses dynamically based on your selected Study Level (Middle School, High School, or College). Change your level anytime!
+              HelpYou AI customizes solutions, vocabulary, and tutor responses dynamically based on your selected Study Level (High School, College, or Advanced). Change your level anytime!
             </p>
           </div>
         </div>
@@ -700,6 +1457,7 @@ export default function Profile({
                       <button 
                         onClick={() => {
                           triggerVibration(15);
+                          setShowSettings(false);
                           setActiveModal('manage_sub');
                         }}
                         className="bg-white text-amber-700 hover:bg-zinc-50 px-3 py-1.5 rounded-xl text-[10px] font-black shadow-sm transition-all active:scale-95 shrink-0"
@@ -732,6 +1490,56 @@ export default function Profile({
                   </div>
                 )}
 
+                {/* Manage Subscription Button right below the banner */}
+                <div 
+                  onClick={() => {
+                    triggerVibration(15);
+                    setShowSettings(false);
+                    if (isVip) {
+                      setActiveModal('manage_sub');
+                    } else {
+                      window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "PRO Benefits" } }));
+                    }
+                  }}
+                  className="bg-white rounded-3xl border border-zinc-200 p-4.5 flex justify-between items-center cursor-pointer hover:bg-zinc-50 transition-colors shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 border border-purple-100 shrink-0">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <span className="text-xs font-black text-zinc-850 block">Manage Subscription</span>
+                      <span className="text-[9px] text-zinc-400 font-bold">View billing, update plans & history</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400" />
+                </div>
+
+                {/* Restore Purchases Button */}
+                <div 
+                  onClick={handleRestorePurchases}
+                  className="bg-white rounded-3xl border border-zinc-200 p-4.5 flex justify-between items-center cursor-pointer hover:bg-zinc-50 transition-colors shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100 shrink-0">
+                      {isRestoring ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <span className="text-xs font-black text-zinc-850 block">Restore Purchases</span>
+                      <span className="text-[9px] text-zinc-400 font-bold">
+                        {isRestoring ? "Checking subscriptions..." : "Force-sync previous purchases"}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400" />
+                </div>
+
+
+
                 {/* APP CONFIGURATION */}
                 <div className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
                   <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-2 bg-zinc-50/50">
@@ -739,21 +1547,6 @@ export default function Profile({
                     <span className="font-extrabold text-[10px] text-zinc-500 uppercase tracking-wide">Preferences</span>
                   </div>
                   
-                  {/* Save History Toggle */}
-                  <div 
-                    onClick={() => {
-                      triggerVibration(10);
-                      setSaveHistory(!saveHistory);
-                      showToast(saveHistory ? "🗑️ History disabled" : "💾 History enabled");
-                    }}
-                    className="p-4 flex justify-between items-center bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
-                  >
-                    <span className="text-xs font-bold text-zinc-650">Save History</span>
-                    <div className={`w-9 h-5 ${saveHistory ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
-                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${saveHistory ? 'right-0.5' : 'left-0.5'}`} />
-                    </div>
-                  </div>
-
                   {/* Dark Mode Toggle */}
                   <div 
                     onClick={() => {
@@ -768,6 +1561,66 @@ export default function Profile({
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${isDarkMode ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
                   </div>
+
+                  {/* Notification Preferences Sub-Header */}
+                  <div className="px-5 py-3 border-t border-zinc-100 flex items-center gap-2 bg-zinc-50/20">
+                    <Bell className="w-3.5 h-3.5 text-zinc-400" />
+                    <span className="font-extrabold text-[9px] text-zinc-400 uppercase tracking-wider">Notifications</span>
+                  </div>
+
+                  {/* Daily Study Reminders Toggle */}
+                  <div 
+                    onClick={() => {
+                      triggerVibration(10);
+                      setDailyReminders(!dailyReminders);
+                      showToast(!dailyReminders ? "🔔 Study Reminders enabled" : "🔕 Study Reminders disabled");
+                    }}
+                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-zinc-650">Daily Study Reminders</span>
+                      <span className="text-[9px] text-zinc-400 font-bold mt-0.5">Alerts to help you keep streaks</span>
+                    </div>
+                    <div className={`w-9 h-5 ${dailyReminders ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${dailyReminders ? 'right-0.5' : 'left-0.5'}`} />
+                    </div>
+                  </div>
+
+                  {/* Streak Alerts Toggle */}
+                  <div 
+                    onClick={() => {
+                      triggerVibration(10);
+                      setStreakAlerts(!streakAlerts);
+                      showToast(!streakAlerts ? "🔥 Streak Alerts enabled" : "🔕 Streak Alerts disabled");
+                    }}
+                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-zinc-650">Streak Alerts</span>
+                      <span className="text-[9px] text-zinc-400 font-bold mt-0.5">Remind you before streaks expire</span>
+                    </div>
+                    <div className={`w-9 h-5 ${streakAlerts ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${streakAlerts ? 'right-0.5' : 'left-0.5'}`} />
+                    </div>
+                  </div>
+
+                  {/* Special Offers Toggle */}
+                  <div 
+                    onClick={() => {
+                      triggerVibration(10);
+                      setSpecialOffers(!specialOffers);
+                      showToast(!specialOffers ? "🎁 Special Offers enabled" : "🔕 Special Offers disabled");
+                    }}
+                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-zinc-650">Special Offers</span>
+                      <span className="text-[9px] text-zinc-400 font-bold mt-0.5">Discounts and feature releases</span>
+                    </div>
+                    <div className={`w-9 h-5 ${specialOffers ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${specialOffers ? 'right-0.5' : 'left-0.5'}`} />
+                    </div>
+                  </div>
                 </div>
 
                 {/* SECURITY (if logged in via password) */}
@@ -779,7 +1632,7 @@ export default function Profile({
                     </div>
                     
                     <button 
-                      onClick={() => { triggerVibration(15); setActiveModal('password'); }}
+                      onClick={() => { triggerVibration(15); setShowSettings(false); setActiveModal('password'); }}
                       className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-none transition-colors text-left"
                     >
                       <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
@@ -790,7 +1643,7 @@ export default function Profile({
                     </button>
 
                     <button 
-                      onClick={() => { triggerVibration(15); setActiveModal('email'); }}
+                      onClick={() => { triggerVibration(15); setShowSettings(false); setActiveModal('email'); }}
                       className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
                     >
                       <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
@@ -867,6 +1720,7 @@ export default function Profile({
                   <button 
                     onClick={() => { 
                       triggerVibration(15); 
+                      setShowSettings(false);
                       setActiveModal('privacy');
                     }}
                     className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
@@ -881,6 +1735,7 @@ export default function Profile({
                   <button 
                     onClick={() => { 
                       triggerVibration(15); 
+                      setShowSettings(false);
                       setActiveModal('terms');
                     }}
                     className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
@@ -895,6 +1750,14 @@ export default function Profile({
 
                 {/* LOG OUT / ACTIONS */}
                 <div className="space-y-3 pt-3">
+                  <button 
+                    onClick={handleExportData}
+                    className="w-full flex items-center justify-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 py-3.5 rounded-2xl font-black border border-zinc-300/80 active:scale-99 transition-all cursor-pointer text-xs"
+                  >
+                    <Download className="w-4 h-4 text-zinc-500" />
+                    <span>Export My Data</span>
+                  </button>
+
                   {user ? (
                     <button 
                       onClick={handleLogout}
@@ -918,11 +1781,21 @@ export default function Profile({
 
                   {user && (
                     <button 
-                      onClick={() => { triggerVibration(25); setActiveModal('delete_account'); }}
-                      className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-50 text-zinc-500 hover:text-rose-600 py-3 rounded-2xl font-bold border-2 border-zinc-200/80 active:scale-99 transition-all cursor-pointer text-[10px] tracking-wide"
+                      onClick={() => { triggerVibration(25); setShowSettings(false); setActiveModal('delete_account'); }}
+                      disabled={isDeleting}
+                      className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-50 text-zinc-500 hover:text-rose-600 py-3 rounded-2xl font-bold border-2 border-zinc-200/80 active:scale-99 transition-all cursor-pointer text-[10px] tracking-wide disabled:opacity-50"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Account & Data</span>
+                      {isDeleting ? (
+                        <>
+                          <ActivityIndicator color="#FF0000" />
+                          <span>Deleting Account...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete Account & Data</span>
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
@@ -1089,9 +1962,26 @@ export default function Profile({
                     <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
                       <AlertTriangle className="w-6 h-6 animate-pulse" />
                     </div>
-                    <p className="text-xs text-zinc-600 font-bold leading-relaxed">
-                      Are you sure you want to delete your HelpYou AI account? This action is permanent and will erase all your history, notes, and coins.
+                    <p className="text-xs text-zinc-600 font-bold leading-relaxed whitespace-pre-line text-left bg-zinc-50 p-4 rounded-2xl border border-zinc-150 shadow-inner">
+                      Are you sure? This will permanently wipe your data.{"\n\n"}⚠️ WARNING: Deleting your account does NOT cancel your active Pro Subscription. You must manually cancel it in your device's App Store settings to avoid future charges.
                     </p>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerVibration(15);
+                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                        const url = isIOS 
+                          ? "https://apps.apple.com/account/subscriptions" 
+                          : "https://play.google.com/store/account/subscriptions";
+                        Linking.openURL(url);
+                      }}
+                      className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-black text-xs py-3 rounded-2xl cursor-pointer transition-all border border-zinc-300 flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-zinc-600" />
+                      <span>Manage Subscription</span>
+                    </button>
+
                     <div className="flex gap-2.5 pt-3">
                       <button 
                         onClick={() => { triggerVibration(10); setActiveModal(null); }}
@@ -1101,9 +1991,17 @@ export default function Profile({
                       </button>
                       <button 
                         onClick={handleDeleteAccount}
-                        className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-black text-xs py-3 rounded-2xl cursor-pointer transition-all shadow-md shadow-rose-500/10"
+                        disabled={isDeleting}
+                        className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-black text-xs py-3 rounded-2xl cursor-pointer transition-all shadow-md shadow-rose-500/10 disabled:opacity-50 flex items-center justify-center gap-1.5"
                       >
-                        Yes, Delete
+                        {isDeleting ? (
+                          <>
+                            <ActivityIndicator color="#FFFFFF" />
+                            <span>Deleting...</span>
+                          </>
+                        ) : (
+                          <span>Yes, Delete</span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1117,22 +2015,28 @@ export default function Profile({
                     </div>
                     <div>
                       <h4 className="text-sm font-black text-zinc-800">Pro Member Plan</h4>
-                      <p className="text-[10px] text-zinc-400 font-bold mt-0.5">Billing via App Store / HelpYou AI Portal</p>
+                      <p className="text-[10px] text-zinc-400 font-bold mt-0.5">Billing via Google Play Store</p>
                     </div>
-                    <p className="text-xs text-zinc-500 font-medium leading-relaxed bg-zinc-50 p-4 rounded-2xl border border-zinc-100">
-                      Your premium subscription is currently active! Enjoy unlimited tools, speech generation, and interactive learning.
-                    </p>
+                    <div className="text-left bg-zinc-50 p-4 rounded-2xl border border-zinc-100 space-y-2">
+                      <p className="text-xs font-bold text-zinc-800">
+                        To cancel your subscription and avoid auto-billing, please follow these steps:
+                      </p>
+                      <ol className="text-xs text-zinc-600 font-medium leading-relaxed space-y-1.5 list-decimal list-inside pl-0.5">
+                        <li>Open the Google Play Store app.</li>
+                        <li>Tap your Profile icon at the top right.</li>
+                        <li>Tap on Payments &amp; subscriptions &gt; Subscriptions.</li>
+                        <li>Select HelpYou AI and tap Cancel subscription.</li>
+                      </ol>
+                    </div>
                     <div className="flex flex-col gap-2 pt-2">
                       <button 
                         onClick={() => {
                           triggerVibration(15);
-                          setIsVip(false);
-                          showToast("Subscription changed back to Free.");
-                          setActiveModal(null);
+                          window.open('https://play.google.com/store/account/subscriptions', '_blank');
                         }}
-                        className="w-full bg-red-550 hover:bg-red-650 text-white font-black text-xs py-3.5 rounded-2xl cursor-pointer transition-all"
+                        className="w-full bg-red-600 hover:bg-red-700 text-white font-black text-xs py-3.5 rounded-2xl cursor-pointer transition-all shadow-sm flex items-center justify-center gap-2"
                       >
-                        Cancel Pro Subscription
+                        <span>Manage on Play Store</span>
                       </button>
                       <button 
                         onClick={() => { triggerVibration(10); setActiveModal(null); }}
@@ -1149,6 +2053,9 @@ export default function Profile({
                   <div className="space-y-5 text-left py-1 text-zinc-700">
                     <p className="text-xs font-semibold leading-relaxed text-zinc-500">
                       At HelpYou AI, we are committed to safeguarding your personal information and ensuring full transparency. This Privacy Policy outlines our comprehensive data handling practices.
+                    </p>
+                    <p className="text-xs font-semibold leading-relaxed text-zinc-700 bg-emerald-50/50 border border-emerald-100/50 rounded-xl p-3 mt-2">
+                      🌟 100% Ad-Free Guarantee: HelpYou AI is a completely ad-free learning environment. We do not sell your data, track you for marketing purposes, or display third-party advertisements.
                     </p>
 
                     <div className="space-y-4">
@@ -1185,17 +2092,14 @@ export default function Profile({
                         </ul>
                       </div>
 
-                      {/* Section 3: Advertising & Analytics */}
+                      {/* Section 3: App Analytics & Performance */}
                       <div>
                         <h4 className="text-xs font-black text-zinc-900 flex items-center gap-1.5 uppercase tracking-wide">
-                          📢 3. Advertising & Analytics
+                          📊 3. App Analytics & Performance
                         </h4>
                         <ul className="text-[11px] leading-relaxed mt-2 text-zinc-600 pl-4 space-y-1.5 list-disc">
                           <li>
-                            <span className="font-bold text-zinc-800">Advertisers:</span> We partner with third-party advertising providers (such as Google AdMob) to serve targeted ads to users on the free plan. These companies may process anonymous metadata—including your Device Advertising ID, device model, and IP address—to display personalized, high-yield advertisements matching your academic interests.
-                          </li>
-                          <li>
-                            <span className="font-bold text-zinc-800">Analytics:</span> Basic anonymous app usage statistics are gathered to identify software issues, track layout efficiency, and constantly refine the HelpYou AI experience.
+                            <span className="font-bold text-zinc-800">Analytics:</span> Basic anonymous app usage statistics are gathered solely to identify software bugs, track layout efficiency, and refine the educational experience.
                           </li>
                         </ul>
                       </div>
@@ -1284,10 +2188,9 @@ export default function Profile({
                           <li><span className="font-semibold text-zinc-800">Essential Cookies:</span> Necessary for securing authentication sessions and accessing paid capabilities.</li>
                           <li><span className="font-semibold text-zinc-800">Functionality Cookies:</span> Remember your educational track, grade preferences, study notes, and dark mode state.</li>
                           <li><span className="font-semibold text-zinc-800">Statistics & Analytics:</span> Anonymous session tracking to log application bugs and speed bottlenecks.</li>
-                          <li><span className="font-semibold text-zinc-800">Advertising Cookies:</span> Leveraged by third-party advertisers (such as Google AdMob) to serve targeted ads matching your educational interests based on app activity.</li>
                         </ul>
                         <p className="text-[11px] leading-relaxed mt-1.5 text-zinc-600 pl-4">
-                          You can easily restrict, disable, or manage cookies and advertising identifiers through your browser configuration, device settings, or by resetting your device's Advertising ID.
+                          You can easily restrict, disable, or manage essential and analytical cookies through your device settings.
                         </p>
                       </div>
                     </div>
@@ -1340,6 +2243,16 @@ export default function Profile({
                             While our underlying models are highly optimized, we do not guarantee 100% academic accuracy, thoroughness, or completeness. Users accept all generated explanations at their own risk.
                           </li>
                         </ul>
+                      </div>
+
+                      {/* Section 2.1: No Professional Advice */}
+                      <div>
+                        <h4 className="text-xs font-black text-zinc-900 flex items-center gap-1.5 uppercase tracking-wide">
+                          ⚕️ 2.1. No Professional Advice
+                        </h4>
+                        <p className="text-[11px] leading-relaxed mt-1 text-zinc-600 pl-4">
+                          The content provided by HelpYou AI, specifically in subjects like Biology and Chemistry, is strictly for academic and educational purposes. It does not constitute professional, medical, health, or safety advice. Never use AI-generated answers for real-world chemical handling or medical self-diagnosis.
+                        </p>
                       </div>
 
                       {/* Section 3: Subscriptions, Billing & Cancellation */}
@@ -1416,14 +2329,15 @@ export default function Profile({
                         </p>
                       </div>
 
-                      {/* Section 9: Governing Law & Dispute Resolution */}
+                      {/* Section 9: Governing Law & Class Action Waiver */}
                       <div>
                         <h4 className="text-xs font-black text-zinc-900 flex items-center gap-1.5 uppercase tracking-wide">
-                          ⚖️ 9. Governing Law & Dispute Resolution
+                          ⚖️ 9. Governing Law & Class Action Waiver
                         </h4>
                         <ul className="text-[11px] leading-relaxed mt-2 text-zinc-600 pl-4 space-y-1.5 list-disc">
                           <li>These Terms and any dispute or claim arising out of or in connection with them shall be governed by and construed in accordance with the laws of India.</li>
                           <li>Any legal actions, suits, or judicial proceedings arising under or related to these Terms shall be resolved exclusively in the competent courts located in India.</li>
+                          <li><span className="font-bold text-zinc-800">Class Action Waiver:</span> You agree that any dispute resolution proceedings will be conducted only on an individual basis and not in a class, consolidated, or representative action. You expressly waive any right to file or participate in a class-action lawsuit against HelpYou AI or its creators.</li>
                         </ul>
                       </div>
 
@@ -1449,6 +2363,236 @@ export default function Profile({
                     </button>
                   </div>
                 )}
+
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Slide-over Panel for Streak Days Details */}
+      <AnimatePresence>
+        {showStreakDetails && (
+          <div className="absolute inset-0 z-40 flex justify-end bg-black/60 backdrop-blur-sm">
+            {/* Backdrop Click Close */}
+            <div className="absolute inset-0 bg-transparent" onClick={() => setShowStreakDetails(false)} />
+
+            {/* Slider Container */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-sm h-full bg-[#FAF9F6] border-l border-zinc-200 flex flex-col shadow-2xl z-10 overflow-hidden"
+            >
+              {/* Streak Header */}
+              <header className="px-6 py-5 bg-white border-b border-zinc-200/60 flex justify-between items-center shrink-0">
+                <h3 className="text-sm font-black text-zinc-800 flex items-center gap-2">
+                  <span>🔥</span> Study Streak Days
+                </h3>
+                <button
+                  onClick={() => setShowStreakDetails(false)}
+                  className="p-1 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </header>
+
+              {/* Streak Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24">
+                
+                {/* Hero Streak Flame Box */}
+                <div className="bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 rounded-[2.25rem] p-6 text-white text-center shadow-lg border border-orange-400 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-white/5 pointer-events-none" />
+                  <div className="relative z-10 flex flex-col items-center">
+                    <motion.div
+                      animate={{ scale: [1, 1.15, 1], y: [0, -3, 0] }}
+                      transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                      className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-white text-3xl mb-3 shadow-inner"
+                    >
+                      🔥
+                    </motion.div>
+                    
+                    <p className="text-4xl font-black tracking-tight leading-none">
+                      {studyStreak} Days
+                    </p>
+                    <span className="text-[10px] uppercase font-black tracking-widest text-white/90 bg-white/20 px-3 py-1 rounded-full mt-2 inline-block">
+                      {studyStreak > 0 ? "Daily Habit Active 🚀" : "Start your Streak today! 🌱"}
+                    </span>
+                    
+                    {/* Encouraging Hindi/Hinglish sub-caption */}
+                    <p className="text-xs font-bold text-white/95 mt-4 leading-relaxed max-w-xs">
+                      Shandaar Performance! Aap har din mehnat kar rahe hain! Daily attendance punch karein aur doston se aage rahein! 🎯
+                    </p>
+                  </div>
+                </div>
+
+                {/* Daily attendance punch-in card */}
+                {(() => {
+                  const today = new Date().toDateString();
+                  const lastPunchDate = safeGetItem('study_last_punch_date');
+                  const hasPunchedToday = lastPunchDate === today;
+
+                  return (
+                    <div className="bg-white rounded-[2rem] p-5 border border-zinc-200/80 shadow-sm flex flex-col items-center text-center space-y-4">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasPunchedToday ? 'bg-green-50 text-green-500 border border-green-100' : 'bg-orange-50 text-orange-500 border border-orange-100'}`}>
+                          {hasPunchedToday ? <Check className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+                        </div>
+                        <h4 className="text-xs font-black text-zinc-800 uppercase tracking-wider">
+                          Daily Attendance Check-In
+                        </h4>
+                      </div>
+
+                      <p className="text-[11px] font-bold text-zinc-500 max-w-xs">
+                        {hasPunchedToday 
+                          ? "Aapki aaj ki attendance register ho chuki hai! Kal fir se aakar continuous padhai jaari rakhein! ✨"
+                          : isVip 
+                            ? "Aaj abhi tak attendance punch nahi hui hai! Padhai shuru karein aur apni streak barkarar rakhein! 🔥"
+                            : "Aaj abhi tak attendance punch nahi hui hai! Padhai shuru karein aur abhi +2 Study Coins kamaein! 🪙"
+                        }
+                      </p>
+
+                      <button
+                        onClick={handleDailyPunch}
+                        disabled={hasPunchedToday}
+                        className={`w-full py-3.5 rounded-2xl font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
+                          hasPunchedToday 
+                            ? 'bg-zinc-100 text-zinc-400 border border-zinc-200/50 cursor-default pointer-events-none' 
+                            : 'bg-zinc-950 hover:bg-zinc-800 text-white shadow-md border-none'
+                        }`}
+                      >
+                        {hasPunchedToday ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Attendance Verified!
+                          </>
+                        ) : (
+                          <>
+                            <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
+                            {isVip ? 'Punch Attendance' : 'Punch Attendance (+2 Coins)'}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* Attendance Calendar Grid */}
+                <div className="bg-white rounded-[2rem] p-5 border border-zinc-200/80 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4" /> Last 28 Days Check-In
+                    </h4>
+                    <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
+                      {generateStreakCalendar().filter(d => d.isActive).length} Completed
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-2">
+                    {/* Weekday Labels */}
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((label, idx) => (
+                      <div key={`label-${idx}`} className="text-center text-[9px] font-black text-zinc-400 uppercase tracking-widest py-1">
+                        {label}
+                      </div>
+                    ))}
+
+                    {/* Date Boxes */}
+                    {generateStreakCalendar().map((day, idx) => (
+                      <div 
+                        key={`day-box-${idx}`}
+                        className={`relative aspect-square rounded-xl flex flex-col items-center justify-center border transition-all ${
+                          day.isActive 
+                            ? 'bg-orange-50/70 border-orange-200 text-orange-600 font-extrabold shadow-sm' 
+                            : day.isToday 
+                              ? 'bg-zinc-50 border-zinc-400 text-zinc-800 font-black ring-1 ring-zinc-400/50' 
+                              : 'bg-[#FAF9F6] border-zinc-200/60 text-zinc-400 font-bold'
+                        }`}
+                        title={`${day.monthLabel} ${day.dateLabel} - ${day.isActive ? 'Study Day' : 'Rest Day'}`}
+                      >
+                        <span className="text-[10px]">{day.dateLabel}</span>
+                        {day.isActive && (
+                          <span className="text-[8px] mt-0.5 animate-pulse">🔥</span>
+                        )}
+                        {day.isToday && !day.isActive && (
+                          <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-zinc-400" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-[9px] text-zinc-400 font-bold text-center italic leading-relaxed pt-1">
+                    Continuous check-ins make your streak flame brighter! Keep up the discipline! 🎯
+                  </p>
+                </div>
+
+                {/* Milestone Targets (Unlockable Rewards) */}
+                <div className="bg-white rounded-[2rem] p-5 border border-zinc-200/80 shadow-sm space-y-4">
+                  <h4 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Trophy className="w-4 h-4 text-amber-500 fill-amber-500" /> Streak Milestones
+                  </h4>
+
+                  <div className="space-y-3">
+                    {[
+                      { days: 3, reward: 5, badge: "Novice Scholar 🎓", desc: isVip ? "Unlock a 3-Day streak milestone!" : "Unlock 3 Days streak to claim +5 Study Coins!" },
+                      { days: 7, reward: 15, badge: "Study Monk 🧘", desc: isVip ? "Unlock a 7-Day streak milestone!" : "Unlock 7 Days streak to claim +15 Study Coins!" },
+                      { days: 15, reward: 30, badge: "Exam Destroyer ⚡", desc: isVip ? "Unlock a 15-Day streak milestone!" : "Unlock 15 Days streak to claim +30 Study Coins!" },
+                      { days: 30, reward: 50, badge: "AI Mastermind 🌟", desc: isVip ? "Unlock a 30-Day streak milestone!" : "Unlock 30 Days streak to claim +50 Study Coins!" }
+                    ].map((milestone) => {
+                      const isUnlocked = studyStreak >= milestone.days;
+                      const isClaimed = claimedMilestones[milestone.days];
+
+                      return (
+                        <div 
+                          key={`milestone-${milestone.days}`}
+                          className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                            isClaimed 
+                              ? 'bg-zinc-50 border-zinc-200/60 opacity-70' 
+                              : isUnlocked 
+                                ? 'bg-amber-50/50 border-amber-200 shadow-sm' 
+                                : 'bg-zinc-50/30 border-zinc-200/40'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-extrabold ${isClaimed ? 'text-zinc-500 line-through' : isUnlocked ? 'text-amber-600' : 'text-zinc-600'}`}>
+                                {milestone.badge}
+                              </span>
+                              {!isClaimed && isUnlocked && (
+                                <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
+                                  Unlocked
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-zinc-500 font-semibold leading-relaxed">
+                              {milestone.desc}
+                            </p>
+                          </div>
+
+                          <div>
+                            {isClaimed ? (
+                              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                                <Check className="w-3.5 h-3.5 text-zinc-400" /> Claimed
+                              </span>
+                            ) : isUnlocked ? (
+                              <button
+                                onClick={() => handleClaimMilestone(milestone.days, milestone.reward)}
+                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer border-none"
+                              >
+                                {isVip ? 'Claim' : `Claim +${milestone.reward}`}
+                              </button>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-zinc-400 shrink-0">
+                                <Lock className="w-4 h-4" />
+                                <span className="text-[9px] font-bold mt-0.5">{studyStreak}/{milestone.days}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
               </div>
             </motion.div>

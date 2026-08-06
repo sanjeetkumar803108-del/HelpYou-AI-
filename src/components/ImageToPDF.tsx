@@ -1,18 +1,48 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Upload, FileImage, FileDown, FileText } from 'lucide-react';
+import { ArrowLeft, Upload, FileImage, FileDown, FileText, History, Share2, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
-import { savePDFMobile } from '../utils/mobileSaver';
+import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
+import { savePdfToHistory } from '../utils/pdfHistory';
+import { Capacitor } from '@capacitor/core';
+import { pickNativeFiles } from '../utils/mobilePicker';
+import SafePdfViewer from './SafePdfViewer';
+import { triggerVibration } from '../utils/vibrate';
 
-export default function ImageToPDF({ onBack }: { onBack: () => void }) {
+export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => void; onOpenHistory?: () => void }) {
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (pdfBlobUrl) {
+      setPdfBlobUrl(null);
+    } else if (showPreviewPage) {
+      setShowPreviewPage(false);
+    } else if (images.length > 0) {
+      setImages([]);
+    } else {
+      onBack();
+    }
+  };
   const [images, setImages] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
   const [quality, setQuality] = useState<'standard' | 'high'>('standard');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfDataUri, setPdfDataUri] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string>('');
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showPreviewPage, setShowPreviewPage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const handleBackButton = (e: Event) => {
+      if (pdfBlobUrl || showPreviewPage || images.length > 0) {
+        e.preventDefault();
+        handleHeaderBack();
+      }
+    };
+    window.addEventListener('appBackButton', handleBackButton);
+    return () => window.removeEventListener('appBackButton', handleBackButton);
+  }, [pdfBlobUrl, showPreviewPage, images]);
 
   const downloadPDF = async () => {
     if (!pdfBlobUrl) return;
@@ -22,6 +52,17 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
       await savePDFMobile(blob, pdfFileName || 'HelpYou-AI-Document.pdf');
     } catch (err) {
       console.error('Failed to download PDF via mobile saver:', err);
+    }
+  };
+
+  const sharePDF = async () => {
+    if (!pdfBlobUrl) return;
+    try {
+      const response = await fetch(pdfBlobUrl);
+      const blob = await response.blob();
+      await sharePDFMobile(blob, pdfFileName || 'HelpYou-AI-Document.pdf');
+    } catch (err) {
+      console.error('Failed to share PDF via mobile share:', err);
     }
   };
 
@@ -129,7 +170,12 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
       const pdfHeight = pdf.internal.pageSize.getHeight();
 
       for (let i = 0; i < images.length; i++) {
-        const imgSrc = images[i];
+        let imgSrc = images[i];
+        
+        // Handle local file:// URIs properly on native mobile wrappers
+        if (Capacitor.isNativePlatform() && imgSrc.startsWith('file://')) {
+          imgSrc = Capacitor.convertFileSrc(imgSrc);
+        }
         
         const img = new Image();
         img.src = imgSrc;
@@ -194,6 +240,21 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
       const blob = pdf.output('blob');
       const blobUrl = URL.createObjectURL(blob);
       setPdfBlobUrl(blobUrl);
+
+      // Automatic capture for centralized PDF history
+      try {
+        const dataUri = pdf.output('datauristring');
+        setPdfDataUri(dataUri);
+        savePdfToHistory({
+          title: outputName,
+          fileUri: dataUri,
+          featureTag: 'Image to PDF',
+          pageCount: images.length,
+          fileSize: `${(blob.size / 1024).toFixed(1)} KB`,
+        });
+      } catch (historyErr) {
+        console.warn('Could not auto-save PDF to history:', historyErr);
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to generate PDF. Try with fewer images.');
@@ -201,6 +262,46 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
       setLoading(false);
     }
   };
+
+  if (showPreviewPage) {
+    return (
+      <div className="fixed inset-0 bg-zinc-950 z-50 flex flex-col h-screen w-screen animate-fade-in">
+        {/* Top sticky app bar */}
+        <div className="bg-zinc-900 border-b border-zinc-800 px-5 py-4 flex items-center gap-4 shrink-0">
+          <button
+            onClick={() => setShowPreviewPage(false)}
+            className="w-10 h-10 bg-zinc-800 hover:bg-zinc-750 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-extrabold text-sm text-white truncate">{pdfFileName}</h3>
+            <p className="text-[10px] text-zinc-400 font-bold">PDF Reader • Full Screen Mode</p>
+          </div>
+        </div>
+        {/* Preview Content */}
+        <div className="flex-1 overflow-hidden relative flex flex-col">
+          {pdfDataUri || pdfBlobUrl ? (
+            <SafePdfViewer pdfUrlOrBase64={pdfDataUri || pdfBlobUrl} />
+          ) : (
+            <div className="text-center p-6 text-zinc-500 my-auto">
+              <p className="text-xs font-bold text-zinc-400">Loading PDF Preview...</p>
+            </div>
+          )}
+        </div>
+        {/* Bottom Action bar */}
+        <div className="bg-zinc-950 p-4 border-t border-zinc-900 flex gap-2.5 shrink-0 z-10">
+          <button
+            onClick={sharePDF}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+          >
+            <Share2 className="w-4 h-4 text-white" />
+            <span>SHARE DOCUMENT</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (pdfBlobUrl) {
     return (
@@ -211,6 +312,7 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
             onClick={() => {
               if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
               setPdfBlobUrl(null);
+              setPdfDataUri(null);
             }}
             className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0"
           >
@@ -247,20 +349,20 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
           <div className="w-full max-w-sm flex flex-col gap-3 px-4">
             {/* Preview Option */}
             <button
-              onClick={() => setShowPreviewModal(true)}
+              onClick={() => setShowPreviewPage(true)}
               className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-50 text-zinc-800 py-4 px-6 rounded-2xl font-bold border border-zinc-200 shadow-sm transition-all active:scale-[0.98] text-sm cursor-pointer"
             >
               <FileText className="w-5 h-5 text-blue-600" />
               <span>PREVIEW PDF</span>
             </button>
 
-            {/* Download Option */}
+            {/* Share Option */}
             <button
-              onClick={downloadPDF}
+              onClick={sharePDF}
               className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-4 px-6 rounded-2xl font-bold border border-blue-500/20 shadow-lg shadow-blue-500/10 transition-all active:scale-[0.98] text-sm cursor-pointer"
             >
-              <FileDown className="w-5 h-5" />
-              <span>SAVE PDF</span>
+              <Share2 className="w-5 h-5" />
+              <span>SHARE PDF</span>
             </button>
 
             {/* Create Another Option */}
@@ -268,6 +370,7 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
               onClick={() => {
                 if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
                 setPdfBlobUrl(null);
+                setPdfDataUri(null);
                 setImages([]);
                 setFileName('');
               }}
@@ -277,35 +380,6 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
             </button>
           </div>
         </div>
-
-        {/* Inline PDF Preview Modal - Completely inside app, no new browser tab */}
-        {showPreviewModal && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col p-4 animate-fade-in">
-            <div className="bg-[#FAF9F6] w-full h-full rounded-3xl flex flex-col overflow-hidden shadow-2xl border border-zinc-200">
-              {/* Modal Header */}
-              <div className="px-5 py-4 border-b border-zinc-200 flex items-center justify-between bg-white shrink-0">
-                <div className="min-w-0 pr-4">
-                  <h4 className="font-extrabold text-sm text-zinc-900 truncate">{pdfFileName}</h4>
-                  <p className="text-[10px] text-zinc-400 font-bold">In-App Safe PDF Viewer</p>
-                </div>
-                <button
-                  onClick={() => setShowPreviewModal(false)}
-                  className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center font-bold transition-all active:scale-90"
-                >
-                  ✕
-                </button>
-              </div>
-              {/* Modal Body / PDF Object Viewer */}
-              <div className="flex-1 bg-zinc-100 p-2 relative">
-                <iframe
-                  src={`${pdfBlobUrl}#toolbar=0&navpanes=0`}
-                  className="w-full h-full rounded-2xl border border-zinc-200/80 bg-white"
-                  title="PDF Preview Frame"
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -347,27 +421,49 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
       </AnimatePresence>
 
       {/* FIXED/STICKY HEADER BAR */}
-      <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center gap-4 shrink-0">
-        <button 
-          onClick={onBack}
-          className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h2 className="text-lg md:text-xl font-bold flex items-center tracking-tight line-clamp-1 text-zinc-900">
-            <FileImage className="w-5 h-5 text-blue-600 mr-2 shrink-0" />
-            <span>Image to PDF</span>
-          </h2>
-          <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Combine multiple photos into one PDF</p>
+      <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={handleHeaderBack}
+            className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h2 className="text-lg md:text-xl font-bold flex items-center tracking-tight line-clamp-1 text-zinc-900">
+              <FileImage className="w-5 h-5 text-blue-600 mr-2 shrink-0" />
+              <span>Image to PDF</span>
+            </h2>
+            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Combine multiple photos into one PDF</p>
+          </div>
         </div>
+
+        {onOpenHistory && (
+          <button
+            onClick={onOpenHistory}
+            className="w-9 h-9 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center border border-rose-200/80 shadow-xs transition-all cursor-pointer shrink-0"
+            title="View PDF History"
+          >
+            <History className="w-4.5 h-4.5" />
+          </button>
+        )}
       </div>
 
       {/* SCROLLABLE BODY */}
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-6 z-10 relative">
         {images.length === 0 ? (
           <div 
-            onClick={() => fileInputRef.current?.click()}
+            onClick={async () => {
+              if (Capacitor.isNativePlatform()) {
+                const picked = await pickNativeFiles({ types: 'image', multiple: true });
+                if (picked && picked.length > 0) {
+                  const newImages = picked.map(p => p.dataUrl);
+                  setImages(prev => [...prev, ...newImages]);
+                }
+              } else {
+                fileInputRef.current?.click();
+              }
+            }}
             className="flex flex-col items-center justify-center h-48 bg-white border border-dashed border-zinc-300 rounded-[2rem] hover:bg-zinc-50 transition-colors cursor-pointer shadow-sm"
           >
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 border border-blue-100">
@@ -444,7 +540,17 @@ export default function ImageToPDF({ onBack }: { onBack: () => void }) {
 
               {/* Add Images Card */}
               <div 
-                onClick={() => fileInputRef.current?.click()}
+                onClick={async () => {
+                  if (Capacitor.isNativePlatform()) {
+                    const picked = await pickNativeFiles({ types: 'image', multiple: true });
+                    if (picked && picked.length > 0) {
+                      const newImages = picked.map(p => p.dataUrl);
+                      setImages(prev => [...prev, ...newImages]);
+                    }
+                  } else {
+                    fileInputRef.current?.click();
+                  }
+                }}
                 className="relative aspect-[3/4] bg-white border border-dashed border-zinc-300 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 transition-colors shadow-sm"
               >
                 <Upload className="w-6 h-6 text-blue-600 mb-2" />

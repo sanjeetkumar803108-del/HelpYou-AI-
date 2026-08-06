@@ -11,8 +11,11 @@ export const safeGetItem = (key: string, defaultValue: string | null = null): st
 export const safeSetItem = (key: string, value: string): void => {
   try {
     window.localStorage.setItem(key, value);
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('academic_profile_updated', { detail: { key, value } }));
   } catch (e) {
     memoryStorage[key] = value;
+    window.dispatchEvent(new CustomEvent('academic_profile_updated', { detail: { key, value } }));
   }
 };
 

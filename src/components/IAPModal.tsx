@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, XCircle, ShieldCheck, CreditCard, Crown, ChevronDown, Check, Smartphone, Wallet, Calendar, AlertCircle } from 'lucide-react';
 import { triggerVibration } from '../utils/vibrate';
-import { getTimezoneCurrency, formatPrice } from '../utils/currency';
+import { safeGetItem } from '../utils/storage';
+import { auth } from '../lib/firebase';
+import { pricingMap } from './PaywallModal';
 
 interface IAPModalProps {
   isOpen: boolean;
@@ -10,11 +12,12 @@ interface IAPModalProps {
   billingCycle: 'monthly' | 'yearly';
   hasTrial: boolean;
   onResult: (success: boolean) => void;
+  selectedCountry?: string;
 }
 
 type PaymentMethod = 'google_play' | 'upi' | 'credit_card';
 
-export default function IAPModal({ isOpen, onClose, billingCycle, hasTrial, onResult }: IAPModalProps) {
+export default function IAPModal({ isOpen, onClose, billingCycle, hasTrial, onResult, selectedCountry: propSelectedCountry }: IAPModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('google_play');
   const [showMethodSelector, setShowMethodSelector] = useState(false);
   const [authorizedAutoPay, setAuthorizedAutoPay] = useState(false);
@@ -22,10 +25,20 @@ export default function IAPModal({ isOpen, onClose, billingCycle, hasTrial, onRe
 
   if (!isOpen) return null;
 
-  const currency = getTimezoneCurrency();
+  const userUid = auth.currentUser?.uid;
+  const selectedCountry = propSelectedCountry 
+    || safeGetItem('academic_country') 
+    || (userUid ? safeGetItem(`academic_country_${userUid}`) : null) 
+    || 'United States';
 
-  // Price conversion based on strict mathematical USD bases
-  const convertedPrice = billingCycle === 'monthly' ? formatPrice(9.99, currency) : formatPrice(99.00, currency);
+  // FIX: Added localized pricing
+  const basePrice = pricingMap[selectedCountry] || pricingMap['Others / International'];
+  const currencySymbolMatch = basePrice.match(/^([^\d.]+)/);
+  const numericMatch = basePrice.match(/([\d.]+)/);
+  const symbol = currencySymbolMatch ? currencySymbolMatch[1] : '$';
+  const monthlyNum = numericMatch ? parseFloat(numericMatch[1]) : 14.99;
+
+  const convertedPrice = billingCycle === 'monthly' ? basePrice : `${symbol}${(monthlyNum * 10).toFixed(2)}`;
   const cycleLabel = billingCycle === 'monthly' ? 'month' : 'year';
 
   const paymentMethods = [

@@ -2,10 +2,9 @@ import { jsPDF } from 'jspdf';
 import { savePDFMobile } from '../utils/mobileSaver';
 
 /**
- * Exports generated study notes to a beautiful, professionally structured PDF document.
- * Handles text wrapping, clean typography styling, page headers/footers, and page overflow seamlessly.
+ * Generates the jsPDF document instance and returns it as a Blob.
  */
-export function exportNotesToPDF(title: string, markdownContent: string, actionType: string) {
+export function generateNotesPDFBlob(title: string, markdownContent: string, actionType: string): Blob {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -158,7 +157,18 @@ export function exportNotesToPDF(title: string, markdownContent: string, actionT
     }
   }
 
-  // Save with sanitised filename
+  return doc.output('blob');
+}
+
+/**
+ * Exports generated study notes to a beautiful, professionally structured PDF document.
+ * Handles text wrapping, clean typography styling, page headers/footers, and page overflow seamlessly.
+ */
+export function exportNotesToPDF(title: string, markdownContent: string, actionType: string) {
+  const cleanTitle = title.replace(/\.[^/.]+$/, "");
   const safeFilename = cleanTitle.toLowerCase().replace(/[^a-z0-9_-]+/g, '_') || 'study_notes';
-  savePDFMobile(doc.output('blob'), `${safeFilename}_notes.pdf`);
+  const fullFilename = `${safeFilename}_notes.pdf`;
+  const blob = generateNotesPDFBlob(title, markdownContent, actionType);
+
+  savePDFMobile(blob, fullFilename);
 }

@@ -11,6 +11,7 @@ import { auth, db } from '../lib/firebase';
 import { collection, addDoc, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration } from '../utils/vibrate';
+import { requestMicrophonePermission } from '../utils/nativePermissions';
 import GlobalMarkdown from './GlobalMarkdown';
 
 interface CallWithTutorProps {
@@ -64,6 +65,7 @@ const blobVariants: any = {
 export default function CallWithTutor({ onBack }: CallWithTutorProps) {
   const [callState, setCallState] = useState<CallState>('idle');
   const [vibe, setVibe] = useState<TutorVibe>('sophia');
+  const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
@@ -106,7 +108,23 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
           });
         }
       });
-      setHistoryItems(items);
+
+      // Keep only last 10 records, delete older ones
+      if (items.length > 10) {
+        const toKeep = items.slice(0, 10);
+        const toDelete = items.slice(10);
+        
+        for (const item of toDelete) {
+          try {
+            await deleteDoc(doc(db, 'pocket_items', item.id));
+          } catch (err) {
+            console.error("Failed to delete old call session item:", err);
+          }
+        }
+        setHistoryItems(toKeep);
+      } else {
+        setHistoryItems(items);
+      }
     } catch (e) {
       console.error("Failed to load call history:", e);
     } finally {
@@ -151,7 +169,7 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
   // Transcripts
   const [liveUserText, setLiveUserText] = useState('');
   const [liveTutorText, setLiveTutorText] = useState('');
-  const [transcript, setTranscript] = useState<{ sender: 'user' | 'tutor'; text: string; time: string }[]>([]);
+  const [transcript, setTranscript] = useState<{ sender: 'user' | 'tutor'; text: string; time: string; imageUri?: string | null }[]>([]);
   const [isTutorThinking, setIsTutorThinking] = useState(false);
   const [isTutorSpeaking, setIsTutorSpeaking] = useState(false);
   const [speechLang, setSpeechLang] = useState<'en-IN' | 'hi-IN'>('en-IN');
@@ -394,6 +412,7 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
         // Stop attempting to capture to avoid loops
         isMutedRef.current = true;
         setIsMuted(true);
+        setPermissionError("Microphone access was denied. Please make sure microphone permission is enabled for this site in your browser settings.");
       }
     };
 
@@ -412,6 +431,19 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
     }
   };
 
+  const cleanMessageText = (rawText: string): string => {
+    let text = rawText;
+    try {
+      const parsed = JSON.parse(rawText);
+      text = parsed.response || parsed.message || rawText;
+    } catch (e) {
+      // If it's already plain text, return it as-is
+      text = rawText;
+    }
+    // Replace escaped newlines (e.g. \n or \\n) with actual newlines (\n)
+    return text.replace(/\\n/g, '\n');
+  };
+
   // Process user input and get response from AI Tutor
   const handleTutorResponse = async (userInput: string, imageFile?: File | null) => {
     setIsTutorThinking(true);
@@ -428,30 +460,55 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
       };
       const selectedVibeStr = vibeMap[vibeRef.current];
 
-      const systemPrompt = `MASTER SYSTEM INSTRUCTION: REAL-TIME AI VOICE TUTOR
-You are an advanced AI Voice Tutor conducting a real-time, interactive audio call with a student. 
-Your current persona and teaching style is: ${selectedVibeStr}.
+      const getSystemPrompt = (selectedVibe: string) => {
+        const baseRules = `
+          UNIVERSAL RULES (APPLY TO ALL PERSONAS):
+          1. Output strictly plain text. DO NOT wrap your response in JSON objects or brackets (e.g., no {"response": "..."}).
+          2. Keep responses concise and conversational, ideal for a voice call. Do not output massive walls of text.
+          3. STRICT FORMATTING: Use clean, standard text formatting. DO NOT use markdown bolding syntax like "**" or markdown tables. Use clean line breaks and emojis for visual readability.
+        `;
 
-GLOBAL AUDIO RULES (APPLY TO ALL MODES - CRITICAL):
-1. SPOKEN FORMAT ONLY: You are speaking on a voice call, not writing an essay. Keep responses short, punchy, and conversational (max 2-3 sentences per turn). 
-2. NO MARKDOWN: Absolutely DO NOT use asterisks (**), dashes, bullet points, or any special formatting symbols. Use plain text only so the Text-to-Speech (TTS) engine sounds human.
-3. TWO-WAY DIALOGUE: Never give a long monologue. Always end your turn by passing the mic back to the student (e.g., asking a question, asking if they understand, or prompting them to solve the next step).
+        let personaInstructions = "";
 
-DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
-- IF 'Coach Sophia (Energetic)': Be highly upbeat, enthusiastic, and motivating. Cheer the student on like a sports coach.
-- IF 'Alex (Socratic)': Play devil's advocate. Never give the direct answer immediately. Ask guiding, thought-provoking questions to make the student arrive at the answer themselves.
-- IF 'Expert Dr. Liam (Rigorous) / Exam Crunch': Be strict, fast-paced, and extremely precise. Focus heavily on rapid-fire quizzing, core formulas, and high-yield exam facts without any casual fluff.
-- IF 'Guru Clara (Calm) / ELI5': Use a soothing, patient, and stress-relieving tone. Explain complex mechanisms using extremely simple, relatable everyday analogies (Explain Like I'm 5).
-- IF 'Storyteller': Hook the student by turning dry academic topics into fascinating historical narratives, mysteries, or real-world stories.`;
+        switch (selectedVibe) {
+          case "Coach Sophia (Energetic)":
+            personaInstructions = `You are Coach Sophia. Your tone is highly upbeat, enthusiastic, and motivating, like a sports coach for academics. Provide direct, accurate, and complete answers to the user's questions immediately. Do NOT withhold answers or use the Socratic method. Explain the concept clearly, cheer the user on, and use phrases like 'Champion', 'Let's crush this', or 'Great job!'. Output strictly plain text. Do NOT wrap your response in JSON objects or brackets. Always format chemical formulas, isotopes, and math equations using proper LaTeX syntax (e.g., C_4H_{10}O or H_2SO_4). DO NOT use markdown bolding syntax like '**' or markdown tables. Use clean line breaks and emojis for visual readability.`;
+            break;
+
+          case "Alex (Socratic)":
+            personaInstructions = `You are Alex. Your tone is thought-provoking, inquisitive, and you play devil's advocate. You MUST use the Socratic method. Never give the direct answer immediately. Instead, ask 1 or 2 concise, guiding questions that force the user to think critically and arrive at the answer themselves. Keep your tone encouraging but challenging. Output strictly plain text. Do NOT wrap your response in JSON objects or brackets. Always format chemical formulas, isotopes, and math equations using proper LaTeX syntax. DO NOT use markdown bolding syntax like '**' or markdown tables. Use clean line breaks and emojis for visual readability.`;
+            break;
+
+          case "Expert Dr. Liam (Rigorous) / Exam Crunch":
+            personaInstructions = `You are Expert Dr. Liam. Your tone is strict, fast-paced, extremely precise, and no-nonsense. Provide rapid-fire, highly concentrated academic facts. Focus strictly on core formulas, high-yield exam facts, and direct answers. Cut out all pleasantries, fluff, and small talk. Deliver the exact information needed to ace the exam in the shortest time possible. Output strictly plain text. Do NOT wrap your response in JSON objects or brackets. Always format chemical formulas, isotopes, and math equations using proper LaTeX syntax. DO NOT use markdown bolding syntax like '**' or markdown tables. Use clean line breaks and emojis for visual readability.`;
+            break;
+
+          case "Guru Clara (Calm) / ELI5":
+            personaInstructions = `You are Guru Clara. Your tone is soothing, patient, warm, and highly empathetic. Explain complex mechanisms using the 'Explain Like I'm 5' (ELI5) method. Always provide the direct answer, but break it down using extremely simple, everyday, relatable analogies. Ensure the user feels zero pressure and completely understands the foundational concept. Output strictly plain text. Do NOT wrap your response in JSON objects or brackets. Always format chemical formulas, isotopes, and math equations using proper LaTeX syntax. DO NOT use markdown bolding syntax like '**' or markdown tables. Use clean line breaks and emojis for visual readability.`;
+            break;
+
+          case "Storyteller":
+            personaInstructions = `You are The Storyteller. Your tone is captivating, dramatic, and narrative-driven. Answer the user's question by turning the academic topic into a fascinating historical narrative, mystery, or real-world story. Set the scene, introduce the concepts as characters, and make the explanation feel like listening to an engaging podcast or audiobook. Output strictly plain text. Do NOT wrap your response in JSON objects or brackets. Always format chemical formulas, isotopes, and math equations using proper LaTeX syntax. DO NOT use markdown bolding syntax like '**' or markdown tables. Use clean line breaks and emojis for visual readability.`;
+            break;
+
+          default:
+            personaInstructions = `Provide a helpful and direct educational response.`;
+        }
+
+        return baseRules + "\n" + personaInstructions;
+      };
+
+      const systemPrompt = getSystemPrompt(selectedVibeStr);
 
       // Structure conversation history for context
       const chatHistory = transcript.slice(-4).map(t => ({
         role: t.sender === 'user' ? 'user' : 'model',
-        parts: [{ text: t.text }]
+        parts: [{ text: t.text || "Attached image" }]
       }));
 
       const formData = new FormData();
-      formData.append('message', userInput);
+      const apiMessage = (userInput === "" && imageFile) ? "Analyze this image" : userInput;
+      formData.append('message', apiMessage);
       formData.append('mode', 'standard');
       formData.append('history', JSON.stringify(chatHistory));
       formData.append('customSystemInstruction', systemPrompt);
@@ -470,7 +527,8 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
         throw new Error("Server returned invalid response format");
       }
       const data = await res.json();
-      const tutorText = data.text || "I am here. Let's keep learning together!";
+      const rawTutorText = data.text || "I am here. Let's keep learning together!";
+      const tutorText = cleanMessageText(rawTutorText);
 
       // Auto-detect voice tutor misconception/trap and save to vault
       detectAndLogMistake('Voice Tutor', userInput, tutorText).catch(e => console.error("Voice tutor mistake capture failed:", e));
@@ -498,8 +556,16 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
     }
   };
 
-  // Start Call Flow
-  const handleStartCall = () => {
+  // Start Call Flow - JIT Microphone Permission trigger (Google Play Compliance)
+  const handleStartCall = async () => {
+    setPermissionError(null);
+    // JIT PERMISSION: Microphone permission is requested strictly when the user initiates the Voice Tutor call
+    const micGranted = await requestMicrophonePermission();
+    if (!micGranted) {
+      setPermissionError("Microphone Permission Required. Please allow microphone access to talk with your AI Tutor.");
+      return;
+    }
+
     setCallState('connecting');
     setCallDuration(0);
     setTranscript([]);
@@ -539,27 +605,10 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
   };
 
   // End Call Flow
-  const handleEndCall = async () => {
+  const handleEndCall = () => {
     stopTutorSpeech();
     stopListening();
     setCallState('ended');
-
-    // Save call session summary to Firebase if transcript exists
-    const user = auth.currentUser;
-    if (user && transcript.length > 0) {
-      try {
-        await addDoc(collection(db, 'pocket_items'), {
-          userId: user.uid,
-          title: `🎙️ Call Session: AI Tutor (${vibe.toUpperCase()})`,
-          content: `**AI Tutor Live Session Summary**\n\n* **Vibe Mode:** ${vibe.toUpperCase()}\n* **Duration:** ${formatTime(callDuration)}\n* **Date:** ${new Date().toLocaleDateString()}\n\n---\n\n### Conversation History:\n\n` + 
-            transcript.map(t => `**${t.sender === 'user' ? 'Student' : 'AI Tutor'}** (${t.time}):\n${t.text}\n`).join('\n'),
-          type: 'note',
-          createdAt: new Date().toISOString()
-        });
-      } catch (err) {
-        console.error("Error saving call summary:", err);
-      }
-    }
   };
 
   // Toggle Mute
@@ -660,20 +709,6 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
           <h1 className="text-sm font-black text-zinc-900 tracking-tight mt-0.5">Call with AI Tutor</h1>
         </div>
         <div className="flex items-center gap-2">
-          {auth.currentUser && callState === 'idle' && (
-            <button 
-              onClick={() => {
-                triggerVibration(15);
-                setHistoryOpen(true);
-                fetchHistory();
-              }}
-              className="w-10 h-10 rounded-full border shadow-sm flex items-center justify-center transition-all active:scale-95 bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-500 hover:text-zinc-800 shrink-0 cursor-pointer"
-              title="Call History"
-            >
-              <History className="w-5 h-5" />
-            </button>
-          )}
-
           <div className="relative">
             <button 
               onClick={() => setShowVibeDropdown(!showVibeDropdown)}
@@ -731,247 +766,178 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
         className="flex-1 flex flex-col items-center justify-around p-4 md:p-6 z-0 relative overflow-y-auto max-h-[calc(100vh-60px)] md:overflow-hidden select-none transition-all duration-100"
         style={{ paddingBottom: viewportBottomOffset > 0 ? `${viewportBottomOffset + 40}px` : '16px' }}
       >
-        
-        {/* Tutor Info & Call Timer */}
-        <div className="text-center mt-1 md:mt-4 flex flex-col items-center">
-          <div className="relative inline-block">
-            {/* Pulsing Outer Ring */}
-            <AnimatePresence>
-              {(callState === 'connected' || callState === 'connecting') && (
-                <motion.span 
-                  className={`absolute -inset-4 rounded-full bg-gradient-to-r ${vibeDetails[vibe].color} opacity-20 pointer-events-none blur-md`}
-                  animate={callState === 'connected' && (isTutorThinking || isTutorSpeaking) ? {
-                    scale: [1, 1.2, 1],
-                    opacity: [0.15, 0.4, 0.15]
-                  } : { scale: 1, opacity: 0.15 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                />
-              )}
-            </AnimatePresence>
-
-            <div className={`w-20 h-20 md:w-28 md:h-28 rounded-full bg-gradient-to-br ${vibeDetails[vibe].color} p-[3px] shadow-[0_8px_25px_rgba(168,85,247,0.12)] relative z-0`}>
-              <div className="w-full h-full rounded-full bg-white flex flex-col items-center justify-center overflow-hidden shadow-inner">
-                <GraduationCap className="w-10 h-10 md:w-12 md:h-12 text-zinc-700" />
-              </div>
+        {permissionError && (
+          <div className="w-full max-w-sm mb-3 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 relative animate-fadeIn shadow-sm shrink-0 z-50">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-xs font-black text-red-800">Permission Required</p>
+              <p className="text-[11px] text-red-700 font-semibold mt-0.5 leading-relaxed">{permissionError}</p>
             </div>
-
-            {/* Glowing active indicator dot */}
-            {callState === 'connected' && (
-              <span className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#FAF9F6] flex items-center justify-center shadow-lg z-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-              </span>
-            )}
+            <button 
+              onClick={() => setPermissionError(null)}
+              className="p-1 rounded-full text-red-400 hover:text-red-600 hover:bg-red-100/50 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-
-          <h2 className="text-lg md:text-xl font-black mt-2 md:mt-4 tracking-tight text-zinc-900">{vibeDetails[vibe].label}</h2>
-          
-          <div className="flex items-center justify-center gap-2 mt-1.5">
-            {callState === 'idle' && (
-              <span className="text-[11px] md:text-xs text-zinc-500 font-bold bg-white border border-zinc-200/60 px-3 py-1 rounded-full shadow-sm">Ready to talk</span>
-            )}
-            {callState === 'connecting' && (
-              <span className="text-[11px] md:text-xs text-yellow-600 font-bold bg-yellow-400/10 border border-yellow-400/20 px-3 py-1 rounded-full animate-pulse shadow-sm">Establishing line...</span>
-            )}
-            {callState === 'hold' && (
-              <span className="text-[11px] md:text-xs text-amber-600 font-bold bg-amber-400/15 border border-amber-400/25 px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse shadow-sm">
-                <Pause className="w-3 h-3 text-amber-500" /> Call on hold
-              </span>
-            )}
-            {callState === 'ended' && (
-              <span className="text-[11px] md:text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-3 py-1 rounded-full shadow-sm">Call ended</span>
-            )}
-            {callState === 'connected' && (
-              <div className="flex flex-col items-center gap-1.5">
-                <div className="flex items-center justify-center gap-1.5 md:gap-2">
-                  <span className="text-[11px] md:text-xs font-mono font-bold text-purple-600 bg-purple-50 border border-purple-100 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
-                    <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 text-purple-500 animate-[spin_4s_linear_infinite]" />
-                    {formatTime(callDuration)}
-                  </span>
-                  <span className="text-[9px] md:text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                    Live HD Audio
-                  </span>
-                </div>
-                <span className="text-[10px] text-purple-600 font-extrabold flex items-center gap-1 bg-purple-50 border border-purple-100 px-3 py-1 rounded-full shadow-sm animate-pulse">
-                  <span>Auto-Transcribing 📝</span>
+        )}
+            {/* Restricted header container for Timer and Orb */}
+        <div className="w-full flex flex-col items-center justify-center h-[160px] shrink-0 overflow-visible relative my-1">
+          {/* Compact Call Status & Timer Area */}
+          <div className="text-center flex flex-col items-center shrink-0 mb-1 z-10">
+            <div className="flex items-center justify-center gap-2">
+              {callState === 'idle' && (
+                <span className="text-[11px] md:text-xs text-zinc-500 font-bold bg-white border border-zinc-200/60 px-3 py-1 rounded-full shadow-sm">Ready to talk</span>
+              )}
+              {callState === 'connecting' && (
+                <span className="text-[11px] md:text-xs text-yellow-600 font-bold bg-yellow-400/10 border border-yellow-400/20 px-3 py-1 rounded-full animate-pulse shadow-sm">Establishing line...</span>
+              )}
+              {callState === 'hold' && (
+                <span className="text-[11px] md:text-xs text-amber-600 font-bold bg-amber-400/15 border border-amber-400/25 px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse shadow-sm">
+                  <Pause className="w-3 h-3 text-amber-500" /> Call on hold
                 </span>
-              </div>
-            )}
+              )}
+              {callState === 'ended' && (
+                <span className="text-[11px] md:text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-3 py-1 rounded-full shadow-sm">Call ended</span>
+              )}
+              {callState === 'connected' && (
+                <span className="text-[11px] md:text-xs font-mono font-bold text-purple-600 bg-purple-50 border border-purple-100 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+                  <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 text-purple-500 animate-[spin_4s_linear_infinite]" />
+                  {formatTime(callDuration)}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Live Audio Visualizer (Fluid Gemini Live Plasma Orb) */}
-        <div className="w-full flex flex-col items-center justify-center h-32 md:h-48 relative my-1 md:my-2 overflow-visible">
-          <AnimatePresence mode="wait">
-            {callState === 'connected' ? (
-              <motion.div 
-                key="plasma-orb"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="relative w-32 h-32 md:w-40 md:h-40 flex items-center justify-center"
-              >
-                {/* Concentric ambient background pulse waves */}
-                {(isTutorSpeaking || (liveUserText && !isMuted)) && (
-                  <>
-                    <motion.div 
-                      className={`absolute -inset-4 md:-inset-6 rounded-full bg-gradient-to-r ${vibeDetails[vibe].color} opacity-10 pointer-events-none blur-md`}
-                      animate={{ scale: [1, 1.4, 1], opacity: [0.1, 0.2, 0.1] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                    <motion.div 
-                      className="absolute -inset-8 md:-inset-12 rounded-full bg-blue-500/5 pointer-events-none blur-xl"
-                      animate={{ scale: [1, 1.6, 1], opacity: [0.05, 0.15, 0.05] }}
-                      transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
-                    />
-                  </>
-                )}
-
-                {/* Morphing Plasma Orb Core */}
-                <motion.div
-                  variants={blobVariants}
-                  animate={isTutorThinking ? 'thinking' : isTutorSpeaking ? 'speaking' : isMuted ? 'muted' : 'listening'}
-                  className="w-28 h-28 md:w-36 md:h-36 relative overflow-hidden bg-white border border-zinc-200 shadow-[0_10px_30px_rgba(147,51,234,0.12)] flex items-center justify-center"
-                  style={{ maskImage: 'radial-gradient(circle, white, black)' }}
+          {/* Live Audio Visualizer (Fluid Gemini Live Plasma Orb) */}
+          <div className="w-full flex flex-col items-center justify-center h-24 relative overflow-visible">
+            <AnimatePresence mode="wait">
+              {callState === 'connected' ? (
+                <motion.div 
+                  key="plasma-orb"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="relative w-22 h-22 flex items-center justify-center"
                 >
-                  {/* Shifting dynamic background color field */}
-                  <div className="absolute inset-0 bg-white" />
-
-                  {/* Shifting Fluid Layer 1 - Deep Indigo / Purple */}
-                  <motion.div
-                    animate={isMuted ? { scale: 0.8 } : {
-                      x: [-15, 20, -8],
-                      y: [12, -15, 8],
-                      scale: [1, 1.3, 0.9],
-                    }}
-                    transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute w-20 h-20 md:w-28 md:h-28 rounded-full bg-gradient-to-r from-purple-600/50 to-indigo-600/40 blur-xl opacity-60 mix-blend-multiply"
-                  />
-
-                  {/* Shifting Fluid Layer 2 - Cyber Cyan / Blue */}
-                  <motion.div
-                    animate={isMuted ? { scale: 0.8 } : {
-                      x: [20, -12, 12],
-                      y: [-12, 15, -8],
-                      scale: [1.1, 0.85, 1.2],
-                    }}
-                    transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
-                    className="absolute w-18 h-18 md:w-24 md:h-24 rounded-full bg-gradient-to-r from-blue-500/50 to-cyan-400/40 blur-xl opacity-55 mix-blend-multiply"
-                  />
-
-                  {/* Shifting Fluid Layer 3 - Energetic Magenta / Coral */}
-                  <motion.div
-                    animate={isMuted ? { scale: 0.8 } : {
-                      x: [-8, 12, -20],
-                      y: [-20, 8, 12],
-                      scale: [0.8, 1.15, 0.9],
-                    }}
-                    transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-                    className="absolute w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-r from-pink-500/40 to-purple-500/35 blur-xl opacity-50 mix-blend-multiply"
-                  />
-
-                  {/* Floating active soundwave ring */}
-                  {isTutorSpeaking && (
-                    <motion.div 
-                      className="absolute inset-2 border-2 border-dashed border-zinc-200 rounded-full"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                    />
+                  {/* Concentric ambient background pulse waves */}
+                  {(isTutorSpeaking || (liveUserText && !isMuted)) && (
+                    <>
+                      <motion.div 
+                        className={`absolute -inset-3 rounded-full bg-gradient-to-r ${vibeDetails[vibe].color} opacity-10 pointer-events-none blur-md`}
+                        animate={{ scale: [1, 1.4, 1], opacity: [0.1, 0.2, 0.1] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                      <motion.div 
+                        className="absolute -inset-6 rounded-full bg-blue-500/5 pointer-events-none blur-xl"
+                        animate={{ scale: [1, 1.6, 1], opacity: [0.05, 0.15, 0.05] }}
+                        transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+                      />
+                    </>
                   )}
 
-                  {/* Central Glassmorphic Core Disk */}
-                  <div className="absolute w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/85 backdrop-blur-md border border-zinc-200 flex items-center justify-center z-10 shadow-sm">
-                    <GraduationCap className="w-5 h-5 md:w-7 md:h-7 text-zinc-700" />
+                  {/* Morphing Plasma Orb Core */}
+                  <motion.div
+                    variants={blobVariants}
+                    animate={isTutorThinking ? 'thinking' : isTutorSpeaking ? 'speaking' : isMuted ? 'muted' : 'listening'}
+                    className="w-18 h-18 relative overflow-hidden bg-white border border-zinc-200 shadow-[0_10px_30px_rgba(147,51,234,0.12)] flex items-center justify-center rounded-full"
+                    style={{ maskImage: 'radial-gradient(circle, white, black)' }}
+                  >
+                    {/* Shifting dynamic background color field */}
+                    <div className="absolute inset-0 bg-white" />
+
+                    {/* Shifting Fluid Layer 1 - Deep Indigo / Purple */}
+                    <motion.div
+                      animate={isMuted ? { scale: 0.8 } : {
+                        x: [-10, 12, -5],
+                        y: [8, -10, 5],
+                        scale: [1, 1.3, 0.9],
+                      }}
+                      transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute w-12 h-12 rounded-full bg-gradient-to-r from-purple-600/50 to-indigo-600/40 blur-lg opacity-60 mix-blend-multiply"
+                    />
+
+                    {/* Shifting Fluid Layer 2 - Cyber Cyan / Blue */}
+                    <motion.div
+                      animate={isMuted ? { scale: 0.8 } : {
+                        x: [12, -8, 8],
+                        y: [-8, 10, -5],
+                        scale: [1.1, 0.85, 1.2],
+                      }}
+                      transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+                      className="absolute w-10 h-10 rounded-full bg-gradient-to-r from-blue-500/50 to-cyan-400/40 blur-lg opacity-55 mix-blend-multiply"
+                    />
+
+                    {/* Shifting Fluid Layer 3 - Energetic Magenta / Coral */}
+                    <motion.div
+                      animate={isMuted ? { scale: 0.8 } : {
+                        x: [-5, 8, -12],
+                        y: [-12, 5, 8],
+                        scale: [0.8, 1.15, 0.9],
+                      }}
+                      transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                      className="absolute w-8 h-8 rounded-full bg-gradient-to-r from-pink-500/40 to-purple-500/35 blur-lg opacity-50 mix-blend-multiply"
+                    />
+
+                    {/* Floating active soundwave ring */}
+                    {isTutorSpeaking && (
+                      <motion.div 
+                        className="absolute inset-1 border border-dashed border-zinc-200 rounded-full"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                      />
+                    )}
+
+                    {/* Central Glassmorphic Core Disk */}
+                    <div className="absolute w-8 h-8 rounded-full bg-white/85 backdrop-blur-md border border-zinc-200 flex items-center justify-center z-10 shadow-sm">
+                      <GraduationCap className="w-4 h-4 text-zinc-700" />
+                    </div>
+                  </motion.div>
+                </motion.div>
+              ) : callState === 'connecting' ? (
+                <motion.div 
+                  key="connecting"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center text-center gap-1"
+                >
+                  <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[10px] text-zinc-400 font-bold">Securing connection channel...</span>
+                </motion.div>
+              ) : callState === 'hold' ? (
+                <motion.div 
+                  key="hold"
+                  className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl animate-pulse"
+                >
+                  <Pause className="w-3.5 h-3.5 text-amber-500" />
+                  <div className="text-left">
+                    <p className="text-[11px] font-black text-zinc-800">Call Paused</p>
                   </div>
                 </motion.div>
-              </motion.div>
-            ) : callState === 'connecting' ? (
-              <motion.div 
-                key="connecting"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-center text-center gap-2"
-              >
-                <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-zinc-500 font-bold">Securing connection channel...</span>
-              </motion.div>
-            ) : callState === 'hold' ? (
-              <motion.div 
-                key="hold"
-                className="flex items-center gap-2.5 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-2xl animate-pulse"
-              >
-                <Pause className="w-4 h-4 text-amber-500" />
-                <div className="text-left">
-                  <p className="text-xs font-black text-zinc-800">Call Paused</p>
-                  <p className="text-[10px] text-zinc-500 font-bold">Tap resume to continue discussing</p>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="idle"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-sm flex flex-col items-center px-2"
-              >
-                <p className="text-xs text-zinc-500 font-bold text-center leading-relaxed max-w-xs mb-8">
-                  Discuss homework, equations, or complex topics in real-time.
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              ) : (
+                <motion.div 
+                  key="idle"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full max-w-sm flex flex-col items-center px-2"
+                >
+                  <p className="text-[11px] text-zinc-400 font-bold text-center leading-relaxed max-w-[240px]">
+                    Discuss homework, equations, or complex topics in real-time.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Live Subtitle / Subtitles Stream */}
-        <div className="w-full max-w-sm flex-1 bg-white border border-zinc-200/80 shadow-md rounded-[2rem] p-4 flex flex-col relative overflow-hidden my-2 max-h-[220px] md:max-h-[300px]">
+        <div className="w-full max-w-sm flex-grow flex-1 bg-white border border-zinc-200/80 shadow-md rounded-[2rem] p-4 flex flex-col relative overflow-hidden my-2">
           {/* Subtle glow border */}
           <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 opacity-50" />
           
           <div className="text-[10px] font-black text-zinc-400 mb-2 flex justify-between items-center px-1 shrink-0">
             <span>LIVE CALL TRANSCRIPT</span>
-            
-            {/* Language Selector */}
-            {callState === 'connected' && (
-              <div className="flex items-center gap-1 bg-zinc-100 p-0.5 rounded-lg border border-zinc-200/60 shadow-sm z-10">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSpeechLang('en-IN');
-                    // Restart listening with new language if call is active
-                    setTimeout(() => {
-                      if (callStateRef.current === 'connected' && !isMutedRef.current && !isTutorSpeakingRef.current) {
-                        startListening();
-                      }
-                    }, 100);
-                  }}
-                  className={`px-1.5 py-0.5 text-[8px] font-bold rounded transition-all ${
-                    speechLang === 'en-IN' 
-                      ? 'bg-purple-600 text-white shadow-sm' 
-                      : 'text-zinc-500 hover:text-zinc-800'
-                  }`}
-                >
-                  EN
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSpeechLang('hi-IN');
-                    // Restart listening with new language if call is active
-                    setTimeout(() => {
-                      if (callStateRef.current === 'connected' && !isMutedRef.current && !isTutorSpeakingRef.current) {
-                        startListening();
-                      }
-                    }, 100);
-                  }}
-                  className={`px-1.5 py-0.5 text-[8px] font-bold rounded transition-all ${
-                    speechLang === 'hi-IN' 
-                      ? 'bg-purple-600 text-white shadow-sm' 
-                      : 'text-zinc-500 hover:text-zinc-800'
-                  }`}
-                >
-                  हिंदी
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-3 pr-1 py-1 scrollbar-thin">
@@ -988,7 +954,7 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
                 {/* If transcript is empty but we have initial liveTutorText, show it */}
                 {transcript.length === 0 && liveTutorText && !liveUserText && !isTutorThinking && (
                   <div className="flex flex-col items-start">
-                    <div className="max-w-[85%] bg-zinc-100 text-zinc-800 border border-zinc-200 rounded-2xl rounded-tl-none px-3.5 py-2 text-xs font-bold leading-relaxed shadow-sm">
+                    <div className="max-w-[85%] bg-zinc-100 text-zinc-800 border border-zinc-200 rounded-2xl rounded-tl-none px-3.5 py-2.5 pb-3 text-xs font-bold leading-loose break-words whitespace-pre-wrap shadow-sm">
                       {liveTutorText}
                     </div>
                   </div>
@@ -1000,25 +966,33 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
                     className={`flex flex-col ${item.sender === 'user' ? 'items-end' : 'items-start'}`}
                   >
                     <div 
-                      className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs font-bold leading-relaxed shadow-sm ${
+                      className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 pb-3 text-xs font-bold leading-loose break-words whitespace-pre-wrap shadow-sm ${
                         item.sender === 'user' 
                           ? 'bg-purple-600 text-white rounded-tr-none' 
                           : 'bg-zinc-100 text-zinc-800 rounded-tl-none border border-zinc-200'
                       }`}
                     >
+                      {item.imageUri && (
+                        <img 
+                          src={item.imageUri} 
+                          alt="Attached Homework" 
+                          className={`w-[200px] h-[200px] object-cover rounded-xl ${item.text ? 'mb-2' : ''}`}
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
                       {item.text}
                     </div>
-                    <span className="text-[9px] text-zinc-400 font-semibold mt-0.5 px-1">{item.time}</span>
+                    <span className="text-[9px] text-zinc-400 font-semibold mt-1 px-1">{item.time}</span>
                   </div>
                 ))}
 
                 {/* User live ongoing speech */}
                 {liveUserText && (
                   <div className="flex flex-col items-end">
-                    <div className="max-w-[85%] bg-purple-50 text-purple-700 border-2 border-dashed border-purple-200 rounded-2xl rounded-tr-none px-3.5 py-2 text-xs font-bold leading-relaxed italic animate-pulse">
+                    <div className="max-w-[85%] bg-purple-50 text-purple-700 border-2 border-dashed border-purple-200 rounded-2xl rounded-tr-none px-3.5 py-2.5 pb-3 text-xs font-bold leading-loose break-words whitespace-pre-wrap italic animate-pulse">
                       "{liveUserText}"
                     </div>
-                    <span className="text-[9px] text-purple-500 font-bold mt-0.5 px-1">Live speech...</span>
+                    <span className="text-[9px] text-purple-500 font-bold mt-1 px-1">Live speech...</span>
                   </div>
                 )}
 
@@ -1036,11 +1010,11 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
               </>
             ) : callState === 'ended' ? (
               <div className="text-center py-2">
-                <p className="text-xs text-emerald-600 font-black flex items-center justify-center gap-1.5">
-                  <Bookmark className="w-4 h-4 text-emerald-500" /> Save Transcript successful!
+                <p className="text-xs text-indigo-600 font-black flex items-center justify-center gap-1.5">
+                  🎙️ Call ended successfully!
                 </p>
                 <p className="text-[10px] text-zinc-500 font-semibold mt-1">
-                  We've automatically compiled and saved this call session as a study note in your **Study Tools** dashboard.
+                  Ready for another study session whenever you are. Click the button below to dial in again!
                 </p>
               </div>
             ) : (
@@ -1071,11 +1045,12 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
                   const target = e.currentTarget.elements.namedItem('keyboardText') as HTMLInputElement;
                   const text = target?.value?.trim();
                   if (text || attachedImageFile) {
-                    const messageToSend = text || "Check out this homework image.";
+                    const messageToSend = text || "";
                     setTranscript(prev => [...prev, { 
                       sender: 'user', 
                       text: messageToSend, 
-                      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      imageUri: attachedImagePreview
                     }]);
                     setLiveUserText('');
                     lastSpeechResultRef.current = '';
@@ -1217,128 +1192,6 @@ DYNAMIC PERSONA BEHAVIORS (Adapt strictly based on the current persona):
  
       </div>
 
-      {/* History Drawer Overlay */}
-      <AnimatePresence>
-        {historyOpen && (
-          <div className="absolute inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
-            {/* Backdrop click to close */}
-            <div className="absolute inset-0 bg-transparent" onClick={() => setHistoryOpen(false)} />
-            
-            {/* Drawer container */}
-            <motion.div 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-xs sm:max-w-sm h-full bg-[#FAF9F6] border-l border-zinc-200 flex flex-col shadow-2xl z-10"
-            >
-              {/* Drawer Header */}
-              <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-[#FAF9F6]">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center border border-purple-150">
-                    <History className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <h3 className="font-bold text-sm text-zinc-800">Call Session History</h3>
-                </div>
-                <button 
-                  onClick={() => setHistoryOpen(false)}
-                  className="p-1 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Drawer Body */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {loadingHistory ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
-                    <Loader2 className="w-6 h-6 animate-spin text-purple-600 mb-2" />
-                    <span className="text-xs font-bold">Loading past sessions...</span>
-                  </div>
-                ) : historyItems.length === 0 ? (
-                  <div className="text-center py-16 px-4">
-                    <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
-                      <History className="w-6 h-6 text-zinc-400" />
-                    </div>
-                    <p className="text-xs font-black text-zinc-700">No Call Sessions Yet</p>
-                    <p className="text-[10px] text-zinc-400 font-bold mt-1 max-w-[180px] mx-auto">
-                      Start a live audio call session to save tutoring transcripts automatically!
-                    </p>
-                  </div>
-                ) : (
-                  historyItems.map((item) => {
-                    const dateStr = item.createdAt ? item.createdAt.toLocaleDateString() : '';
-                    return (
-                      <div 
-                        key={item.id}
-                        onClick={() => setSelectedHistoryItem(item)}
-                        className="p-3.5 rounded-2xl border border-zinc-200 bg-white hover:border-purple-300 hover:shadow-sm cursor-pointer transition-all duration-200 flex items-start justify-between gap-3 relative group text-left"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-xs font-black text-zinc-800 truncate flex items-center gap-1">
-                            <span>{item.title || "🎙️ Call Session"}</span>
-                          </h4>
-                          <div className="flex items-center gap-2 mt-1.5 text-[10px] text-zinc-400 font-bold">
-                            <span className="flex items-center gap-0.5">
-                              <Calendar className="w-3 h-3" />
-                              {dateStr}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <button 
-                          onClick={(e) => deleteHistoryItem(item.id, e)}
-                          className="p-1.5 rounded-xl hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors shrink-0"
-                          title="Delete Summary"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Detail Viewer Modal */}
-      <AnimatePresence>
-        {selectedHistoryItem && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-[#FAF9F6] border border-zinc-200 w-full max-w-2xl h-[85vh] rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl"
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-zinc-200 flex items-center justify-between shrink-0">
-                <div className="text-left">
-                  <h3 className="text-sm font-black text-zinc-800">{selectedHistoryItem.title || "Call Session Details"}</h3>
-                  <p className="text-[10px] text-zinc-400 font-bold uppercase mt-0.5">
-                    {selectedHistoryItem.createdAt ? selectedHistoryItem.createdAt.toLocaleDateString() : ''}
-                  </p>
-                </div>
-                <button 
-                  onClick={() => setSelectedHistoryItem(null)}
-                  className="p-2 rounded-full hover:bg-zinc-200/65 text-zinc-500 hover:text-zinc-800 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className="flex-1 overflow-y-auto p-6 text-zinc-800 text-left">
-                <div className="markdown-body text-xs leading-relaxed max-w-none">
-                  <GlobalMarkdown>{selectedHistoryItem.content || selectedHistoryItem.text || ''}</GlobalMarkdown>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

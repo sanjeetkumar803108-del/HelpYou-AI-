@@ -1,12 +1,9 @@
-import { getProfileContext } from "../utils/profile";
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Sparkles, ArrowLeft, RotateCcw, AlertCircle, HelpCircle, Mic, MicOff, ChevronDown, ChevronUp, BookOpen, ChevronRight, Calculator as CalcIcon } from 'lucide-react';
+import { Sparkles, ArrowLeft, Mic, BookOpen, Calculator as CalcIcon, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import GlobalMarkdown from './GlobalMarkdown';
 import katex from 'katex';
 import { triggerVibration } from '../utils/vibrate';
 import UnitCircleVisualizer from './UnitCircleVisualizer';
-import { detectAndLogMistake } from '../utils/mistakes';
 
 const FORMULA_CATEGORIES = [
   {
@@ -113,6 +110,7 @@ const FORMULA_CATEGORIES = [
 
 interface CalculatorProps {
   onBack: () => void;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 interface MathRenderProps {
@@ -221,18 +219,13 @@ const exprToLaTeX = (expr: string): string => {
   return latex;
 };
 
-export default function Calculator({ onBack }: CalculatorProps) {
+export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps) {
   const [expression, setExpression] = useState('');
   const [result, setResult] = useState('');
-  const [history, setHistory] = useState<string[]>([]);
-  const [explanation, setExplanation] = useState('');
-  const [isExplaining, setIsExplaining] = useState(false);
   const [isAdvanced, setIsAdvanced] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
-  const [showStepByStep, setShowStepByStep] = useState(true);
-  const [isExplanationExpanded, setIsExplanationExpanded] = useState(true);
   const [trigMode, setTrigMode] = useState<'deg' | 'rad'>('deg');
   const [showUnitCircle, setShowUnitCircle] = useState(false);
   const [showFormulas, setShowFormulas] = useState(false);
@@ -418,7 +411,6 @@ export default function Calculator({ onBack }: CalculatorProps) {
     if (value === 'C') {
       setExpression('');
       setResult('');
-      setExplanation('');
     } else if (value === '⌫') {
       setExpression(prev => prev.slice(0, -1));
     } else if (value === '=') {
@@ -444,6 +436,13 @@ export default function Calculator({ onBack }: CalculatorProps) {
           sanitized = sanitized.replace(/(\d)\s*(sin|cos|tan|asin|acos|atan|Math\.PI|Math\.sqrt|\()/g, '$1*$2');
           sanitized = sanitized.replace(/(\))\s*(sin|cos|tan|asin|acos|atan|Math\.PI|Math\.sqrt|\(|\d)/g, '$1*$2');
           sanitized = sanitized.replace(/(Math\.PI)\s*(sin|cos|tan|asin|acos|atan|Math\.PI|Math\.sqrt|\(|\d)/g, '$1*$2');
+
+          // Automatically balance unbalanced parentheses before passing to parser
+          let openParens = (sanitized.match(/\(/g) || []).length;
+          let closeParens = (sanitized.match(/\)/g) || []).length;
+          if (openParens > closeParens) {
+            sanitized += ')'.repeat(openParens - closeParens);
+          }
 
           const allowedChars = sanitized.replace(/[^0-9+\-*/().\s|Math\.PI|Math\.sqrt|**|sin|cos|tan|asin|acos|atan]/g, '');
           
@@ -476,25 +475,27 @@ export default function Calculator({ onBack }: CalculatorProps) {
                 : String(Number(evalResult.toFixed(6)));
               localCalculatedResult = formattedResult;
               setResult(localCalculatedResult);
-              setHistory(prev => [`${expression} = ${localCalculatedResult}`, ...prev.slice(0, 4)]);
             }
           }
         } catch (err) {
           console.error("Evaluation error:", err);
           
-          const parts = expression.trim().split(/\s+/);
-          if (parts.length >= 2) {
-             setResult(`Did you mean to multiply ${parts[0]} and ${parts[1]}? Please add an operator (+, -, *, /).`);
+          // Check if parenthesis are unbalanced
+          const origOpen = (expression.match(/\(/g) || []).length;
+          const origClose = (expression.match(/\)/g) || []).length;
+          if (origOpen !== origClose) {
+            setResult('Please close all brackets.');
           } else {
-             setResult('Syntax error. Please add an operator (+, -, *, /).');
+            const parts = expression.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              setResult(`Did you mean to multiply ${parts[0]} and ${parts[1]}? Please add an operator (+, -, *, /).`);
+            } else {
+              setResult('Syntax error. Please add an operator (+, -, *, /) or check brackets.');
+            }
           }
         }
       } else {
-        setResult('Solving with AI...');
-      }
-
-      if (showStepByStep) {
-        explainSteps(localCalculatedResult);
+        setResult("Tap 'Explain with AI'");
       }
     } else {
       // Prevent consecutive operators
@@ -507,72 +508,6 @@ export default function Calculator({ onBack }: CalculatorProps) {
       } else {
         setExpression(prev => prev + value);
       }
-    }
-  };
-
-  const explainSteps = async (preCalculatedResult?: string) => {
-    if (!expression) return;
-    setIsExplaining(true);
-    setExplanation('');
-    setIsExplanationExpanded(true); // Auto-expand when a new explanation is fetched
-    
-    try {
-      const isTrig = /sin|cos|tan/i.test(expression);
-      let promptMessage = `Please solve and explain the mathematical expression: "${expression}" step-by-step. ${preCalculatedResult ? `We know the final numerical answer is "${preCalculatedResult}".` : 'Please calculate the final answer first.'} Keep the explanation incredibly clear, pedagogical (like WolframAlpha), and structured. Use LaTeX ONLY for complex, multi-line mathematical equations (using $$...$$). Do not use LaTeX wrappers like \text{} for standard words.  Include explanations of algebraic rules or values (like decimal values of square roots or constants) that are used.`;
-      
-      let systemInstruction = "Your persona: You are Sophia, an advanced AI Math Tutor with WolframAlpha-level clarity. Break down equations step-by-step using precise LaTeX formatting for all mathematical expressions. Explain each calculation clearly, including intermediate decimal conversions, algebraic rules, and pedagogical logic.";
-
-      if (isTrig) {
-        promptMessage += `\n\nCRITICAL SPECIFICATIONS FOR THIS TRIGONOMETRIC EXPRESSION:
-1. Note that the calculator is currently set to ${trigMode.toUpperCase()} mode. Please perform any conversions or solve assuming ${trigMode === 'deg' ? 'Degrees' : 'Radians'}.
-2. Provide a visual reference or conceptual connection to the Unit Circle coordinates (x = cos θ, y = sin θ) to show the geometric interpretation.
-3. Include a dedicated section titled "🌍 Real-World Context" explaining how this specific trigonometric function (${expression}) is applied in fields like audio engineering (sound wave pressure), physics (AC current or oscillations), or architectural design (structural forces).`;
-
-        systemInstruction += ` When explaining trigonometric functions, you must always state whether the output is in Degrees or Radians, relate the calculation to the coordinates on the Unit Circle, and provide a real-world application paragraph (e.g. sound wave pressure for sine, truss forces for cosine, or road steepness for tangent).`;
-      }
-
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: promptMessage,
-          customSystemInstruction: systemInstruction,
-          profileContext: getProfileContext(),
-        })
-      });
-      
-      if (!response.ok) throw new Error('Failed to get explanation');
-      const calcContentType = response.headers.get("content-type") || "";
-      if (!calcContentType.includes("application/json")) {
-        throw new Error("Server returned invalid response format");
-      }
-      const data = await response.json();
-      const aiResponseText = data.text || 'Could not load explanation. Please try again!';
-      setExplanation(aiResponseText);
-
-      // Automatically detect math/trig misconception and log it
-      detectAndLogMistake('Smart Calculator', expression, aiResponseText).catch(e => console.error("Calculator mistake capture failed:", e));
-
-      // If this is algebra, parse or show a solved state in the display
-      if (expression.includes('x') || expression.includes('y') || expression.includes('=')) {
-        const finalAnswerMatch = aiResponseText.match(/final\s+answer:?\s*([^\n$]+)/i) || aiResponseText.match(/x\s*=\s*([^\n$]+)/i);
-        if (finalAnswerMatch) {
-          const solvedVal = finalAnswerMatch[1].trim().replace(/[#*`$]/g, '');
-          setResult(solvedVal);
-          setHistory(prev => [`${expression} = ${solvedVal}`, ...prev.slice(0, 4)]);
-        } else {
-          setResult('Solved!');
-          setHistory(prev => [`${expression} = Solved`, ...prev.slice(0, 4)]);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      setExplanation('Oops! Our math magical spell hit a bump. Let\'s try to evaluate again!');
-      if (expression.includes('x') || expression.includes('y') || expression.includes('=')) {
-        setResult('Error');
-      }
-    } finally {
-      setIsExplaining(false);
     }
   };
 
@@ -691,38 +626,38 @@ export default function Calculator({ onBack }: CalculatorProps) {
           {/* Step-by-Step Breakdown is always enabled by default behind the scenes, toggle switch removed per user request */}
 
           {/* Advanced Math & Trig Toggles */}
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 mb-4">
             <button
               onClick={() => {
                 triggerVibration(10);
                 setIsAdvanced(!isAdvanced);
               }}
-              className="flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 hover:text-zinc-950 px-4 py-2 rounded-full font-black text-xs tracking-tight transition-all active:scale-95 border border-zinc-200/40 shadow-xs shrink-0"
+              className="flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 hover:text-zinc-950 px-3 sm:px-4 py-2 rounded-full font-black text-xs tracking-tight transition-all active:scale-95 border border-zinc-200/40 shadow-xs shrink-0"
             >
-              <span>Advanced Math</span>
-              <span className="text-zinc-400 font-bold">{isAdvanced ? '▴' : '▾'}</span>
+              <span className="truncate">Advanced Math</span>
+              <span className="text-zinc-400 font-bold shrink-0">{isAdvanced ? '▴' : '▾'}</span>
             </button>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 max-w-full overflow-hidden">
               <button
                 onClick={() => {
                   triggerVibration(10);
                   setTrigMode(trigMode === 'deg' ? 'rad' : 'deg');
                 }}
-                className="flex items-center bg-zinc-100 rounded-full border border-zinc-200/50 p-0.5"
+                className="flex items-center bg-zinc-100 rounded-full border border-zinc-200/50 p-0.5 shrink-0"
               >
-                <div className={`px-2.5 py-1 text-[10px] font-black rounded-full transition-all ${trigMode === 'deg' ? 'bg-white text-amber-600 shadow-xs' : 'text-zinc-500 hover:text-zinc-950'}`}>DEG</div>
-                <div className={`px-2.5 py-1 text-[10px] font-black rounded-full transition-all ${trigMode === 'rad' ? 'bg-white text-amber-600 shadow-xs' : 'text-zinc-500 hover:text-zinc-950'}`}>RAD</div>
+                <div className={`px-2 sm:px-2.5 py-1 text-[10px] font-black rounded-full transition-all ${trigMode === 'deg' ? 'bg-white text-amber-600 shadow-xs' : 'text-zinc-500 hover:text-zinc-950'}`}>DEG</div>
+                <div className={`px-2 sm:px-2.5 py-1 text-[10px] font-black rounded-full transition-all ${trigMode === 'rad' ? 'bg-white text-amber-600 shadow-xs' : 'text-zinc-500 hover:text-zinc-950'}`}>RAD</div>
               </button>
               <button
                 onClick={() => {
                   triggerVibration(10);
                   setShowUnitCircle(!showUnitCircle);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-xs tracking-tight transition-all active:scale-95 border shadow-xs shrink-0 ${
+                className={`flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full font-black text-[11px] sm:text-xs tracking-tight transition-all active:scale-95 border shadow-xs shrink-0 max-w-full overflow-hidden whitespace-nowrap ${
                   showUnitCircle ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 border-zinc-200/40'
                 }`}
               >
-                <span>Unit Circle</span>
+                <span className="truncate">Unit Circle</span>
               </button>
             </div>
           </div>
@@ -827,9 +762,13 @@ export default function Calculator({ onBack }: CalculatorProps) {
           <button
             onClick={() => {
               triggerVibration(25);
-              explainSteps();
+              const event = new CustomEvent('study-calculator-send-to-tutor', {
+                detail: { expression }
+              });
+              window.dispatchEvent(event);
+              onNavigateToTab?.('aitutor');
             }}
-            disabled={!expression || isExplaining}
+            disabled={!expression}
             className={`mt-5 w-full py-4 px-5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
               expression 
                 ? 'bg-zinc-950 text-white hover:bg-zinc-900 shadow-md shadow-zinc-950/10 cursor-pointer' 
@@ -837,106 +776,8 @@ export default function Calculator({ onBack }: CalculatorProps) {
             }`}
           >
             <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
-            <span>{isExplaining ? 'Math Magic Brewing...' : 'Explain Step-by-Step with AI'}</span>
+            <span>Explain Step-by-Step with AI</span>
           </button>
-        </div>
-
-        {/* Right Side: Collapsible Step-by-Step explanation panel */}
-        <div className="flex-1 flex flex-col bg-white rounded-[2rem] border border-zinc-200/60 p-6 shadow-sm min-h-[300px] transition-all duration-300">
-          <div 
-            onClick={() => {
-              if (explanation || isExplaining) {
-                triggerVibration(10);
-                setIsExplanationExpanded(!isExplanationExpanded);
-              }
-            }}
-            className={`flex items-center justify-between border-b border-zinc-100 pb-4 mb-4 ${
-              (explanation || isExplaining) ? 'cursor-pointer hover:opacity-80' : ''
-            }`}
-          >
-            <h3 className="font-bold text-sm text-zinc-800 flex items-center gap-2 select-none">
-              <span className="text-xl filter drop-shadow-sm">👩‍🏫</span>
-              <span>Sophia's Math Academy</span>
-              {(explanation || isExplaining) && (
-                <span className="text-zinc-400 text-xs shrink-0 ml-1">
-                  {isExplanationExpanded ? <ChevronUp className="w-4 h-4 inline" /> : <ChevronDown className="w-4 h-4 inline" />}
-                </span>
-              )}
-            </h3>
-            {explanation && (
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  triggerVibration(15);
-                  setExplanation('');
-                }}
-                className="text-xs text-rose-500 font-bold hover:underline bg-transparent border-none cursor-pointer"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          <AnimatePresence initial={false}>
-            {isExplanationExpanded && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: 'easeInOut' }}
-                className="flex-1 flex flex-col overflow-hidden"
-              >
-                <div className="flex-1 overflow-y-auto max-h-[380px] pr-1 space-y-4">
-                  {isExplaining ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center py-12">
-                      <div className="relative mb-4">
-                        <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
-                        <Sparkles className="w-5 h-5 text-amber-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-                      </div>
-                      <p className="text-xs font-bold text-zinc-600">Sophia is casting a math helper spell...</p>
-                      <p className="text-[10px] text-zinc-400 mt-1 max-w-[200px]">Evaluating your formula and structuring the easiest explanation.</p>
-                    </div>
-                  ) : explanation ? (
-                    <div className="text-xs text-zinc-700 leading-relaxed font-sans prose prose-zinc max-w-none prose-sm prose-p:my-1 prose-headings:font-extrabold prose-headings:text-zinc-800 prose-blockquote:border-amber-400 bg-amber-500/[0.01] p-1.5 rounded-xl">
-                      <GlobalMarkdown 
-                      >
-                        {explanation}
-                      </GlobalMarkdown>
-                    </div>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center py-12 text-zinc-400">
-                      <HelpCircle className="w-12 h-12 text-zinc-200 mb-3" />
-                      <p className="text-xs font-bold text-zinc-500">Need some math magic?</p>
-                      <p className="text-[10px] text-zinc-400 mt-1 max-w-[220px]">Type in any problem on the calculator, evaluate it, and click "Explain Step-by-Step with AI"!</p>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* History log footer */}
-          {history.length > 0 && (
-            <div className="border-t border-zinc-100 pt-4 mt-4">
-              <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Recent Solutions</h4>
-              <div className="space-y-1.5">
-                {history.map((hist, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      const expr = hist.split(' = ')[0];
-                      setExpression(expr);
-                      setResult(hist.split(' = ')[1]);
-                    }}
-                    className="w-full text-left bg-zinc-50 hover:bg-zinc-100 p-2 rounded-xl text-[11px] text-zinc-600 font-bold border border-zinc-200/30 flex justify-between transition-all"
-                  >
-                    <span>{hist.split(' = ')[0]}</span>
-                    <span className="text-amber-600">{hist.split(' = ')[1]}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

@@ -1,13 +1,14 @@
 import { getProfileContext } from "../utils/profile";
 import { safeGetItem, safeSetItem } from "../utils/storage";
-import { triggerVibration } from "../utils/vibrate";
+import { triggerVibration, hapticNotification, hapticImpact } from "../utils/vibrate";
 import { detectAndLogMistake } from "../utils/mistakes";
 import { getCoins, deductCoins, isProUser } from "../utils/coins";
+import { requestMicrophonePermission } from "../utils/nativePermissions";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Sparkles, Send, Mic, MicOff, Loader2, RefreshCw, Compass, Brain, 
   ArrowRight, Copy, Check, Share2, ThumbsUp, ThumbsDown, Pause, Play,
-  Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock
+  Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock, Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parsePartialJSON } from '../utils/partialJson';
@@ -15,6 +16,8 @@ import GlobalMarkdown from './GlobalMarkdown';
 import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { Capacitor } from '@capacitor/core';
+import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -30,6 +33,7 @@ interface ChatMessage {
 // SYSTEM INSTRUCTION FOR THE ELITE MATH & SCIENCE MASTER EDUCATOR
 // ----------------------------------------------------
 const SYSTEM_INSTRUCTION_NURSERY = `You are an Elite High School Math & Science Tutor, SAT/ACT Expert, and a Master Educator. Adopt an encouraging, patient, precise, and crisp tone. Use clean line breaks and emojis for visual readability.
+You are analyzing a full-screen, uncropped photo. Scan the image to locate the primary mathematical equation, science question, or text problem. Ignore any background noise, hands, or irrelevant objects. Focus solely on extracting and solving the main academic problem visible in the image.
 DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimiters.
 
 CRITICAL SYSTEM INSTRUCTION (MANDATORY):
@@ -114,16 +118,27 @@ function AITutorMessageItem({
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
 
+  const onTypingCompleteRef = useRef(onTypingComplete);
+  useEffect(() => {
+    onTypingCompleteRef.current = onTypingComplete;
+  });
+
+  const hasCompletedRef = useRef(false);
+
   // Typewriter effect logic (Word-by-word for high-end professional feel)
   useEffect(() => {
     if (!msg.isTyping) {
       setDisplayedText(cleanText);
+      hasCompletedRef.current = false;
       return;
     }
 
     const words = cleanText.split(/(\s+)/); // Preserve all whitespaces and line-breaks
     if (currentWordIndex >= words.length) {
-      onTypingComplete();
+      if (!hasCompletedRef.current) {
+        hasCompletedRef.current = true;
+        onTypingCompleteRef.current();
+      }
       return;
     }
 
@@ -183,87 +198,96 @@ function AITutorMessageItem({
       animate={{ opacity: 1, y: 0 }}
       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
     >
-      <div className={`max-w-[92%] rounded-3xl p-5 shadow-sm border ${
+      <div className={`max-w-[92%] w-full rounded-3xl p-5 shadow-sm border overflow-hidden break-words ${
         msg.role === 'user' 
           ? 'bg-blue-600 text-white border-blue-500/30 rounded-tr-none' 
           : msg.isError
             ? 'bg-red-50/90 border-red-200 text-red-950 rounded-tl-none overflow-hidden shadow-sm'
             : 'bg-[#FAF9F6] border-zinc-200 text-zinc-900 rounded-tl-none overflow-hidden shadow-sm'
       }`}>
-        <div className={`prose prose-sm max-w-none break-words ${msg.role === 'user' ? 'text-white prose-invert' : msg.isError ? 'text-red-900 font-medium' : 'text-zinc-800'} [&_pre]:overflow-x-auto [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-2 [&_p]:leading-relaxed`}>
+        <div className={`prose prose-sm max-w-full overflow-hidden break-words ${msg.role === 'user' ? 'text-white prose-invert' : msg.isError ? 'text-red-900 font-medium' : 'text-zinc-800'} [&_pre]:overflow-x-auto [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-2 [&_p]:leading-relaxed`}>
           {msg.isError && <span className="inline-flex items-center gap-1 text-red-600 font-extrabold mr-1">⚠️ Alert: </span>}
           {parsedSolution ? (
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-full overflow-hidden">
               {parsedSolution.topic_title && (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 uppercase tracking-wide">
+                <div className="flex items-center gap-2 mb-2 max-w-full overflow-hidden">
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 uppercase tracking-wide shrink-0">
                     Topic
                   </span>
-                  <h3 className="text-base font-bold text-zinc-950 m-0 leading-tight">
+                  <h3 className="text-base font-bold text-zinc-950 m-0 leading-tight min-w-0 break-words whitespace-normal text-wrap">
                     {parsedSolution.topic_title}
                   </h3>
                 </div>
               )}
               
-              <div className="space-y-3">
-                {parsedSolution.solution_steps && parsedSolution.solution_steps.map((step: any, sIdx: number) => {
-                  const isCurrentStep = msg.isTyping && (sIdx === parsedSolution.solution_steps.length - 1);
-                  return (
-                    <motion.div 
-                      key={sIdx} 
-                      layout="position"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                      className={`p-4 rounded-2xl border transition-all duration-200 bg-white shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)] ${
-                        step.is_final_answer 
-                          ? 'border-emerald-200 bg-emerald-50/20' 
-                          : 'border-zinc-150 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-dashed border-zinc-100">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-lg flex items-center gap-1.5 ${
+              {parsedSolution.format_type === 'markdown' || !parsedSolution.solution_steps ? (
+                <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-0.5 text-zinc-800">
+                  <GlobalMarkdown>{parsedSolution.markdown_content || parsedSolution.content || cleanText}</GlobalMarkdown>
+                </div>
+              ) : (
+                <div className="space-y-3 max-w-full overflow-hidden">
+                  {Array.isArray(parsedSolution?.solution_steps) && parsedSolution.solution_steps.map((step: any, sIdx: number) => {
+                    const stepsLen = parsedSolution.solution_steps.length;
+                    const isCurrentStep = msg.isTyping && (sIdx === stepsLen - 1);
+                    return (
+                      <motion.div 
+                        key={sIdx} 
+                        layout="position"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className={`p-4 rounded-2xl border transition-all duration-200 bg-white shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)] max-w-full overflow-hidden break-words ${
                           step.is_final_answer 
-                            ? 'bg-emerald-100 text-emerald-800' 
-                            : 'bg-zinc-100 text-zinc-700'
-                        }`}>
-                          <span>Step {step.step_id || (sIdx + 1)}</span>
-                          {isCurrentStep && (
-                            <span className="flex h-2 w-2 relative shrink-0">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                            ? 'border-emerald-200 bg-emerald-50/20' 
+                            : 'border-zinc-150 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-2 pb-2 border-b border-dashed border-zinc-100 min-w-0">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-lg flex items-center gap-1.5 shrink-0 ${
+                            step.is_final_answer 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : 'bg-zinc-100 text-zinc-700'
+                          }`}>
+                            <span>Step {step.step_id || (sIdx + 1)}</span>
+                            {isCurrentStep && (
+                              <span className="flex h-2 w-2 relative shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                              </span>
+                            )}
+                          </span>
+                          {step.title && (
+                            <span className="text-xs font-bold text-zinc-800 text-right min-w-0 break-words whitespace-normal text-wrap">
+                              {step.title}
                             </span>
                           )}
-                        </span>
-                        {step.title && (
-                          <span className="text-xs font-bold text-zinc-800 shrink-0">
-                            {step.title}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-sm text-zinc-850 leading-relaxed overflow-x-auto relative">
-                        <GlobalMarkdown>{step.content + (isCurrentStep ? " ▌" : "")}</GlobalMarkdown>
-                      </div>
-
-                      {msg.role === 'model' && !msg.isTyping && onAskDoubt && (
-                        <div className="mt-3 pt-2.5 border-t border-zinc-100 flex justify-end">
-                          <button
-                            onClick={() => onAskDoubt?.(step.step_id || (sIdx + 1), step.title || '', step.content)}
-                            className="text-xs px-3 py-1.5 rounded-xl font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 active:scale-95 transition-all flex items-center gap-1.5 border border-indigo-100/50 shadow-sm"
-                          >
-                            <Sparkles className="w-3 h-3 text-indigo-500 shrink-0" />
-                            <span>Tap to Ask a Doubt</span>
-                          </button>
                         </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </div>
+
+                        <div className="text-sm text-zinc-850 leading-relaxed overflow-x-auto max-w-full relative py-0.5">
+                          <GlobalMarkdown>{step.content + (isCurrentStep ? " ▌" : "")}</GlobalMarkdown>
+                        </div>
+
+                        {msg.role === 'model' && !msg.isTyping && onAskDoubt && (
+                          <div className="mt-3 pt-2.5 border-t border-zinc-100 flex justify-end">
+                            <button
+                              onClick={() => onAskDoubt?.(step.step_id || (sIdx + 1), step.title || '', step.content)}
+                              className="text-xs px-3 py-1.5 rounded-xl font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 active:scale-95 transition-all flex items-center gap-1.5 border border-indigo-100/50 shadow-sm"
+                            >
+                              <Sparkles className="w-3 h-3 text-indigo-500 shrink-0" />
+                              <span>Tap to Ask a Doubt</span>
+                            </button>
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
-            <GlobalMarkdown>{displayedText}</GlobalMarkdown>
+            <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-0.5">
+              <GlobalMarkdown>{displayedText}</GlobalMarkdown>
+            </div>
           )}
         </div>
 
@@ -397,7 +421,7 @@ const PERSONAS = {
     bgLight: 'bg-amber-500/10',
     textColor: 'text-amber-300',
     description: 'Methodical, Clear, and Step-by-Step. Explains math and analytical logic with rigorous clarity.',
-    promptSuffix: `\n\nYour persona: You are Dr. Sage (Math Expert). Your tone is Methodical, Clear, and Step-by-Step. Break down complex equations and analytical problems with meticulous logical sequence, displaying key formulas in LaTeX and avoiding childish analogies.`
+    promptSuffix: `\n\nYour persona: You are Dr. Sage (Math Expert). Your tone is Methodical, Clear, and Step-by-Step. Break down complex equations and analytical problems with meticulous logical sequence. You MUST format ALL mathematical expressions, formulas, variables, and step-by-step calculations strictly using LaTeX ($ for inline math and $$ for block math equations).`
   },
   dino: {
     id: 'dino' as const,
@@ -569,6 +593,10 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     rotateSuggestions();
   }, []);
   const [loading, setLoading] = useState(false);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const isUserScrollingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [chatInput, setChatInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [chatDocId, setChatDocId] = useState<string | null>(null);
@@ -615,6 +643,27 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
 
   // File Upload & Plus Menu States
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+
+  useEffect(() => {
+    const handleBackButton = (e: Event) => {
+      if (historyOpen) {
+        e.preventDefault();
+        triggerVibration(10);
+        setHistoryOpen(false);
+      } else if (personaModalOpen) {
+        e.preventDefault();
+        triggerVibration(10);
+        setPersonaModalOpen(false);
+      } else if (showPlusMenu) {
+        e.preventDefault();
+        triggerVibration(10);
+        setShowPlusMenu(false);
+      }
+    };
+    window.addEventListener('appBackButton', handleBackButton);
+    return () => window.removeEventListener('appBackButton', handleBackButton);
+  }, [historyOpen, personaModalOpen, showPlusMenu]);
+
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [attachedFilePreview, setAttachedFilePreview] = useState<string | null>(null);
   const [attachedFileType, setAttachedFileType] = useState<'image' | 'document' | null>(null);
@@ -641,8 +690,41 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
 
   // Handle auto-scroll during response generations
   useEffect(() => {
+    if (!isUserScrolling) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, loading, isUserScrolling]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    // Detect if user has scrolled up from the bottom by more than 50px
+    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 50;
+    if (isScrolledUp) {
+      if (!isUserScrolling) {
+        setIsUserScrolling(true);
+        isUserScrollingRef.current = true;
+      }
+    } else {
+      if (isUserScrolling) {
+        setIsUserScrolling(false);
+        isUserScrollingRef.current = false;
+      }
+    }
+  };
+
+  const scrollToBottom = () => {
+    setIsUserScrolling(false);
+    isUserScrollingRef.current = false;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  };
+
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+  };
 
   // Handle cycle of dynamic thinking messages
   useEffect(() => {
@@ -663,18 +745,44 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
 
   useEffect(() => {
     const handleScannerSendToTutor = (e: Event) => {
-      const customEvent = e as CustomEvent<{ text: string; imageFile: File; subject?: string; handwritten?: boolean }>;
+      const customEvent = e as CustomEvent<{ 
+        text: string; 
+        imageFile: File; 
+        subject?: string; 
+        handwritten?: boolean;
+        isEvaluation?: boolean;
+        evaluationDetails?: {
+          subjectTopic: string;
+          userGrade: string;
+          questionText: string;
+          userAnswer: string;
+        };
+      }>;
       if (customEvent.detail) {
-        const { text, imageFile, subject, handwritten } = customEvent.detail;
+        const { text, imageFile, subject, handwritten, isEvaluation, evaluationDetails } = customEvent.detail;
         if (handleSendMessageRef.current) {
-          handleSendMessageRef.current(text, imageFile, 'image', subject, handwritten);
+          handleSendMessageRef.current(text, imageFile, 'image', subject, handwritten, isEvaluation, evaluationDetails);
         }
       }
     };
 
     window.addEventListener('study-scanner-send-to-tutor', handleScannerSendToTutor);
+    
+    const handleCalculatorSendToTutor = (e: Event) => {
+      const customEvent = e as CustomEvent<{ text?: string; expression?: string }>;
+      if (customEvent.detail) {
+        const text = customEvent.detail.text || customEvent.detail.expression;
+        if (text && handleSendMessageRef.current) {
+          handleSendMessageRef.current(`Please solve and explain step-by-step: ${text}`);
+        }
+      }
+    };
+
+    window.addEventListener('study-calculator-send-to-tutor', handleCalculatorSendToTutor);
+
     return () => {
       window.removeEventListener('study-scanner-send-to-tutor', handleScannerSendToTutor);
+      window.removeEventListener('study-calculator-send-to-tutor', handleCalculatorSendToTutor);
     };
   }, []);
 
@@ -709,7 +817,7 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     }
   }, []);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (!recognitionRef.current) {
       alert("Speech recognition is not supported in this browser.");
       return;
@@ -719,6 +827,12 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
+      // JIT PERMISSION: Microphone permission requested strictly when user taps the mic button
+      const micGranted = await requestMicrophonePermission();
+      if (!micGranted) {
+        alert("Microphone Permission Required\n\nPlease allow microphone access to use voice typing.");
+        return;
+      }
       try {
         baseTextRef.current = chatInput;
         setIsListening(true);
@@ -760,23 +874,40 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     }
   };
 
-  // Auto-retry timer
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (retryCountdown > 0) {
-      timer = setInterval(() => {
-        setRetryCountdown(prev => {
-          if (prev <= 1) {
-            handleSendMessage(lastRequestArgs?.text, lastRequestArgs?.file, lastRequestArgs?.type, lastRequestArgs?.subject, lastRequestArgs?.handwritten);
-            setRateLimitInfo(null);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+  const handleNativeImagePicked = (picked: any) => {
+    setAttachedFile(picked.fileObj);
+    setAttachedFileType('image');
+    setAttachedFilePreview(picked.dataUrl);
+    setShowPlusMenu(false);
+  };
+
+  const handleNativeDocPicked = (picked: any) => {
+    setAttachedFile(picked.fileObj);
+    setAttachedFileType('document');
+    setAttachedFilePreview(picked.name);
+    setShowPlusMenu(false);
+
+    if (picked.name.endsWith('.txt') || picked.name.endsWith('.md') || picked.name.endsWith('.csv')) {
+      try {
+        const text = atob(picked.base64);
+        setDocumentContent(text);
+      } catch (e) {
+        console.error('Error decoding native text file:', e);
+        setDocumentContent(`[Student uploaded a study document: ${picked.name}]`);
+      }
+    } else {
+      setDocumentContent(`[Student uploaded a study document: ${picked.name}]`);
     }
+  };
+
+  // Auto-retry timer countdown
+  useEffect(() => {
+    if (retryCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setRetryCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
     return () => clearInterval(timer);
-  }, [retryCountdown, lastRequestArgs]);
+  }, [retryCountdown]);
 
   const wordCount = chatInput.trim().split(/\s+/).filter(w => w.length > 0).length;
 
@@ -785,26 +916,35 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     overrideFile?: File, 
     overrideFileType?: 'image' | 'document',
     subject?: string,
-    handwritten?: boolean
+    handwritten?: boolean,
+    isEvaluation?: boolean,
+    evaluationDetails?: {
+      subjectTopic: string;
+      userGrade: string;
+      questionText: string;
+      userAnswer: string;
+    }
   ) => {
     let queryText = textToSend || chatInput;
     const activeAttachedFile = overrideFile || attachedFile;
     const activeAttachedType = overrideFileType || attachedFileType;
 
+    if (isEvaluation && evaluationDetails) {
+      queryText = `Subject Topic: ${evaluationDetails.subjectTopic}
+Grade: ${evaluationDetails.userGrade}
+Question Attempted: "${evaluationDetails.questionText}"
+Student's Answer: "${evaluationDetails.userAnswer}"
+Please evaluate this answer strictly according to your system rubric.`;
+    }
+
     if (!queryText.trim() && !activeAttachedFile) return;
 
-    // ELITE ROUTING LOGIC: Pro vs Free
-    if (isProUser()) {
-      // PRO: Bypass all limits
-    } else {
-      // FREE: Check coins balance
+    // ELITE ROUTING LOGIC: Pro vs Free (AI Tutor charges 2 coins on output generation)
+    if (!isProUser()) {
       const coins = getCoins();
-      if (coins > 0) {
-        // Deduct 1 coin and continue
-        deductCoins(1, "AI Chat Session");
-      } else {
+      if (coins < 2) {
         // BLOCK & TRIGGER PAYWALL
-        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "AI Tutoring Chat" } }));
+        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "AI Tutoring Chat", cost: 2 } }));
         return;
       }
     }
@@ -832,13 +972,20 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     setShowPlusMenu(false);
 
     // Save attachment data to construct user message representation
-    const textToShow = textToSend || chatInput;
-    const userMsgText = activeAttachedFile 
-      ? `📎 Attached: ${activeAttachedFile.name || 'Image'}\n\n${textToShow}` 
-      : textToShow;
+    const textToShow = (isEvaluation && evaluationDetails) ? evaluationDetails.userAnswer : (textToSend || chatInput);
+    const userMsgText = (isEvaluation && evaluationDetails)
+      ? textToShow
+      : (activeAttachedFile 
+          ? `📎 Attached: ${activeAttachedFile.name || 'Image'}\n\n${textToShow}` 
+          : textToShow);
 
     const updatedMessages = [...messages, { role: 'user' as const, text: userMsgText }];
     setMessages(updatedMessages);
+
+    // Instantiate a new AbortController for streaming cancellation
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
 
     if (!overrideFile) {
@@ -891,11 +1038,16 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
         formData.append('image', activeAttachedFile);
       }
 
+      if (isEvaluation) {
+        formData.append('isEvaluation', 'true');
+      }
+
       formData.append('stream', 'true');
 
       const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/chat', {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
       });
       
       if (!response.ok) {
@@ -983,10 +1135,12 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
                     return next;
                   });
 
-                  // Scroll container down
-                  const scrollAnchor = document.getElementById('ai-chat-scroll-anchor');
-                  if (scrollAnchor) {
-                    scrollAnchor.scrollIntoView({ behavior: 'auto' });
+                  // Scroll container down if user is not actively scrolling up
+                  if (!isUserScrollingRef.current) {
+                    const scrollAnchor = document.getElementById('ai-chat-scroll-anchor');
+                    if (scrollAnchor) {
+                      scrollAnchor.scrollIntoView({ behavior: 'auto' });
+                    }
                   }
                 }
               } catch (e) {
@@ -1082,8 +1236,20 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
           console.error("Failed to save to firestore", e);
         }
       }
-    } catch (err) {
+
+      // Freemium/Free user coin deduction after successful output generation
+      if (!isProUser()) {
+        deductCoins(2, "AI Chat Session");
+      }
+
+      hapticNotification('SUCCESS');
+    } catch (err: any) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log("Stream generation aborted by user.");
+        return;
+      }
       console.error(err);
+      hapticNotification('ERROR');
       let errorMessage = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.";
       if (err instanceof Error) {
         if (err.message === "Quota exceeded") {
@@ -1095,6 +1261,7 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
       setMessages(prev => [...prev, { role: 'model', text: errorMessage, isError: true }]);
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -1162,8 +1329,24 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
           updatedAt: data.updatedAt
         });
       });
-      setSavedChats(chats);
-      safeSetItem(`stale_tutor_chats_${auth.currentUser.uid}`, JSON.stringify(chats));
+
+      // Keep only last 10 records, delete older ones
+      if (chats.length > 10) {
+        const toKeep = chats.slice(0, 10);
+        const toDelete = chats.slice(10);
+        for (const item of toDelete) {
+          try {
+            await deleteDoc(doc(db, 'ai_tutor_chats', item.id));
+          } catch (err) {
+            console.error("Failed to delete old ai_tutor_chats item:", err);
+          }
+        }
+        setSavedChats(toKeep);
+        safeSetItem(`stale_tutor_chats_${auth.currentUser.uid}`, JSON.stringify(toKeep));
+      } else {
+        setSavedChats(chats);
+        safeSetItem(`stale_tutor_chats_${auth.currentUser.uid}`, JSON.stringify(chats));
+      }
     } catch (e) {
       console.error("Failed to load chat history:", e);
     } finally {
@@ -1393,7 +1576,7 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
                   <div className="text-center py-12">
                     <p className="text-xs text-zinc-500">Please sign in to view your saved chats.</p>
                   </div>
-                ) : savedChats.length === 0 ? (
+                ) : !Array.isArray(savedChats) || savedChats.length === 0 ? (
                   <div className="text-center py-12 flex flex-col items-center space-y-3">
                     <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 border border-zinc-200">
                       <BookOpen className="w-5 h-5 text-zinc-400" />
@@ -1407,68 +1590,61 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
                   </div>
                 ) : (
                   (() => {
-                    const grouped: { [key: string]: { categoryInfo: { name: string; tag: string; color: string }; chats: SavedChat[] } } = {};
-                    savedChats.forEach((chat) => {
-                      const cat = getChatCategory(chat);
-                      if (!grouped[cat.name]) {
-                        grouped[cat.name] = { categoryInfo: cat, chats: [] };
+                    const getChatTime = (chat: SavedChat) => {
+                      const ts = chat.updatedAt || chat.createdAt;
+                      if (!ts) return Date.now();
+                      if (typeof ts.seconds === 'number') {
+                        return ts.seconds * 1000 + (ts.nanoseconds ? ts.nanoseconds / 1000000 : 0);
                       }
-                      grouped[cat.name].chats.push(chat);
-                    });
+                      const dateParsed = new Date(ts).getTime();
+                      return isNaN(dateParsed) ? Date.now() : dateParsed;
+                    };
 
-                    return Object.keys(grouped).map((catName) => {
-                      const group = grouped[catName];
-                      return (
-                        <div key={catName} className="space-y-2 mt-4 first:mt-0">
-                          <div className="flex items-center gap-2 px-1 py-1 sticky top-0 bg-[#FAF9F6] z-[5]">
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${group.categoryInfo.color}`}>
-                              {group.categoryInfo.tag}
-                            </span>
-                            <div className="flex-1 h-[1px] bg-zinc-200" />
-                          </div>
-                          <div className="space-y-2">
-                            {group.chats.map((chat) => (
-                              <div 
-                                key={chat.id}
-                                onClick={() => handleLoadChat(chat)}
-                                className={`group relative p-3 rounded-xl bg-[#FAF9F6] border transition-all duration-200 cursor-pointer flex flex-col gap-1.5 ${
-                                  tutorChatId === chat.id 
-                                    ? 'border-purple-500/40 shadow-md shadow-purple-500/5 bg-purple-500/5' 
-                                    : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50'
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-3 pr-8">
-                                  <div className="flex-1 min-w-0">
-                                    <h4 className="text-xs font-bold text-zinc-800 leading-snug group-hover:text-purple-600 transition-colors line-clamp-2">
-                                      {chat.title}
-                                    </h4>
-                                    <span className="text-[9px] text-zinc-500 mt-1 block">
-                                      {chat.createdAt?.seconds 
-                                        ? new Date(chat.createdAt.seconds * 1000).toLocaleDateString(undefined, {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                          })
-                                        : 'Just now'}
-                                    </span>
-                                  </div>
-                                </div>
+                    const sortedChats = [...(Array.isArray(savedChats) ? savedChats : [])].sort((a, b) => getChatTime(b) - getChatTime(a));
 
-                                {/* Delete Button */}
-                                <button 
-                                  onClick={(e) => handleDeleteChat(chat.id, e)}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-transparent hover:bg-rose-50 text-zinc-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all active:scale-90"
-                                  title="Delete Session"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                    return (
+                      <div className="space-y-2">
+                        {sortedChats.map((chat) => (
+                          <div 
+                            key={chat.id}
+                            onClick={() => handleLoadChat(chat)}
+                            className={`group relative p-3 rounded-xl bg-[#FAF9F6] border transition-all duration-200 cursor-pointer flex flex-col gap-1.5 ${
+                              tutorChatId === chat.id 
+                                ? 'border-purple-500/40 shadow-md shadow-purple-500/5 bg-purple-500/5' 
+                                : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3 pr-8">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-zinc-800 leading-snug group-hover:text-purple-600 transition-colors line-clamp-2">
+                                  {chat.title}
+                                </h4>
+                                <span className="text-[9px] text-zinc-500 mt-1 block font-medium">
+                                  {chat.createdAt?.seconds 
+                                    ? new Date(chat.createdAt.seconds * 1000).toLocaleDateString(undefined, {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })
+                                    : 'Just now'}
+                                </span>
                               </div>
-                            ))}
+                            </div>
+
+                            {/* Delete Button */}
+                            <button 
+                              onClick={(e) => handleDeleteChat(chat.id, e)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-transparent hover:bg-rose-50 text-zinc-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all active:scale-90"
+                              title="Delete Session"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                        </div>
-                      );
-                    });
+                        ))}
+                      </div>
+                    );
                   })()
                 )}
               </div>
@@ -1479,6 +1655,8 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
 
       {/* Main chat area or Welcome suggestions screen - fully responsive */}
       <div 
+        ref={chatContainerRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto p-4 space-y-6 min-h-0 scroll-smooth transition-all duration-100"
         style={{ paddingBottom: '20px' }}
       >
@@ -1643,12 +1821,22 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="p-6 rounded-[2rem] bg-amber-50 border-2 border-amber-200 shadow-xl max-w-md mx-auto text-center space-y-4"
+                  className="p-6 rounded-[2rem] bg-amber-50 border-2 border-amber-200 shadow-xl max-w-md mx-auto text-center space-y-4 relative"
                 >
+                  <button
+                    onClick={() => {
+                      setRateLimitInfo(null);
+                      setRetryCountdown(0);
+                    }}
+                    className="absolute top-4 right-4 text-amber-500 hover:text-amber-800 p-1.5 rounded-full hover:bg-amber-100/80 transition-colors"
+                    title="Dismiss notification"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                   <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-2">
                     <Sparkles className="w-6 h-6 text-amber-600 animate-pulse" />
                   </div>
-                  <div className="text-sm font-bold text-amber-900 whitespace-pre-wrap leading-relaxed">
+                  <div className="text-sm font-bold text-amber-900 whitespace-pre-wrap leading-relaxed pr-6">
                     {rateLimitInfo.message}
                   </div>
                   
@@ -1663,9 +1851,11 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
                     >
                       Retry Now
                     </button>
-                    <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                      Auto-retrying in {retryCountdown}s...
-                    </div>
+                    {retryCountdown > 0 && (
+                      <div className="text-[10px] font-black text-amber-500 uppercase tracking-widest">
+                        Cooldown active: {retryCountdown}s remaining
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -1673,6 +1863,23 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Floating Scroll to Bottom button (WhatsApp style) */}
+      <AnimatePresence>
+        {isUserScrolling && (
+          <motion.button
+            key="scroll-to-bottom-btn"
+            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+            onClick={scrollToBottom}
+            className="absolute bottom-36 right-6 z-30 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center shadow-lg transition-colors active:scale-95 border border-purple-400"
+            title="Scroll to bottom"
+          >
+            <ChevronDown className="w-5 h-5" />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Hidden file inputs for Option Menu */}
       <input type="file" ref={galleryInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
@@ -1692,21 +1899,51 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
               className="absolute bottom-20 left-4 right-4 bg-[#FAF9F6] border border-zinc-200 p-2 rounded-2xl shadow-xl z-20"
             >
               <button 
-                onClick={() => { galleryInputRef.current?.click(); setShowPlusMenu(false); }}
+                onClick={async () => {
+                  setShowPlusMenu(false);
+                  if (Capacitor.isNativePlatform()) {
+                    const picked = await pickNativeFiles({ types: 'image', multiple: false });
+                    if (picked && picked.length > 0) {
+                      handleNativeImagePicked(picked[0]);
+                    }
+                  } else {
+                    galleryInputRef.current?.click();
+                  }
+                }}
                 className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors mb-1"
               >
                 <Image className="w-4 h-4 text-sky-600" />
                 <span>Choose From Gallery</span>
               </button>
               <button 
-                onClick={() => { cameraInputRef.current?.click(); setShowPlusMenu(false); }}
+                onClick={async () => {
+                  setShowPlusMenu(false);
+                  if (Capacitor.isNativePlatform()) {
+                    const picked = await takeNativePhoto();
+                    if (picked) {
+                      handleNativeImagePicked(picked);
+                    }
+                  } else {
+                    cameraInputRef.current?.click();
+                  }
+                }}
                 className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors mb-1"
               >
                 <Camera className="w-4 h-4 text-emerald-600" />
                 <span>Take Photo with Camera</span>
               </button>
               <button 
-                onClick={() => { docInputRef.current?.click(); setShowPlusMenu(false); }}
+                onClick={async () => {
+                  setShowPlusMenu(false);
+                  if (Capacitor.isNativePlatform()) {
+                    const picked = await pickNativeFiles({ types: 'document', multiple: false });
+                    if (picked && picked.length > 0) {
+                      handleNativeDocPicked(picked[0]);
+                    }
+                  } else {
+                    docInputRef.current?.click();
+                  }
+                }}
                 className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors"
               >
                 <FileText className="w-4 h-4 text-purple-600" />
@@ -1798,12 +2035,20 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
             {isListening ? <MicOff className="w-4 h-4 animate-pulse" /> : <Mic className="w-4 h-4" />}
           </button>
 
-          {isAnyMessageTyping ? (
+          {loading ? (
+            <button 
+              onClick={handleStopGeneration}
+              className="w-9 h-9 rounded-xl bg-red-600 flex items-center justify-center text-white hover:bg-red-500 transition-colors shrink-0 shadow-md"
+              title="Stop Generation"
+            >
+              <Square className="w-4 h-4" fill="currentColor" />
+            </button>
+          ) : isAnyMessageTyping ? (
             <button 
               onClick={() => setIsHolding(!isHolding)}
               className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 shadow-sm ${
                 isHolding 
-                  ? 'bg-yellow-550 text-zinc-955 hover:bg-yellow-500 animate-pulse' 
+                  ? 'bg-yellow-500 text-zinc-950 hover:bg-yellow-400 animate-pulse' 
                   : 'bg-white border border-yellow-300 text-yellow-600 hover:bg-yellow-50/50'
               }`}
               title={isHolding ? "Resume AI Response" : "Hold AI Response"}

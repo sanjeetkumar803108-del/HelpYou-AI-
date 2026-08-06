@@ -64,9 +64,26 @@
         "createdAt": { "type": "string" }
       },
       "required": ["userId", "sourceFeature", "question", "wrongInput", "correctConcept"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with coin balance and basic configuration.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "coins": { "type": "number" },
+        "isPro": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "email", "coins"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles and coin balances."
+    },
     "/pocket_items/{itemId}": {
       "schema": { "$ref": "#/entities/PocketItem" },
       "description": "Stores user saved items like notes and chats."

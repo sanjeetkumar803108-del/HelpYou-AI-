@@ -38,6 +38,15 @@ interface PracticeQuestion {
 }
 
 export default function MistakeVault({ onBack }: MistakeVaultProps) {
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (practicingId) {
+      setPracticingId(null);
+      setPracticeQuestions([]);
+    } else {
+      onBack();
+    }
+  };
   const [mistakes, setMistakes] = useState<MistakeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [fixingId, setFixingId] = useState<string | null>(null);
@@ -52,6 +61,17 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [correctAnswersCount, setCorrectAnswersCount] = useState(0);
   const [practiceComplete, setPracticeComplete] = useState(false);
+
+  useEffect(() => {
+    const handleBackButton = (e: Event) => {
+      if (practicingId) {
+        e.preventDefault();
+        handleHeaderBack();
+      }
+    };
+    window.addEventListener('appBackButton', handleBackButton);
+    return () => window.removeEventListener('appBackButton', handleBackButton);
+  }, [practicingId]);
 
   const fetchMistakes = async () => {
     setLoading(true);
@@ -241,10 +261,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
       <header className="px-5 py-4 border-b border-zinc-100 bg-white flex justify-between items-center shrink-0 z-10">
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => {
-              triggerVibration(15);
-              onBack();
-            }}
+            onClick={handleHeaderBack}
             className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-700 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -444,18 +461,22 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                             <div className="text-center py-6 text-xs font-semibold text-red-500">
                               Failed to load practice questions. Please try again!
                             </div>
+                          ) : (!practiceQuestions[currentQuestionIdx]) ? (
+                            <div className="text-center py-6 text-xs font-semibold text-zinc-500">
+                              Question unavailable. Please try again!
+                            </div>
                           ) : !practiceComplete ? (
                             <div className="space-y-4">
                               {/* Question Text */}
                               <p className="text-xs font-bold text-zinc-950 leading-relaxed">
-                                {practiceQuestions[currentQuestionIdx].question}
+                                {practiceQuestions[currentQuestionIdx]?.question || 'Practice Question'}
                               </p>
 
                               {/* Options Grid */}
                               <div className="grid grid-cols-1 gap-2.5">
-                                {practiceQuestions[currentQuestionIdx].options.map((option, oIdx) => {
+                                {(practiceQuestions[currentQuestionIdx]?.options || []).map((option, oIdx) => {
                                   const isSelected = selectedOptionIdx === oIdx;
-                                  const isCorrect = oIdx === practiceQuestions[currentQuestionIdx].correctIndex;
+                                  const isCorrect = oIdx === practiceQuestions[currentQuestionIdx]?.correctIndex;
                                   
                                   let btnStyle = "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100/50 text-zinc-800 bg-white";
                                   if (isAnswerSubmitted) {

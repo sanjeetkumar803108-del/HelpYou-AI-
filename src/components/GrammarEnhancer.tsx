@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar, Camera } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { deductCoins } from '../utils/coins';
+import { deductCoins, getCoins } from '../utils/coins';
 import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
@@ -14,8 +14,19 @@ interface GrammarEnhancerProps {
 }
 
 export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (showHistory) {
+      setShowHistory(false);
+    } else if (result) {
+      setResult(null);
+    } else {
+      onBack();
+    }
+  };
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -24,6 +35,57 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const [fixes, setFixes] = useState<string[]>([]);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [showLimitPopup, setShowLimitPopup] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    if (files.length > 5) {
+      setError("Please select a maximum of 5 images, bhai.");
+      setShowLimitPopup(true);
+      triggerVibration(15);
+      e.target.value = '';
+      return;
+    }
+    
+    setScanning(true);
+    setError(null);
+    
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('images', files[i]);
+    }
+    
+    try {
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/scan-images', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error("Could not transcribe the image.");
+      }
+      
+      const resContentType = response.headers.get("content-type") || "";
+      if (!resContentType.includes("application/json")) {
+        throw new Error("Server returned invalid response format");
+      }
+      
+      const data = await response.json();
+      if (data.text) {
+        setInputText(data.text);
+      } else {
+        setError("No text could be extracted from the image. Please make sure the handwriting/text is clear.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError("Failed to transcribe image. Please try typing or pasting your text.");
+    } finally {
+      setScanning(false);
+      e.target.value = '';
+    }
+  };
 
   const enhancingSteps = [
     "Analyzing sentence structure...",
@@ -34,6 +96,26 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   ];
 
   const [showHistory, setShowHistory] = useState(false);
+
+  React.useEffect(() => {
+    const handleBackButton = (e: Event) => {
+      if (showLimitPopup) {
+        e.preventDefault();
+        triggerVibration(10);
+        setShowLimitPopup(false);
+      } else if (showHistory) {
+        e.preventDefault();
+        triggerVibration(10);
+        setShowHistory(false);
+      } else if (result) {
+        e.preventDefault();
+        triggerVibration(10);
+        setResult(null);
+      }
+    };
+    window.addEventListener('appBackButton', handleBackButton);
+    return () => window.removeEventListener('appBackButton', handleBackButton);
+  }, [showLimitPopup, showHistory, result]);
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -84,7 +166,23 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
           });
         }
       });
-      setHistoryItems(items);
+
+      // Keep only last 10 records, delete older ones
+      if (items.length > 10) {
+        const toKeep = items.slice(0, 10);
+        const toDelete = items.slice(10);
+        
+        for (const item of toDelete) {
+          try {
+            await deleteDoc(doc(db, 'pocket_items', item.id));
+          } catch (err) {
+            console.error("Failed to delete old grammar item:", err);
+          }
+        }
+        setHistoryItems(toKeep);
+      } else {
+        setHistoryItems(items);
+      }
     } catch (e) {
       console.error("Failed to load Grammar history:", e);
     } finally {
@@ -108,8 +206,10 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const handleEnhance = async () => {
     if (!inputText.trim()) return;
 
-    // Deduct 1 coin for Grammar & Flow
-    if (!deductCoins(1, "Grammar & Flow")) {
+    // Check if user has at least 1 coin before starting, but do not deduct yet!
+    const coins = getCoins();
+    if (coins < 1) {
+      window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "AI Grammar Enhancer", cost: 1 } }));
       return;
     }
     
@@ -144,6 +244,9 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       }
       const data = await response.json();
       
+      // Deduct 1 coin now that the output has been successfully generated by the AI
+      deductCoins(1, "Grammar & Flow");
+      
       setResult(data.text);
       const receivedFixes = data.fixes || [];
       setFixes(receivedFixes);
@@ -157,8 +260,8 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       if (auth.currentUser) {
         try {
           let savedText = data.text;
-          if (receivedFixes.length > 0) {
-            savedText += "\n\n### 💡 What we fixed:\n" + receivedFixes.map((f: string) => `- ${f}`).join("\n");
+          if (receivedFixes && receivedFixes.length > 0) {
+            savedText += "\n\n### 💡 What we fixed:\n" + (receivedFixes || []).map((f: string) => `- ${f}`).join("\n");
           }
 
           await addDoc(collection(db, 'pocket_items'), {
@@ -198,7 +301,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-4">
           <button 
-            onClick={onBack}
+            onClick={handleHeaderBack}
             className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -238,7 +341,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         <div className="max-w-md mx-auto space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-extrabold text-sm text-zinc-500 uppercase tracking-wider">Your Grammar Polishes</h3>
-            <span className="text-xs bg-zinc-100 text-zinc-600 font-bold px-2 py-0.5 rounded-full">{historyItems.length} items</span>
+            <span className="text-xs bg-zinc-100 text-zinc-600 font-bold px-2 py-0.5 rounded-full">{(Array.isArray(historyItems) ? historyItems : []).length} items</span>
           </div>
 
           {loadingHistory ? (
@@ -246,7 +349,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
               <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
               <span>Loading grammar history...</span>
             </div>
-          ) : historyItems.length === 0 ? (
+          ) : !Array.isArray(historyItems) || historyItems.length === 0 ? (
             <div className="bg-white border border-zinc-200 rounded-3xl p-8 text-center text-zinc-500 font-bold shadow-sm">
               <p className="text-3xl mb-2">✨</p>
               <p className="text-sm">No grammar polishes found.</p>
@@ -254,7 +357,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              {historyItems.map((item) => (
+              {(historyItems || []).map((item) => (
                 <div
                   key={item.id}
                   onClick={() => {
@@ -333,11 +436,46 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="E.g., I was went to the store to buying some milks but its was closed..."
-                className="w-full p-4 pb-8 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 resize-none h-48 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-semibold text-sm leading-relaxed"
+                disabled={loading || scanning}
+                className="w-full p-4 pb-8 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 resize-none h-48 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-semibold text-sm leading-relaxed disabled:opacity-60"
               />
               <div className={`absolute bottom-3 right-4 text-xs font-bold ${'text-zinc-400'}`}>
                 {wordCount} words
               </div>
+            </div>
+
+            {/* GALLERY IMAGE UPLOAD */}
+            <div className="mb-6">
+              <input 
+                type="file"
+                id="grammar-gallery-input"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleImageUpload}
+                disabled={scanning || loading}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  triggerVibration(10);
+                  document.getElementById('grammar-gallery-input')?.click();
+                }}
+                disabled={scanning || loading}
+                className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-100/50 font-extrabold text-sm transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              >
+                {scanning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                    <span>Transcribing text from image...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4" />
+                    <span>Upload images</span>
+                  </>
+                )}
+              </button>
             </div>
 
             {/* TONE & MODE SELECTORS */}
@@ -346,24 +484,26 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
               <div className="grid grid-cols-2 bg-zinc-100 p-1 rounded-xl border border-zinc-200/50">
                 <button
                   type="button"
-                  onClick={() => setMode('fix')}
+                  onClick={() => !loading && !scanning && setMode('fix')}
+                  disabled={loading || scanning}
                   className={`py-2.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                     mode === 'fix'
                       ? 'bg-white text-purple-600 shadow-sm border border-zinc-200/30'
                       : 'text-zinc-500 hover:text-zinc-800'
-                  }`}
+                  } disabled:opacity-50`}
                 >
                   <span className="text-sm">🔧</span>
                   <span>Fix Grammar Only</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMode('academic')}
+                  onClick={() => !loading && !scanning && setMode('academic')}
+                  disabled={loading || scanning}
                   className={`py-2.5 text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                     mode === 'academic'
                       ? 'bg-white text-purple-600 shadow-sm border border-zinc-200/30'
                       : 'text-zinc-500 hover:text-zinc-800'
-                  }`}
+                  } disabled:opacity-50`}
                 >
                   <span className="text-sm">🎓</span>
                   <span>Academic Rewrite</span>
@@ -379,7 +519,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
 
             <button
               onClick={handleEnhance}
-              disabled={!inputText.trim() || loading || false}
+              disabled={!inputText.trim() || loading || scanning}
               className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-purple-500/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center border border-purple-500/20"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Enhance & Correct"}
@@ -416,7 +556,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                 <span>💡</span> What we fixed:
               </h4>
               <ul className="space-y-2">
-                {fixes.map((fix, idx) => (
+                {(fixes || []).map((fix, idx) => (
                   <li key={idx} className="text-xs font-medium text-amber-900 flex items-start gap-2 leading-relaxed">
                     <span className="text-amber-500 select-none mt-0.5">•</span>
                     <span>{fix}</span>
@@ -446,6 +586,36 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         </motion.div>
       )}
       </div>
+
+      <AnimatePresence>
+        {showLimitPopup && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-zinc-100 flex flex-col items-center text-center"
+            >
+              <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 text-2xl">
+                ⚠️
+              </div>
+              <h3 className="font-extrabold text-zinc-900 text-lg mb-2">Maximum 5 Images Allowed</h3>
+              <p className="text-zinc-500 text-sm font-semibold leading-relaxed mb-6">
+                Bhai, you can only select up to 5 images at a time. Please select 5 or fewer images.
+              </p>
+              <button
+                onClick={() => {
+                  triggerVibration(10);
+                  setShowLimitPopup(false);
+                }}
+                className="w-full bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black py-4 rounded-xl transition-all text-sm cursor-pointer"
+              >
+                Ok, understood!
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

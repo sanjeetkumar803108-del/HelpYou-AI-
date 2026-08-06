@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, GraduationCap, BookOpen, Rocket, HeartPulse, BarChart3, Palette, Cpu, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Check, GraduationCap, Rocket, HeartPulse, BarChart3, Palette, Cpu, ArrowLeft, ArrowRight, Globe } from 'lucide-react';
 import { triggerVibration } from '../utils/vibrate';
 import { safeSetItem } from '../utils/storage';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface AcademicSetupProps {
   userId: string;
@@ -20,46 +22,125 @@ const GRADES = [
   { id: 'College Senior', label: 'College Year 4', desc: 'Senior Undergrad', isCollege: true },
 ];
 
-const STREAMS = [
-  { id: 'STEM / Engineering', label: 'STEM / Engineering', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-  { id: 'Pre-Med / AP Sciences', label: 'Pre-Med / AP Sciences', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
-  { id: 'Business / Economics', label: 'Business / Economics', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
-  { id: 'Humanities / Liberal Arts', label: 'Humanities / Liberal Arts', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
-  { id: 'Computer Science', label: 'Computer Science', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+export const COUNTRIES = [
+  { id: 'USA', name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
+  { id: 'UK', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
+  { id: 'CA', name: 'Canada', flag: '🇨🇦', regionSystem: 'USA' },
+  { id: 'AU', name: 'Australia', flag: '🇦🇺', regionSystem: 'UK' },
+  { id: 'Global', name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
 ];
 
+// Dynamic tracks dictionary mapped by Country Name
+export const REGIONAL_TRACKS: Record<string, Array<{ id: string; title: string; subtitle: string; icon: React.ReactNode; color: string }>> = {
+  'United States': [
+    { id: 'STEM / Engineering', title: 'STEM / Engineering', subtitle: 'Tailored for AP Calculus & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
+    { id: 'Pre-Med / AP Sciences', title: 'Pre-Med / AP Sciences', subtitle: 'Tailored for AP Bio, Chem & Anatomy', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Business / Economics', title: 'Business / Economics', subtitle: 'Tailored for AP Micro, Macro & Finance', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
+    { id: 'Humanities / Liberal Arts', title: 'Humanities / Liberal Arts', subtitle: 'Tailored for AP US Gov & World History', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
+    { id: 'Computer Science', title: 'Computer Science & AI', subtitle: 'Tailored for AP CS A & Principles', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+  ],
+  'United Kingdom': [
+    { id: 'STEM / Engineering', title: 'STEM & Mathematics', subtitle: 'Tailored for A-Level Maths & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
+    { id: 'Pre-Med / AP Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for A-Level Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Business / Economics', title: 'Economics & Business Studies', subtitle: 'Tailored for GCSE & A-Level Economics', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
+    { id: 'Humanities / Liberal Arts', title: 'Humanities & Social Sciences', subtitle: 'Tailored for A-Level History & Literature', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
+    { id: 'Computer Science', title: 'Computer Science & Software', subtitle: 'Tailored for GCSE & A-Level Computer Science', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+  ],
+  'Canada': [
+    { id: 'STEM / Engineering', title: 'Engineering & Math (University Prep)', subtitle: 'Tailored for Grade 12 Calculus & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
+    { id: 'Pre-Med / AP Sciences', title: 'Health Sciences (University Prep)', subtitle: 'Tailored for Grade 12 Bio & Chem', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Business / Economics', title: 'Commerce & Economics Prep', subtitle: 'Tailored for Grade 12 Business & Financial Math', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
+    { id: 'Humanities / Liberal Arts', title: 'Humanities & Social Studies', subtitle: 'Tailored for Grade 12 Canadian History & English', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
+    { id: 'Computer Science', title: 'Computer Science & Tech', subtitle: 'Tailored for Grade 12 Computer & Data Science', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+  ],
+  'Australia': [
+    { id: 'STEM / Engineering', title: 'Engineering & Mathematical Sciences', subtitle: 'Tailored for HSC Specialist Maths & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
+    { id: 'Pre-Med / AP Sciences', title: 'Biomedical & Medical Sciences', subtitle: 'Tailored for HSC / VCE Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Business / Economics', title: 'Commerce & Financial Studies', subtitle: 'Tailored for HSC / VCE Economics & Commerce', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
+    { id: 'Humanities / Liberal Arts', title: 'Humanities & Legal Studies', subtitle: 'Tailored for HSC Modern History & Legal Studies', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
+    { id: 'Computer Science', title: 'Information & Software Technology', subtitle: 'Tailored for HSC Software Design & Development', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+  ],
+  'Others / International': [
+    { id: 'STEM / Engineering', title: 'STEM & Engineering', subtitle: 'Tailored for IB Physics & Advanced Mathematics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
+    { id: 'Pre-Med / AP Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for IB Biology, Chemistry & Health Sciences', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Business / Economics', title: 'Business, Economics & Finance', subtitle: 'Tailored for Global Economics & Business Management', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
+    { id: 'Humanities / Liberal Arts', title: 'Humanities & Liberal Arts', subtitle: 'Tailored for Global History, Literature & Social Sciences', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
+    { id: 'Computer Science', title: 'Computer Science & Software', subtitle: 'Tailored for IB Computer Science HL/SL', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+  ],
+};
+
 export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps) {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedGrade, setSelectedGrade] = useState<string>('11th Grade (Junior)');
+  const [selectedCountryId, setSelectedCountryId] = useState<string>('USA');
   const [selectedStream, setSelectedStream] = useState<string>('STEM / Engineering');
 
   const handleNextStep = () => {
     triggerVibration(15);
-    setStep(2);
+    if (step === 1) {
+      setStep(2);
+    } else if (step === 2) {
+      setStep(3);
+    }
   };
 
   const handleBackStep = () => {
     triggerVibration(10);
-    setStep(1);
+    if (step === 3) {
+      setStep(2);
+    } else if (step === 2) {
+      setStep(1);
+    }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     triggerVibration(25);
     
+    const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
+
     // Save selections locally
     safeSetItem('academic_grade', selectedGrade);
     safeSetItem('academic_stream', selectedStream);
+    safeSetItem('academic_region', countryObj.regionSystem);
+    safeSetItem('academic_country', countryObj.name);
     
     // Find study level based on grade (High School vs College)
     const gradeObj = GRADES.find(g => g.id === selectedGrade);
     const studyLevel = gradeObj?.isCollege ? 'College' : 'High School';
     safeSetItem('onboarding_grade', studyLevel);
+    safeSetItem('onboarding_completed', 'true');
 
-    // Save for this specific user
-    safeSetItem(`academic_grade_${userId}`, selectedGrade);
-    safeSetItem(`academic_stream_${userId}`, selectedStream);
-    safeSetItem(`onboarding_grade_${userId}`, studyLevel);
-    safeSetItem(`academic_setup_completed_${userId}`, 'true');
+    // Save for this specific user locally
+    const activeUid = userId || auth.currentUser?.uid || '';
+    if (activeUid) {
+      safeSetItem(`academic_grade_${activeUid}`, selectedGrade);
+      safeSetItem(`academic_stream_${activeUid}`, selectedStream);
+      safeSetItem(`academic_region_${activeUid}`, countryObj.regionSystem);
+      safeSetItem(`academic_country_${activeUid}`, countryObj.name);
+      safeSetItem(`onboarding_grade_${activeUid}`, studyLevel);
+      safeSetItem(`academic_setup_completed_${activeUid}`, 'true');
+      safeSetItem(`onboarding_completed_${activeUid}`, 'true');
+      safeSetItem(`isOnboardingComplete_${activeUid}`, 'true');
+
+      // Update Firestore user document with isOnboardingComplete and selections
+      try {
+        await setDoc(doc(db, 'users', activeUid), {
+          isOnboardingComplete: true,
+          isOnboardingCompleted: true,
+          grade: selectedGrade,
+          stream: selectedStream,
+          country: countryObj.name,
+          regionSystem: countryObj.regionSystem,
+          academic_grade: selectedGrade,
+          academic_stream: selectedStream,
+          academic_country: countryObj.name,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`[AcademicSetup] Successfully updated Firestore user doc ${activeUid} with isOnboardingComplete: true`);
+      } catch (dbErr) {
+        console.error('[AcademicSetup] Error saving onboarding state to Firestore:', dbErr);
+      }
+    }
 
     onComplete();
   };
@@ -78,7 +159,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest bg-zinc-100 px-2.5 py-1 rounded-full border border-zinc-150">
-            Step {step} of 2
+            Step {step} of 3
           </span>
         </div>
       </div>
@@ -86,7 +167,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
       {/* Content Area with Slide Animation */}
       <div className="flex-1 px-6 flex flex-col justify-center max-w-sm mx-auto w-full min-h-0 z-10">
         <AnimatePresence mode="wait">
-          {step === 1 ? (
+          {step === 1 && (
             <motion.div
               key="step-grade"
               initial={{ x: -20, opacity: 0 }}
@@ -142,7 +223,65 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
                 })}
               </div>
             </motion.div>
-          ) : (
+          )}
+
+          {step === 2 && (
+            <motion.div
+              key="step-country"
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -20, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col justify-center min-h-0 py-2"
+            >
+              <div className="text-left mb-6 shrink-0">
+                <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight flex items-center gap-2">
+                  Select your country
+                </h1>
+                <p className="text-xs text-zinc-500 font-semibold mt-1.5 leading-relaxed">
+                  We tailor subject titles and exam naming conventions (SAT, GCSE, A-Levels, IB) to your educational system.
+                </p>
+              </div>
+
+              {/* Country Selection Cards */}
+              <div className="flex-1 overflow-y-auto pr-1 -mr-1 py-1 space-y-2.5 max-h-[50vh]">
+                {COUNTRIES.map((country) => {
+                  const isSelected = selectedCountryId === country.id;
+                  return (
+                    <motion.div
+                      key={country.id}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        triggerVibration(10);
+                        setSelectedCountryId(country.id);
+                      }}
+                      className={`p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? 'border-purple-500 bg-purple-50/60 ring-1 ring-purple-500/20 shadow-sm'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <span className="text-2xl filter drop-shadow-sm select-none">{country.flag}</span>
+                        <span className={`text-xs font-black ${isSelected ? 'text-purple-700' : 'text-zinc-800'}`}>
+                          {country.name}
+                        </span>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                        isSelected 
+                          ? 'border-purple-600 bg-purple-600 text-white' 
+                          : 'border-zinc-300 bg-white'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
             <motion.div
               key="step-stream"
               initial={{ x: 20, opacity: 0 }}
@@ -162,43 +301,49 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
 
               {/* Streams Grid */}
               <div className="flex-1 overflow-y-auto pr-1 -mr-1 py-1 space-y-2.5 max-h-[50vh]">
-                {STREAMS.map((stream) => {
-                  const isSelected = selectedStream === stream.id;
-                  return (
-                    <motion.div
-                      key={stream.id}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        triggerVibration(10);
-                        setSelectedStream(stream.id);
-                      }}
-                      className={`p-4 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer ${
-                        isSelected
-                          ? 'border-purple-500 bg-purple-50/50 shadow-sm shadow-purple-500/5'
-                          : 'border-zinc-200 bg-white hover:border-zinc-300'
-                      }`}
-                    >
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${stream.color} text-white flex items-center justify-center shadow-md shadow-zinc-100/10`}>
-                        {stream.icon}
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className={`text-xs font-black ${isSelected ? 'text-purple-700' : 'text-zinc-800'}`}>
-                          {stream.label}
-                        </p>
-                        <p className="text-[9px] text-zinc-400 font-bold mt-0.5">
-                          Tailored study notes & tests
-                        </p>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
-                        isSelected 
-                          ? 'border-purple-600 bg-purple-600 text-white' 
-                          : 'border-zinc-300 bg-white'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                {(() => {
+                  const countryObj = COUNTRIES.find(c => c.id === selectedCountryId);
+                  const countryName = countryObj?.name || 'United States';
+                  const activeTracks = REGIONAL_TRACKS[countryName] || REGIONAL_TRACKS['Others / International'];
+
+                  return activeTracks.map((track) => {
+                    const isSelected = selectedStream === track.id || selectedStream === track.title;
+                    return (
+                      <motion.div
+                        key={track.title}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          triggerVibration(10);
+                          setSelectedStream(track.id);
+                        }}
+                        className={`p-4 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer ${
+                          isSelected
+                            ? 'border-purple-500 bg-purple-50/50 shadow-sm shadow-purple-500/5'
+                            : 'border-zinc-200 bg-white hover:border-zinc-300'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${track.color} text-white flex items-center justify-center shadow-md shadow-zinc-100/10`}>
+                          {track.icon}
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className={`text-xs font-black ${isSelected ? 'text-purple-700' : 'text-zinc-800'}`}>
+                            {track.title}
+                          </p>
+                          <p className="text-[9px] text-zinc-400 font-bold mt-0.5">
+                            {track.subtitle}
+                          </p>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                          isSelected 
+                            ? 'border-purple-600 bg-purple-600 text-white' 
+                            : 'border-zinc-300 bg-white'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </motion.div>
+                    );
+                  });
+                })()}
               </div>
             </motion.div>
           )}
@@ -208,7 +353,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
       {/* Bottom Actions Rail */}
       <div className="w-full px-6 pb-12 pt-4 flex flex-col items-center gap-4 shrink-0 z-10">
         <div className="w-full max-w-sm flex items-center gap-3">
-          {step === 2 && (
+          {step > 1 && (
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleBackStep}
@@ -219,7 +364,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
             </motion.button>
           )}
           
-          {step === 1 ? (
+          {step < 3 ? (
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleNextStep}

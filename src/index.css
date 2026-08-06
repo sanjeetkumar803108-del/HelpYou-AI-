@@ -9,9 +9,28 @@
 }
 
 @layer base {
+  html, body {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
   body {
     @apply bg-[#121212] text-gray-100;
   }
+}
+
+/* KaTeX Math Responsive Overflow Safeguard */
+.katex-display {
+  @apply max-w-full overflow-x-auto overflow-y-hidden py-1;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+.katex {
+  @apply max-w-full;
+  max-width: 100%;
 }
 
 @layer utilities {
@@ -20,6 +39,10 @@
   }
   .glass-panel {
     @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+  .momentum-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
   }
 }
 
@@ -80,9 +103,47 @@
 }
 
 /* Dark Mode Overrides */
-.dark, .dark .bg-\[\#FAF9F6\] {
+.dark, .dark .bg-\[\#FAF9F6\], .dark .bg-\[\#faf9f6\] {
   background-color: #09090b !important;
   color: #f4f4f5 !important;
+}
+
+.dark .bg-\[\#FAF9F6\]\/95, .dark .bg-\[\#faf9f6\]\/95 {
+  background-color: rgba(9, 9, 11, 0.95) !important;
+}
+
+.dark .bg-\[\#FAF9F6\]\/90, .dark .bg-\[\#faf9f6\]\/90 {
+  background-color: rgba(9, 9, 11, 0.90) !important;
+}
+
+.dark .bg-\[\#FAF9F6\]\/80, .dark .bg-\[\#faf9f6\]\/80 {
+  background-color: rgba(9, 9, 11, 0.80) !important;
+}
+
+.dark .bg-\[\#FAF9F6\]\/50, .dark .bg-\[\#faf9f6\]\/50 {
+  background-color: rgba(9, 9, 11, 0.50) !important;
+}
+
+/* Ensure text inside pastel feature cards remains dark and readable in dark mode */
+.dark .bg-\[\#EBF5FF\],
+.dark .bg-\[\#F3E8FF\],
+.dark .bg-\[\#E6FFFA\],
+.dark .bg-\[\#FEFCBF\],
+.dark .bg-\[\#FFE4E6\],
+.dark .bg-\[\#FFEDD5\],
+.dark .bg-\[\#F0FDF4\],
+.dark .bg-\[\#E0E7FF\],
+.dark .bg-\[\#FEF2F2\],
+.dark .bg-\[\#EBF5FF\] *,
+.dark .bg-\[\#F3E8FF\] *,
+.dark .bg-\[\#E6FFFA\] *,
+.dark .bg-\[\#FEFCBF\] *,
+.dark .bg-\[\#FFE4E6\] *,
+.dark .bg-\[\#FFEDD5\] *,
+.dark .bg-\[\#F0FDF4\] *,
+.dark .bg-\[\#E0E7FF\] *,
+.dark .bg-\[\#FEF2F2\] * {
+  color: #1a1a1a !important;
 }
 
 .dark .bg-white {
@@ -198,3 +259,121 @@
   background-color: #121214 !important;
   border-color: #27272a !important;
 }
+
+/* Advanced Premium Loader Keyframes */
+@keyframes orb-morph {
+  0% {
+    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
+    transform: rotate(0deg);
+  }
+  33% {
+    border-radius: 70% 30% 52% 48% / 60% 40% 60% 40%;
+    transform: rotate(120deg);
+  }
+  66% {
+    border-radius: 50% 50% 30% 70% / 40% 60% 40% 60%;
+    transform: rotate(240deg);
+  }
+  100% {
+    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orb-breathe {
+  0%, 100% {
+    transform: scale(0.92);
+    filter: blur(20px) brightness(0.95);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    filter: blur(32px) brightness(1.2);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer-anim {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-orb-morph {
+  animation: orb-morph 8s ease-in-out infinite;
+}
+
+.animate-orb-breathe {
+  animation: orb-breathe 4s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-anim 1.6s infinite linear;
+}
+
+.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* Dark Mode Specificity and Background Gradient Fixes */
+
+/* 1. Reset light-color background gradients in dark mode so the background is properly dark */
+.dark .bg-gradient-to-b.via-\[\#FAF9F6\],
+.dark .bg-gradient-to-b.to-\[\#FAF9F6\],
+.dark .bg-gradient-to-b.to-\[\#F1F0F5\] {
+  background-image: none !important;
+  background-color: #09090b !important;
+}
+
+/* 2. Overriding zinc text overrides inside pastel/light feature cards to remain dark and highly legible, using high-specificity selectors */
+.dark div.bg-\[\#EBF5FF\],
+.dark div.bg-\[\#F3E8FF\],
+.dark div.bg-\[\#E6FFFA\],
+.dark div.bg-\[\#FEFCBF\],
+.dark div.bg-\[\#FFE4E6\],
+.dark div.bg-\[\#FFEDD5\],
+.dark div.bg-\[\#F0FDF4\],
+.dark div.bg-\[\#E0E7FF\],
+.dark div.bg-\[\#FEF2F2\],
+.dark div.bg-\[\#EBF5FF\] *,
+.dark div.bg-\[\#F3E8FF\] *,
+.dark div.bg-\[\#E6FFFA\] *,
+.dark div.bg-\[\#FEFCBF\] *,
+.dark div.bg-\[\#FFE4E6\] *,
+.dark div.bg-\[\#FFEDD5\] *,
+.dark div.bg-\[\#F0FDF4\] *,
+.dark div.bg-\[\#E0E7FF\] *,
+.dark div.bg-\[\#FEF2F2\] * {
+  color: #1a1a1a !important;
+}
+
+/* 3. Splash Screen Dark Mode Fixes */
+.dark #splash-screen {
+  background-color: #09090b !important;
+}
+
+.dark #textGradient stop:first-child {
+  stop-color: #ffffff !important;
+}
+
+.dark #textGradient stop:last-child {
+  stop-color: #e4e4e7 !important;
+}
+
+

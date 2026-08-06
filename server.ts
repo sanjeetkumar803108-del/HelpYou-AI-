@@ -3,16 +3,15 @@ import path from "path";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
+import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
-import dotenv from "dotenv";
-import pdf from "pdf-parse";
+import { createRequire } from "module";
 
-// Load .env variables (important for Vercel cloud deployment)
-dotenv.config();
-
+const requireModule = typeof require !== "undefined" ? require : createRequire(import.meta.url);
+const pdf = requireModule("pdf-parse");
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -26,9 +25,7 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = 3000;
 
-app.use(cors({
-    origin: '*'
-}));
+app.use(cors());
 
 // 1. Strict Rate Limiting (Brute Force Protection)
 const apiLimiter = rateLimit({
@@ -186,6 +183,73 @@ const upload = multer({
   limits: { fileSize: 35 * 1024 * 1024 }
 });
 
+// 3. PrivacyGuard Security Middleware: Immediate Image & File Purging
+// This middleware intercepts response completion and physically overrides all uploaded
+// in-memory buffer blocks with zero bytes before releasing their references.
+// This fulfills our "100% Privacy-First & Zero-Retention" guarantee, securing student data completely.
+app.use((req, res, next) => {
+  const purgeFiles = () => {
+    try {
+      if (req.file) {
+        if (req.file.buffer && Buffer.isBuffer(req.file.buffer)) {
+          req.file.buffer.fill(0);
+          console.log("[PrivacyGuard] Securely purged single uploaded file buffer from memory.");
+        }
+        req.file = undefined as any;
+      }
+      if (req.files) {
+        if (Array.isArray(req.files)) {
+          (req.files as Express.Multer.File[]).forEach(file => {
+            if (file.buffer && Buffer.isBuffer(file.buffer)) {
+              file.buffer.fill(0);
+            }
+          });
+          console.log("[PrivacyGuard] Securely purged multiple uploaded file buffers from memory.");
+        } else if (typeof req.files === "object") {
+          Object.values(req.files).forEach((fileArr: any) => {
+            if (Array.isArray(fileArr)) {
+              fileArr.forEach((file: any) => {
+                if (file.buffer && Buffer.isBuffer(file.buffer)) {
+                  file.buffer.fill(0);
+                }
+              });
+            }
+          });
+          console.log("[PrivacyGuard] Securely purged object-based multiple uploaded file buffers from memory.");
+        }
+        req.files = undefined as any;
+      }
+    } catch (e) {
+      console.error("[PrivacyGuard] Error while purging buffers:", e);
+    }
+  };
+
+  res.on("finish", purgeFiles);
+  res.on("close", purgeFiles);
+  next();
+});
+
+function pcmToWav(pcmBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Buffer {
+  const wavHeader = Buffer.alloc(44);
+  const numBytes = pcmBuffer.length;
+
+  wavHeader.write("RIFF", 0);
+  wavHeader.writeUInt32LE(36 + numBytes, 4);
+  wavHeader.write("WAVE", 8);
+  wavHeader.write("fmt ", 12);
+  wavHeader.writeUInt32LE(16, 16);
+  wavHeader.writeUInt16LE(1, 20);
+  wavHeader.writeUInt16LE(numChannels, 22);
+  wavHeader.writeUInt32LE(sampleRate, 24);
+  wavHeader.writeUInt32LE((sampleRate * numChannels * bitsPerSample) / 8, 28);
+  wavHeader.writeUInt16LE((numChannels * bitsPerSample) / 8, 32);
+  wavHeader.writeUInt16LE(bitsPerSample, 34);
+  wavHeader.write("data", 36);
+  wavHeader.writeUInt32LE(numBytes, 40);
+
+  return Buffer.concat([wavHeader, pcmBuffer]);
+}
+
 let ai: GoogleGenAI | null = null;
 function getAI() {
   if (!ai) {
@@ -244,20 +308,28 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
     clonedParams.config = { ...clonedParams.config };
   }
 
+  const isTtsModel = !!(clonedParams.model && clonedParams.model.includes("tts"));
+
+  if (isTtsModel && clonedParams.config) {
+    delete clonedParams.config.systemInstruction;
+  }
+
   // Setup basic systemInstruction structure if missing
-  if (!clonedParams.config.systemInstruction) {
-    clonedParams.config.systemInstruction = { parts: [{ text: "" }] };
-  } else {
-    let sysInstr = clonedParams.config.systemInstruction;
-    if (typeof sysInstr === 'string') {
-      sysInstr = { parts: [{ text: sysInstr }] };
+  if (!isTtsModel) {
+    if (!clonedParams.config.systemInstruction) {
+      clonedParams.config.systemInstruction = { parts: [{ text: "" }] };
     } else {
-      sysInstr = { ...sysInstr };
-      if (sysInstr.parts) {
-        sysInstr.parts = sysInstr.parts.map((p: any) => ({ ...p }));
+      let sysInstr = clonedParams.config.systemInstruction;
+      if (typeof sysInstr === 'string') {
+        sysInstr = { parts: [{ text: sysInstr }] };
+      } else {
+        sysInstr = { ...sysInstr };
+        if (sysInstr.parts) {
+          sysInstr.parts = sysInstr.parts.map((p: any) => ({ ...p }));
+        }
       }
+      clonedParams.config.systemInstruction = sysInstr;
     }
-    clonedParams.config.systemInstruction = sysInstr;
   }
 
   // Clone tools if present
@@ -265,24 +337,26 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
     clonedParams.config.tools = clonedParams.config.tools.map((t: any) => ({ ...t }));
   }
 
-  // Inject current date & time
-  const dateInstruction = `The current date and time is: ${new Date().toISOString()}. You must treat this as the absolute present moment.`;
-  const originalParts = clonedParams.config.systemInstruction.parts || [];
-  const originalText = originalParts[0]?.text || "";
-  clonedParams.config.systemInstruction.parts = [
-    { text: `${originalText}\n\n${dateInstruction}`.trim() },
-    ...originalParts.slice(1)
-  ];
-
-  if (gradeLevel) {
-    const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
-    
-    const parts = clonedParams.config.systemInstruction.parts || [];
-    const text = parts[0]?.text || "";
+  if (!isTtsModel) {
+    // Inject current date & time
+    const dateInstruction = `The current date and time is: ${new Date().toISOString()}. You must treat this as the absolute present moment.`;
+    const originalParts = clonedParams.config.systemInstruction.parts || [];
+    const originalText = originalParts[0]?.text || "";
     clonedParams.config.systemInstruction.parts = [
-      { text: `${gradeInstruction}\n\n${text}`.trim() },
-      ...parts.slice(1)
+      { text: `${originalText}\n\n${dateInstruction}`.trim() },
+      ...originalParts.slice(1)
     ];
+
+    if (gradeLevel) {
+      const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
+      
+      const parts = clonedParams.config.systemInstruction.parts || [];
+      const text = parts[0]?.text || "";
+      clonedParams.config.systemInstruction.parts = [
+        { text: `${gradeInstruction}\n\n${text}`.trim() },
+        ...parts.slice(1)
+      ];
+    }
   }
 
   const query = extractUserQuery(clonedParams);
@@ -299,8 +373,14 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
     params.model.includes("clip")
   );
 
-  let modelsToTry = isSpecialtyModel ? [params.model] : [
-    params.model || "gemini-3.5-flash",
+  let requestedModel = params.model;
+  if (requestedModel === "gemini-flash-latest") {
+    requestedModel = "gemini-3.6-flash";
+  }
+
+  let modelsToTry = isSpecialtyModel ? [requestedModel] : [
+    requestedModel || "gemini-3.6-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "gemini-flash-latest",
@@ -314,7 +394,8 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
 
     for (const m of modelsToTry) {
       const lastLimited = rateLimitedModels[m] || 0;
-      if (now - lastLimited < 30000) {
+      // Keep on backburner for 1 hour to handle daily/frequent free-tier limits
+      if (now - lastLimited < 3600000) {
         backburnerModels.push(m);
       } else {
         activeModels.push(m);
@@ -355,8 +436,6 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
         lastError = error;
         const errorStr = String(error.message || error).toLowerCase();
         
-        console.error(`[ai-client] Model ${model} (attempt ${attempt}/${retries}) failed:`, errorStr);
-        
         const isRateLimitOrOverloaded = errorStr.includes("429") || 
                                         errorStr.includes("503") ||
                                         errorStr.includes("quota") || 
@@ -365,6 +444,12 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
                                         errorStr.includes("unavailable") ||
                                         errorStr.includes("overloaded") ||
                                         errorStr.includes("demand");
+        
+        if (isRateLimitOrOverloaded) {
+          console.warn(`[ai-client] Model ${model} (attempt ${attempt}/${retries}) hit rate-limit or quota constraint:`, errorStr);
+        } else {
+          console.error(`[ai-client] Model ${model} (attempt ${attempt}/${retries}) failed:`, errorStr);
+        }
         
         if (isRateLimitOrOverloaded) {
           anyQuotaExceeded = true;
@@ -437,19 +522,26 @@ app.post("/api/scan", upload.single("image"), async (req, res) => {
     const profileContext = req.body.profileContext;
     const gradeLevel = req.body.gradeLevel;
     const textPart = {
-      text: `You are an Elite High School Math & Science Tutor, SAT/ACT Expert, and a Master Educator. The student will input questions via OCR (messy text), Keyboard, or Voice Dictation. Your job is to perfectly interpret the input and provide a world-class, highly empathetic learning experience.
+      text: `You are "Magic AI Tutor", an elite, highly intelligent, encouraging educational assistant, SAT/ACT Expert, and Master Educator.
+You are analyzing a full-screen, uncropped photo. Scan the image to locate the primary mathematical equation, science question, diagram, or text problem. Ignore any background noise, hands, or irrelevant objects. Focus solely on extracting and solving the main academic problem visible in the image.
 ${profileContext ? `\nUSER PROFILE CONTEXT:\n${profileContext}\n` : ''}
 
 Adopt an encouraging, patient, precise, and crisp tone. Use clean line breaks and emojis for visual readability.
 DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimiters.
 
 CRITICAL SYSTEM INSTRUCTION (MANDATORY):
-You MUST output your response strictly in the following JSON format, followed by 3 context-aware follow-up suggestions.
-No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
+Before generating your response, you MUST analyze the extracted academic problem and categorize it into one of the following 3 routing rules to determine the output formatting:
 
-FORMAT:
+--- CATEGORIZATION & ROUTING RULES ---
+
+1. RULE 1 (Math & Physics Calculations):
+- Use this ONLY if the query is a mathematical equation, physics numerical, derivation, or problem requiring step-by-step sequential solving.
+- Set "format_type" to "steps".
+- Populate the "solution_steps" array with each logical phase of the sequential solution.
+- Output strictly in this format:
 {
   "topic_title": "Subject or Topic of the problem",
+  "format_type": "steps",
   "solution_steps": [
     {
       "step_id": 1,
@@ -459,19 +551,38 @@ FORMAT:
     }
   ]
 }
+
+2. RULE 2 (Comparisons & Differences):
+- Use this if the problem asks for "Difference between", "Compare", "Pros & Cons", or similar analytical contrasts (e.g., "Compare mitosis vs meiosis", "Difference between Cow and Buffalo").
+- Set "format_type" to "markdown".
+- You MUST output a strictly formatted Markdown Table comparing the items side-by-side with clear parameter columns. It must NEVER use steps or sequential solver cards for this.
+- Place the entire Markdown Table in the "markdown_content" field. Do NOT use the "solution_steps" array.
+- Output strictly in this format:
+{
+  "topic_title": "Comparison: [Topic Title]",
+  "format_type": "markdown",
+  "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |"
+}
+
+3. RULE 3 (General Theory/Biology/History):
+- Use this for general explanations, descriptive essays, conceptual questions, diagrams, small talk, or conversational queries (e.g., "Explain photosynthesis", "Who was George Washington?", "Why is the sky blue?").
+- Set "format_type" to "markdown".
+- Output structured, rich text using standard markdown headings (###) and bullet points. It must NEVER use steps or sequential solver cards for this.
+- Place the entire response in the "markdown_content" field. Do NOT use the "solution_steps" array.
+- Output strictly in this format:
+{
+  "topic_title": "Concept: [Topic Title]",
+  "format_type": "markdown",
+  "markdown_content": "### Overview\nYour detailed overview here...\n\n### Key Concepts\n- Bullet point 1\n- Bullet point 2"
+}
+
+--- STRICT CONSTRAINTS & FORMATTING RULES ---
+- The entire output MUST be a valid JSON object. No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
+- Always append exactly 3 plain text follow-up suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines AFTER the JSON object.
+- Example suffix:
 [SUGGESTION: Plain text suggestion 1]
 [SUGGESTION: Plain text suggestion 2]
 [SUGGESTION: Plain text suggestion 3]
-
-RULES:
-- The JSON object must be valid raw JSON.
-- For step-by-step math, science, derivations, calculations, or explanations, map each logical phase of the solution to an object in the "solution_steps" array.
-- The "step_id" should be incremental integers (e.g. 1, 2, 3).
-- The "title" should be a short, clear heading of what is accomplished in that step.
-- The "content" must be rich, clear, and explain the step's logic simply, using standard LaTeX formulas.
-- Set "is_final_answer" to true ONLY on the final step that reveals the final solution.
-- For non-academic questions, small talk, or conversational responses, simply output a single step with step_id=1, is_final_answer=true, and the response text inside "content".
-- Always append exactly 3 plain text suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines.
 - Do NOT use LaTeX inside the suggestions.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:
@@ -537,17 +648,23 @@ You MUST structure your response strictly using this layout:
 Your task is to provide a comprehensive, clear, and highly accurate answer with rigorous academic authority. Avoid any child-like vocabulary, juvenile analogies, or patronizing language. Start directly with the answer to the question. Do not use conversational filler at the start.`;
   } else {
     // Default / Math mode
-    instruction = `You are an Elite High School Math & Science Tutor, SAT/ACT Expert, and a Master Educator.
+    instruction = `You are "Magic AI Tutor", an elite, highly intelligent, encouraging educational assistant, SAT/ACT Expert, and Master Educator.
 Adopt an encouraging, patient, precise, and crisp tone. Use clean line breaks and emojis for visual readability.
 DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimiters.
 
 CRITICAL SYSTEM INSTRUCTION (MANDATORY):
-You MUST output your response strictly in the following JSON format, followed by 3 context-aware follow-up suggestions.
-No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
+Before generating your response, you MUST analyze the user's query and categorize it into one of the following 3 routing rules to determine the output formatting:
 
-FORMAT:
+--- CATEGORIZATION & ROUTING RULES ---
+
+1. RULE 1 (Math & Physics Calculations):
+- Use this ONLY if the query is a mathematical equation, physics numerical, derivation, or problem requiring step-by-step sequential solving.
+- Set "format_type" to "steps".
+- Populate the "solution_steps" array with each logical phase of the sequential solution.
+- Output strictly in this format:
 {
   "topic_title": "Subject or Topic of the problem",
+  "format_type": "steps",
   "solution_steps": [
     {
       "step_id": 1,
@@ -557,19 +674,38 @@ FORMAT:
     }
   ]
 }
+
+2. RULE 2 (Comparisons & Differences):
+- Use this if the user asks for "Difference between", "Compare", "Pros & Cons", or similar analytical contrasts (e.g., "Compare mitosis vs meiosis", "Difference between Cow and Buffalo").
+- Set "format_type" to "markdown".
+- You MUST output a strictly formatted Markdown Table comparing the items side-by-side with clear parameter columns. It must NEVER use steps or sequential solver cards for this.
+- Place the entire Markdown Table in the "markdown_content" field. Do NOT use the "solution_steps" array.
+- Output strictly in this format:
+{
+  "topic_title": "Comparison: [Topic Title]",
+  "format_type": "markdown",
+  "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |"
+}
+
+3. RULE 3 (General Theory/Biology/History):
+- Use this for general explanations, descriptive essays, conceptual questions, small talk, or conversational queries (e.g., "Explain photosynthesis", "Who was George Washington?", "Why is the sky blue?").
+- Set "format_type" to "markdown".
+- Output structured, rich text using standard markdown headings (###) and bullet points. It must NEVER use steps or sequential solver cards for this.
+- Place the entire response in the "markdown_content" field. Do NOT use the "solution_steps" array.
+- Output strictly in this format:
+{
+  "topic_title": "Concept: [Topic Title]",
+  "format_type": "markdown",
+  "markdown_content": "### Overview\nYour detailed overview here...\n\n### Key Concepts\n- Bullet point 1\n- Bullet point 2"
+}
+
+--- STRICT CONSTRAINTS & FORMATTING RULES ---
+- The entire output MUST be a valid JSON object. No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
+- Always append exactly 3 plain text follow-up suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines AFTER the JSON object.
+- Example suffix:
 [SUGGESTION: Plain text suggestion 1]
 [SUGGESTION: Plain text suggestion 2]
 [SUGGESTION: Plain text suggestion 3]
-
-RULES:
-- The JSON object must be valid raw JSON.
-- For step-by-step math, science, derivations, calculations, or explanations, map each logical phase of the solution to an object in the "solution_steps" array.
-- The "step_id" should be incremental integers (e.g. 1, 2, 3).
-- The "title" should be a short, clear heading of what is accomplished in that step.
-- The "content" must be rich, clear, and explain the step's logic simply, using standard LaTeX formulas.
-- Set "is_final_answer" to true ONLY on the final step that reveals the final solution.
-- For non-academic questions, small talk, or conversational responses, simply output a single step with step_id=1, is_final_answer=true, and the response text inside "content".
-- Always append exactly 3 plain text suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines.
 - Do NOT use LaTeX inside the suggestions.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:
@@ -600,7 +736,8 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
       contextualDoubtStepId,
       contextualDoubtContent,
       contextualDoubtTitle,
-      stream
+      stream,
+      isEvaluation
     } = req.body;
     
     let parsedHistory = history ? (typeof history === 'string' ? JSON.parse(history) : history) : [];
@@ -640,19 +777,38 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
     );
 
     // Get base system instruction
-    let systemInstruction = customSystemInstruction || getSystemInstruction(mode, targetLanguage);
-    if (profileContext) {
-      systemInstruction += "\n\nUSER PROFILE CONTEXT:\n" + profileContext;
-    }
+    let systemInstruction = "";
+    if (isEvaluation === 'true' || isEvaluation === true) {
+      systemInstruction = `You are a strict academic examiner. DO NOT act as a standard tutor. Your SOLE purpose is to grade the student's answer based on their grade level. YOU MUST output strictly using this format:
 
-    // Inject grade level instruction if provided
-    if (gradeLevel) {
-      const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
-      systemInstruction = `${gradeInstruction}\n\n${systemInstruction}`;
-    }
+## Grade-Level Assessment
+[Pass/Fail/Needs Improvement for this grade level]
 
-    // Inject current date & time
-    systemInstruction += `\n\nThe current date and time is: ${new Date().toISOString()}. You must treat this as the absolute present moment.`;
+## Step-Marking Breakdown
+- Formula Selection & Concepts: [Score]/3
+- Logical Working & Steps: [Score]/5
+- Final Answer & Units: [Score]/2
+
+## Final Score
+**[Total Score] / 10**
+
+## Examiner Feedback & Ideal Solution
+[Explain mistakes and provide the perfect 10/10 mathematical solution]`;
+    } else {
+      systemInstruction = customSystemInstruction || getSystemInstruction(mode, targetLanguage);
+      if (profileContext) {
+        systemInstruction += "\n\nUSER PROFILE CONTEXT:\n" + profileContext;
+      }
+
+      // Inject grade level instruction if provided
+      if (gradeLevel) {
+        const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
+        systemInstruction = `${gradeInstruction}\n\n${systemInstruction}`;
+      }
+
+      // Inject current date & time
+      systemInstruction += `\n\nThe current date and time is: ${new Date().toISOString()}. You must treat this as the absolute present moment.`;
+    }
 
     if (shouldEnableSearch) {
       systemInstruction += `
@@ -677,13 +833,35 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       contents = [{ role: "user", parts }];
     } else {
       // Follow-up chat
-      // The first history item was the user's image upload. We need to re-attach the image there.
-      if (imagePart && parsedHistory[0]?.role === 'user') {
-        parsedHistory[0].parts.unshift(imagePart);
+      // Check if the first message in parsedHistory is an empty-parts user placeholder (typical for MagicScanner scans)
+      const isScannerPlaceholder = parsedHistory[0]?.role === 'user' && 
+                                  (!parsedHistory[0].parts || parsedHistory[0].parts.length === 0);
+
+      if (imagePart && isScannerPlaceholder) {
+        parsedHistory[0].parts = [imagePart];
+      } else if (imagePart && parsedHistory[0]?.role === 'user') {
+        // Fallback for general unshifting if it was previously set up like this and has empty/uninitialized inlineData parts
+        const hasNoInlineData = !parsedHistory[0].parts.some((p: any) => p.inlineData);
+        if (hasNoInlineData) {
+          parsedHistory[0].parts.unshift(imagePart);
+        }
+      }
+
+      const parts: any[] = [];
+      // If we have an image and it was NOT attached retroactively to the first history item,
+      // then it is a new image uploaded on this current turn (e.g. CallWithTutor or AITutor)
+      if (imagePart && !isScannerPlaceholder && (parsedHistory[0]?.role !== 'user' || parsedHistory[0].parts.some((p: any) => p.inlineData))) {
+        parts.push(imagePart);
+      } else if (imagePart && !isScannerPlaceholder) {
+        // Double-check: if it's not a scanner placeholder but we have a new image to attach to the current turn
+        parts.push(imagePart);
       }
       
-      const parts: any[] = [];
-      if (userMessage) parts.push({ text: userMessage + "\n\nPlease continue providing step-by-step guidance." });
+      if (userMessage) {
+        parts.push({ text: userMessage + "\n\nPlease continue providing step-by-step guidance." });
+      } else if (imagePart) {
+        parts.push({ text: "Please look at this uploaded homework image and assist me." });
+      }
       
       contents = [
         ...parsedHistory,
@@ -694,12 +872,30 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     const shouldStream = stream === "true" || stream === true;
 
     if (shouldStream) {
-      const modelsToTry = [
+      let modelsToTry = [
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
         "gemini-3.1-flash-lite",
         "gemini-flash-latest",
         "gemini-2.5-flash"
       ];
+
+      const now = Date.now();
+      const activeModels: string[] = [];
+      const backburnerModels: string[] = [];
+
+      for (const m of modelsToTry) {
+        const lastLimited = rateLimitedModels[m] || 0;
+        if (now - lastLimited < 3600000) {
+          backburnerModels.push(m);
+        } else {
+          activeModels.push(m);
+        }
+      }
+
+      if (activeModels.length > 0) {
+        modelsToTry = [...activeModels, ...backburnerModels];
+      }
 
       let responseStream: any = null;
       let successModel = "";
@@ -712,14 +908,25 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             contents,
             config: { 
               systemInstruction: { parts: [{ text: systemInstruction }] },
-              responseMimeType: "application/json",
+              responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
               ...(shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {})
             }
           });
           successModel = model;
           break;
         } catch (err: any) {
-          console.error(`Stream start failed for model ${model}:`, err);
+          const errStr = String(err.message || err).toLowerCase();
+          const isRateLimitOrQuota = errStr.includes("429") || 
+                                     errStr.includes("quota") || 
+                                     errStr.includes("resource_exhausted") || 
+                                     errStr.includes("limit");
+          
+          if (isRateLimitOrQuota) {
+            console.warn(`[chat stream] Model ${model} hit rate-limit or quota constraint:`, errStr);
+            rateLimitedModels[model] = Date.now();
+          } else {
+            console.error(`Stream start failed for model ${model}:`, err);
+          }
         }
       }
 
@@ -754,7 +961,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         contents,
         config: { 
           systemInstruction: { parts: [{ text: systemInstruction }] },
-          responseMimeType: "application/json",
+          responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
           ...(shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {})
         }
       });
@@ -779,6 +986,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     const action = req.body.action || 'summarize';
     const textInput = req.body.text || "";
     const gradeLevel = req.body.gradeLevel;
+    const format = req.body.format || "bullet";
     
     if (!req.file && !textInput) {
       return res.status(400).json({ error: "No PDF file or text content provided" });
@@ -832,7 +1040,13 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     let responseMimeType = "text/plain";
 
     if (action === 'audio') {
-      promptText = "You are an enthusiastic, highly experienced, and friendly school teacher. Your goal is to explain educational concepts to a student in a way that feels like a real, engaging one-on-one conversation. Summarize and explain the provided document based on the following strict rules: 1. TONE & STYLE: Speak directly to the student using words like 'you', 'we', and 'let's look at this'. Be warm, encouraging, and full of energy. 2. SIMPLICITY: Break down complex concepts into simple, bite-sized pieces. If there is a difficult scientific word, explain it simply immediately. 3. ANALOGIES: Use simple, real-world examples. 4. AUDIO-FRIENDLY FORMATTING: This output will be read aloud by a Text-to-Speech (TTS) engine. DO NOT use any markdown formatting like bold (**), italics (*), hashtags (#), or bullet points (-). Write in plain, short paragraphs. Keep sentences short so the AI voice can take natural breaths and pauses. 5. STRUCTURE: Start with a catchy hook to grab attention. Explain the 3 or 4 main points clearly. End with a quick, memorable 1-sentence summary and an encouraging closing (e.g., 'Great job focusing, you\'ve got this!'). Do not include any intro or outro text confirming you understand the instructions. Just start teaching the provided text.";
+      promptText = "You are an engaging, expert study podcast host. Your job is to convert the provided document into a 4-5 minute study audio script (approx 500-700 words). " +
+        "CRITICAL RULE: DO NOT copy and paste the text verbatim. You must extract the high-yield concepts, definitions, and frameworks, and explain them in your own words using a conversational, easy-to-understand tone. Use relatable analogies. Strike a balance between being concise and highly educational. Never sound like you are just reading a textbook. Use the following strict rules:\n" +
+        "1. TONE & STYLE: Conversational, warm, and highly engaging. Speak directly to the listener using 'you', 'we', and 'let's explore this'.\n" +
+        "2. SIMPLICITY & ANALOGIES: Demystify complex terms, explaining them immediately using clear language. Use relatable analogies, but ensure technical definitions, important rules, and key examples are NOT skipped.\n" +
+        "3. PACING & STRUCTURE: Start with an attention-grabbing podcast-style hook or intro (e.g., 'Welcome to your deep study revision briefing...'). Include clear transitions between different chapters or sections. Cover all critical topics from the text sequentially. End with a complete revision summary and an encouraging sign-off.\n" +
+        "4. AUDIO-FRIENDLY FORMATTING: Since this will be spoken aloud, DO NOT use any markdown formatting such as bold (**), italics (*), hashtags (#), or bullet points (-). Write in clean, conversational plain text and paragraphs. Keep sentences clear and punchy for natural breathing pauses.\n" +
+        "Do not include any intro or outro text confirming you understand the instructions. Just output the podcast script directly.";
     } else if (action === 'flashcards' || action === 'flashcards-json') {
       if (action === 'flashcards-json') {
         responseMimeType = "application/json";
@@ -875,7 +1089,64 @@ Explanation: Because...
 
 At the very end, provide a clear Answer Key. Format strictly using Markdown. If there is code in the questions or options, wrap it in backticks.`;
     } else {
-      promptText = "You are an expert tutor. Please extract and summarize the most important notes from this document in a well-structured, easy to read format using Markdown. Include clear headings and bullet points.";
+      let selectedFormatName = "Bullet Points";
+      if (format === "tldr") {
+        selectedFormatName = "Short TL;DR";
+      } else if (format === "eli5") {
+        selectedFormatName = "Explain Like I'm 5";
+      }
+
+      promptText = `SYSTEM INSTRUCTION: EXPERT SUMMARISER
+
+You are an expert academic and professional summarizer. Your task is to extract key information from the provided text/document and format it STRICTLY according to the user's requested mode. 
+
+USER'S REQUESTED FORMAT: ${selectedFormatName}
+
+CRITICAL GLOBAL RULE:
+NEVER output a "Wall of Text". Always use proper line breaks and structure.
+
+DYNAMIC FORMATTING RULES:
+
+IF FORMAT IS "Bullet Points":
+1. Structure the output using clear, BOLD HEADINGS for different sections (e.g., **Key Concepts**).
+2. MANDATORY: Every single point must start with a standard visual bullet symbol (•). Do not use numbers, stars, or dashes, only the "•" symbol.
+3. STRICT FORMATTING: Ensure there is a line break before and after each heading. 
+4. CONCISE: Keep each bullet point under 2 sentences. 
+5. NO NARRATIVE: Do not write intro or conclusion paragraphs. Start immediately with the first heading and its associated bullet points.
+6. EXAMPLE OF EXPECTED FORMAT:
+
+**Heading Name**
+
+• Fact or point one.
+• Fact or point two.
+
+IF FORMAT IS "Short TL;DR":
+1. Provide the absolute bottom-line of the text.
+2. Structure it as one short "Executive Summary" paragraph (max 3-4 sentences).
+3. Follow it with a "Top 3 Takeaways" numbered list.
+4. Keep the tone professional, direct, and time-saving.
+
+IF FORMAT IS "Explain Like I'm 5":
+1. Break down complex jargon into grade-school level vocabulary.
+2. Use at least one relatable, everyday analogy (e.g., comparing a system to a school, a car, or pizza).
+3. Keep the tone extremely warm, engaging, and story-like.
+4. Use short paragraphs and emojis to make it visually friendly for beginners.`;
+    }
+
+    if (action !== 'audio') {
+      promptText += "\n\nCRITICAL FORMATTING INSTRUCTIONS: You must generate clean, highly readable, and structured study notes. You are STRICTLY FORBIDDEN from using complex characters, emojis, or math formatting.\n" +
+        "You MUST obey the following rules blindly:\n" +
+        "1. NO LATEX OR MATH BLOCKS: Never use '$', '$$', '\\text{}', '\\rightarrow', or any LaTeX syntax anywhere in the response.\n" +
+        "2. PLAIN TEXT ARROWS: If you need an arrow, use standard keyboard characters only: '->' or '=>'.\n" +
+        "3. NO EMOJIS OR WEIRD UNICODE: Do not use emojis, fancy bullets, or special symbols. They break the PDF encoder.\n" +
+        "4. STRICT MARKDOWN ONLY: Use only basic, universal markdown formatting:\n" +
+        "   - Headings: '#', '##', '###'\n" +
+        "   - Lists: Use ONLY the standard hyphen '-' or numbers '1.' for lists. Do not use special bullets.\n" +
+        "   - Bold/Italic: '**text**' or '*text*'\n" +
+        "   - Code Blocks: Strictly use triple backticks (```) for any code, syntax, or technical snippets. Do not use $$ for code.\n" +
+        "Output ONLY standard, plain ASCII-compatible markdown text.";
+    } else {
+      promptText += "\n\nCRITICAL FORMATTING INSTRUCTIONS: Output ONLY standard, plain ASCII-compatible conversational text. You are STRICTLY FORBIDDEN from using emojis, LaTeX math blocks, special characters, or markdown formatting (like bold, italics, bullet points, or hashtags) as they interfere with text-to-speech rendering.";
     }
 
     const textPart = { text: promptText };
@@ -945,9 +1216,15 @@ app.post("/api/tts", async (req, res) => {
       return res.status(400).json({ error: "No text provided" });
     }
     
+    // Slice text to maximum 1500 characters to make generation fast, avoid timeouts, and preserve low latency.
+    let textToSpeak = text;
+    if (textToSpeak.length > 1500) {
+      textToSpeak = textToSpeak.substring(0, 1500) + "...";
+    }
+    
     const response = await safeGenerateContent({
       model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: `Please generate audio for this text: ${text}` }] }],
+      contents: [{ parts: [{ text: `Please generate audio for this text: ${textToSpeak}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
@@ -958,7 +1235,11 @@ app.post("/api/tts", async (req, res) => {
     
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio) {
-      res.json({ audio: base64Audio });
+      // Wrap raw linear 16-bit PCM inside a browser-playable WAV container
+      const rawPcm = Buffer.from(base64Audio, "base64");
+      const wavBuffer = pcmToWav(rawPcm);
+      const base64Wav = wavBuffer.toString("base64");
+      res.json({ audio: base64Wav, mimeType: "audio/wav" });
     } else {
       res.status(500).json({ error: "No audio generated" });
     }
@@ -974,7 +1255,7 @@ app.post("/api/tts", async (req, res) => {
 
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const { text, subject, gradeLevel } = req.body;
+    const { text, curriculum, subject, gradeLevel } = req.body;
     
     const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
     
@@ -986,29 +1267,70 @@ app.post("/api/grade-essay", async (req, res) => {
 
     const aiClient = getAI();
     
-    const systemInstruction = `Act as an expert College Board certified AP-level High School Teacher and Essay Grader in the United States. Your task is to grade and provide constructive, highly specific feedback on the student's essay for the AP Subject: "${subject || 'General AP Essay'}".
+    const curr = curriculum || 'AP (Advanced Placement)';
+    const subj = subject || 'General Essay';
+
+    let rubricInstructions = '';
+    let scoreHeader = '';
+
+    if (curr.includes('AP')) {
+      scoreHeader = 'AP RUBRIC SCORE: [Score]/6 (Thesis: [ThesisScore]/1, Evidence: [EvidenceScore]/4, Sophistication: [SophisticationScore]/1)';
+      rubricInstructions = `You MUST evaluate the essay using the official AP 6-point scale:
+Thesis: 0 or 1 point
+Evidence and Commentary: 0 to 4 points
+Sophistication: 0 or 1 point
+Your score output must EXACTLY match this format (with correct points calculated):
+AP RUBRIC SCORE: [Score]/6 (Thesis: [ThesisScore]/1, Evidence: [EvidenceScore]/4, Sophistication: [SophisticationScore]/1)`;
+    } else if (curr.includes('IELTS') || curr.includes('TOEFL')) {
+      const isIelts = subj.toLowerCase().includes('ielts') || subj.toLowerCase().includes('task');
+      if (isIelts) {
+        scoreHeader = 'IELTS BAND SCORE: [BandScore]/9 (Task Achievement: [TAScore]/9, Coherence: [CCScore]/9, Lexical: [LRScore]/9, Grammar: [GRAScore]/9)';
+        rubricInstructions = `You MUST evaluate the essay using the official IELTS 9-band scale across four criteria (Task Achievement/Response, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy).
+Your score output must EXACTLY match this format:
+IELTS BAND SCORE: [BandScore]/9 (Task Achievement: [TAScore]/9, Coherence: [CCScore]/9, Lexical: [LRScore]/9, Grammar: [GRAScore]/9)`;
+      } else {
+        scoreHeader = 'TOEFL SCORE: [Score]/30';
+        rubricInstructions = `You MUST evaluate the essay using the official TOEFL Writing scale (0 to 30 points) based on development of ideas, organization, language use, and accuracy.
+Your score output must EXACTLY match this format:
+TOEFL SCORE: [Score]/30`;
+      }
+    } else if (curr.includes('IB')) {
+      scoreHeader = 'IB CRITERIA SCORE: [Score]/34 (Focus: [FocusScore]/10, Analysis: [AnalysisScore]/10, Structure: [StructureScore]/10, Language: [LanguageScore]/4)';
+      rubricInstructions = `You MUST evaluate the essay using the official IB grading criteria (scale from 0 to 34).
+Your score output must EXACTLY match this format:
+IB CRITERIA SCORE: [Score]/34 (Focus: [FocusScore]/10, Analysis: [AnalysisScore]/10, Structure: [StructureScore]/10, Language: [LanguageScore]/4)`;
+    } else if (curr.includes('A-Levels')) {
+      scoreHeader = 'A-LEVEL GRADE: [Grade] (A*, A, B, C, D, or E) - Score: [Score]/25';
+      rubricInstructions = `You MUST evaluate the essay based on UK A-Level marking bands (scale from 0 to 25).
+Your score output must EXACTLY match this format:
+A-LEVEL GRADE: [Grade] (A*, A, B, C, D, or E) - Score: [Score]/25`;
+    } else {
+      scoreHeader = 'HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: [ContentScore]/25, Style: [StyleScore]/25, Grammar: [GrammarScore]/25)';
+      rubricInstructions = `You MUST evaluate the essay using a standard high school grading rubric out of 100 points, broken down into Focus/Organization, Content/Development, Style/Sentence Structure, and Grammar/Mechanics (each 25 points).
+Your score output must EXACTLY match this format:
+HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: [ContentScore]/25, Style: [StyleScore]/25, Grammar: [GrammarScore]/25)`;
+    }
+
+    const systemInstruction = `Act as an expert certified educator and Essay Grader for the "${curr}" curriculum, specifically for the subject/essay type: "${subj}".
+Your task is to grade and provide constructive, highly specific feedback on the student's essay.
 
 CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.
 
 Tone: Encouraging, professional, and clear. Speak directly to the student.
 
 CRITICAL RULES (MUST FOLLOW):
-1. NO LETTER GRADES: You are strictly forbidden from giving letter grades (like A, B, C+, F, etc.).
-2. OFFICIAL AP 6-POINT RUBRIC FORMAT: You MUST evaluate the essay using the official AP 6-point scale:
-   Thesis: 0 or 1 point
-   Evidence and Commentary: 0 to 4 points
-   Sophistication: 0 or 1 point
-   Your score output must EXACTLY match this format (with correct points calculated):
-   AP RUBRIC SCORE: [Score]/6 (Thesis: [ThesisScore]/1, Evidence: [EvidenceScore]/4, Sophistication: [SophisticationScore]/1)
+1. NO RAW LETTER GRADES (except if A-Level curriculum where A-Level bands specify grades, but do not just write "A" or "B" without details).
+2. OFFICIAL SPECIFIC RUBRIC FORMAT: 
+${rubricInstructions}
 3. ⚡ SPEED & CONCISENESS RULE: Deliver your feedback using highly concise, clear, and punchy plain text. Keep sentence lengths short. Avoid general or redundant context. Limit the response to a total of 250 words to ensure instant grading delivery.
 4. STRICT PLAIN TEXT RULE (CRITICAL): Absolutely DO NOT use any Markdown formatting like asterisks (** or *), hashes (#), underscores, backticks, or dashes/bullet points (-, *, •). Use simple numbered steps (e.g., 1. or 2.) or regular line breaks and capitalized section headers. Do not output any HTML tags or markdown formatting symbols. Output ONLY clean, raw plain text.
 
 Analyze the provided text and output your response EXACTLY in the following structure. Do not add any conversational filler before or after.
 
-AP RUBRIC SCORE: [Score]/6 (Thesis: [ThesisScore]/1, Evidence: [EvidenceScore]/4, Sophistication: [SophisticationScore]/1)
+${scoreHeader}
 
 POINT DEDUCTION ANALYSIS:
-[Explain the lost points. For every single point the student did NOT earn, explicitly state which point was lost and why in 1-2 plain sentences. If they scored 6/6, write: "No points lost! Outstanding, college-ready work."]
+[Explain any lost points or bands. For every single point/band the student did NOT earn, explicitly state which point was lost and why in 1-2 plain sentences. If they scored perfectly, write: "No points lost! Outstanding work."]
 
 STRENGTHS:
 [1-2 clear, plain sentences highlighting a strong point in their writing, without any dashes, asterisks or bullet points]
@@ -1023,8 +1345,9 @@ GRAMMAR AND POLISH:
 OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
 
-    const originalModel = "gemini-3.5-flash";
+    const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
+      "gemini-3.6-flash",
       "gemini-3.5-flash",
       "gemini-3.1-flash-lite",
       "gemini-flash-latest",
@@ -1037,7 +1360,8 @@ OVERALL VERDICT:
 
     for (const m of modelsToTry) {
       const lastLimited = rateLimitedModels[m] || 0;
-      if (now - lastLimited < 30000) {
+      // Keep on backburner for 1 hour to handle daily/frequent free-tier limits
+      if (now - lastLimited < 3600000) {
         backburnerModels.push(m);
       } else {
         activeModels.push(m);
@@ -1067,7 +1391,6 @@ OVERALL VERDICT:
       } catch (err: any) {
         lastError = err;
         const errStr = String(err.message || err);
-        console.error(`[grade-essay stream] Model ${model} failed:`, errStr);
         
         const isRateLimitOrQuota = errStr.includes("429") || 
                                    errStr.includes("quota") || 
@@ -1076,11 +1399,14 @@ OVERALL VERDICT:
                                    errStr.includes("limit");
         
         if (isRateLimitOrQuota) {
+          console.warn(`[grade-essay stream] Model ${model} hit rate-limit or quota constraint:`, errStr);
           lastQuotaExceededTime = Date.now();
           rateLimitedModels[model] = Date.now();
           anyQuotaExceeded = true;
           // Continue to next model
           continue;
+        } else {
+          console.error(`[grade-essay stream] Model ${model} failed:`, errStr);
         }
       }
     }
@@ -1165,21 +1491,55 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
   }
 });
 
+app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
+  try {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "No images provided" });
+    }
+
+    const imageParts = files.map(file => ({
+      inlineData: {
+        mimeType: file.mimetype,
+        data: file.buffer.toString("base64"),
+      },
+    }));
+
+    const response = await safeGenerateContent({
+      model: "gemini-3.5-flash",
+      contents: [
+        {
+          parts: [
+            ...imageParts,
+            { text: "Transcribe the handwritten and printed text from these images perfectly, preserving their chronological page order. Return ONLY the combined transcribed text. Do not add any conversational filler, intro, outro, or formatting annotations. Keep paragraphs intact as written." }
+          ]
+        }
+      ]
+    });
+
+    const text = response.text || "";
+    res.json({ text: text.trim() });
+  } catch (error: any) {
+    console.error("Multimodal OCR Error:", error);
+    res.status(500).json({ error: error.message || "Failed to transcribe images" });
+  }
+});
+
 app.post("/api/generate-flashcards", async (req, res) => {
   try {
-    const { text, gradeLevel } = req.body;
+    const { text, gradeLevel, count } = req.body;
     
     const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
     
-
 
     if (!text) {
       return res.status(400).json({ error: "Missing text" });
     }
 
+    const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const aiClient = getAI();
     
-    const systemInstruction = `Act as an expert study coach and cognitive learning specialist. Analyze the provided text. Regardless of the text's length, extract ONLY the top 10 to 15 most critical, high-yield concepts. Generate a MAXIMUM of 15 flashcards. Do not attempt to cover every single detail if the document is dense. Prioritize quality and core concepts.
+    const systemInstruction = `Act as an expert study coach and cognitive learning specialist. Analyze the provided text. Regardless of the text's length, extract exactly the top ${requestedCount} most critical, high-yield concepts. Generate exactly ${requestedCount} flashcards. Prioritize quality and core concepts.
 
 Rules for Flashcards:
 1. Focus on key definitions, dates, formulas, or core concepts.
@@ -1204,7 +1564,7 @@ Format exactly like this:
 
     const response = await safeGenerateContent({
       model: "gemini-flash-latest",
-      contents: { parts: [{ text }] },
+      contents: { parts: [{ text: `Generate exactly ${requestedCount} flashcards from this text: ${text}` }] },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
@@ -2004,13 +2364,137 @@ How to resolve this:
 
 
 
+app.post("/api/generate-questions", async (req, res) => {
+  try {
+    const { topic, count, gradeLevel, stream } = req.body;
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
+    const topicText = topic && topic.trim() ? topic.trim() : `general concepts in ${stream || 'academic subjects'}`;
+
+    const aiClient = getAI();
+    
+    const systemInstruction = `You are an Elite Academic Advisor, US High School & AP/College Teacher, and Expert AI Tutor.
+The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions.
+Your ONLY job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
+
+CRITICAL RULES:
+1. NO ANSWERS: Do not include any answers, options, multiple choice letters, hints, solutions, or explanations. You must ONLY output the question prompts themselves.
+2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans. Do not output simple retrieval questions.
+3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
+4. CRISP & CONCISE: Keep every question incredibly clear, direct, and free of redundant words. Avoid wordy, run-on sentences.
+5. WORD LIMIT: Each question must be extremely direct and MUST NOT exceed 30-40 words.
+6. CHUNKING FOR COMPLEXITY: If a question requires a complex scenario or detailed context, DO NOT write a massive paragraph. Instead, break it down using sub-parts (e.g., Part A, Part B) or bullet points.
+7. NO FLUFF: Maintain elite academic rigor and Bloom's Taxonomy cognitive depth, but deliver it in bite-sized, digestible mobile text.
+
+Use this exact JSON structure:
+{
+  "questions": [
+    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict the consumer response.",
+    "Analyze the ethical implications of using advanced AI algorithms for autonomous driving in critical, unavoidable crash scenarios.",
+    "Describe the primary biochemical and molecular steps that occur in a eukaryotic muscle cell during a sliding filament contraction."
+  ]
+}`;
+
+    let generatedText = "";
+    try {
+      const response = await safeGenerateContent({
+        gradeLevel,
+        model: "gemini-3.6-flash",
+        contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions now.` }] },
+        config: {
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          responseMimeType: "application/json"
+        }
+      });
+      generatedText = response.text || "";
+    } catch (apiError: any) {
+      console.warn("API Error during subjective question generation:", apiError);
+      throw apiError;
+    }
+
+    const parsed = safeParseJSON(generatedText, 'object');
+    if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+      return res.json({ questions: parsed.questions });
+    } else if (Array.isArray(parsed)) {
+      return res.json({ questions: parsed });
+    }
+
+    throw new Error("Failed to generate a valid subjective questions structure.");
+
+  } catch (error: any) {
+    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
+      return res.status(429).json({ 
+        error: "QUOTA_EXCEEDED",
+        text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
+      });
+    }
+    console.error("Question generation endpoint error:", error);
+    res.status(500).json({ error: error.message || "Failed to generate questions" });
+  }
+});
+
+
+
+
+app.post("/api/evaluate-answer", async (req, res) => {
+  try {
+    const { questionText, userAnswer, userGrade, curriculum, subject } = req.body;
+    if (!questionText) {
+      return res.status(400).json({ error: "Missing questionText" });
+    }
+    if (!userAnswer || !userAnswer.trim()) {
+      return res.status(400).json({ error: "Please write an answer before submitting for evaluation!" });
+    }
+
+    const systemInstruction = `You are a strict academic examiner. DO NOT act as a standard tutor. Your SOLE purpose is to grade the student's answer based on their grade level. YOU MUST output strictly using this format:
+
+## Grade-Level Assessment
+[Pass/Fail/Needs Improvement for this grade level]
+
+## Step-Marking Breakdown
+- Formula Selection & Concepts: [Score]/3
+- Logical Working & Steps: [Score]/5
+- Final Answer & Units: [Score]/2
+
+## Final Score
+**[Total Score] / 10**
+
+## Examiner Feedback & Ideal Solution
+[Explain mistakes and provide the perfect 10/10 mathematical solution]`;
+
+    const response = await safeGenerateContent({
+      gradeLevel: userGrade,
+      model: "gemini-3.5-flash",
+      contents: { parts: [{ text: `Evaluate the student's answer for: "${questionText}". Student's Answer is: "${userAnswer}".` }] },
+      config: {
+        systemInstruction: { parts: [{ text: systemInstruction }] }
+      }
+    });
+
+    const text = response.text || "Failed to evaluate response.";
+    res.json({ evaluation: text });
+
+  } catch (error: any) {
+    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
+      return res.status(429).json({ 
+        error: "QUOTA_EXCEEDED",
+        text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
+      });
+    }
+    console.error("Evaluation endpoint error:", error);
+    res.status(500).json({ error: error.message || "Failed to evaluate answer" });
+  }
+});
+
+
+
 app.post("/api/generate-quiz", async (req, res) => {
   try {
-    const { topic, gradeLevel } = req.body;
+    const { topic, gradeLevel, count } = req.body;
     if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
     }
 
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
     
     const systemInstruction = `You are an Elite US High School Teacher and SAT/AP Exam Expert. The user will provide a subject or specific topic. 
@@ -2018,7 +2502,7 @@ Your ONLY job is to generate a highly accurate, exam-level Multiple Choice Quiz 
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly 5 questions. Each question must have exactly 4 options and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array. Do not return an array of multiple correct answers.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
 
@@ -2037,7 +2521,7 @@ Use this exact JSON structure:
       const response = await safeGenerateContent({
         gradeLevel,
         model: "gemini-flash-latest",
-        contents: { parts: [{ text: `Topic: ${topic}. Generate the 5-question JSON quiz now.` }] },
+        contents: { parts: [{ text: `Topic: ${topic}. Generate the ${requestedCount}-question JSON quiz now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json"
@@ -2070,7 +2554,7 @@ Use this exact JSON structure:
 
 app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
   try {
-    const { gradeLevel } = req.body;
+    const { gradeLevel, count } = req.body;
     if (!req.file) {
       return res.status(400).json({ error: "No PDF file provided" });
     }
@@ -2096,11 +2580,13 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
       return res.status(400).json({ error: "PDF document exceeds 50 pages limit. Please upload a shorter document (max 50 pages)." });
     }
 
-    const systemInstruction = `You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate a 5-question Multiple Choice Quiz based ONLY on this text/document. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
+
+    const systemInstruction = `You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate exactly ${requestedCount} multiple choice questions based ONLY on this text/document. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly 5 questions. Each question must have 4 options and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.`;
 
@@ -2112,7 +2598,7 @@ CRITICAL RULES:
         gradeLevel,
         model: "gemini-flash-latest",
         contents: {
-          parts: [{ text: `DOCUMENT CONTENT:\n${slicedText}\n\nGenerate the 5-question JSON quiz now based strictly on the content above.` }]
+          parts: [{ text: `DOCUMENT CONTENT:\n${slicedText}\n\nGenerate the ${requestedCount}-question JSON quiz now based strictly on the content above.` }]
         },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2134,7 +2620,7 @@ CRITICAL RULES:
         contents: { 
           parts: [
             pdfPart,
-            { text: "Analyze the attached PDF document and generate the 5-question JSON quiz now based strictly on its content." }
+            { text: `Analyze the attached PDF document and generate the ${requestedCount}-question JSON quiz now based strictly on its content.` }
           ] 
         },
         config: {
@@ -2169,7 +2655,7 @@ CRITICAL RULES:
 
 app.post("/api/generate-image-quiz", upload.single("image"), async (req, res) => {
   try {
-    const { gradeLevel } = req.body;
+    const { gradeLevel, count } = req.body;
     if (!req.file) {
       return res.status(400).json({ error: "No image provided" });
     }
@@ -2181,11 +2667,13 @@ app.post("/api/generate-image-quiz", upload.single("image"), async (req, res) =>
       },
     };
 
-    const systemInstruction = `You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate a highly accurate, exam-level 5-question Multiple Choice Quiz based strictly on the content of that textbook page.
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
+
+    const systemInstruction = `You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate exactly ${requestedCount} multiple choice questions based strictly on the content of that textbook page.
     
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly 5 questions. Each question must have exactly 4 options (prefixed with A), B), C), D)) and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with A), B), C), D)) and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
 
@@ -2202,7 +2690,7 @@ Use this exact JSON structure:
     const response = await safeGenerateContent({
       gradeLevel,
       model: "gemini-3.5-flash",
-      contents: [{ parts: [imagePart, { text: "Analyze this textbook page image and generate a 5-question JSON quiz." }] }],
+      contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
@@ -2529,45 +3017,52 @@ app.post("/api/live-study-tutor", async (req, res) => {
       return res.status(400).json({ error: "Missing search query" });
     }
 
-    const systemInstruction = `You are "Deep Search AI", an elite, highly intelligent educational assistant. Adopt a highly professional, crisp, and direct tone. Avoid overly conversational greetings (e.g., do not say "Hello young achiever!"). Start directly with the most critical facts, maintaining an encouraging but elite academic voice.
+    const systemInstruction = `You are "Deep Search AI", an elite, highly intelligent educational assistant and expert master tutor.
 
+EXPERT ACADEMIC TUTORING GUIDELINES:
+- Provide detailed, comprehensive, deep, and easy-to-understand explanations.
+- For educational or academic topics (such as Physics, Chemistry, Biology, Mathematics, or Computer Science concepts), act as a world-class expert tutor: explain fundamental principles deeply, break down key equations or concepts step-by-step, and provide clear real-world examples.
+- Format all information thoroughly using structured bullet points, clear step-by-step breakdowns, and actionable insights.
+
+DYNAMIC TEMPORAL CONTEXT:
 The current date and time is: ${new Date().toISOString()}. You must treat this as the absolute present moment.
 
 REAL-TIME GOOGLE SEARCH GROUNDING:
-You MUST use the Google Search tool to retrieve current, live, up-to-date real-time data (e.g., currency exchange rates, live news, weather, sports scores, current events, facts for the year 2026). Do NOT rely on your pre-trained training weights for these queries.
+You MUST use the Google Search tool to retrieve current, live, up-to-date real-time data (e.g., currency exchange rates, live news, weather, sports scores, current events, facts for the current year 2026). Do NOT rely on pre-trained training weights for these queries.
 
 RESULT GROUNDING & CITATION (ANTI-HALLUCINATION):
-- You MUST explicitly cite the exact date of the data you retrieve from the live search in your response (e.g., "As of today, July 17, 2026...", "Based on live search results for July 17, 2026...").
-- If the live search fails or returns no results, you MUST explicitly state: "Unable to fetch real-time data at the moment," instead of hallucinating past data or future forecasts.
+- Explicitly cite the exact date of the data you retrieve from the live search in your response (e.g., "As of today, July 22, 2026...", "Based on live search results...").
+- If the live search fails or returns no results, explicitly state: "Unable to fetch real-time data at the moment," instead of hallucinating past data or future forecasts.
 
 STRICT TIME & DATE OVERRIDE (ZERO HALLUCINATION):
-NEVER output placeholder dates, past dates, or your internal training dates (such as June 2024). The date provided by the live search source is the ABSOLUTE TRUTH.
+NEVER output placeholder dates, past dates, or internal training dates (such as June 2024). The date provided by the live search source is the ABSOLUTE TRUTH.
 
 DATA BLENDING (LOCAL + LIVE):
-Intelligently combine the live web search results with the student's provided local context (e.g., their current class, stream, or uploaded study notes). Filter the live information to match exactly what the student needs.
+Intelligently combine live web search results with the student's provided local context (e.g., their grade level, stream, or uploaded study notes). Filter and tailor the information deeply to match what the student needs to master the topic.
 
 STRICT JSON OUTPUT FORMAT (FOR UI RENDERING):
-To ensure the mobile app frontend renders premium UI cards, you must NEVER output plain text paragraphs. ALWAYS output your final response in strict JSON format using the exact structure below. NEVER use markdown bolding syntax '**' or markdown tables.
+To ensure the mobile app frontend renders premium UI cards, output your final response in strict JSON format using the exact structure below. NEVER use raw markdown bolding '**' inside text strings.
 
 {
-  "topic_title": "Main heading of the result (Crisp and professional)",
+  "topic_title": "Comprehensive Topic Heading (Crisp, authoritative, and clear)",
   "live_updates": [
-    "Bullet point 1: Short, highly skimmable fact.",
-    "Bullet point 2: Direct information without fluff.",
-    "Bullet point 3: Deadlines or key updates."
+    "Detailed fact/concept bullet point 1 with clear explanation",
+    "Detailed fact/concept bullet point 2 with key principles",
+    "Detailed fact/concept bullet point 3 with real-world context/examples",
+    "Detailed fact/concept bullet point 4 with important formulas or key takeaways"
   ],
-  "match_score": "A percentage score (e.g., '95%') showing relevance to the student's profile",
+  "match_score": "A percentage score (e.g., '98%') showing relevance to student's profile",
   "action_steps": [
-    "Step 1: Focus on specific task (Include deep-links to official syllabus/websites if available).",
-    "Step 2: Practical academic step.",
-    "Step 3: Verification or tracking step."
+    "Step 1: Deep Explanation & Foundation - Detailed conceptual overview with examples",
+    "Step 2: Step-by-Step Breakdown - Analytical derivation, formula application, or practical procedure",
+    "Step 3: Mastery Verification - Key questions or practice problem steps to solidify understanding"
   ],
-  "pro_tips": "One highly effective, advanced study or preparation tip.",
+  "pro_tips": "In-depth expert tutor insight explaining common traps, shortcuts, memory tricks, or real-world applications with concrete examples.",
   "source_links": ["Verified Link 1", "Verified Link 2"]
 }
 
 FALLBACK BEHAVIOR:
-If a live search fails, state in the JSON output that real-time data is currently unavailable, and provide the best theoretical guidance based on your core knowledge without guessing dates.`;
+If a live search fails, state in the JSON output that real-time data is currently unavailable, and provide the best theoretical guidance and deep conceptual tutor explanation based on core knowledge without guessing dates.`;
 
     const contentPrompt = `USER SEARCH QUERY: ${query}
 ${profileContext ? `STUDENT PROFILE: ${profileContext}` : ""}
@@ -2590,6 +3085,9 @@ Please perform a Google Search, combine the facts with the student profile conte
     let parsedResult: any = null;
     try {
       parsedResult = safeParseJSON(rawText, 'object');
+      if (!parsedResult || Object.keys(parsedResult).length === 0 || !parsedResult.topic_title) {
+        throw new Error("Invalid or empty parsed JSON structure");
+      }
     } catch (parseError) {
       console.error("Failed to parse JSON response from live search tutor:", parseError, rawText);
       // Fallback response inside schema
@@ -2634,13 +3132,18 @@ Please perform a Google Search, combine the facts with the student profile conte
 
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const { gradeLevel, academicStream, topic, excludeQuestions } = req.body;
+    const { gradeLevel, academicStream, topic, excludeQuestions, country } = req.body;
     
     const aiClient = getAI();
     
     let promptText = `Generate a single, unique, highly engaging educational trivia question tailored for:
 - Student Academic Grade: ${gradeLevel || "11th Grade (Junior)"}
-- Academic Track/Stream: ${academicStream || "STEM / Engineering"}`;
+- Academic Track/Stream: ${academicStream || "STEM / Engineering"}
+- Student's Country: ${country || "United States"}`;
+
+    if (country && country.trim().length > 0) {
+      promptText += `\n- Country-Specific Customization: Design a question that relates to, is contextualised for, or is based on the school curriculum, general knowledge, history, geography, science, famous figures, or academic themes of ${country}. For instance, if the student is from India, ask about Indian history, science achievements, or geography. If from United States, ask about US-relevant topics, etc.`;
+    }
 
     if (topic && topic.trim().length > 0) {
       promptText += `\n- Specific Topic/Subject: ${topic}`;
@@ -2778,9 +3281,13 @@ app.post("/api/verify-subscription", (req, res) => {
   res.json({ userId, isPro });
 });
 
+// Server-time validation endpoint
+app.get("/api/time", (req, res) => {
+  res.json({ timestamp: Date.now() });
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-   const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -2789,7 +3296,43 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+
+    // Serve original source files for source maps/debugging to prevent 404 network errors
+    app.get("/src/*", (req, res) => {
+      let relativePath = req.params[0] || "";
+      if (!relativePath && req.path.startsWith("/src/")) {
+        relativePath = req.path.substring(5);
+      }
+      try {
+        relativePath = decodeURIComponent(relativePath);
+      } catch (e) {
+        // Fallback to original
+      }
+      const filePath = path.join(process.cwd(), "src", relativePath);
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        try {
+          const content = fs.readFileSync(filePath, "utf-8");
+          if (filePath.endsWith(".js") || filePath.endsWith(".jsx")) {
+            res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+          } else if (filePath.endsWith(".ts") || filePath.endsWith(".tsx")) {
+            // Serve TypeScript source files as text/plain so the browser doesn't try to parse them as executable JS scripts
+            res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          } else {
+            res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          }
+          return res.send(content);
+        } catch (err) {
+          return res.status(500).send("Error reading file");
+        }
+      }
+      return res.status(404).send("Not Found");
+    });
+
     app.get("*", (req, res) => {
+      const ext = path.extname(req.path);
+      if (ext || req.path.startsWith('/src') || req.path.startsWith('/api')) {
+        return res.status(404).send('Not Found');
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
@@ -2800,12 +3343,5 @@ async function startServer() {
   server.timeout = 300000;
 }
 
-// Export app for Vercel serverless environment
-export default app;
-
-// Only start the server when running locally (not on Vercel)
-// VERCEL env variable is automatically set by Vercel's build environment
-if (!process.env.VERCEL) {
-  startServer();
-}
+startServer();
 

@@ -1,4 +1,5 @@
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { safeGetItem, safeSetItem } from './storage';
 
 export interface Transaction {
@@ -26,9 +27,9 @@ export function getCoins(uid?: string): number {
   const storedLimit = safeGetItem(userKey);
 
   if (storedLimit === null) {
-    // New User! Default 3 free interactions
-    safeSetItem(userKey, '3');
-    return 3;
+    // New User! Default 20 free interactions
+    safeSetItem(userKey, '20');
+    return 20;
   }
 
   return Number(storedLimit);
@@ -53,27 +54,53 @@ export function deductCoins(amount: number, featureName: string): boolean {
   }
 
   const currentLimit = getCoins();
-  if (currentLimit < 1) {
+  if (currentLimit < amount) {
     // Dispatch event to show Paywall
-    window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName, cost: 1 } }));
+    window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName, cost: amount } }));
     return false;
   }
 
-  const newBalance = currentLimit - 1; // Always decrement by 1 as per instructions
+  const newBalance = currentLimit - amount;
   const userKey = `study_daily_limit_${currentUser.uid}`;
   safeSetItem(userKey, String(newBalance));
 
-  addCoinTransaction(`${featureName} Use`, -1, currentUser.uid);
+  addCoinTransaction(`${featureName} Use`, -amount, currentUser.uid);
+
+  // Sync to Firestore asynchronously
+  setDoc(doc(db, 'users', currentUser.uid), {
+    coins: newBalance
+  }, { merge: true }).catch((err) => {
+    console.warn("[Coins Sync] Failed to sync coin deduction to Firestore:", err);
+  });
 
   // Dispatch global update event to keep the UI in sync
   window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: newBalance }));
   return true;
 }
 
-// Add limits (Reward logic removed as per instructions)
+// Add coins to user balance
 export function addCoins(amount: number, label: string): void {
-  // Reward logic purged. This function now does nothing to prevent "Coin Farming".
-  console.log(`Blocked reward attempt: ${label} (+${amount})`);
+  if (isProUser()) return;
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) return;
+
+  const currentCoins = getCoins();
+  const newBalance = currentCoins + amount;
+  const userKey = `study_daily_limit_${currentUser.uid}`;
+  safeSetItem(userKey, String(newBalance));
+
+  addCoinTransaction(label, amount, currentUser.uid);
+
+  // Sync to Firestore asynchronously
+  setDoc(doc(db, 'users', currentUser.uid), {
+    coins: newBalance
+  }, { merge: true }).catch((err) => {
+    console.warn("[Coins Sync] Failed to sync coin addition to Firestore:", err);
+  });
+
+  // Dispatch global update event to keep the UI in sync
+  window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: newBalance }));
 }
 
 // Get the user's specific transaction history
@@ -90,25 +117,10 @@ export function getCoinHistory(uid?: string): Transaction[] {
   return [];
 }
 
-// refillDailyCoins ensures free users get 3 free interactions every day
+// refillDailyCoins ensures free users get 20 free interactions every day
 export function refillDailyCoins(): void {
-  if (isProUser()) return;
-  const currentUser = auth.currentUser;
-  if (!currentUser) return;
-
-  const lastRefillKey = `study_last_refill_${currentUser.uid}`;
-  const today = new Date().toDateString();
-  const lastRefill = safeGetItem(lastRefillKey);
-
-  if (lastRefill !== today) {
-    const userKey = `study_daily_limit_${currentUser.uid}`;
-    // Reset to 3 daily
-    safeSetItem(userKey, '3');
-    safeSetItem(lastRefillKey, today);
-    
-    // Dispatch update event
-    window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: 3 }));
-  }
+  // Disabling automatic daily reset to 20. Users get 20 coins exactly once as a new user,
+  // and they must manually claim their 2 daily coins on the Coins page.
 }
 
 // Add a transaction to the history

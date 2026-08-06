@@ -10,6 +10,8 @@ import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
+import { Camera } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -106,22 +108,11 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('Hindi');
 
-  // Interactive Image Cropper States
-  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
-  const [cropBox, setCropBox] = useState({ x: 15, y: 15, w: 70, h: 70 });
-  const [activeDrag, setActiveDrag] = useState<string | null>(null);
-  const dragStartRef = useRef<{ clientX: number, clientY: number, x: number, y: number, w: number, h: number } | null>(null);
-  const cropperContainerRef = useRef<HTMLDivElement>(null);
-
   // Mobile Torch (Flashlight) State
   const [torchOn, setTorchOn] = useState(false);
 
-  // Live Scanner Frame States
-  const [scannerFrame, setScannerFrame] = useState({ top: 20, left: 6, right: 6, height: 224 }); // 224px is 56 * 4 approx
-  const [activeScannerDrag, setActiveScannerDrag] = useState<string | null>(null);
-  const scannerDragStartRef = useRef<{ clientX: number, clientY: number, top: number, left: number, right: number, height: number } | null>(null);
-
-  const cropBoxRef = useRef<HTMLDivElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const bottomPanelRef = useRef<HTMLDivElement>(null);
   
   const categoryScrollRef = useRef<HTMLDivElement>(null);
   const subjectRefs = useRef<{[key: string]: HTMLButtonElement | null}>({});
@@ -142,6 +133,26 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       }
     }
   }, [activeMode]);
+
+  useEffect(() => {
+    const handleBackButton = (e: Event) => {
+      if (showLanguageSelector) {
+        e.preventDefault();
+        triggerVibration(10);
+        setShowLanguageSelector(false);
+      } else if (imagePreview || messages.length > 0) {
+        e.preventDefault();
+        triggerVibration(10);
+        resetScanner();
+      } else if (cameraActive) {
+        e.preventDefault();
+        triggerVibration(10);
+        setCameraActive(false);
+      }
+    };
+    window.addEventListener('appBackButton', handleBackButton);
+    return () => window.removeEventListener('appBackButton', handleBackButton);
+  }, [showLanguageSelector, imagePreview, messages, cameraActive]);
   
   const recognitionRef = useRef<any>(null);
 
@@ -153,10 +164,24 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         setCameraActive(false);
         return;
       }
-      // Do not run camera stream when showing preview or cropping
-      if (imagePreview || imageToCrop) return;
+      // Do not run camera stream when showing preview
+      if (imagePreview) return;
       try {
-        // Trigger native OS prompt simulation for first-time access
+        // Request native Capacitor camera permission on Android/iOS devices
+        if (Capacitor.isNativePlatform()) {
+          console.log("[Capacitor Camera] Requesting native camera permissions...");
+          const permStatus = await Camera.checkPermissions();
+          if (permStatus.camera !== 'granted') {
+            const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
+            if (reqStatus.camera !== 'granted') {
+              alert("Camera Permission Required\n\nPlease grant camera permission in your settings to scan questions.");
+              setCameraActive(false);
+              return;
+            }
+          }
+        }
+
+        // Trigger native OS prompt simulation for first-time access on web fallback
         if (!(window as any).hasRequestedCamera) {
           (window as any).hasRequestedCamera = true;
           console.log("Triggering native OS prompt for Camera access...");
@@ -186,7 +211,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [imagePreview, imageToCrop, isFocused, appVisible]); // Restart/stop camera when transitioning to preview, cropper, focus state, or app state
+  }, [imagePreview, isFocused, appVisible]); // Restart/stop camera when transitioning to preview, focus state, or app state
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -287,12 +312,9 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
     } else {
       // FREE: Check coins balance
       const coins = getCoins();
-      if (coins > 0) {
-        // Deduct 1 coin and continue
-        deductCoins(1, `${activeMode} Question`);
-      } else {
+      if (coins < 1) {
         // BLOCK & TRIGGER PAYWALL
-        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: `${activeMode} Assistant` } }));
+        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: `${activeMode} Assistant`, cost: 1 } }));
         return;
       }
     }
@@ -400,11 +422,9 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
     } else {
       // FREE: Check coins balance
       const coins = getCoins();
-      if (coins > 0) {
-        deductCoins(1, `${activeMode} Scan`);
-      } else {
+      if (coins < 1) {
         // BLOCK & TRIGGER PAYWALL
-        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: `${activeMode} Scanner` } }));
+        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: `${activeMode} Scanner`, cost: 1 } }));
         return;
       }
     }
@@ -444,193 +464,6 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
     }, 150);
   };
 
-  const handleScannerPointerDown = (e: React.PointerEvent, type: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    } catch (err) {}
-    setActiveScannerDrag(type);
-    scannerDragStartRef.current = {
-      clientX: e.clientX,
-      clientY: e.clientY,
-      ...scannerFrame
-    };
-  };
-
-  const handleScannerPointerMove = (e: React.PointerEvent) => {
-    if (!activeScannerDrag || !scannerDragStartRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const dy = e.clientY - scannerDragStartRef.current.clientY;
-    const dx = e.clientX - scannerDragStartRef.current.clientX;
-
-    const { top, left, right, height } = scannerDragStartRef.current;
-
-    if (activeScannerDrag === 'move') {
-      setScannerFrame({
-        top: top + (dy / window.innerHeight * 100),
-        left: left + (dx / window.innerWidth * 100),
-        right: right - (dx / window.innerWidth * 100),
-        height
-      });
-    } else if (activeScannerDrag === 'bottom') {
-      setScannerFrame({
-        top,
-        left,
-        right,
-        height: Math.max(50, height + dy)
-      });
-    }
-  };
-
-  const handleScannerPointerUp = (e: React.PointerEvent) => {
-    if (activeScannerDrag) {
-      try {
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch (err) {}
-      setActiveScannerDrag(null);
-      scannerDragStartRef.current = null;
-    }
-  };
-  const handleCropPointerDown = (e: React.PointerEvent, type: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    } catch (err) {}
-    setActiveDrag(type);
-    dragStartRef.current = {
-      clientX: e.clientX,
-      clientY: e.clientY,
-      x: cropBox.x,
-      y: cropBox.y,
-      w: cropBox.w,
-      h: cropBox.h
-    };
-  };
-
-  const handleCropPointerMove = (e: React.PointerEvent) => {
-    if (!activeDrag || !dragStartRef.current || !cropperContainerRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const rect = cropperContainerRef.current.getBoundingClientRect();
-    const dx = ((e.clientX - dragStartRef.current.clientX) / rect.width) * 100;
-    const dy = ((e.clientY - dragStartRef.current.clientY) / rect.height) * 100;
-
-    let { x, y, w, h } = dragStartRef.current;
-    const minSize = 10;
-
-    if (activeDrag === 'move') {
-      let nextX = x + dx;
-      let nextY = y + dy;
-      if (nextX < 0) nextX = 0;
-      if (nextY < 0) nextY = 0;
-      if (nextX + w > 100) nextX = 100 - w;
-      if (nextY + h > 100) nextY = 100 - h;
-      setCropBox({ x: nextX, y: nextY, w, h });
-    } else {
-      if (activeDrag.includes('left')) {
-        let nextX = x + dx;
-        let nextW = w - dx;
-        if (nextX < 0) {
-          nextW += nextX;
-          nextX = 0;
-        }
-        if (nextW < minSize) {
-          nextX = x + w - minSize;
-          nextW = minSize;
-        }
-        x = nextX;
-        w = nextW;
-      }
-      if (activeDrag.includes('right')) {
-        let nextW = w + dx;
-        if (x + nextW > 100) nextW = 100 - x;
-        if (nextW < minSize) nextW = minSize;
-        w = nextW;
-      }
-      if (activeDrag.includes('top')) {
-        let nextY = y + dy;
-        let nextH = h - dy;
-        if (nextY < 0) {
-          nextH += nextY;
-          nextY = 0;
-        }
-        if (nextH < minSize) {
-          nextY = y + h - minSize;
-          nextH = minSize;
-        }
-        y = nextY;
-        h = nextH;
-      }
-      if (activeDrag.includes('bottom')) {
-        let nextH = h + dy;
-        if (y + nextH > 100) nextH = 100 - y;
-        if (nextH < minSize) nextH = minSize;
-        h = nextH;
-      }
-      setCropBox({ x, y, w, h });
-    }
-  };
-
-  const handleCropPointerUp = (e: React.PointerEvent) => {
-    if (activeDrag) {
-      try {
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch (err) {}
-      setActiveDrag(null);
-      dragStartRef.current = null;
-    }
-  };
-
-  const handlePerformCrop = () => {
-    if (!imageToCrop) return;
-    
-    const img = new Image();
-    img.src = imageToCrop;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        const sx = (cropBox.x / 100) * img.naturalWidth;
-        const sy = (cropBox.y / 100) * img.naturalHeight;
-        const sWidth = (cropBox.w / 100) * img.naturalWidth;
-        const sHeight = (cropBox.h / 100) * img.naturalHeight;
-
-        // Downscale image if too large to optimize mobile upload speed & processing time
-        const maxDimension = 1024;
-        let targetWidth = sWidth;
-        let targetHeight = sHeight;
-        if (sWidth > maxDimension || sHeight > maxDimension) {
-          if (sWidth > sHeight) {
-            targetWidth = maxDimension;
-            targetHeight = (sHeight / sWidth) * maxDimension;
-          } else {
-            targetHeight = maxDimension;
-            targetWidth = (sWidth / sHeight) * maxDimension;
-          }
-        }
-
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-
-        ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
-
-        // Convert with compressed quality (0.8) for small file size and super-fast uploads
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const file = new File([blob], "cropped_capture.jpg", { type: "image/jpeg" });
-            setImageToCrop(null); // Close crop screen
-            processFile(file);
-          }
-        }, 'image/jpeg', 0.8);
-      }
-    };
-  };
-
   const toggleTorch = async () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
@@ -663,44 +496,30 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setImageToCrop(url);
+      processFile(file);
     }
   };
 
   const handleCapture = () => {
     if (videoRef.current && cameraActive) {
       const video = videoRef.current;
-      const canvas = document.createElement('canvas');
-      
       const sWidth = video.videoWidth;
       const sHeight = video.videoHeight;
-      const maxDimension = 1024;
-      let targetWidth = sWidth;
-      let targetHeight = sHeight;
-      
-      if (sWidth > maxDimension || sHeight > maxDimension) {
-        if (sWidth > sHeight) {
-          targetWidth = maxDimension;
-          targetHeight = (sHeight / sWidth) * maxDimension;
-        } else {
-          targetHeight = maxDimension;
-          targetWidth = (sWidth / sHeight) * maxDimension;
-        }
-      }
 
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
+      // Draw the full video frame onto a canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = sWidth;
+      canvas.height = sHeight;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+        ctx.drawImage(video, 0, 0, sWidth, sHeight);
         canvas.toBlob((blob) => {
           if (blob) {
-            const url = URL.createObjectURL(blob);
-            setImageToCrop(url);
+            const file = new File([blob], "full_capture.jpg", { type: "image/jpeg" });
+            processFile(file);
           }
-        }, 'image/jpeg', 0.8);
+        }, 'image/jpeg', 0.85); // compress to optimize upload size
       }
     } else {
       fileInputRef.current?.click();
@@ -884,7 +703,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                               </div>
                             )}
                             <div className="space-y-3">
-                              {parsed.solution_steps && parsed.solution_steps.map((step: any, sIdx: number) => (
+                              {Array.isArray(parsed?.solution_steps) && parsed.solution_steps.map((step: any, sIdx: number) => (
                                 <div 
                                   key={sIdx} 
                                   className={`p-4 rounded-2xl border transition-all duration-200 bg-white shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)] ${
@@ -991,7 +810,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
   }
 
   return (
-    <div className="w-full h-full relative bg-[#FAF9F6] overflow-hidden">
+    <div className="w-full h-full relative bg-black overflow-hidden">
       <input 
         type="file" 
         accept="image/*" 
@@ -1000,13 +819,14 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         onChange={handleFileUpload}
       />
 
-      <div className="absolute inset-0 z-0 bg-black">
+      {/* 1. Camera & Frame Wrapper (Takes up the entire available vertical space absolutely) */}
+      <div ref={videoContainerRef} className="absolute inset-0 w-full h-full z-0 bg-black overflow-hidden">
         <video 
           ref={videoRef} 
           autoPlay 
           playsInline 
           muted 
-          className="w-full h-full object-cover opacity-80"
+          className="w-full h-full object-cover opacity-100"
         />
         {!cameraActive && (
           <div className="absolute inset-0 flex items-center justify-center text-gray-500">
@@ -1015,309 +835,157 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         )}
       </div>
 
-      <AnimatePresence>
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 z-10 pointer-events-none pb-24"
+      {/* 2. Floating Top Overlay (PRO button, back button) */}
+      <div className="absolute top-0 left-0 w-full z-50 pointer-events-auto p-6 flex justify-between items-center bg-gradient-to-b from-black/55 via-black/25 to-transparent">
+        <button 
+          onClick={() => {
+            triggerVibration(15);
+            if (onNavigateToTab) onNavigateToTab('notes');
+          }}
+          className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/15 flex items-center justify-center text-white active:scale-95 transition-all shadow-lg hover:bg-black/60"
+          title="Back to Home"
         >
-          {/* Floating Premium 3D PRO Badge with Purple Glow */}
-          <div className="absolute top-6 right-4 pointer-events-auto z-30">
+          <X className="w-5 h-5" strokeWidth={2.5} />
+        </button>
+
+        {/* Floating Premium 3D PRO Badge with Purple Glow */}
+        <button 
+          onClick={() => window.dispatchEvent(new CustomEvent('open-vip-modal'))}
+          className="bg-gradient-to-r from-purple-600 via-indigo-600 to-violet-600 border border-purple-400/50 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-[0_10px_25px_rgba(168,85,247,0.5),_inset_0_1px_1px_rgba(255,255,255,0.4)] hover:shadow-[0_15px_30px_rgba(168,85,247,0.7),_inset_0_1px_1px_rgba(255,255,255,0.6)] hover:scale-105 active:scale-95 duration-300 transition-all cursor-pointer group"
+        >
+          <span className="text-white font-[900] text-xs tracking-widest bg-gradient-to-r from-amber-200 to-yellow-100 bg-clip-text text-transparent drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] uppercase">PRO</span>
+          <div className="bg-white/10 rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-inner group-hover:rotate-12 transition-transform">
+            🦉
+          </div>
+        </button>
+      </div>
+
+      {/* 3. Floating Bottom Overlay Panel */}
+      <div 
+        ref={bottomPanelRef}
+        className="absolute bottom-0 left-0 w-full z-50 pointer-events-auto pb-safe pt-12 flex flex-col items-center gap-6 bg-gradient-to-t from-black/85 via-black/45 to-transparent"
+      >
+        
+        {/* Swipeable Premium Category Selector */}
+        <div 
+          ref={categoryScrollRef}
+          className="w-full flex justify-start sm:justify-center items-center gap-x-8 overflow-x-auto whitespace-nowrap scrollbar-none px-8 py-2"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {['Math', 'Physics', 'Chemistry', 'Biology', 'Summary', 'Others'].map((m) => (
             <button 
-              onClick={() => window.dispatchEvent(new CustomEvent('open-vip-modal'))}
-              className="bg-gradient-to-r from-purple-600 via-indigo-600 to-violet-600 border border-purple-400/50 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-[0_10px_25px_rgba(168,85,247,0.5),_inset_0_1px_1px_rgba(255,255,255,0.4)] hover:shadow-[0_15px_30px_rgba(168,85,247,0.7),_inset_0_1px_1px_rgba(255,255,255,0.6)] hover:scale-105 active:scale-95 duration-300 transition-all cursor-pointer group"
+              key={m}
+              ref={(el) => {
+                subjectRefs.current[m] = el;
+              }}
+              onClick={() => {
+                setActiveMode(m);
+                triggerVibration(15); // Light haptic feedback
+              }}
+              className={`transition-all duration-300 relative pb-2 transform ${
+                activeMode === m 
+                  ? 'text-white font-extrabold text-[15px] sm:text-base scale-110 drop-shadow-[0_2px_15px_rgba(236,72,153,0.8)] tracking-wider' 
+                  : 'text-white/40 font-normal text-xs scale-90 hover:text-white/80'
+              }`}
             >
-              <span className="text-white font-[900] text-xs tracking-widest bg-gradient-to-r from-amber-200 to-yellow-100 bg-clip-text text-transparent drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] uppercase">PRO</span>
-              <div className="bg-white/10 rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-inner group-hover:rotate-12 transition-transform">
-                🦉
-              </div>
-            </button>
-          </div>
-
-          <div className="absolute top-[12%] w-full flex justify-center z-20">
-            <div className="bg-black/40 backdrop-blur-md border border-white/20 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold tracking-wide shadow-lg">
-              Position problem in frame
-            </div>
-          </div>
-
-          {/* Minimalist crop box with rotating rainbow border, laser effect, and Google Lens thick L-shaped corner handles */}
-          <div 
-            ref={cropBoxRef} 
-            className="absolute rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.6)] rainbow-scanner-box overflow-hidden z-20"
-            style={{ top: `${scannerFrame.top}%`, left: `${scannerFrame.left}%`, right: `${scannerFrame.right}%`, height: scannerFrame.height }}
-            onPointerDown={(e) => handleScannerPointerDown(e, 'move')}
-            onPointerMove={handleScannerPointerMove}
-            onPointerUp={handleScannerPointerUp}
-          >
-            {/* Ambient scan line laser effect */}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-500/15 to-transparent animate-[pulse_2s_infinite] pointer-events-none" />
-            
-            {/* Google Lens corner L-shaped thick crop handles */}
-            {/* Top Left */}
-            <div className="absolute top-0 left-0 w-8 h-8 z-30">
-              <div className="absolute top-0 left-0 w-8 h-[5px] bg-white rounded-tl-lg rounded-tr-sm"></div>
-              <div className="absolute top-0 left-0 w-[5px] h-8 bg-white rounded-tl-lg rounded-bl-sm"></div>
-            </div>
-            {/* Top Right */}
-            <div className="absolute top-0 right-0 w-8 h-8 z-30">
-              <div className="absolute top-0 right-0 w-8 h-[5px] bg-white rounded-tr-lg rounded-tl-sm"></div>
-              <div className="absolute top-0 right-0 w-[5px] h-8 bg-white rounded-tr-lg rounded-br-sm"></div>
-            </div>
-            {/* Bottom Left */}
-            <div className="absolute bottom-0 left-0 w-8 h-8 z-30">
-              <div className="absolute bottom-0 left-0 w-8 h-[5px] bg-white rounded-bl-lg rounded-br-sm"></div>
-              <div className="absolute bottom-0 left-0 w-[5px] h-8 bg-white rounded-bl-lg rounded-tl-sm"></div>
-            </div>
-            {/* Bottom Right - Resizing Handle */}
-            <div 
-              className="absolute bottom-0 right-0 w-10 h-10 z-30 cursor-se-resize flex items-center justify-center"
-              onPointerDown={(e) => handleScannerPointerDown(e, 'bottom')}
-            >
-              <div className="absolute bottom-0 right-0 w-8 h-[5px] bg-white rounded-br-lg rounded-bl-sm"></div>
-              <div className="absolute bottom-0 right-0 w-[5px] h-8 bg-white rounded-br-lg rounded-tr-sm"></div>
-            </div>
-          </div>
-
-          {/* Stacked Bottom Controls Panel - elevated to prevent overlap with bottom navigation tabs */}
-          <div className="absolute bottom-[84px] left-0 right-0 flex flex-col items-center gap-6 pointer-events-none z-20">
-            
-            {/* Swipeable Premium Category Selector */}
-            <div 
-              ref={categoryScrollRef}
-              className="w-full flex justify-start sm:justify-center items-center gap-x-8 overflow-x-auto whitespace-nowrap scrollbar-none pointer-events-auto px-8 py-2"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {['Math', 'Physics', 'Chemistry', 'Biology', 'Summary', 'Others'].map((m) => (
-                <button 
-                  key={m}
-                  ref={(el) => {
-                    subjectRefs.current[m] = el;
-                  }}
-                  onClick={() => {
-                    setActiveMode(m);
-                    triggerVibration(15); // Light haptic feedback
-                  }}
-                  className={`transition-all duration-300 relative pb-2 transform ${
-                    activeMode === m 
-                      ? 'text-white font-extrabold text-[15px] sm:text-base scale-110 drop-shadow-[0_2px_15px_rgba(236,72,153,0.8)] tracking-wider' 
-                      : 'text-white/40 font-normal text-xs scale-90 hover:text-white/80'
-                  }`}
-                >
-                  {m}
-                  {activeMode === m && (
-                    <motion.div 
-                      layoutId="activeMode" 
-                      className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-pink-500 via-fuchsia-500 to-purple-600 rounded-full shadow-[0_0_15px_#f43f5e,_0_0_5px_#d946ef]" 
-                    />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Actions Row (Upload, Capture, Flashlight) */}
-            <div className="w-full px-12 flex justify-between items-center pointer-events-auto">
-              <button 
-                onClick={() => {
-                  triggerVibration(15);
-                  fileInputRef.current?.click();
-                }}
-                className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white active:scale-90 transition-transform hover:bg-white/20"
-              >
-                <ImageIcon className="w-5 h-5" strokeWidth={1.5} />
-              </button>
-
-              {/* Premium magenta capture button */}
-              {(() => {
-                const btnClass = "border-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.5)] hover:shadow-[0_0_35px_rgba(236,72,153,0.7)]";
-                const childClass = "bg-gradient-to-br from-pink-500 via-fuchsia-500 to-purple-600 text-white shadow-inner";
-                let IconComponent = <GraduationCap className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
-
-                if (activeMode === 'Summary') {
-                  IconComponent = <BookOpen className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
-                } else if (activeMode === 'Math') {
-                  IconComponent = <Calculator className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
-                } else if (activeMode === 'Physics') {
-                  IconComponent = <Zap className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
-                } else if (activeMode === 'Chemistry') {
-                  IconComponent = <GraduationCap className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
-                } else if (activeMode === 'Biology') {
-                  IconComponent = <Brain className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
-                } else if (activeMode === 'Others') {
-                  IconComponent = <HelpCircle className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
-                }
-
-                return (
-                  <button 
-                    onClick={() => {
-                      triggerVibration(45); // Solid haptic vibration (medium impact)
-                      handleCapture();
-                    }}
-                    className={`w-20 h-20 rounded-full border-[3px] p-1 active:scale-95 transition-all group flex items-center justify-center ${btnClass}`}
-                    title={`Capture & Solve - ${activeMode}`}
-                  >
-                    <div className={`w-full h-full rounded-full flex items-center justify-center transition-all ${childClass}`}>
-                      {IconComponent}
-                    </div>
-                  </button>
-                );
-              })()}
-
-              <button 
-                onClick={() => {
-                  triggerVibration(15);
-                  toggleTorch();
-                }}
-                className={`w-12 h-12 rounded-full backdrop-blur-xl border flex items-center justify-center active:scale-90 transition-transform ${
-                  torchOn 
-                    ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse' 
-                    : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
-                }`}
-              >
-                <Zap className="w-5 h-5" strokeWidth={1.5} fill={torchOn ? "currentColor" : "none"} />
-              </button>
-            </div>
-
-            {/* Elegant Input Type Toggle Pill */}
-            <div className="flex justify-center pointer-events-auto">
-              <button
-                onClick={() => {
-                  triggerVibration(15); // Light haptic feedback
-                  setInputType(prev => prev === 'Printed' ? 'Handwritten' : 'Printed');
-                }}
-                className="px-4 py-1.5 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white flex items-center gap-2 hover:bg-black/60 hover:border-white/30 transition-all duration-300 shadow-lg text-[11px] font-bold"
-              >
-                {inputType === 'Handwritten' ? (
-                  <>
-                    <PenLine className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
-                    <span>Handwritten Mode</span>
-                  </>
-                ) : (
-                  <>
-                    <Type className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                    <span>Printed Text Mode</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* INTERACTIVE IMAGE CROPPER OVERLAY */}
-      <AnimatePresence>
-        {imageToCrop && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-40 bg-black/95 flex flex-col pointer-events-auto"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#121212]/95 backdrop-blur-md z-10">
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setImageToCrop(null)}
-                  className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                  title="Cancel"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-                <span className="text-white font-bold text-base ml-1">Crop Image</span>
-              </div>
-              
-              {/* Confirm icon to submit cropped image directly */}
-              <button 
-                onClick={handlePerformCrop}
-                className="w-10 h-10 rounded-full bg-pink-500 hover:bg-pink-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(236,72,153,0.4)] active:scale-95"
-                title="Confirm"
-              >
-                <Check className="w-5 h-5 stroke-[2.5px]" />
-              </button>
-            </div>
-
-            {/* Crop Stage Container */}
-            <div className="flex-1 flex items-center justify-center p-4 overflow-hidden relative min-h-0">
-              <div 
-                ref={cropperContainerRef}
-                className="relative max-w-full max-h-[50vh] sm:max-h-[60vh] aspect-auto overflow-hidden select-none touch-none bg-black/50 rounded-2xl"
-                onPointerMove={handleCropPointerMove}
-                onPointerUp={handleCropPointerUp}
-                onPointerLeave={handleCropPointerUp}
-              >
-                {/* Main Image to Crop */}
-                <img 
-                  src={imageToCrop} 
-                  alt="To crop" 
-                  className="max-w-full max-h-[50vh] sm:max-h-[60vh] object-contain select-none pointer-events-none rounded-2xl" 
+              {m}
+              {activeMode === m && (
+                <motion.div 
+                  layoutId="activeMode" 
+                  className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-pink-500 via-fuchsia-500 to-purple-600 rounded-full shadow-[0_0_15px_#f43f5e,_0_0_5px_#d946ef]" 
                 />
+              )}
+            </button>
+          ))}
+        </div>
 
-                {/* Translucent overlays surrounding the crop box */}
-                <div className="absolute bg-black/60 pointer-events-none" style={{ top: 0, left: 0, right: 0, height: `${cropBox.y}%` }} />
-                <div className="absolute bg-black/60 pointer-events-none" style={{ bottom: 0, left: 0, right: 0, height: `${100 - cropBox.y - cropBox.h}%` }} />
-                <div className="absolute bg-black/60 pointer-events-none" style={{ top: `${cropBox.y}%`, bottom: `${100 - cropBox.y - cropBox.h}%`, left: 0, width: `${cropBox.x}%` }} />
-                <div className="absolute bg-black/60 pointer-events-none" style={{ top: `${cropBox.y}%`, bottom: `${100 - cropBox.y - cropBox.h}%`, right: 0, width: `${100 - cropBox.x - cropBox.w}%` }} />
+        {/* Actions Row (Upload, Capture, Flashlight) */}
+        <div className="w-full px-12 flex justify-between items-center">
+          <button 
+            onClick={() => {
+              triggerVibration(15);
+              fileInputRef.current?.click();
+            }}
+            className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white active:scale-90 transition-transform hover:bg-white/20"
+          >
+            <ImageIcon className="w-5 h-5" strokeWidth={1.5} />
+          </button>
 
-                {/* Draggable Crop Rectangle */}
-                <div 
-                  style={{ 
-                    left: `${cropBox.x}%`, 
-                    top: `${cropBox.y}%`, 
-                    width: `${cropBox.w}%`, 
-                    height: `${cropBox.h}%` 
-                  }}
-                  className="absolute border-2 border-white shadow-[0_0_40px_rgba(0,0,0,0.5)] cursor-move flex flex-col justify-between"
-                  onPointerDown={(e) => handleCropPointerDown(e, 'move')}
-                >
-                  {/* Grid layout for crop reference lines */}
-                  <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-40">
-                    <div className="border-r border-dashed border-white/60 col-span-1" />
-                    <div className="border-r border-dashed border-white/60 col-span-1" />
-                    <div className="border-b border-dashed border-white/60 row-span-1 col-span-3 absolute left-0 right-0 top-[33.3%]" />
-                    <div className="border-b border-dashed border-white/60 row-span-1 col-span-3 absolute left-0 right-0 top-[66.6%]" />
-                  </div>
+          {/* Premium magenta capture button */}
+          {(() => {
+            const btnClass = "border-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.5)] hover:shadow-[0_0_35px_rgba(236,72,153,0.7)]";
+            const childClass = "bg-gradient-to-br from-pink-500 via-fuchsia-500 to-purple-600 text-white shadow-inner";
+            let IconComponent = <GraduationCap className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
 
-                  {/* Corner Grab Handles */}
-                  <div 
-                    className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-white rounded-full border border-purple-600 cursor-nwse-resize z-10 active:scale-125 transition-transform" 
-                    onPointerDown={(e) => handleCropPointerDown(e, 'top-left')}
-                  />
-                  <div 
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white rounded-full border border-purple-600 cursor-nesw-resize z-10 active:scale-125 transition-transform" 
-                    onPointerDown={(e) => handleCropPointerDown(e, 'top-right')}
-                  />
-                  <div 
-                    className="absolute -bottom-1.5 -left-1.5 w-4 h-4 bg-white rounded-full border border-purple-600 cursor-nesw-resize z-10 active:scale-125 transition-transform" 
-                    onPointerDown={(e) => handleCropPointerDown(e, 'bottom-left')}
-                  />
-                  <div 
-                    className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white rounded-full border border-purple-600 cursor-nwse-resize z-10 active:scale-125 transition-transform" 
-                    onPointerDown={(e) => handleCropPointerDown(e, 'bottom-right')}
-                  />
+            if (activeMode === 'Summary') {
+              IconComponent = <BookOpen className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
+            } else if (activeMode === 'Math') {
+              IconComponent = <Calculator className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
+            } else if (activeMode === 'Physics') {
+              IconComponent = <Zap className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
+            } else if (activeMode === 'Chemistry') {
+              IconComponent = <GraduationCap className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
+            } else if (activeMode === 'Biology') {
+              IconComponent = <Brain className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
+            } else if (activeMode === 'Others') {
+              IconComponent = <HelpCircle className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
+            }
+
+            return (
+              <button 
+                onClick={() => {
+                  triggerVibration(45); // Solid haptic vibration (medium impact)
+                  handleCapture();
+                }}
+                className={`w-20 h-20 rounded-full border-[3px] p-1 active:scale-95 transition-all group flex items-center justify-center ${btnClass}`}
+                title={`Capture & Solve - ${activeMode}`}
+              >
+                <div className={`w-full h-full rounded-full flex items-center justify-center transition-all ${childClass}`}>
+                  {IconComponent}
                 </div>
-              </div>
-            </div>
+              </button>
+            );
+          })()}
 
-            {/* Bottom Controls */}
-            <div className="p-6 pb-12 md:pb-14 bg-[#121212]/95 backdrop-blur-md border-t border-white/10 flex gap-4 justify-center items-center w-full relative z-10">
-              <button 
-                onClick={() => setImageToCrop(null)}
-                className="px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 text-gray-300 font-bold text-sm transition-colors min-w-[120px]"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handlePerformCrop}
-                className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 via-fuchsia-600 to-purple-600 hover:from-pink-500 hover:via-fuchsia-500 hover:to-purple-500 text-white font-extrabold text-sm transition-colors shadow-lg shadow-pink-500/20 flex items-center justify-center gap-2 min-w-[160px]"
-              >
-                <Check className="w-5 h-5 text-white stroke-[2.5px]" />
-                <span>Confirm</span>
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          <button 
+            onClick={() => {
+              triggerVibration(15);
+              toggleTorch();
+            }}
+            className={`w-12 h-12 rounded-full backdrop-blur-xl border flex items-center justify-center active:scale-90 transition-transform ${
+              torchOn 
+                ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse' 
+                : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+            }`}
+          >
+            <Zap className="w-5 h-5" strokeWidth={1.5} fill={torchOn ? "currentColor" : "none"} />
+          </button>
+        </div>
+
+        {/* Elegant Input Type Toggle Pill */}
+        <div className="flex justify-center">
+          <button
+            onClick={() => {
+              triggerVibration(15); // Light haptic feedback
+              setInputType(prev => prev === 'Printed' ? 'Handwritten' : 'Printed');
+            }}
+            className="px-4 py-1.5 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white flex items-center gap-2 hover:bg-black/60 hover:border-white/30 transition-all duration-300 shadow-lg text-[11px] font-bold animate-fade-in"
+          >
+            {inputType === 'Handwritten' ? (
+              <>
+                <PenLine className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
+                <span>Handwritten Mode</span>
+              </>
+            ) : (
+              <>
+                <Type className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <span>Printed Text Mode</span>
+              </>
+            )}
+          </button>
+        </div>
+
+      </div>
 
     </div>
   );

@@ -411,7 +411,7 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-32 space-y-4">
-        {items.length === 0 ? (
+        {!Array.isArray(items) || items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4 mt-20">
             <div className="w-20 h-20 bg-zinc-100 rounded-full flex items-center justify-center mb-6 shadow-inner border border-zinc-200">
               <Volume2 className="w-10 h-10 text-zinc-400" />
@@ -426,7 +426,7 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
             </button>
           </div>
         ) : (
-          items.map((item) => (
+          (items || []).map((item) => (
             <motion.div 
             key={item.id}
             initial={{ opacity: 0, y: 10 }}
@@ -448,7 +448,7 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
                     onClick={(e) => { e.stopPropagation(); handleDownload(item); }}
                     className="w-[42px] h-[42px] flex items-center justify-center text-zinc-700 hover:text-zinc-900 bg-zinc-100/80 hover:bg-zinc-200 rounded-full transition-colors border border-zinc-200/50"
                   >
-                    {isVip ? <Download className="w-5 h-5" strokeWidth={1.5} /> : <Lock className="w-5 h-5 text-orange-550" />}
+                    {isVip ? <Download className="w-5 h-5" strokeWidth={1.5} /> : <Lock className="w-5 h-5 text-orange-500" />}
                   </button>
                 )}
                 <button 

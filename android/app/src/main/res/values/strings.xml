@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">HelpYou AI</string>
-    <string name="title_activity_main">HelpYou AI</string>
-    <string name="package_name">com.helpyouai.com</string>
-    <string name="custom_url_scheme">com.helpyouai.com</string>
-</resources>

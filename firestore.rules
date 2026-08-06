@@ -20,32 +20,49 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    // Users Profile Collection Rules
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // 2. Pocket Items Collection Rules
     match /pocket_items/{itemId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isOwner(resource.data.userId) && request.resource.data.userId == request.auth.uid;
+      allow read, write: if isSignedIn() && (
+        (resource == null && request.resource.data.userId == request.auth.uid) ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
     }
 
     // 3. AI Tutor Chats Collection Rules
     match /ai_tutor_chats/{chatId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isOwner(resource.data.userId) && request.resource.data.userId == request.auth.uid;
+      allow read, write: if isSignedIn() && (
+        (resource == null && request.resource.data.userId == request.auth.uid) ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
     }
 
     // 4. Quiz Results Collection Rules
     match /quiz_results/{resultId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isOwner(resource.data.userId) && request.resource.data.userId == request.auth.uid;
+      allow read, write: if isSignedIn() && (
+        (resource == null && request.resource.data.userId == request.auth.uid) ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
     }
 
     // 5. Mistake Vault Collection Rules
     match /MistakeVault/{mistakeId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isOwner(resource.data.userId) && request.resource.data.userId == request.auth.uid;
+      allow read, write: if isSignedIn() && (
+        (resource == null && request.resource.data.userId == request.auth.uid) ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
+    }
+
+    // 6. Generated Questions Collection Rules
+    match /generated_questions/{questionId} {
+      allow read, write: if isSignedIn() && (
+        (resource == null && request.resource.data.userId == request.auth.uid) ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
     }
   }
 }

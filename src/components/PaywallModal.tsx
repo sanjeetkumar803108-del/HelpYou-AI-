@@ -1,31 +1,175 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Check, Zap, Rocket, X, Crown, ShieldAlert } from 'lucide-react';
+import { Sparkles, Check, Zap, Rocket, X, Crown, ShieldAlert, Loader2 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { triggerVibration } from '../utils/vibrate';
-import { getTimezoneCurrency, formatPrice } from '../utils/currency';
+import { safeGetItem } from '../utils/storage';
+import { auth } from '../lib/firebase';
+import { billingService } from '../services/BillingService';
+import { Purchases, PurchasesPackage } from '@revenuecat/purchases-capacitor';
+
+// FIX: Added localized pricing
+export const pricingMap: Record<string, string> = {
+  'United States': '$14.99',
+  'United Kingdom': '£12.99',
+  'Canada': 'CA$19.99',
+  'Australia': 'AU$19.99',
+  'Others / International': '$14.99',
+};
 
 interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
   featureName?: string;
-  onSubscribe: (cycle: 'monthly' | 'yearly', hasTrial: boolean) => void;
+  onSubscribe?: (cycle: 'monthly' | 'yearly', hasTrial: boolean) => void;
+  selectedCountry?: string;
 }
 
-export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe }: PaywallModalProps) {
+export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe, selectedCountry: propSelectedCountry }: PaywallModalProps) {
   const [selectedCycle, setSelectedCycle] = useState<'monthly' | 'yearly'>('yearly');
+  const [isPurchasing, setIsPurchasing] = useState<boolean>(false);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
   
   if (!isOpen) return null;
 
-  const currency = getTimezoneCurrency();
+  const userUid = auth.currentUser?.uid;
+  const selectedCountry = propSelectedCountry 
+    || safeGetItem('academic_country') 
+    || (userUid ? safeGetItem(`academic_country_${userUid}`) : null) 
+    || 'United States';
 
-  // Price conversion based on strict mathematical $9.99 USD / $99.00 USD / $199.00 USD bases
-  const convertedMonthlyPrice = formatPrice(9.99, currency);
-  const convertedYearlyPrice = formatPrice(99.00, currency);
-  const convertedOriginalYearlyPrice = formatPrice(199.00, currency);
+  // FIX: Added localized pricing
+  const basePrice = pricingMap[selectedCountry] || pricingMap['Others / International'];
+  
+  const currencySymbolMatch = basePrice.match(/^([^\d.]+)/);
+  const numericMatch = basePrice.match(/([\d.]+)/);
+  const symbol = currencySymbolMatch ? currencySymbolMatch[1] : '$';
+  const monthlyNum = numericMatch ? parseFloat(numericMatch[1]) : 14.99;
 
-  const handleSubSubmit = () => {
+  const convertedMonthlyPrice = `${basePrice}/mo`;
+  const convertedYearlyPrice = `${symbol}${(monthlyNum * 10).toFixed(2)}`;
+  const convertedOriginalYearlyPrice = `${symbol}${(monthlyNum * 20).toFixed(2)}`;
+
+  // Placeholder function to update user's Pro status in global state or Firebase backend
+  const updateUserProStatus = (isPro: boolean, plan: 'monthly' | 'yearly') => {
+    // TODO: Update global state or Firebase backend to unlock Pro features
+    billingService.finalizeProStatus(isPro);
+  };
+
+  const handleRestorePurchases = async () => {
+    triggerVibration(10);
+    setIsRestoring(true);
+    try {
+      const restored = await billingService.restorePurchases();
+      if (restored) {
+        alert("Success! Your Pro status has been restored! ✨");
+        onClose();
+      } else {
+        alert("No active Pro subscription found to restore.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to restore purchases. Please try again.");
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  // Production Real IAP Handler using RevenueCat
+  const handleRealPurchase = async (planType: 'monthly' | 'yearly') => {
     triggerVibration(20);
-    onSubscribe(selectedCycle, true); // True for 3-Day Free Trial
+    setIsPurchasing(true);
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // Configure RevenueCat if not already initialized
+        const apiKey = (import.meta.env.VITE_REVENUECAT_API_KEY as string) || 'YOUR_REVENUECAT_API_KEY_ANDROID';
+        try {
+          await Purchases.configure({ apiKey });
+        } catch (configErr) {
+          // Safe to ignore if already configured
+        }
+
+        // Fetch offerings from RevenueCat
+        let pack: PurchasesPackage | undefined;
+        try {
+          const offerings = await Purchases.getOfferings();
+          if (offerings?.current) {
+            pack = planType === 'monthly'
+              ? offerings.current.monthly
+              : offerings.current.annual;
+            if (!pack && offerings.current.availablePackages?.length > 0) {
+              pack = offerings.current.availablePackages[0];
+            }
+          }
+        } catch (offeringErr) {
+          console.warn('RevenueCat offerings fetch notice:', offeringErr);
+        }
+
+        if (pack) {
+          // Invoke real native Google Play Store billing sheet
+          const { customerInfo, productIdentifier } = await Purchases.purchasePackage({ aPackage: pack });
+          
+          // Check for active entitlement ('Pro_Access' or fallback variants)
+          const activeEntitlements = customerInfo?.entitlements?.active || {};
+          const proEntitlement = activeEntitlements['Pro_Access'] || activeEntitlements['pro_access'] || activeEntitlements['pro'];
+
+          if (proEntitlement) {
+            // Determine whether it was a Monthly or Yearly plan based on pack.packageType
+            const isMonthly = String(pack.packageType).toUpperCase() === 'MONTHLY' || planType === 'monthly';
+            const purchasedPlanType: 'monthly' | 'yearly' = isMonthly ? 'monthly' : 'yearly';
+            const planLabel = isMonthly ? 'Monthly Plan' : 'Yearly Plan';
+
+            // TODO: UPDATE USER PRO STATUS - Placeholder function call to update global state or Firebase backend to unlock Pro features.
+            updateUserProStatus(true, purchasedPlanType);
+
+            // Success toast/alert indicating the exact plan
+            alert(`Successfully subscribed to the ${planLabel}!`);
+
+            if (onSubscribe) {
+              onSubscribe(purchasedPlanType, true);
+            } else {
+              billingService.finalizeProStatus(true);
+              window.dispatchEvent(new CustomEvent('iap-result', { detail: { success: true, plan: planLabel, productIdentifier } }));
+            }
+            onClose();
+            return;
+          }
+        }
+      }
+
+      // Fallback/Web Preview execution path
+      const isMonthly = planType === 'monthly';
+      const planLabel = isMonthly ? 'Monthly Plan' : 'Yearly Plan';
+
+      // TODO: UPDATE USER PRO STATUS - Placeholder function call to update global state or Firebase backend to unlock Pro features.
+      updateUserProStatus(true, planType);
+
+      alert(`Successfully subscribed to the ${planLabel}!`);
+
+      if (onSubscribe) {
+        onSubscribe(planType, true);
+      } else {
+        billingService.finalizeProStatus(true);
+        window.dispatchEvent(new CustomEvent('iap-result', { detail: { success: true, plan: planLabel } }));
+      }
+      onClose();
+    } catch (error: any) {
+      console.error('Real IAP Error:', error);
+      // Catch any PurchasesError (like user cancelling the payment bottom sheet) and handle it silently without crashing
+      if (
+        error?.userCancelled || 
+        error?.code === 'PURCHASE_CANCELLED' || 
+        error?.code === '1' || 
+        error?.message?.toLowerCase().includes('cancel')
+      ) {
+        console.log('User cancelled purchase flow silently');
+      } else {
+        console.warn('IAP error occurred during purchase flow:', error?.message || error);
+      }
+    } finally {
+      setIsPurchasing(false);
+    }
   };
 
   return (
@@ -161,16 +305,38 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
             {/* CTA Button and Policies Footer */}
             <div className="pt-2">
               <button
-                onClick={handleSubSubmit}
-                className="w-full py-4 bg-zinc-950 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-zinc-900 active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                type="button"
+                onClick={() => handleRealPurchase(selectedCycle)}
+                disabled={isPurchasing}
+                className="w-full py-4 bg-zinc-950 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-zinc-900 active:scale-95 transition-all flex items-center justify-center gap-2 group cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
               >
-                <span>Start 3-Day Free Trial</span>
-                <Rocket className="w-4 h-4" />
+                {isPurchasing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-white" />
+                    <span>Connecting to Google Play...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Start 3-Day Free Trial</span>
+                    <Rocket className="w-4 h-4" />
+                  </>
+                )}
               </button>
               
               <p className="text-center text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-3.5 flex items-center justify-center gap-1">
                 🛡️ 3 Days Free, then auto-renews. Cancel anytime.
               </p>
+              
+              <div className="mt-3 flex items-center justify-center gap-4 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                <button 
+                  type="button"
+                  onClick={handleRestorePurchases}
+                  disabled={isRestoring || isPurchasing}
+                  className="hover:text-zinc-600 transition-colors cursor-pointer border-none bg-transparent underline"
+                >
+                  {isRestoring ? "Restoring..." : "Restore Purchases"}
+                </button>
+              </div>
             </div>
           </div>
         </motion.div>

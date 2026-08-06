@@ -12,7 +12,14 @@ export function useSWR<T>(
   } = {}
 ) {
   const enabled = options.enabled !== false;
-  
+  const refreshInterval = options.refreshInterval;
+
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+
   const [data, setData] = useState<T | undefined>(() => {
     const cached = safeGetItem(`swr_cache_${key}`);
     if (cached) {
@@ -27,8 +34,6 @@ export function useSWR<T>(
   
   const [error, setError] = useState<Error | null>(null);
   const [isValidating, setIsValidating] = useState(false);
-  const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
 
   const revalidate = useCallback(async () => {
     if (!enabled) return;
@@ -37,25 +42,26 @@ export function useSWR<T>(
       const freshData = await fetcherRef.current();
       setData(freshData);
       safeSetItem(`swr_cache_${key}`, JSON.stringify(freshData));
-      options.onSuccess?.(freshData);
+      optionsRef.current.onSuccess?.(freshData);
       setError(null);
     } catch (err: any) {
       setError(err);
     } finally {
       setIsValidating(false);
     }
-  }, [key, enabled, options]);
+  }, [key, enabled]);
 
   useEffect(() => {
     if (!enabled) return;
     
     revalidate();
 
-    if (options.refreshInterval) {
-      const interval = setInterval(revalidate, options.refreshInterval);
+    if (refreshInterval) {
+      const interval = setInterval(revalidate, refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [key, revalidate, options.refreshInterval, enabled]);
+  }, [key, revalidate, refreshInterval, enabled]);
 
   return { data, error, isValidating, mutate: revalidate };
 }
+

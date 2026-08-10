@@ -1623,37 +1623,7 @@ export default function Profile({
                   </div>
                 </div>
 
-                {/* SECURITY (if logged in via password) */}
-                {user && user.providerData.some(p => p.providerId === 'password') && (
-                  <div className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-2 bg-zinc-50/50">
-                      <Shield className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="font-extrabold text-[10px] text-zinc-500 uppercase tracking-wide">Security</span>
-                    </div>
-                    
-                    <button 
-                      onClick={() => { triggerVibration(15); setShowSettings(false); setActiveModal('password'); }}
-                      className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-none transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
-                        <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>Change Password</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-zinc-400" />
-                    </button>
 
-                    <button 
-                      onClick={() => { triggerVibration(15); setShowSettings(false); setActiveModal('email'); }}
-                      className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
-                        <Mail className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>Update Email</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-zinc-400" />
-                    </button>
-                  </div>
-                )}
 
                 {/* Account Info for Social Users */}
                 {user && !user.providerData.some(p => p.providerId === 'password') && (

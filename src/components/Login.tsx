@@ -13,14 +13,15 @@ import {
   sendPasswordResetEmail,
   User
 } from 'firebase/auth';
+import appLogo from '../assets/logo.svg';
 
 // React Native web-compatibility components & helpers
 const require = (path: string) => {
-  return "/src/assets/logo.svg";
+  return appLogo;
 };
 
 const Image = ({ source, style, className }: { source: any; style?: any; className?: string }) => {
-  const src = typeof source === 'string' ? source : (source && source.default) || source || '/src/assets/logo.svg';
+  const src = appLogo;
   const objectFit = style?.resizeMode || 'contain';
   return (
     <img 
@@ -306,8 +307,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     setForgotMessage(null);
     try {
       await sendPasswordResetEmail(auth, emailToReset.trim());
-      Alert.alert("Check Your Email", "A password reset link has been sent to your email address.");
-      setForgotMessage("A password reset link has been sent to your email address.");
+      Alert.alert("Check Your Email", "A password reset link has been sent to your email address. Please check your Spam box in your Email id.");
+      setForgotMessage("A password reset link has been sent to your email address. Please check your Spam box in your Email id.");
     } catch (err: any) {
       console.warn('[Forgot Password Error]', err?.code, err?.message);
       let errMsg = "Failed to send reset email. Please try again.";

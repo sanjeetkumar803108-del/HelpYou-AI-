@@ -6,6 +6,8 @@
       "name": "react-example",
       "dependencies": {
         "@capacitor-community/file-opener": "^8.0.1",
+        "@capacitor-firebase/analytics": "^8.3.0",
+        "@capacitor-firebase/crashlytics": "^8.3.0",
         "@capacitor/app": "^8.1.1",
         "@capacitor/camera": "^8.2.1",
         "@capacitor/core": "^8.4.2",
@@ -104,6 +106,10 @@
     "@babel/types": ["@babel/types@7.29.7", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.7", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA=="],
 
     "@capacitor-community/file-opener": ["@capacitor-community/file-opener@8.0.1", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-kiPybhOlDUMmt5LLsulxLZC/j4gHcPuvKsdbCZTDsQTShGc2G5SNqalYSJUFUfNYl3gQSF7jnNPRlfD5JnSeaw=="],
+
+    "@capacitor-firebase/analytics": ["@capacitor-firebase/analytics@8.3.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0", "firebase": "^12.6.0" }, "optionalPeers": ["firebase"] }, "sha512-xgbhd79q/1dpWzQlGQZqv7wiEv6FQnkhQixE+YoAix5PiHQBnTjBql51tnprHUmEoqYCyS/U3NtllQMCQFDuNA=="],
+
+    "@capacitor-firebase/crashlytics": ["@capacitor-firebase/crashlytics@8.3.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0", "firebase": "*" }, "optionalPeers": ["firebase"] }, "sha512-WojXS6rDq9JtSKSU2G1i0UgLrVmJpCxAqg1Ps4dbcqfmdhsre+n+gH2R+DwqbKgtRkzC/FEuJqHtaAlxjdMncQ=="],
 
     "@capacitor/app": ["@capacitor/app@8.1.1", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-xM2ZTX5jK60tFtmjsmJv+Cdj1Qsb6NcavkqmdEnCPQBeya9oKhamZJxYOnQNj1ZvcJM7sWfG6BEtSLx42pisbA=="],
 

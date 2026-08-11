@@ -118,14 +118,11 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
   }
 
   try {
-    // Check and request camera permission
-    const perm = await Camera.checkPermissions();
-    if (perm.camera !== 'granted') {
-      const req = await Camera.requestPermissions({ permissions: ['camera'] });
-      if (req.camera !== 'granted') {
-        alert('Camera permission is required to take photos.');
-        return null;
-      }
+    // Request camera permission explicitly before triggering the camera
+    const req = await Camera.requestPermissions({ permissions: ['camera'] });
+    if (req.camera !== 'granted') {
+      alert("Camera Permission Needed\n\nHelpYou needs access to your camera to capture photos of your study materials, homework, or essays. Please allow camera access in your device settings.");
+      return null;
     }
 
     const photo = await Camera.getPhoto({

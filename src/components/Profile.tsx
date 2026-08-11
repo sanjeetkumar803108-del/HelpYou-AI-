@@ -198,14 +198,14 @@ export default function Profile({
         spread: 60,
         origin: { y: 0.7 }
       });
-      showToast(`🎉 Shandaar! Aapne +${reward} coins claim kar liye hain! 🚀`);
+      showToast(`🎉 Awesome! You have successfully claimed +${reward} Study Coins! 🚀`);
     } else {
       confetti({
         particleCount: 80,
         spread: 60,
         origin: { y: 0.7 }
       });
-      showToast(`🎉 Shandaar! Milestone unlocked successfully! 🚀`);
+      showToast(`🎉 Awesome! Milestone unlocked successfully! 🚀`);
     }
   };
 
@@ -443,14 +443,12 @@ export default function Profile({
     try {
       const today = new Date().toDateString();
       const lastPunchDate = safeGetItem('study_last_punch_date');
-      const currentStreak = Number(safeGetItem('study_punches') || '0');
 
       if (!lastPunchDate) {
-        // First ever visit
-        safeSetItem('study_punches', '1');
-        safeSetItem('study_last_punch_date', today);
-        setStudyStreak(1);
-      } else if (lastPunchDate !== today) {
+        // First ever visit - streak is 0 until they manually punch
+        safeSetItem('study_punches', '0');
+        setStudyStreak(0);
+      } else {
         const lastDate = new Date(lastPunchDate);
         const currentDate = new Date(today);
         
@@ -461,17 +459,11 @@ export default function Profile({
         const diffTime = currentDate.getTime() - lastDate.getTime();
         const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 1) {
-          // Consecutive daily visit - increment streak!
-          const newStreak = currentStreak + 1;
-          safeSetItem('study_punches', String(newStreak));
-          setStudyStreak(newStreak);
-        } else if (diffDays > 1) {
-          // More than a day gap - reset streak to 1
-          safeSetItem('study_punches', '1');
-          setStudyStreak(1);
+        if (diffDays > 1) {
+          // More than a day gap (user missed yesterday) - reset streak to 0
+          safeSetItem('study_punches', '0');
+          setStudyStreak(0);
         }
-        safeSetItem('study_last_punch_date', today);
       }
     } catch (error) {
       console.error("Error updating streak:", error);
@@ -1585,75 +1577,9 @@ export default function Profile({
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${dailyReminders ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
                   </div>
-
-                  {/* Streak Alerts Toggle */}
-                  <div 
-                    onClick={() => {
-                      triggerVibration(10);
-                      setStreakAlerts(!streakAlerts);
-                      showToast(!streakAlerts ? "🔥 Streak Alerts enabled" : "🔕 Streak Alerts disabled");
-                    }}
-                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
-                  >
-                    <div className="flex flex-col text-left">
-                      <span className="text-xs font-bold text-zinc-650">Streak Alerts</span>
-                      <span className="text-[9px] text-zinc-400 font-bold mt-0.5">Remind you before streaks expire</span>
-                    </div>
-                    <div className={`w-9 h-5 ${streakAlerts ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
-                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${streakAlerts ? 'right-0.5' : 'left-0.5'}`} />
-                    </div>
-                  </div>
-
-                  {/* Special Offers Toggle */}
-                  <div 
-                    onClick={() => {
-                      triggerVibration(10);
-                      setSpecialOffers(!specialOffers);
-                      showToast(!specialOffers ? "🎁 Special Offers enabled" : "🔕 Special Offers disabled");
-                    }}
-                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
-                  >
-                    <div className="flex flex-col text-left">
-                      <span className="text-xs font-bold text-zinc-650">Special Offers</span>
-                      <span className="text-[9px] text-zinc-400 font-bold mt-0.5">Discounts and feature releases</span>
-                    </div>
-                    <div className={`w-9 h-5 ${specialOffers ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
-                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${specialOffers ? 'right-0.5' : 'left-0.5'}`} />
-                    </div>
-                  </div>
                 </div>
 
-                {/* SECURITY (if logged in via password) */}
-                {user && user.providerData.some(p => p.providerId === 'password') && (
-                  <div className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-2 bg-zinc-50/50">
-                      <Shield className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="font-extrabold text-[10px] text-zinc-500 uppercase tracking-wide">Security</span>
-                    </div>
-                    
-                    <button 
-                      onClick={() => { triggerVibration(15); setShowSettings(false); setActiveModal('password'); }}
-                      className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-none transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
-                        <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>Change Password</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-zinc-400" />
-                    </button>
 
-                    <button 
-                      onClick={() => { triggerVibration(15); setShowSettings(false); setActiveModal('email'); }}
-                      className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
-                        <Mail className="w-3.5 h-3.5 text-zinc-400" />
-                        <span>Update Email</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-zinc-400" />
-                    </button>
-                  </div>
-                )}
 
                 {/* Account Info for Social Users */}
                 {user && !user.providerData.some(p => p.providerId === 'password') && (
@@ -2422,7 +2348,7 @@ export default function Profile({
                     
                     {/* Encouraging Hindi/Hinglish sub-caption */}
                     <p className="text-xs font-bold text-white/95 mt-4 leading-relaxed max-w-xs">
-                      Shandaar Performance! Aap har din mehnat kar rahe hain! Daily attendance punch karein aur doston se aage rahein! 🎯
+                      Fantastic Performance! You are working hard every day! Punch in your daily attendance to stay ahead of the rest! 🎯
                     </p>
                   </div>
                 </div>
@@ -2446,10 +2372,10 @@ export default function Profile({
 
                       <p className="text-[11px] font-bold text-zinc-500 max-w-xs">
                         {hasPunchedToday 
-                          ? "Aapki aaj ki attendance register ho chuki hai! Kal fir se aakar continuous padhai jaari rakhein! ✨"
+                          ? "Your attendance for today is successfully registered! Come back tomorrow to continue your daily study streak! ✨"
                           : isVip 
-                            ? "Aaj abhi tak attendance punch nahi hui hai! Padhai shuru karein aur apni streak barkarar rakhein! 🔥"
-                            : "Aaj abhi tak attendance punch nahi hui hai! Padhai shuru karein aur abhi +2 Study Coins kamaein! 🪙"
+                            ? "Your attendance hasn't been punched today! Start studying and mark your attendance now! 🔥"
+                            : "Your attendance hasn't been punched today! Start studying and earn +2 Study Coins now! 🪙"
                         }
                       </p>
 

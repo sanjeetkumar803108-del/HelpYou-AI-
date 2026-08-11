@@ -13,7 +13,12 @@
   },
   "dependencies": {
     "@capacitor-community/file-opener": "^8.0.1",
+<<<<<<< HEAD
     "@capacitor/android": "^8.5.0",
+=======
+    "@capacitor-firebase/analytics": "^8.3.0",
+    "@capacitor-firebase/crashlytics": "^8.3.0",
+>>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
     "@capacitor/app": "^8.1.1",
     "@capacitor/camera": "^8.2.1",
     "@capacitor/core": "^8.4.2",

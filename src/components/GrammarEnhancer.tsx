@@ -42,7 +42,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
     if (!files || files.length === 0) return;
     
     if (files.length > 5) {
-      setError("Please select a maximum of 5 images, bhai.");
+      setError("Please select a maximum of 5 images.");
       setShowLimitPopup(true);
       triggerVibration(15);
       e.target.value = '';

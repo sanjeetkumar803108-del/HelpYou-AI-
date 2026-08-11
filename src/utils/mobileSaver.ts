@@ -62,6 +62,21 @@ export async function savePDFMobile(pdfData: Blob | ArrayBuffer | string, filena
   if (Capacitor.isNativePlatform()) {
     try {
       console.log(`[MobileSaver] Native saving starting for: ${cleanFilename}`);
+
+      // Request storage permission first
+      try {
+        const perm = await Filesystem.checkPermissions();
+        if (perm.publicStorage !== 'granted') {
+          const req = await Filesystem.requestPermissions();
+          if (req.publicStorage !== 'granted') {
+            alert('Storage Permission Needed\n\nHelpYou needs storage permission to download and save your PDF worksheets directly to your device. Please enable storage access in your device settings.');
+            return false;
+          }
+        }
+      } catch (permErr) {
+        console.warn('[MobileSaver] Filesystem permission check/request failed:', permErr);
+      }
+
       const b64Data = await getBase64(pdfData);
 
       // Write file to native Documents directory via Scoped Storage (Directory.Documents)

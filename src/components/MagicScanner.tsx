@@ -170,14 +170,11 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         // Request native Capacitor camera permission on Android/iOS devices
         if (Capacitor.isNativePlatform()) {
           console.log("[Capacitor Camera] Requesting native camera permissions...");
-          const permStatus = await Camera.checkPermissions();
-          if (permStatus.camera !== 'granted') {
-            const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
-            if (reqStatus.camera !== 'granted') {
-              alert("Camera Permission Required\n\nPlease grant camera permission in your settings to scan questions.");
-              setCameraActive(false);
-              return;
-            }
+          const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
+          if (reqStatus.camera !== 'granted') {
+            alert("Camera Permission Needed\n\nHelpYou needs camera access to scan and solve your questions directly. Please enable camera access in your device settings to use this feature.");
+            setCameraActive(false);
+            return;
           }
         }
 

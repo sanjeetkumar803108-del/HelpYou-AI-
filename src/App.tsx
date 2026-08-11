@@ -634,23 +634,27 @@ export default function App() {
       )}
       
       <main className={`w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 ${(activeTab === 'scanner' || activeTab === 'aitutor' || activeTab === 'teacher' || activeTool !== null) ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto pb-20'} bg-[#FAF9F6]`}>
-        <Suspense fallback={<FullPageSkeleton />}>
-          {/* Scanner Tab */}
-          <div className={activeTab === 'scanner' ? 'h-full flex flex-col' : 'hidden'}>
+        {/* Scanner Tab */}
+        <div className={activeTab === 'scanner' ? 'h-full flex flex-col' : 'hidden'}>
+          <Suspense fallback={<FullPageSkeleton />}>
             <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
               setActiveTab(tab);
               setActiveTool(null);
             }} />
-          </div>
+          </Suspense>
+        </div>
 
-          {/* AI Tutor Tab */}
-          <div className={activeTab === 'aitutor' ? 'h-full flex flex-col' : 'hidden'}>
+        {/* AI Tutor Tab */}
+        <div className={activeTab === 'aitutor' ? 'h-full flex flex-col' : 'hidden'}>
+          <Suspense fallback={<FullPageSkeleton />}>
             <AITutor isVip={isVip} />
-          </div>
+          </Suspense>
+        </div>
 
-          {/* Home/Notes Tab */}
-          <div className={activeTab === 'notes' ? 'h-full flex flex-col' : 'hidden'}>
-            <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
+        {/* Home/Notes Tab */}
+        <div className={activeTab === 'notes' ? 'h-full flex flex-col' : 'hidden'}>
+          <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
+            <Suspense fallback={<FullPageSkeleton />}>
               <ToolsDashboard 
                 isVip={isVip} 
                 user={user}
@@ -659,9 +663,12 @@ export default function App() {
                 onOpenProfile={handleOpenProfileFromDashboard}
                 onOpenLogin={handleOpenLoginFromDashboard}
                 onSelectTool={handleSelectToolFromDashboard} 
+                activeTab={activeTab}
               />
-            </div>
-            {/* Active Tool Rendering */}
+            </Suspense>
+          </div>
+          {/* Active Tool Rendering */}
+          <Suspense fallback={<FullPageSkeleton />}>
             {activeTool === 'notemaker' && (
               <LockedFeature cost={5} featureName="AI Audio Summary" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                 <NoteMaker onBack={() => setActiveTool(null)} />
@@ -748,10 +755,12 @@ export default function App() {
             {activeTool === 'streakpage' && (
               <StreakDetailsPage onBack={() => setActiveTool(null)} />
             )}
-          </div>
+          </Suspense>
+        </div>
 
-          {/* Profile Tab */}
-          <div className={activeTab === 'profile' ? 'h-full flex flex-col' : 'hidden'}>
+        {/* Profile Tab */}
+        <div className={activeTab === 'profile' ? 'h-full flex flex-col' : 'hidden'}>
+          <Suspense fallback={<FullPageSkeleton />}>
             <Profile 
               user={user}
               isVip={isVip}
@@ -774,8 +783,8 @@ export default function App() {
                 setActiveTool('pdfhistory');
               }}
             />
-          </div>
-        </Suspense>
+          </Suspense>
+        </div>
       </main>
 
       {activeTool === null && (

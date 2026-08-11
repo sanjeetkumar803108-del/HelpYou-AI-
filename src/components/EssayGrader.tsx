@@ -200,7 +200,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
     if (!files || files.length === 0) return;
     
     if (files.length > 5) {
-      setErrorToast("Please select a maximum of 5 images, bhai.");
+      setErrorToast("Please select a maximum of 5 images.");
       setShowLimitPopup(true);
       triggerVibration(15);
       e.target.value = '';

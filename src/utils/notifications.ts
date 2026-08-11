@@ -8,7 +8,7 @@ const STORAGE_KEY_SCHEDULED = 'study_daily_notification_scheduled_v2';
  * Request notification permissions from the user.
  * Supports both Capacitor Native (iOS/Android) and Web/Desktop Browser.
  */
-export async function requestNotificationPermissions(): Promise<boolean> {
+export async function requestNotificationPermissions(forcePrompt = false): Promise<boolean> {
   if (Capacitor.isNativePlatform()) {
     try {
       const permStatus = await LocalNotifications.checkPermissions();
@@ -16,6 +16,10 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         return true;
       }
       
+      if (!forcePrompt) {
+        return false;
+      }
+
       const requestResult = await LocalNotifications.requestPermissions();
       return requestResult.display === 'granted';
     } catch (error) {
@@ -30,6 +34,10 @@ export async function requestNotificationPermissions(): Promise<boolean> {
           return true;
         }
         
+        if (!forcePrompt) {
+          return false;
+        }
+
         if (Notification.permission !== 'denied') {
           const permission = await Notification.requestPermission();
           return permission === 'granted';
@@ -116,9 +124,9 @@ export async function scheduleDailyNotification() {
  * Initialize and trigger the setup workflow.
  * Checks permissions, requests if needed, and schedules the notification.
  */
-export async function setupDailyLocalNotifications() {
+export async function setupDailyLocalNotifications(forcePrompt = false) {
   console.log('[NotificationService] Starting setup of daily local notifications...');
-  const hasPermission = await requestNotificationPermissions();
+  const hasPermission = await requestNotificationPermissions(forcePrompt);
   if (hasPermission) {
     await scheduleDailyNotification();
   } else {

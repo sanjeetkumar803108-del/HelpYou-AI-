@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, ArrowRight, BookOpen, Layers, Youtube, FileText, FileImage, Wand2, ChevronDown, ChevronUp, Calculator, UserCircle, Search, Lock, Brain, Crown, Share2, Archive, Trash2, Calendar, HelpCircle, Check, Undo, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Capacitor } from '@capacitor/core';
+import appLogo from '../assets/logo.svg';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getCoins, isUserLoggedIn } from '../utils/coins';
@@ -15,6 +17,7 @@ interface ToolsDashboardProps {
   onOpenProfile?: () => void;
   onOpenLogin?: () => void;
   pocketItems?: any[];
+  activeTab?: string;
 }
 
 const FEATURE_COSTS: Record<string, number> = {
@@ -35,7 +38,7 @@ const FEATURE_COSTS: Record<string, number> = {
 
 const HeaderLogo = React.memo(() => (
   <div className="flex items-center gap-2 font-bold text-lg text-zinc-900 select-none">
-    <img src="/src/assets/logo.svg" alt="HelpYou AI Logo" className="w-7 h-7" referrerPolicy="no-referrer" loading="lazy" />
+    <img src={appLogo} alt="HelpYou AI Logo" className="w-7 h-7" referrerPolicy="no-referrer" loading="lazy" />
     <span className="font-black tracking-tight text-zinc-950">HelpYou AI</span>
   </div>
 ));
@@ -72,11 +75,52 @@ function ToolsDashboard({
   onOpenVip,
   onOpenProfile,
   onOpenLogin,
-  pocketItems = []
+  pocketItems = [],
+  activeTab
 }: ToolsDashboardProps) {
   const [showAllTools, setShowAllTools] = useState(false);
   const loggedIn = isUserLoggedIn();
   const { deepFocus } = useSettings();
+
+  // WebView / Capacitor safe layout force-render trick
+  const [forceRenderCount, setForceRenderCount] = useState(0);
+
+  useEffect(() => {
+    const forceLayoutRecalculation = () => {
+      setForceRenderCount(prev => prev + 1);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('resize'));
+      }
+    };
+
+    const timers = [
+      setTimeout(forceLayoutRecalculation, 10),
+      setTimeout(forceLayoutRecalculation, 80),
+      setTimeout(forceLayoutRecalculation, 180),
+      setTimeout(forceLayoutRecalculation, 350),
+      setTimeout(forceLayoutRecalculation, 600)
+    ];
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const nativeSplashScreen = (Capacitor as any).Plugins?.SplashScreen || (window as any).Capacitor?.Plugins?.SplashScreen;
+        if (nativeSplashScreen) {
+          nativeSplashScreen.hide().catch((e: any) => console.log('[Native] SplashScreen hide error:', e));
+        }
+      } catch (err) {
+        console.warn('[Native] Capacitor SplashScreen detection skipped:', err);
+      }
+    }
+
+    window.addEventListener('focus', forceLayoutRecalculation);
+    document.addEventListener('visibilitychange', forceLayoutRecalculation);
+
+    return () => {
+      timers.forEach(clearTimeout);
+      window.removeEventListener('focus', forceLayoutRecalculation);
+      document.removeEventListener('visibilitychange', forceLayoutRecalculation);
+    };
+  }, [activeTab]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showToastMessage, setShowToastMessage] = useState<string | null>(null);
@@ -346,7 +390,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('tab:scanner'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('tab:scanner'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#EBF5FF] border border-blue-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#EBF5FF] border border-blue-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('tab:scanner')}
               <span className="text-4xl filter drop-shadow-sm select-none">📷</span>
@@ -367,7 +411,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('tab:aitutor'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('tab:aitutor'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('tab:aitutor')}
               <span className="text-4xl filter drop-shadow-sm select-none">💭</span>
@@ -431,7 +475,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('calculator'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('calculator'))}
               onMouseLeave={handleCancelPress}
-              className="bg-[#E6FFFA] border border-teal-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="bg-[#E6FFFA] border border-teal-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-teal-500/20">
                 <Calculator className="w-6 h-6 stroke-[2.5]" />
@@ -453,7 +497,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('testprep'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('testprep'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#FEFCBF] border border-yellow-300/50 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#FEFCBF] border border-yellow-300/50 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('testprep')}
               <span className="text-4xl filter drop-shadow-sm select-none">🎯</span>
@@ -474,7 +518,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('questiongenerator'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('questiongenerator'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#FFE4E6] border border-pink-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#FFE4E6] border border-pink-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('questiongenerator')}
               <span className="text-4xl filter drop-shadow-sm select-none">🔮</span>
@@ -495,7 +539,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('contentgenerator'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('contentgenerator'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#FFEDD5] border border-orange-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#FFEDD5] border border-orange-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('contentgenerator')}
               <span className="text-4xl filter drop-shadow-sm select-none">🖍️</span>
@@ -516,7 +560,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('callwithtutor'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('callwithtutor'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               <span className="text-4xl filter drop-shadow-sm select-none">🧑‍🏫</span>
               <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Call with AI Tutor</h3>
@@ -536,7 +580,7 @@ function ToolsDashboard({
               onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('notemaker'))}
               onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('notemaker'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#E0E7FF] border border-indigo-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#E0E7FF] border border-indigo-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('notemaker')}
               <span className="text-4xl filter drop-shadow-sm select-none">🎙️</span>

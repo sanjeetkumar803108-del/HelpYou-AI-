@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, UserPlus, LogIn, Chrome, LogOut, Loader2 } from 'lucide-react';
+import { X, UserPlus, LogIn, Chrome, LogOut, Loader2, Eye, EyeOff } from 'lucide-react';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { safeClearAll, safeSetItem, safeGetItem } from '../utils/storage';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -13,14 +13,15 @@ import {
   sendPasswordResetEmail,
   User
 } from 'firebase/auth';
+import appLogo from '../assets/logo.svg';
 
 // React Native web-compatibility components & helpers
 const require = (path: string) => {
-  return "/src/assets/logo.svg";
+  return appLogo;
 };
 
 const Image = ({ source, style, className }: { source: any; style?: any; className?: string }) => {
-  const src = typeof source === 'string' ? source : (source && source.default) || source || '/src/assets/logo.svg';
+  const src = appLogo;
   const objectFit = style?.resizeMode || 'contain';
   return (
     <img 
@@ -56,6 +57,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const [isSignUp, setIsSignUp] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -306,8 +308,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     setForgotMessage(null);
     try {
       await sendPasswordResetEmail(auth, emailToReset.trim());
-      Alert.alert("Check Your Email", "A password reset link has been sent to your email address.");
-      setForgotMessage("A password reset link has been sent to your email address.");
+      Alert.alert("Check Your Email", "A password reset link has been sent to your email address. Please check your Spam box in your Email id.");
+      setForgotMessage("A password reset link has been sent to your email address. Please check your Spam box in your Email id.");
     } catch (err: any) {
       console.warn('[Forgot Password Error]', err?.code, err?.message);
       let errMsg = "Failed to send reset email. Please try again.";
@@ -384,14 +386,23 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
             <label className="text-xs font-bold text-zinc-500 mb-2 uppercase tracking-wide">
               Password
             </label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="bg-white px-4 py-4 rounded-2xl border border-zinc-200 outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 shadow-sm text-zinc-800 font-medium tracking-widest placeholder-zinc-350 transition-all"
-              placeholder="••••••"
-            />
+            <div className="relative">
+              <input 
+                type={showPassword ? "text" : "password"} 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className={`w-full bg-white pl-4 pr-12 py-4 rounded-2xl border border-zinc-200 outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 shadow-sm text-zinc-800 font-medium placeholder-zinc-350 transition-all ${showPassword ? '' : 'tracking-widest'}`}
+                placeholder={showPassword ? "Password" : "••••••"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 focus:outline-none p-1 transition-colors flex items-center justify-center"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
             {!isSignUp && (
               <div className="flex justify-end mt-2">
                 <TouchableOpacity onPress={handleForgotPasswordPress}>
@@ -436,13 +447,13 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         </button>
 
         <div className="mt-8 text-sm text-zinc-500 font-medium">
-          {isSignUp ? 'Pehle se account hai? ' : 'Account nahi hai? '}
+          {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
           <button 
             type="button"
             onClick={() => setIsSignUp(!isSignUp)}
             className="text-teal-600 font-bold hover:text-teal-700 ml-1 transition-colors"
           >
-            {isSignUp ? 'Sign In karein' : 'Sign Up karein'}
+            {isSignUp ? 'Sign In' : 'Sign Up'}
           </button>
         </div>
         
@@ -468,7 +479,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
             <h2 className="text-xl font-bold text-zinc-800 mb-1 tracking-tight">Reset Password</h2>
             <p className="text-zinc-500 text-xs font-semibold leading-relaxed mb-6">
-              Apna register kiya hua email enter karein. Hum aapko password reset link bhejenge.
+              Enter your registered email address. We will send you a password reset link.
             </p>
 
             <div className="flex flex-col space-y-4">

@@ -40,6 +40,33 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
   const [toast, setToast] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
 
+  // Automatically check & reset streak if missed
+  useEffect(() => {
+    try {
+      const today = new Date().toDateString();
+      const lastPunchDate = safeGetItem('study_last_punch_date');
+      if (!lastPunchDate) {
+        safeSetItem('study_punches', '0');
+        setStudyStreak(0);
+      } else {
+        const lastDate = new Date(lastPunchDate);
+        const currentDate = new Date(today);
+        lastDate.setHours(0, 0, 0, 0);
+        currentDate.setHours(0, 0, 0, 0);
+        
+        const diffTime = currentDate.getTime() - lastDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 1) {
+          safeSetItem('study_punches', '0');
+          setStudyStreak(0);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating streak:", error);
+    }
+  }, []);
+
   const showToast = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
@@ -58,9 +85,9 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
       origin: { y: 0.6 }
     });
     if (isPro) {
-      showToast(`🎉 Shandaar! Aapne milestone claim kar liya hai! 🚀`);
+      showToast(`🎉 Awesome! You have claimed this milestone achievement! 🚀`);
     } else {
-      showToast(`🎉 Shandaar! Aapne +${reward} coins claim kar liye hain! 🚀`);
+      showToast(`🎉 Awesome! You have successfully claimed +${reward} Study Coins! 🚀`);
     }
   };
 
@@ -190,53 +217,14 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
               <span>🔥</span> Study Streak Days
             </h1>
             <p className="text-[10px] text-zinc-400 font-extrabold uppercase tracking-widest">
-              Aapki Mehnat Ki Nishani
+              Your Dedication Tracker
             </p>
           </div>
         </div>
-
-        <button
-          onClick={() => {
-            triggerVibration(10);
-            setShowExplanation(prev => !prev);
-          }}
-          className="p-2 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"
-          title="Streak info"
-        >
-          <HelpCircle className="w-5 h-5" />
-        </button>
       </header>
 
       {/* Main Container */}
       <div className="max-w-md w-full mx-auto px-4 py-6 space-y-6">
-        
-        {/* Info/Explanation Card */}
-        <AnimatePresence>
-          {showExplanation && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="bg-amber-50 border border-amber-200 rounded-[1.75rem] p-5 space-y-3">
-                <div className="flex items-start gap-2 text-amber-800">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <h4 className="text-xs font-black uppercase tracking-wider">How do Streaks work?</h4>
-                </div>
-                <p className="text-[11px] font-bold text-amber-700 leading-relaxed">
-                  1. Har din is page par aakar "Punch Attendance" button par click karein. {isPro ? "Aapka attendance streak register hoga! (Aap PRO hain, isliye coin system off hai ✨)" : "Aapko +2 coins milenge!"}
-                </p>
-                <p className="text-[11px] font-bold text-amber-700 leading-relaxed">
-                  2. Agar aap lagatar padhte hain aur roz punch-in karte hain, toh aapka streak badhta rahega.
-                </p>
-                <p className="text-[11px] font-bold text-amber-700 leading-relaxed">
-                  3. Lagatar 3, 7, 15, aur 30 din streak maintain karne par aap milestone rewards {isPro ? "claim kar sakte hain!" : "(upto +50 coins) claim kar sakte hain!"}
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Hero Streak Flame Box */}
         <div className="bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 rounded-[2.25rem] p-8 text-white text-center shadow-lg border border-orange-400 relative overflow-hidden">
@@ -258,7 +246,7 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
             </span>
             
             <p className="text-xs font-bold text-white/95 mt-5 leading-relaxed max-w-xs">
-              Shandaar Performance! Aap har din mehnat kar rahe hain! Daily attendance punch karein aur doston se aage rahein! 🎯
+              Fantastic Performance! You are working hard every day! Punch in your daily attendance to stay ahead of the rest! 🎯
             </p>
           </div>
         </div>
@@ -276,10 +264,10 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
 
           <p className="text-[11px] font-bold text-zinc-500 max-w-xs leading-relaxed">
             {hasPunchedToday 
-              ? "Aapki aaj ki attendance register ho chuki hai! Kal fir se aakar continuous padhai jaari rakhein! ✨"
+              ? "Your attendance for today is successfully registered! Come back tomorrow to continue your daily study streak! ✨"
               : isPro
-                ? "Aaj abhi tak attendance punch nahi hui hai! Padhai shuru karein aur abhi attendance mark karein! 🔥"
-                : "Aaj abhi tak attendance punch nahi hui hai! Padhai shuru karein aur abhi +2 Study Coins kamaein! 🪙"
+                ? "Your attendance hasn't been punched today! Start studying and mark your attendance now! 🔥"
+                : "Your attendance hasn't been punched today! Start studying and earn +2 Study Coins now! 🪙"
             }
           </p>
 

@@ -155,8 +155,8 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
           </h2>
           
           <p className="text-sm font-bold text-zinc-500 mt-3 leading-relaxed max-w-sm">
-            Deep Search AI humare premium VIP models ke liye vishesh hai! 🚀
-            Isko chalane ke liye kripya humare VIP membership model mein upgrade karein.
+            Deep Search AI is exclusive to our premium VIP users! 🚀
+            Please upgrade to our VIP membership to access this feature.
           </p>
 
           <div className="w-full max-w-xs bg-white border border-zinc-200/80 rounded-[2rem] p-5 my-6 space-y-3 shadow-sm text-left">

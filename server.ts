@@ -1009,7 +1009,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
 
     if (req.file) {
       try {
-        const { default: pdf } = await import("pdf-parse");
+        const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
         const pdfData = await pdf(req.file.buffer, { max: 60 });
         
         // Explicitly check page count

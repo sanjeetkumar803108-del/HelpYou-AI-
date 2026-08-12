@@ -187,26 +187,16 @@ export default function Profile({
     };
   });
 
-  const handleClaimMilestone = (days: number, reward: number) => {
+  const handleClaimMilestone = (days: number) => {
     triggerVibration(15);
     safeSetItem(`study_claimed_milestone_${days}`, 'true');
     setClaimedMilestones(prev => ({ ...prev, [days]: true }));
-    if (!isVip) {
-      addCoins(reward, `${days}-Day Streak Achievement! 🏆`);
-      confetti({
-        particleCount: 80,
-        spread: 60,
-        origin: { y: 0.7 }
-      });
-      showToast(`🎉 Awesome! You have successfully claimed +${reward} Study Coins! 🚀`);
-    } else {
-      confetti({
-        particleCount: 80,
-        spread: 60,
-        origin: { y: 0.7 }
-      });
-      showToast(`🎉 Awesome! Milestone unlocked successfully! 🚀`);
-    }
+    confetti({
+      particleCount: 80,
+      spread: 60,
+      origin: { y: 0.7 }
+    });
+    showToast(`🎉 Shandaar! You have successfully unlocked the ${days}-Day Study Milestone Badge! 🏆`);
   };
 
   // Profile Edit State
@@ -414,16 +404,20 @@ export default function Profile({
 
       if (diffDays === 1) {
         newStreak = studyStreak + 1;
+      } else if (diffDays === 0) {
+        newStreak = studyStreak;
+      } else {
+        // Missed yesterday, reset and start a new 1-day streak today
+        newStreak = 1;
       }
+    } else {
+      // First ever punch, start at 1
+      newStreak = Math.max(1, studyStreak);
     }
 
     safeSetItem('study_punches', String(newStreak));
     safeSetItem('study_last_punch_date', today);
     setStudyStreak(newStreak);
-
-    if (!isVip) {
-      addCoins(2, "Daily Streak Punch-In 🎯");
-    }
 
     confetti({
       particleCount: 120,
@@ -431,11 +425,7 @@ export default function Profile({
       origin: { y: 0.6 }
     });
 
-    if (!isVip) {
-      showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! +2 Coins Added! 🚀`);
-    } else {
-      showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! 🚀`);
-    }
+    showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! 🚀`);
   };
 
   // Automatically check & update study streak
@@ -446,8 +436,10 @@ export default function Profile({
 
       if (!lastPunchDate) {
         // First ever visit - streak is 0 until they manually punch
-        safeSetItem('study_punches', '0');
-        setStudyStreak(0);
+        if (!safeGetItem('study_punches')) {
+          safeSetItem('study_punches', '0');
+          setStudyStreak(0);
+        }
       } else {
         const lastDate = new Date(lastPunchDate);
         const currentDate = new Date(today);
@@ -1553,30 +1545,6 @@ export default function Profile({
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${isDarkMode ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
                   </div>
-
-                  {/* Notification Preferences Sub-Header */}
-                  <div className="px-5 py-3 border-t border-zinc-100 flex items-center gap-2 bg-zinc-50/20">
-                    <Bell className="w-3.5 h-3.5 text-zinc-400" />
-                    <span className="font-extrabold text-[9px] text-zinc-400 uppercase tracking-wider">Notifications</span>
-                  </div>
-
-                  {/* Daily Study Reminders Toggle */}
-                  <div 
-                    onClick={() => {
-                      triggerVibration(10);
-                      setDailyReminders(!dailyReminders);
-                      showToast(!dailyReminders ? "🔔 Study Reminders enabled" : "🔕 Study Reminders disabled");
-                    }}
-                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
-                  >
-                    <div className="flex flex-col text-left">
-                      <span className="text-xs font-bold text-zinc-650">Daily Study Reminders</span>
-                      <span className="text-[9px] text-zinc-400 font-bold mt-0.5">Alerts to help you keep streaks</span>
-                    </div>
-                    <div className={`w-9 h-5 ${dailyReminders ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
-                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${dailyReminders ? 'right-0.5' : 'left-0.5'}`} />
-                    </div>
-                  </div>
                 </div>
 
 
@@ -1995,7 +1963,10 @@ export default function Profile({
                             <span className="font-bold text-zinc-800">Account Data:</span> We collect your email address and basic profile information solely for authentication, account management, and synchronization across devices.
                           </li>
                           <li>
-                            <span className="font-bold text-zinc-800">Image & Camera Data:</span> When you use the device camera to scan homework problems or upload images for AI analysis, these images are processed in real-time. They are immediately and permanently deleted from our servers once the results are generated. We do not permanently store, log, or share user images.
+                            <span className="font-bold text-zinc-800">Image & Camera Data:</span> All user-uploaded images in chats or other features are strictly temporary. They are automatically and permanently deleted from our servers within 1 hour of upload to ensure maximum privacy.
+                          </li>
+                          <li>
+                            <span className="font-bold text-zinc-800">Generated PDFs & Local Files:</span> Any local files generated by the user, such as exported conversation PDFs, are saved directly to the user's device storage and are completely exempt from our server-side deletion.
                           </li>
                         </ul>
                       </div>
@@ -2373,9 +2344,7 @@ export default function Profile({
                       <p className="text-[11px] font-bold text-zinc-500 max-w-xs">
                         {hasPunchedToday 
                           ? "Your attendance for today is successfully registered! Come back tomorrow to continue your daily study streak! ✨"
-                          : isVip 
-                            ? "Your attendance hasn't been punched today! Start studying and mark your attendance now! 🔥"
-                            : "Your attendance hasn't been punched today! Start studying and earn +2 Study Coins now! 🪙"
+                          : "Your attendance hasn't been punched today! Mark your attendance to keep your daily study habit alive! 🔥"
                         }
                       </p>
 
@@ -2396,7 +2365,7 @@ export default function Profile({
                         ) : (
                           <>
                             <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
-                            {isVip ? 'Punch Attendance' : 'Punch Attendance (+2 Coins)'}
+                            Punch Attendance
                           </>
                         )}
                       </button>
@@ -2460,10 +2429,10 @@ export default function Profile({
 
                   <div className="space-y-3">
                     {[
-                      { days: 3, reward: 5, badge: "Novice Scholar 🎓", desc: isVip ? "Unlock a 3-Day streak milestone!" : "Unlock 3 Days streak to claim +5 Study Coins!" },
-                      { days: 7, reward: 15, badge: "Study Monk 🧘", desc: isVip ? "Unlock a 7-Day streak milestone!" : "Unlock 7 Days streak to claim +15 Study Coins!" },
-                      { days: 15, reward: 30, badge: "Exam Destroyer ⚡", desc: isVip ? "Unlock a 15-Day streak milestone!" : "Unlock 15 Days streak to claim +30 Study Coins!" },
-                      { days: 30, reward: 50, badge: "AI Mastermind 🌟", desc: isVip ? "Unlock a 30-Day streak milestone!" : "Unlock 30 Days streak to claim +50 Study Coins!" }
+                      { days: 3, badge: "Novice Scholar 🎓", desc: "Unlock the 3-Day study streak badge!" },
+                      { days: 7, badge: "Study Monk 🧘", desc: "Unlock the 7-Day study streak badge!" },
+                      { days: 15, badge: "Exam Destroyer ⚡", desc: "Unlock the 15-Day study streak badge!" },
+                      { days: 30, badge: "AI Mastermind 🌟", desc: "Unlock the 30-Day study streak badge!" }
                     ].map((milestone) => {
                       const isUnlocked = studyStreak >= milestone.days;
                       const isClaimed = claimedMilestones[milestone.days];
@@ -2502,10 +2471,10 @@ export default function Profile({
                               </span>
                             ) : isUnlocked ? (
                               <button
-                                onClick={() => handleClaimMilestone(milestone.days, milestone.reward)}
+                                onClick={() => handleClaimMilestone(milestone.days)}
                                 className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer border-none"
                               >
-                                {isVip ? 'Claim' : `Claim +${milestone.reward}`}
+                                Claim Badge 🏆
                               </button>
                             ) : (
                               <div className="flex flex-col items-center justify-center text-zinc-400 shrink-0">

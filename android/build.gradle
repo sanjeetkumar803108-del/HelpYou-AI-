@@ -6,7 +6,11 @@ buildscript {
         mavenCentral()
     }
     dependencies {
+<<<<<<< HEAD
         classpath 'com.android.tools.build:gradle:8.13.2'
+=======
+        classpath 'com.android.tools.build:gradle:8.2.1'
+>>>>>>> 1d9e810434968d4a47278879a2e938fcc6ee0a5e
         classpath 'com.google.gms:google-services:4.4.1'
         classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.7'
 
@@ -15,8 +19,11 @@ buildscript {
     }
 }
 
+<<<<<<< HEAD
 apply from: "variables.gradle"
 
+=======
+>>>>>>> 1d9e810434968d4a47278879a2e938fcc6ee0a5e
 allprojects {
     repositories {
         google()

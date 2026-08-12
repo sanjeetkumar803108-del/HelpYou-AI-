@@ -1,62 +1,38 @@
 apply plugin: 'com.android.application'
-<<<<<<< HEAD
-
-android {
-    namespace = "com.helpyou.ai"
-    compileSdk = rootProject.ext.compileSdkVersion
-    defaultConfig {
-        applicationId "com.helpyou.ai"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
-=======
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.firebase.crashlytics'
 
 android {
     namespace "com.helpyou.ai"
-    compileSdk 34
+    compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.helpyou.ai"
-        minSdkVersion 22
-        targetSdkVersion 34
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
-<<<<<<< HEAD
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
-=======
-             ignoreAssetsPattern "!.svn:!.git:!.ds_store:!*.scc:.*:g_hover:!CVS:!thumbs.db:!picasa.ini:!*~"
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
         }
     }
     buildTypes {
         release {
             minifyEnabled false
-<<<<<<< HEAD
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-=======
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
         }
     }
 }
 
 repositories {
     flatDir{
-<<<<<<< HEAD
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
-=======
-        dirs '../libs', 'libs'
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
     }
 }
 
 dependencies {
-<<<<<<< HEAD
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
@@ -66,31 +42,13 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // Import the Firebase BoM
+    implementation platform('com.google.firebase:firebase-bom:34.17.0')
+
+    // Firebase analytics and crashlytics
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-crashlytics'
 }
 
 apply from: 'capacitor.build.gradle'
-
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
-=======
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation project(':capacitor-android')
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-    implementation project(':capacitor-cordova-android-plugins')
-
-    // Import the Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
-
-    // Firebase analytics and crashlytics
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-crashlytics")
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
-}

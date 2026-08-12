@@ -15,19 +15,46 @@ import { parsePartialJSON } from '../utils/partialJson';
 import GlobalMarkdown from './GlobalMarkdown';
 import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, storage } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Capacitor } from '@capacitor/core';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 
 interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  imageUrl?: string;
+  imageTimestamp?: number;
   isTyping?: boolean;
   displayedText?: string;
   isLiked?: boolean;
   isDisliked?: boolean;
   isError?: boolean;
 }
+
+const ChatImage = ({ src, timestamp }: { src: string; timestamp?: number }) => {
+  const [failed, setFailed] = React.useState(false);
+  const isExpired = timestamp ? (Date.now() - timestamp > 3600000) : false;
+
+  if (failed || isExpired) {
+    return (
+      <div className="flex flex-col items-center justify-center p-4 bg-zinc-50 border border-dashed border-zinc-300 rounded-2xl max-w-sm my-2 text-zinc-500">
+        <span className="text-xl mb-1">🔒</span>
+        <span className="text-xs font-semibold">Image deleted for privacy</span>
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={src} 
+      alt="Uploaded problem" 
+      onError={() => setFailed(true)}
+      className="max-w-full max-h-[300px] object-contain rounded-2xl my-2 border border-zinc-200/60 shadow-sm"
+      referrerPolicy="no-referrer"
+    />
+  );
+};
 
 // ----------------------------------------------------
 // SYSTEM INSTRUCTION FOR THE ELITE MATH & SCIENCE MASTER EDUCATOR
@@ -206,6 +233,9 @@ function AITutorMessageItem({
             : 'bg-[#FAF9F6] border-zinc-200 text-zinc-900 rounded-tl-none overflow-hidden shadow-sm'
       }`}>
         <div className={`prose prose-sm max-w-full overflow-hidden break-words ${msg.role === 'user' ? 'text-white prose-invert' : msg.isError ? 'text-red-900 font-medium' : 'text-zinc-800'} [&_pre]:overflow-x-auto [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-2 [&_p]:leading-relaxed`}>
+          {msg.imageUrl && (
+            <ChatImage src={msg.imageUrl} timestamp={msg.imageTimestamp} />
+          )}
           {msg.isError && <span className="inline-flex items-center gap-1 text-red-600 font-extrabold mr-1">⚠️ Alert: </span>}
           {parsedSolution ? (
             <div className="space-y-4 max-w-full overflow-hidden">
@@ -979,7 +1009,27 @@ Please evaluate this answer strictly according to your system rubric.`;
           ? `📎 Attached: ${activeAttachedFile.name || 'Image'}\n\n${textToShow}` 
           : textToShow);
 
-    const updatedMessages = [...messages, { role: 'user' as const, text: userMsgText }];
+    let imageUrl: string | undefined = undefined;
+    let imageTimestamp: number | undefined = undefined;
+
+    if (activeAttachedFile && activeAttachedType === 'image') {
+      try {
+        const fileExtension = activeAttachedFile.name?.split('.').pop() || 'jpg';
+        const uniqueFileName = `chat_images/${auth.currentUser?.uid || 'anon'}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExtension}`;
+        const storageRef = ref(storage, uniqueFileName);
+        const uploadResult = await uploadBytes(storageRef, activeAttachedFile);
+        imageUrl = await getDownloadURL(uploadResult.ref);
+        imageTimestamp = Date.now();
+      } catch (err) {
+        console.error("Failed to upload image to Firebase Storage:", err);
+      }
+    }
+
+    const updatedMessages = [...messages, { 
+      role: 'user' as const, 
+      text: userMsgText,
+      ...(imageUrl ? { imageUrl, imageTimestamp } : {})
+    }];
     setMessages(updatedMessages);
 
     // Instantiate a new AbortController for streaming cancellation
@@ -1214,7 +1264,8 @@ Please evaluate this answer strictly according to your system rubric.`;
           // Structured chat history saving for loading/restoring
           const messagesPayload = finalMessages.map(m => ({
             role: m.role,
-            text: m.text
+            text: m.text,
+            ...(m.imageUrl ? { imageUrl: m.imageUrl, imageTimestamp: m.imageTimestamp } : {})
           }));
 
           if (!tutorChatId) {

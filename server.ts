@@ -3,11 +3,15 @@ import path from "path";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
+import { createServer as createViteServer } from "vite";
 import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
-import pdf from "pdf-parse";
+import { createRequire } from "module";
+
+const requireModule = typeof require !== "undefined" ? require : createRequire(import.meta.url);
+const pdf = requireModule("pdf-parse");
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -3284,7 +3288,6 @@ app.get("/api/time", (req, res) => {
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -3340,9 +3343,5 @@ async function startServer() {
   server.timeout = 300000;
 }
 
-export default app;
-
-if (process.env.VERCEL !== "1") {
-  startServer();
-}
+startServer();
 

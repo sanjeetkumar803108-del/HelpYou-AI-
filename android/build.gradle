@@ -1,34 +1,20 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-<<<<<<< HEAD
-    
-=======
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-<<<<<<< HEAD
-        classpath 'com.android.tools.build:gradle:8.13.0'
-        classpath 'com.google.gms:google-services:4.4.4'
-=======
         classpath 'com.android.tools.build:gradle:8.2.1'
         classpath 'com.google.gms:google-services:4.4.1'
         classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.7'
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
 }
 
-<<<<<<< HEAD
-apply from: "variables.gradle"
-
-=======
->>>>>>> e06d9561e6a837650aa8d7c60fff28f24fc99ea4
 allprojects {
     repositories {
         google()

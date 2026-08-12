@@ -51,6 +51,22 @@ function useIsFocused(isFocusedProp: boolean) {
 export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, onNavigateToTab }: MagicScannerProps) {
   const isFocused = useIsFocused(isFocusedProp);
   const [appVisible, setAppVisible] = useState(true);
+  const [isPremium, setIsPremium] = useState(isVip || isProUser());
+
+  useEffect(() => {
+    setIsPremium(isVip || isProUser());
+  }, [isVip]);
+
+  useEffect(() => {
+    const handleVipUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setIsPremium(customEvent.detail === true || isProUser());
+    };
+    window.addEventListener('study-vip-updated', handleVipUpdate);
+    return () => {
+      window.removeEventListener('study-vip-updated', handleVipUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -97,6 +113,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
   const [isListeningChat, setIsListeningChat] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [activeMode, setActiveMode] = useState('Math');
@@ -497,7 +514,43 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
     }
   };
 
+  const handleNativeCapture = async () => {
+    try {
+      const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
+      if (reqStatus.camera !== 'granted') {
+        alert("Camera Permission Needed\n\nHelpYou needs camera access to scan and solve your questions directly. Please enable camera access in your device settings to use this feature.");
+        return;
+      }
+      
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: 'base64' as any,
+        source: 'CAMERA' as any,
+      });
+
+      if (photo && photo.base64String) {
+        const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
+        const byteCharacters = atob(photo.base64String);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        const file = new File([blob], `capture_${Date.now()}.${photo.format || 'jpg'}`, { type: mimeType });
+        processFile(file);
+      }
+    } catch (err) {
+      console.warn("Native capture cancelled or failed:", err);
+    }
+  };
+
   const handleCapture = () => {
+    if (Capacitor.isNativePlatform()) {
+      handleNativeCapture();
+      return;
+    }
     if (videoRef.current && cameraActive) {
       const video = videoRef.current;
       const sWidth = video.videoWidth;
@@ -815,6 +868,14 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         ref={fileInputRef}
         onChange={handleFileUpload}
       />
+      <input 
+        type="file" 
+        accept="image/*" 
+        capture="environment"
+        className="hidden" 
+        ref={cameraInputRef}
+        onChange={handleFileUpload}
+      />
 
       {/* 1. Camera & Frame Wrapper (Takes up the entire available vertical space absolutely) */}
       <div ref={videoContainerRef} className="absolute inset-0 w-full h-full z-0 bg-black overflow-hidden">
@@ -826,13 +887,58 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
           className="w-full h-full object-cover opacity-100"
         />
         {!cameraActive && (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-            Camera unavailable. Use Gallery.
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-zinc-950 z-10 overflow-hidden">
+            {/* Viewfinder Target / Reticle Simulation */}
+            <div className="absolute inset-12 border-2 border-indigo-500/20 rounded-3xl pointer-events-none flex items-center justify-center">
+              {/* Corner brackets */}
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl"></div>
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl"></div>
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl"></div>
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-indigo-500 rounded-br-xl"></div>
+
+              {/* Animated Laser sweeping bar */}
+              <div className="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-indigo-400 to-transparent shadow-[0_0_12px_rgba(99,102,241,0.8)] animate-bounce"></div>
+            </div>
+
+            {/* Content Hub overlay */}
+            <div className="relative z-20 flex flex-col items-center max-w-sm px-4">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/20">
+                <Brain className="w-6 h-6 animate-pulse" />
+              </div>
+              
+              <h2 className="text-zinc-100 text-xl font-black tracking-wide mb-2 uppercase">
+                HelpYou AI Scanner
+              </h2>
+              <p className="text-zinc-400 text-xs text-center max-w-xs mb-8 leading-relaxed">
+                Aim at any equation, chart, or scientific problem. Capture or select an image to get a full master explanation step-by-step.
+              </p>
+
+              <div className="flex flex-col gap-3 w-full max-w-[250px]">
+                <button
+                  onClick={() => {
+                    if (Capacitor.isNativePlatform()) {
+                      handleNativeCapture();
+                    } else {
+                      cameraInputRef.current?.click();
+                    }
+                  }}
+                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-black tracking-widest uppercase shadow-xl shadow-indigo-500/20 active:scale-95 transition-all duration-200 cursor-pointer"
+                >
+                  📸 Open Camera
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-3.5 px-6 rounded-2xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 text-xs font-bold active:scale-95 transition-all duration-200 cursor-pointer"
+                >
+                  🖼️ Choose from Gallery
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* 2. Floating Top Overlay (PRO button, back button) */}
+      {/* 2. Floating Top Overlay (back button) */}
       <div className="absolute top-0 left-0 w-full z-50 pointer-events-auto p-6 flex justify-between items-center bg-gradient-to-b from-black/55 via-black/25 to-transparent">
         <button 
           onClick={() => {
@@ -843,17 +949,6 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
           title="Back to Home"
         >
           <X className="w-5 h-5" strokeWidth={2.5} />
-        </button>
-
-        {/* Floating Premium 3D PRO Badge with Purple Glow */}
-        <button 
-          onClick={() => window.dispatchEvent(new CustomEvent('open-vip-modal'))}
-          className="bg-gradient-to-r from-purple-600 via-indigo-600 to-violet-600 border border-purple-400/50 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-[0_10px_25px_rgba(168,85,247,0.5),_inset_0_1px_1px_rgba(255,255,255,0.4)] hover:shadow-[0_15px_30px_rgba(168,85,247,0.7),_inset_0_1px_1px_rgba(255,255,255,0.6)] hover:scale-105 active:scale-95 duration-300 transition-all cursor-pointer group"
-        >
-          <span className="text-white font-[900] text-xs tracking-widest bg-gradient-to-r from-amber-200 to-yellow-100 bg-clip-text text-transparent drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] uppercase">PRO</span>
-          <div className="bg-white/10 rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-inner group-hover:rotate-12 transition-transform">
-            🦉
-          </div>
         </button>
       </div>
 

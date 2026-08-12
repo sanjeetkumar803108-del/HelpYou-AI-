@@ -1,0 +1,14 @@
+<component name="libraryTable">
+  <library name="Gradle: com.revenuecat.purchases:purchases-hybrid-common:18.29.0@aar" external-system-id="GRADLE">
+    <CLASSES>
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/8dfbfa2bb6993b9c90813a7556f038d9/transformed/purchases-hybrid-common-18.29.0/AndroidManifest.xml" />
+      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/8dfbfa2bb6993b9c90813a7556f038d9/transformed/purchases-hybrid-common-18.29.0/jars/classes.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.revenuecat.purchases/purchases-hybrid-common/18.29.0/3fb0e6a36b6d6864daee25c1a807a85addcb1fc/purchases-hybrid-common-18.29.0-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.revenuecat.purchases/purchases-hybrid-common/18.29.0/fde245b3583f430190fdf376e88eecf85de55eef/purchases-hybrid-common-18.29.0-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

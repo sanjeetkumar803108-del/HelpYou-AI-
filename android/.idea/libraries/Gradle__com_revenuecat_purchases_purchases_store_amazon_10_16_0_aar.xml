@@ -1,0 +1,14 @@
+<component name="libraryTable">
+  <library name="Gradle: com.revenuecat.purchases:purchases-store-amazon:10.16.0@aar" external-system-id="GRADLE">
+    <CLASSES>
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/797cbe597dab7e87da244bb140bda7e5/transformed/purchases-store-amazon-10.16.0/AndroidManifest.xml" />
+      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/797cbe597dab7e87da244bb140bda7e5/transformed/purchases-store-amazon-10.16.0/jars/classes.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.revenuecat.purchases/purchases-store-amazon/10.16.0/14afe455670b82299c8ff0e09307e2ecc5968fff/purchases-store-amazon-10.16.0-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.revenuecat.purchases/purchases-store-amazon/10.16.0/5a35c9743f71ec60676f9c5ce515d4cf68fbbc10/purchases-store-amazon-10.16.0-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

@@ -1,0 +1,15 @@
+<component name="libraryTable">
+  <library name="Gradle: com.revenuecat.purchases:purchases:10.16.0@aar" external-system-id="GRADLE">
+    <CLASSES>
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/5336ef2659f30c4a7cac3f50a31b869a/transformed/purchases-10.16.0/AndroidManifest.xml" />
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/5336ef2659f30c4a7cac3f50a31b869a/transformed/purchases-10.16.0/res" />
+      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/5336ef2659f30c4a7cac3f50a31b869a/transformed/purchases-10.16.0/jars/classes.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.revenuecat.purchases/purchases/10.16.0/f9fa1fd8e1ff356fef593f7417713a61a340a218/purchases-10.16.0-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.revenuecat.purchases/purchases/10.16.0/ee172dc034ce5ae082de04c338ce2eeb0504c1f8/purchases-10.16.0-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

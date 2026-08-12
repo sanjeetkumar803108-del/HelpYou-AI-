@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Gradle: io.ionic.libs:ioncamera-android:1.0.2@aar" external-system-id="GRADLE">
+    <CLASSES>
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/3df44db3575d3ffa331d8e84158949b1/transformed/ioncamera-android-1.0.2/AndroidManifest.xml" />
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/3df44db3575d3ffa331d8e84158949b1/transformed/ioncamera-android-1.0.2/res" />
+      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/3df44db3575d3ffa331d8e84158949b1/transformed/ioncamera-android-1.0.2/jars/classes.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/io.ionic.libs/ioncamera-android/1.0.2/967bf748f4fc9c143ea43687f1c61d687a7fb6f1/ioncamera-android-1.0.2-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: com.google.firebase:firebase-config-interop:16.0.1@aar" external-system-id="GRADLE">
+    <CLASSES>
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/4928cf26d74e5c214426654952be582c/transformed/firebase-config-interop-16.0.1/AndroidManifest.xml" />
+      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/4928cf26d74e5c214426654952be582c/transformed/firebase-config-interop-16.0.1/jars/classes.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.google.firebase/firebase-config-interop/16.0.1/b039da0638ec092f80f54737783ff9a60671b631/firebase-config-interop-16.0.1-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

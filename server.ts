@@ -7,7 +7,6 @@ import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
-import pdf from "pdf-parse";
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -1010,6 +1009,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
 
     if (req.file) {
       try {
+        const { default: pdf } = await import("pdf-parse");
         const pdfData = await pdf(req.file.buffer, { max: 60 });
         
         // Explicitly check page count

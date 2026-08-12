@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Gradle: com.android.billingclient:billing:8.3.0@aar" external-system-id="GRADLE">
+    <CLASSES>
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/6f15cdc132d09e02ddae4fbfca7ed6de/transformed/billing-8.3.0/AndroidManifest.xml" />
+      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/6f15cdc132d09e02ddae4fbfca7ed6de/transformed/billing-8.3.0/res" />
+      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/6f15cdc132d09e02ddae4fbfca7ed6de/transformed/billing-8.3.0/jars/classes.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.android.billingclient/billing/8.3.0/71076c259fe5f4450447f20738a542da819b755a/billing-8.3.0-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES />
+  </library>
+</component>

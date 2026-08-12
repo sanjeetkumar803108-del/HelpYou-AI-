@@ -3283,8 +3283,8 @@ app.get("/api/time", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") 
-    const { createServer: createViteServer } = await import("vite");{
+  if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

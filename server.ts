@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
+import pdf from "pdf-parse";
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);

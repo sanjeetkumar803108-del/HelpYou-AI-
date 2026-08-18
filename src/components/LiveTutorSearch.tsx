@@ -380,7 +380,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
       setError(null);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "An unexpected error occurred during search.");
+      setError("Oops! Something went wrong on our end. Please try again.");
       setSearchResponse(null);
     } finally {
       setLoading(false);

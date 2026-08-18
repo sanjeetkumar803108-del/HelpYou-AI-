@@ -10,8 +10,9 @@ import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
-import { Camera } from '@capacitor/camera';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { Network } from '@capacitor/network';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -49,6 +50,24 @@ function useIsFocused(isFocusedProp: boolean) {
 }
 
 export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, onNavigateToTab }: MagicScannerProps) {
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    Network.getStatus().then((status) => {
+      setIsOffline(!status.connected);
+    }).catch(err => {
+      console.warn("MagicScanner: Failed to get initial network status", err);
+    });
+
+    const listener = Network.addListener('networkStatusChange', (status) => {
+      setIsOffline(!status.connected);
+    });
+
+    return () => {
+      listener.then(l => l.remove());
+    };
+  }, []);
+
   const isFocused = useIsFocused(isFocusedProp);
   const [appVisible, setAppVisible] = useState(true);
   const [isPremium, setIsPremium] = useState(isVip || isProUser());
@@ -419,10 +438,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       }
     } catch (err) {
       console.error(err);
-      let errorMessage = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.";
-      if (err instanceof Error && (err.message.includes("breather") || err.message.includes("Oops") || err.message.includes("Try Again"))) {
-        errorMessage = err.message;
-      }
+      let errorMessage = "Oops! Something went wrong on our end. Please try again.";
       setMessages(prev => [...prev, { role: 'model', text: errorMessage, isError: true }]);
     } finally {
       setChatLoading(false);
@@ -522,23 +538,17 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         return;
       }
       
-      const photo = await Camera.getPhoto({
+      const image = await Camera.getPhoto({
         quality: 90,
         allowEditing: false,
-        resultType: 'base64' as any,
-        source: 'CAMERA' as any,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Camera,
       });
 
-      if (photo && photo.base64String) {
-        const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
-        const byteCharacters = atob(photo.base64String);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mimeType });
-        const file = new File([blob], `capture_${Date.now()}.${photo.format || 'jpg'}`, { type: mimeType });
+      if (image && image.webPath) {
+        const response = await fetch(image.webPath);
+        const blob = await response.blob();
+        const file = new File([blob], `capture_${Date.now()}.${image.format || 'jpg'}`, { type: blob.type || 'image/jpeg' });
         processFile(file);
       }
     } catch (err) {
@@ -551,10 +561,10 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       handleNativeCapture();
       return;
     }
-    if (videoRef.current && cameraActive) {
+    if (videoRef.current) {
       const video = videoRef.current;
-      const sWidth = video.videoWidth;
-      const sHeight = video.videoHeight;
+      const sWidth = video.videoWidth || 1280;
+      const sHeight = video.videoHeight || 720;
 
       // Draw the full video frame onto a canvas
       const canvas = document.createElement('canvas');
@@ -566,7 +576,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         ctx.drawImage(video, 0, 0, sWidth, sHeight);
         canvas.toBlob((blob) => {
           if (blob) {
-            const file = new File([blob], "full_capture.jpg", { type: "image/jpeg" });
+            const file = new File([blob], `capture_${Date.now()}.jpg`, { type: "image/jpeg" });
             processFile(file);
           }
         }, 'image/jpeg', 0.85); // compress to optimize upload size
@@ -664,10 +674,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       }
     } catch (err) {
       console.error(err);
-      let errorMessage = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.";
-      if (err instanceof Error && (err.message.includes("breather") || err.message.includes("Oops") || err.message.includes("Try Again"))) {
-        errorMessage = err.message;
-      }
+      let errorMessage = "Oops! Something went wrong on our end. Please try again.";
       setMessages(prev => [...prev, { role: 'model', text: errorMessage, isError: true }]);
     } finally {
       setChatLoading(false);
@@ -830,9 +837,10 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                 type="text" 
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && true && handleSendMessage()}
-                placeholder="Ask a follow-up question..."
-                className="flex-1 bg-transparent border-none focus:outline-none text-zinc-800 placeholder:text-zinc-400 py-2 text-sm min-w-0"
+                disabled={isOffline}
+                onKeyDown={e => e.key === 'Enter' && !isOffline && handleSendMessage()}
+                placeholder={isOffline ? "You are offline. Reconnect to ask." : "Ask a follow-up question..."}
+                className="flex-1 bg-transparent border-none focus:outline-none text-zinc-800 placeholder:text-zinc-400 py-2 text-sm min-w-0 disabled:cursor-not-allowed"
               />
               <span className={`text-[10px] font-semibold shrink-0 bg-zinc-50 border border-zinc-100 px-2 py-0.5 rounded-full select-none ${'text-zinc-400'}`}>
                 {wordCount} words
@@ -841,14 +849,15 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
 
             <button 
               onClick={toggleListeningChat}
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 shadow-md ${isListeningChat ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-500'}`}
+              disabled={isOffline}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 shadow-md ${isOffline ? 'bg-zinc-100 text-zinc-300 cursor-not-allowed' : isListeningChat ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-500'}`}
             >
               {isListeningChat ? <MicOff className="w-4 h-4 animate-pulse" /> : <Mic className="w-4 h-4" />}
             </button>
 
             <button 
               onClick={() => handleSendMessage()}
-              disabled={!chatInput.trim() || chatLoading || false}
+              disabled={!chatInput.trim() || chatLoading || isOffline}
               className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white disabled:opacity-50 hover:bg-purple-500 transition-colors shrink-0 shadow-md"
             >
               <Send className="w-4 h-4 ml-0.5" />
@@ -886,56 +895,6 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
           muted 
           className="w-full h-full object-cover opacity-100"
         />
-        {!cameraActive && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-zinc-950 z-10 overflow-hidden">
-            {/* Viewfinder Target / Reticle Simulation */}
-            <div className="absolute inset-12 border-2 border-indigo-500/20 rounded-3xl pointer-events-none flex items-center justify-center">
-              {/* Corner brackets */}
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl"></div>
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl"></div>
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl"></div>
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-indigo-500 rounded-br-xl"></div>
-
-              {/* Animated Laser sweeping bar */}
-              <div className="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-indigo-400 to-transparent shadow-[0_0_12px_rgba(99,102,241,0.8)] animate-bounce"></div>
-            </div>
-
-            {/* Content Hub overlay */}
-            <div className="relative z-20 flex flex-col items-center max-w-sm px-4">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center mb-5 shadow-lg shadow-indigo-500/20">
-                <Brain className="w-6 h-6 animate-pulse" />
-              </div>
-              
-              <h2 className="text-zinc-100 text-xl font-black tracking-wide mb-2 uppercase">
-                HelpYou AI Scanner
-              </h2>
-              <p className="text-zinc-400 text-xs text-center max-w-xs mb-8 leading-relaxed">
-                Aim at any equation, chart, or scientific problem. Capture or select an image to get a full master explanation step-by-step.
-              </p>
-
-              <div className="flex flex-col gap-3 w-full max-w-[250px]">
-                <button
-                  onClick={() => {
-                    if (Capacitor.isNativePlatform()) {
-                      handleNativeCapture();
-                    } else {
-                      cameraInputRef.current?.click();
-                    }
-                  }}
-                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-black tracking-widest uppercase shadow-xl shadow-indigo-500/20 active:scale-95 transition-all duration-200 cursor-pointer"
-                >
-                  📸 Open Camera
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-3.5 px-6 rounded-2xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 text-xs font-bold active:scale-95 transition-all duration-200 cursor-pointer"
-                >
-                  🖼️ Choose from Gallery
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 2. Floating Top Overlay (back button) */}
@@ -994,19 +953,44 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         {/* Actions Row (Upload, Capture, Flashlight) */}
         <div className="w-full px-12 flex justify-between items-center">
           <button 
-            onClick={() => {
+            onClick={async () => {
+              if (isOffline) return;
               triggerVibration(15);
-              fileInputRef.current?.click();
+              if (Capacitor.isNativePlatform()) {
+                try {
+                  const image = await Camera.getPhoto({
+                    quality: 90,
+                    allowEditing: false,
+                    resultType: CameraResultType.Uri,
+                    source: CameraSource.Photos,
+                  });
+                  if (image && image.webPath) {
+                    const response = await fetch(image.webPath);
+                    const blob = await response.blob();
+                    const file = new File([blob], `gallery_${Date.now()}.${image.format || 'jpg'}`, { type: blob.type || 'image/jpeg' });
+                    processFile(file);
+                  }
+                } catch (err) {
+                  console.warn("Native gallery picker failed or cancelled:", err);
+                }
+              } else {
+                fileInputRef.current?.click();
+              }
             }}
-            className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white active:scale-90 transition-transform hover:bg-white/20"
+            disabled={isOffline}
+            className={`w-12 h-12 rounded-full backdrop-blur-xl border flex items-center justify-center text-white active:scale-90 transition-transform ${isOffline ? 'bg-zinc-800/40 border-zinc-700/30 text-zinc-500 cursor-not-allowed opacity-40' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}
           >
             <ImageIcon className="w-5 h-5" strokeWidth={1.5} />
           </button>
 
           {/* Premium magenta capture button */}
           {(() => {
-            const btnClass = "border-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.5)] hover:shadow-[0_0_35px_rgba(236,72,153,0.7)]";
-            const childClass = "bg-gradient-to-br from-pink-500 via-fuchsia-500 to-purple-600 text-white shadow-inner";
+            const btnClass = isOffline 
+              ? "border-zinc-700/50 cursor-not-allowed opacity-40" 
+              : "border-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.5)] hover:shadow-[0_0_35px_rgba(236,72,153,0.7)]";
+            const childClass = isOffline 
+              ? "bg-zinc-800 text-zinc-500" 
+              : "bg-gradient-to-br from-pink-500 via-fuchsia-500 to-purple-600 text-white shadow-inner";
             let IconComponent = <GraduationCap className="w-8 h-8 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />;
 
             if (activeMode === 'Summary') {
@@ -1026,11 +1010,13 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
             return (
               <button 
                 onClick={() => {
+                  if (isOffline) return;
                   triggerVibration(45); // Solid haptic vibration (medium impact)
                   handleCapture();
                 }}
+                disabled={isOffline}
                 className={`w-20 h-20 rounded-full border-[3px] p-1 active:scale-95 transition-all group flex items-center justify-center ${btnClass}`}
-                title={`Capture & Solve - ${activeMode}`}
+                title={isOffline ? "Scanner Offline" : `Capture & Solve - ${activeMode}`}
               >
                 <div className={`w-full h-full rounded-full flex items-center justify-center transition-all ${childClass}`}>
                   {IconComponent}

@@ -58,9 +58,19 @@ export default function LockedFeature({
 
   return (
     <div id="locked-feature-container" className="relative w-full h-full min-h-[400px] flex flex-col justify-between bg-[#FAF9F6] overflow-hidden">
-      {/* Blurred background preview of children to make it look premium */}
-      <div className="absolute inset-0 blur-[6px] opacity-40 pointer-events-none select-none overflow-hidden scale-95 origin-center">
-        {children}
+      {/* Elegant static abstract background preview to make it look premium without mounting dynamic child states */}
+      <div className="absolute inset-0 blur-[4px] opacity-20 pointer-events-none select-none overflow-hidden scale-95 origin-center p-8 space-y-6 flex flex-col justify-center">
+        <div className="h-4 bg-zinc-400 rounded-full w-2/3" />
+        <div className="space-y-3">
+          <div className="h-3 bg-zinc-300 rounded-full w-full" />
+          <div className="h-3 bg-zinc-300 rounded-full w-5/6" />
+          <div className="h-3 bg-zinc-300 rounded-full w-4/5" />
+        </div>
+        <div className="h-32 bg-zinc-200 rounded-3xl w-full" />
+        <div className="space-y-3">
+          <div className="h-3 bg-zinc-300 rounded-full w-full" />
+          <div className="h-3 bg-zinc-300 rounded-full w-3/4" />
+        </div>
       </div>
 
       {/* Elegant minimalist navbar */}

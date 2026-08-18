@@ -25,8 +25,8 @@ const GRADES = [
 export const COUNTRIES = [
   { id: 'USA', name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
   { id: 'UK', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
-  { id: 'CA', name: 'Canada', flag: '🇨🇦', regionSystem: 'USA' },
-  { id: 'AU', name: 'Australia', flag: '🇦🇺', regionSystem: 'UK' },
+  { id: 'CA', name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
+  { id: 'AU', name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
   { id: 'Global', name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
 ];
 

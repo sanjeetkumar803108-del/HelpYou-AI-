@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar, Camera } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar, Camera, X } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -8,6 +8,7 @@ import { deductCoins, getCoins } from '../utils/coins';
 import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
+import { compressImage } from '../utils/imageCompressor';
 
 interface GrammarEnhancerProps {
   onBack: () => void;
@@ -36,12 +37,13 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
   const [showLimitPopup, setShowLimitPopup] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
-    if (files.length > 5) {
+    if (uploadedImages.length + files.length > 5) {
       setError("Please select a maximum of 5 images.");
       setShowLimitPopup(true);
       triggerVibration(15);
@@ -52,35 +54,14 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
     setScanning(true);
     setError(null);
     
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('images', files[i]);
-    }
-    
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/scan-images', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error("Could not transcribe the image.");
-      }
-      
-      const resContentType = response.headers.get("content-type") || "";
-      if (!resContentType.includes("application/json")) {
-        throw new Error("Server returned invalid response format");
-      }
-      
-      const data = await response.json();
-      if (data.text) {
-        setInputText(data.text);
-      } else {
-        setError("No text could be extracted from the image. Please make sure the handwriting/text is clear.");
-      }
+      const readPromises = Array.from(files).map(file => compressImage(file));
+      const base64s = await Promise.all(readPromises);
+      setUploadedImages(prev => [...prev, ...base64s]);
+      triggerVibration(10);
     } catch (err: any) {
       console.error(err);
-      setError("Failed to transcribe image. Please try typing or pasting your text.");
+      setError("Failed to load and compress selected image(s).");
     } finally {
       setScanning(false);
       e.target.value = '';
@@ -204,7 +185,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const wordCount = inputText.trim().split(/\s+/).filter(w => w.length > 0).length;
 
   const handleEnhance = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && uploadedImages.length === 0) return;
 
     // Check if user has at least 1 coin before starting, but do not deduct yet!
     const coins = getCoins();
@@ -225,7 +206,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/grammar-enhance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText, mode, gradeLevel })
+        body: JSON.stringify({ text: inputText, mode, gradeLevel, images: uploadedImages })
       });
       
       if (!response.ok) {
@@ -253,7 +234,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
 
       // Auto-save grammatical fixes to mistake vault
       if (receivedFixes && receivedFixes.length > 0) {
-        detectAndLogMistake('Grammar Enhancer', inputText, data.text).catch(e => console.error("Grammar mistake capture failed:", e));
+        detectAndLogMistake('Grammar Enhancer', inputText || "Image content", data.text).catch(e => console.error("Grammar mistake capture failed:", e));
       }
 
       // Auto-save
@@ -277,7 +258,8 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
+      console.error(err);
+      setError('Oops! Something went wrong on our end. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -444,6 +426,42 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
               </div>
             </div>
 
+            {/* ATTACHED IMAGES PREVIEW GRID */}
+            {uploadedImages.length > 0 && (
+              <div className="mb-6 bg-zinc-50 border border-zinc-150 rounded-2xl p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Attached Images ({uploadedImages.length}/5)</span>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setUploadedImages([]);
+                      triggerVibration(10);
+                    }}
+                    className="text-[10px] font-extrabold text-red-500 hover:text-red-600 transition-colors border-none bg-transparent cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+                  {uploadedImages.map((img, idx) => (
+                    <div key={idx} className="relative w-16 h-16 rounded-xl border border-zinc-250 overflow-hidden bg-white group flex-shrink-0">
+                      <img src={img} alt={`attached-${idx}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadedImages(prev => prev.filter((_, i) => i !== idx));
+                          triggerVibration(5);
+                        }}
+                        className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors border-none flex items-center justify-center cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* GALLERY IMAGE UPLOAD */}
             <div className="mb-6">
               <input 
@@ -467,7 +485,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                 {scanning ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-                    <span>Transcribing text from image...</span>
+                    <span>Attaching images...</span>
                   </>
                 ) : (
                   <>
@@ -519,7 +537,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
 
             <button
               onClick={handleEnhance}
-              disabled={!inputText.trim() || loading || scanning}
+              disabled={(!inputText.trim() && uploadedImages.length === 0) || loading || scanning}
               className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-purple-500/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center border border-purple-500/20"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Enhance & Correct"}

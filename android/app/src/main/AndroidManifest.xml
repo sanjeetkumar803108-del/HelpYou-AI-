@@ -19,6 +19,7 @@
 
     <!-- 4. STORAGE: Required strictly for downloading/saving PDFs and worksheets -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
@@ -29,6 +30,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.HelpYouAI"
         android:networkSecurityConfig="@xml/network_security_config">
+        
+        <meta-data android:name="firebase_performance_logcat_enabled" android:value="true" />
         
         <activity
             android:name=".MainActivity"

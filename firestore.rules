@@ -64,5 +64,13 @@ service cloud.firestore {
         (resource != null && resource.data.userId == request.auth.uid)
       );
     }
+
+    // 7. PDF History Collection Rules
+    match /pdf_history/{pdfId} {
+      allow read, write: if isSignedIn() && (
+        (resource == null && request.resource.data.userId == request.auth.uid) ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
+    }
   }
 }

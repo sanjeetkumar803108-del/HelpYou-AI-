@@ -11,8 +11,8 @@ interface CountryOption {
 const COUNTRIES: CountryOption[] = [
   { id: 'us', name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
   { id: 'uk', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
-  { id: 'ca', name: 'Canada', flag: '🇨🇦', regionSystem: 'USA' },
-  { id: 'au', name: 'Australia', flag: '🇦🇺', regionSystem: 'UK' },
+  { id: 'ca', name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
+  { id: 'au', name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
   { id: 'global', name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
 ];
 

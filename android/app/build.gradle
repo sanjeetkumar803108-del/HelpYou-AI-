@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.firebase.crashlytics'
+apply plugin: 'com.google.firebase.firebase-perf'
 
 android {
     namespace "com.helpyou.ai"
@@ -81,5 +82,6 @@ apply from: 'capacitor.build.gradle'
     // Firebase analytics and crashlytics
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-perf")
 }
 >>>>>>> 1d9e810434968d4a47278879a2e938fcc6ee0a5e

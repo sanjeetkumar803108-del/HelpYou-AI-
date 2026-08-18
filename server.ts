@@ -170,6 +170,16 @@ app.use((err: any, req: any, res: any, next: any) => {
       return res.status(400).json({ error: "File too large. Maximum size is 30MB." });
     }
   }
+  console.error('[Global Error Handler] Caught unhandled error:', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  if (req.path && req.path.startsWith('/api')) {
+    return res.status(err.status || 500).json({
+      error: err.message || "An unexpected error occurred on the server.",
+      success: false
+    });
+  }
   next(err);
 });
 
@@ -370,11 +380,12 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
 
   let requestedModel = params.model;
   if (requestedModel === "gemini-flash-latest") {
-    requestedModel = "gemini-3.6-flash";
+    requestedModel = "gemini-3.7-flash";
   }
 
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-3.6-flash",
+    requestedModel || "gemini-3.7-flash",
+    "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
@@ -470,10 +481,14 @@ async function safeGenerateContent(params: any, retries = 3, delay = 500): Promi
           
           const isHardQuotaLimit = errorStr.includes("quota") || 
                                    errorStr.includes("resource_exhausted") ||
+                                   errorStr.includes("503") ||
+                                   errorStr.includes("unavailable") ||
+                                   errorStr.includes("overloaded") ||
+                                   errorStr.includes("demand") ||
                                    (errorStr.includes("429") && !errorStr.includes("overloaded"));
           
           if (isHardQuotaLimit) {
-            console.warn(`[ai-client] Model ${model} hit hard quota limit. Skipping retries for this model and trying fallback...`);
+            console.warn(`[ai-client] Model ${model} is unavailable, overloaded, or hit quota. Skipping retries for this model and instantly routing to fallback...`);
             break;
           }
           
@@ -805,6 +820,8 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
       systemInstruction += `\n\nThe current date and time is: ${new Date().toISOString()}. You must treat this as the absolute present moment.`;
     }
 
+    systemInstruction += `\n\nCRITICAL LANGUAGE RULE: You MUST strictly mirror the user's language, tone, and script. If the user writes in English, reply in English. If the user writes in Hindi (Devanagari), reply in Hindi. If the user writes in Hinglish (Hindi words written in the English alphabet, e.g., "kya haal hai"), you MUST reply completely in Hinglish. Do NOT default to English or mix English sentences if the user initiated the conversation in Hinglish or another language.`;
+
     if (shouldEnableSearch) {
       systemInstruction += `
 \n\n[CRITICAL DEEP SEARCH MODE ACTIVE]
@@ -868,6 +885,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
     if (shouldStream) {
       let modelsToTry = [
+        "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash",
         "gemini-3.1-flash-lite",
@@ -912,12 +930,18 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         } catch (err: any) {
           const errStr = String(err.message || err).toLowerCase();
           const isRateLimitOrQuota = errStr.includes("429") || 
+                                     errStr.includes("503") ||
+                                     errStr.includes("502") ||
                                      errStr.includes("quota") || 
                                      errStr.includes("resource_exhausted") || 
-                                     errStr.includes("limit");
+                                     errStr.includes("limit") ||
+                                     errStr.includes("unavailable") ||
+                                     errStr.includes("overloaded") ||
+                                     errStr.includes("demand") ||
+                                     errStr.includes("temporary");
           
           if (isRateLimitOrQuota) {
-            console.warn(`[chat stream] Model ${model} hit rate-limit or quota constraint:`, errStr);
+            console.warn(`[chat stream] Model ${model} hit rate-limit, 503, or quota constraint:`, errStr);
             rateLimitedModels[model] = Date.now();
           } else {
             console.error(`Stream start failed for model ${model}:`, err);
@@ -1251,14 +1275,12 @@ app.post("/api/tts", async (req, res) => {
 
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const { text, curriculum, subject, gradeLevel } = req.body;
+    const { text, curriculum, subject, gradeLevel, images } = req.body;
     
     const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
     
-
-
-    if (!text) {
-      return res.status(400).json({ error: "Missing text" });
+    if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
+      return res.status(400).json({ error: "Missing text or images" });
     }
 
     const aiClient = getAI();
@@ -1341,8 +1363,9 @@ GRAMMAR AND POLISH:
 OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
 
-    const originalModel = "gemini-3.6-flash";
+    const originalModel = "gemini-3.7-flash";
     let modelsToTry = [
+      "gemini-3.7-flash",
       "gemini-3.6-flash",
       "gemini-3.5-flash",
       "gemini-3.1-flash-lite",
@@ -1368,6 +1391,25 @@ OVERALL VERDICT:
       modelsToTry = [...activeModels, ...backburnerModels];
     }
     
+    // Build contents payload with optional images
+    const contentParts = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+      for (const img of images) {
+        if (!img) continue;
+        const parts = img.split(',');
+        const base64Data = parts[1] || img;
+        const mimeType = parts[0]?.split(';')[0]?.split(':')[1] || 'image/jpeg';
+        contentParts.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Data
+          }
+        });
+      }
+    }
+    const targetText = text || "Please read the student's handwritten or typed essay from the attached image(s) and grade it strictly according to the rubric.";
+    contentParts.push({ text: targetText });
+
     let streamResponse = null;
     let lastError: any = null;
     let anyQuotaExceeded = false;
@@ -1376,7 +1418,7 @@ OVERALL VERDICT:
       try {
         streamResponse = await aiClient.models.generateContentStream({
           model,
-          contents: text,
+          contents: { parts: contentParts },
           config: { 
             systemInstruction: systemInstruction,
             temperature: 0.15,
@@ -2118,12 +2160,12 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 
 app.post("/api/grammar-enhance", async (req, res) => {
   try {
-    const { text, mode, gradeLevel } = req.body;
+    const { text, mode, gradeLevel, images } = req.body;
     
     const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
     
-    if (!text) {
-      return res.status(400).json({ error: "Missing text" });
+    if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
+      return res.status(400).json({ error: "Missing text or images" });
     }
 
     const aiClient = getAI();
@@ -2155,10 +2197,29 @@ You must return your output strictly in JSON format matching the following schem
   ]
 }`;
 
+    // Build content payload with optional images
+    const contentParts = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+      for (const img of images) {
+        if (!img) continue;
+        const parts = img.split(',');
+        const base64Data = parts[1] || img;
+        const mimeType = parts[0]?.split(';')[0]?.split(':')[1] || 'image/jpeg';
+        contentParts.push({
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Data
+          }
+        });
+      }
+    }
+    const targetText = text || "Please read the text inside the attached image(s), correct any grammatical errors, and enhance it according to the chosen mode.";
+    contentParts.push({ text: targetText });
+
     const response = await safeGenerateContent({
       gradeLevel,
       model: "gemini-flash-latest",
-      contents: { parts: [{ text: text }] },
+      contents: { parts: contentParts },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
@@ -2394,7 +2455,7 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2552,8 +2613,11 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
   try {
     const { gradeLevel, count } = req.body;
     if (!req.file) {
+      console.warn("[PDF Quiz API] No PDF file provided in request.");
       return res.status(400).json({ error: "No PDF file provided" });
     }
+
+    console.log(`[PDF Quiz API] Received file: ${req.file.originalname}, Size: ${req.file.size} bytes`);
 
     // Enforce 10MB size limit
     const maxSizeBytes = 10 * 1024 * 1024; // 10MB
@@ -2568,8 +2632,9 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
       const pdfData = await pdf(req.file.buffer, { max: 51 });
       numPages = pdfData.numpages;
       extractedText = pdfData.text || "";
+      console.log(`[PDF Quiz API] PDF parse complete. Pages: ${numPages}, Extracted text length: ${extractedText.trim().length}`);
     } catch (parseError) {
-      console.warn("Failed to parse PDF locally with pdf-parse:", parseError);
+      console.warn("[PDF Quiz API] Failed to parse PDF locally with pdf-parse:", parseError);
     }
 
     if (numPages > 50) {
@@ -2578,31 +2643,41 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
 
-    const systemInstruction = `You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate exactly ${requestedCount} multiple choice questions based ONLY on this text/document. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
+    const systemInstruction = `You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate exactly ${requestedCount} multiple choice questions based strictly on this text/document. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
 2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
-4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.`;
+4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+
+Use this exact JSON structure:
+[
+  {
+    "question": "Sample multiple choice question...",
+    "options": ["A) Option A", "B) Option B", "C) Option C", "D) Option D"],
+    "correctAnswer": "A) Option A",
+    "explanation": "Because..."
+  }
+]`;
 
     let response;
     if (extractedText && extractedText.trim().length >= 50) {
-      // Use the highly reliable text extraction path
+      console.log("[PDF Quiz API] Using high-reliability text extraction path...");
       const slicedText = extractedText.length > 150000 ? extractedText.slice(0, 150000) : extractedText;
       response = await safeGenerateContent({
         gradeLevel,
         model: "gemini-flash-latest",
-        contents: {
+        contents: [{
           parts: [{ text: `DOCUMENT CONTENT:\n${slicedText}\n\nGenerate the ${requestedCount}-question JSON quiz now based strictly on the content above.` }]
-        },
+        }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json"
         }
       });
     } else {
-      // Fallback to base64 PDF multimodal processing (e.g. for scanned PDFs or low-quality extractions)
+      console.log("[PDF Quiz API] Falling back to base64 PDF multimodal processing path (scanned PDF or low-quality extraction)...");
       const pdfPart = {
         inlineData: {
           mimeType: "application/pdf",
@@ -2613,12 +2688,12 @@ CRITICAL RULES:
       response = await safeGenerateContent({
         gradeLevel,
         model: "gemini-flash-latest",
-        contents: { 
+        contents: [{ 
           parts: [
             pdfPart,
             { text: `Analyze the attached PDF document and generate the ${requestedCount}-question JSON quiz now based strictly on its content.` }
           ] 
-        },
+        }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json"
@@ -2627,13 +2702,15 @@ CRITICAL RULES:
     }
 
     let quizText = response.text || "";
+    console.log(`[PDF Quiz API] Gemini response received. Length: ${quizText.length} characters.`);
     try {
       const parsed = safeParseJSON(quizText, 'array');
       if (Array.isArray(parsed) && parsed.length > 0) {
+        console.log(`[PDF Quiz API] Successfully parsed quiz with ${parsed.length} questions.`);
         return res.json({ quiz: parsed });
       }
     } catch (parseError) {
-      console.error("JSON parse error for PDF quiz output:", parseError, quizText);
+      console.error("[PDF Quiz API] JSON parse error for PDF quiz output:", parseError, quizText);
     }
 
     return res.status(400).json({ error: "Failed to generate a valid quiz structure from the PDF. Please ensure it has readable text or images." });
@@ -2644,7 +2721,7 @@ CRITICAL RULES:
         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
       });
     }
-    console.error("PDF quiz generation error:", error);
+    console.error("[PDF Quiz API] PDF quiz generation error:", error);
     res.status(400).json({ error: error.message || "Failed to generate quiz from PDF" });
   }
 });
@@ -3131,26 +3208,44 @@ app.post("/api/generate-trivia", async (req, res) => {
     const { gradeLevel, academicStream, topic, excludeQuestions, country } = req.body;
     
     const aiClient = getAI();
+    const normalizeStr = (s: string) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    const excludesSet = new Set((excludeQuestions || []).map((q: string) => normalizeStr(q)));
     
-    let promptText = `Generate a single, unique, highly engaging educational trivia question tailored for:
+    let attempts = 0;
+    let finalTrivia: any = null;
+    let extraAvoidInstruction = "";
+
+    while (attempts < 3) {
+      attempts++;
+      
+      let promptText = `Generate a single, unique, highly engaging educational trivia question tailored for:
 - Student Academic Grade: ${gradeLevel || "11th Grade (Junior)"}
 - Academic Track/Stream: ${academicStream || "STEM / Engineering"}
 - Student's Country: ${country || "United States"}`;
 
-    if (country && country.trim().length > 0) {
-      promptText += `\n- Country-Specific Customization: Design a question that relates to, is contextualised for, or is based on the school curriculum, general knowledge, history, geography, science, famous figures, or academic themes of ${country}. For instance, if the student is from India, ask about Indian history, science achievements, or geography. If from United States, ask about US-relevant topics, etc.`;
-    }
+      if (country && country.trim().length > 0) {
+        promptText += `\n- Country-Specific Customization: Design a question that relates to, is contextualised for, or is based on the school curriculum, general knowledge, history, geography, science, famous figures, or academic themes of ${country}.`;
+      }
 
-    if (topic && topic.trim().length > 0) {
-      promptText += `\n- Specific Topic/Subject: ${topic}`;
-    }
+      if (topic && topic.trim().length > 0) {
+        promptText += `\n- Specific Topic/Subject Focus: ${topic}`;
+      }
 
-    if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
-      promptText += `\n- EXCLUDE the following questions (do not generate similar questions): ${JSON.stringify(excludeQuestions.slice(-10))}`;
-    }
+      if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
+        // Send a larger slice of history to prevent repetition
+        promptText += `\n- EXCLUDE the following questions (do NOT generate them or anything similar): ${JSON.stringify(excludeQuestions.slice(-120))}`;
+      }
 
-    const systemInstruction = `You are an Elite Interactive Quiz and Trivia Game Creator.
-Generate a single multiple-choice trivia question that is highly informative, accurate, and customized to the student's grade level and academic track.
+      if (extraAvoidInstruction) {
+        promptText += `\n${extraAvoidInstruction}`;
+      }
+
+      const systemInstruction = `You are an Elite Interactive Quiz and Trivia Game Creator.
+Generate a single multiple-choice trivia question that is highly informative, accurate, and customized.
+
+GAME-PLAY & UNIQUE QUESTION STYLE:
+- Design "Thinking Questions" (conceptual puzzles, scientific anomalies, real-world educational paradoxes, or reasoning riddles) rather than standard factual memorization.
+- Make it highly gamified, interactive, and stimulating to think about. It should feel like a premium educational mind game!
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON object matching the schema below. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
@@ -3167,23 +3262,36 @@ Required JSON Structure:
   "fact": "The Golgi apparatus acts like the post office of the cell, sorting and shipping proteins! 📦"
 }`;
 
-    const response = await safeGenerateContent({
-      gradeLevel: gradeLevel || "11th Grade (Junior)",
-      model: "gemini-3.5-flash",
-      contents: [{ parts: [{ text: promptText }] }],
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
-      }
-    });
+      const response = await safeGenerateContent({
+        gradeLevel: gradeLevel || "11th Grade (Junior)",
+        model: "gemini-3.5-flash",
+        contents: [{ parts: [{ text: promptText }] }],
+        config: {
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          responseMimeType: "application/json"
+        }
+      });
 
-    const triviaText = response.text || "";
-    const parsed = safeParseJSON(triviaText, 'object');
-    if (parsed && parsed.question && Array.isArray(parsed.options)) {
-      return res.json({ trivia: parsed });
+      const triviaText = response.text || "";
+      const parsed = safeParseJSON(triviaText, 'object');
+      
+      if (parsed && parsed.question && Array.isArray(parsed.options)) {
+        const normQ = normalizeStr(parsed.question);
+        if (!excludesSet.has(normQ)) {
+          finalTrivia = parsed;
+          break; // Found a completely unique question!
+        } else {
+          console.warn(`[Trivia Loop] Duplicate question generated: "${parsed.question}". Retrying...`);
+          extraAvoidInstruction = `\n- IMPORTANT: You previously generated "${parsed.question}", which was already asked. Please choose a completely different subtopic or a creative new angle to make sure it is 100% unique.`;
+        }
+      }
     }
 
-    throw new Error("Failed to parse valid trivia response from AI");
+    if (finalTrivia) {
+      return res.json({ trivia: finalTrivia });
+    }
+
+    throw new Error("Failed to parse or generate a unique trivia response after multiple attempts");
   } catch (error: any) {
     console.error("Trivia generation error:", error);
     // Fallback to a random hardcoded trivia

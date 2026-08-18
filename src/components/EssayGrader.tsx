@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PenTool, Loader2, ArrowLeft, Save, AlertCircle, Camera, History, Trash2, Calendar } from 'lucide-react';
+import { PenTool, Loader2, ArrowLeft, Save, AlertCircle, Camera, History, Trash2, Calendar, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -10,6 +10,7 @@ import { triggerVibration, hapticNotification, hapticImpact } from '../utils/vib
 import { safeGetItem } from '../utils/storage';
 import { Capacitor } from '@capacitor/core';
 import { takeNativePhoto } from '../utils/mobilePicker';
+import { compressImage } from '../utils/imageCompressor';
 
 const CURRICULUMS = [
   'Standard High School',
@@ -53,6 +54,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
   const [studyTip, setStudyTip] = useState('');
   const [serverWakingUpError, setServerWakingUpError] = useState(false);
   const [showLimitPopup, setShowLimitPopup] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
 
   const [showHistory, setShowHistory] = useState(false);
 
@@ -199,7 +201,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
-    if (files.length > 5) {
+    if (uploadedImages.length + files.length > 5) {
       setErrorToast("Please select a maximum of 5 images.");
       setShowLimitPopup(true);
       triggerVibration(15);
@@ -210,47 +212,24 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
     setScanning(true);
     setErrorToast(null);
     
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('images', files[i]);
-    }
-    formData.append('gradeLevel', safeGetItem('academic_grade') || '11th Grade (Junior)');
-    
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/scan-images', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error("Could not transcribe the image(s).");
-      }
-      
-      const essayContentType = response.headers.get("content-type") || "";
-      if (!essayContentType.includes("application/json")) {
-        throw new Error("Server returned invalid response format");
-      }
-      
-      const data = await response.json();
-      if (data.text) {
-        setEssayText(data.text);
-      } else {
-        setErrorToast("No text could be extracted from the image(s). Please make sure the handwriting/text is clear.");
-      }
+      const readPromises = Array.from(files).map(file => compressImage(file));
+      const base64s = await Promise.all(readPromises);
+      setUploadedImages(prev => [...prev, ...base64s]);
+      triggerVibration(10);
     } catch (err: any) {
       console.error(err);
-      setErrorToast("Failed to transcribe image(s). Please try typing or pasting your essay.");
+      setErrorToast("Failed to load and compress selected image(s).");
     } finally {
       setScanning(false);
-      // Reset input value
       e.target.value = '';
     }
   };
 
   const handleGrade = async () => {
-    if (!essayText.trim()) return;
+    if (!essayText.trim() && uploadedImages.length === 0) return;
     
-    if (wordCount < 50) {
+    if (uploadedImages.length === 0 && wordCount < 50) {
       setErrorToast("Please enter at least 50 words of your essay to get elite feedback.");
       return;
     }
@@ -275,7 +254,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
       const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/grade-essay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: essayText, curriculum, subject, gradeLevel }),
+        body: JSON.stringify({ text: essayText, curriculum, subject, gradeLevel, images: uploadedImages }),
       });
       
       const contentType = response.headers.get("content-type") || "";
@@ -690,6 +669,42 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
+          {/* ATTACHED IMAGES PREVIEW GRID */}
+          {uploadedImages.length > 0 && (
+            <div className="mb-4 bg-zinc-50 border border-zinc-150 rounded-2xl p-4">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Attached Images ({uploadedImages.length}/5)</span>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setUploadedImages([]);
+                    triggerVibration(10);
+                  }}
+                  className="text-[10px] font-extrabold text-red-500 hover:text-red-600 transition-colors border-none bg-transparent cursor-pointer"
+                >
+                  Clear All
+                </button>
+              </div>
+              <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+                {uploadedImages.map((img, idx) => (
+                  <div key={idx} className="relative w-16 h-16 rounded-xl border border-zinc-250 overflow-hidden bg-white group flex-shrink-0">
+                    <img src={img} alt={`attached-${idx}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedImages(prev => prev.filter((_, i) => i !== idx));
+                        triggerVibration(5);
+                      }}
+                      className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors border-none flex items-center justify-center cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* MOBILE INPUT SHORTCUT BUTTON */}
           <div className="mb-6">
             <input 
@@ -713,7 +728,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
               {scanning ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                  <span>Transcribing image(s)...</span>
+                  <span>Attaching images...</span>
                 </>
               ) : (
                 <>
@@ -742,7 +757,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
 
           <button
             onClick={handleGrade}
-            disabled={!essayText.trim() || loading || scanning || false}
+            disabled={(!essayText.trim() && uploadedImages.length === 0) || loading || scanning}
             className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-500/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center border border-indigo-500/20"
           >
             {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Grade Essay"}

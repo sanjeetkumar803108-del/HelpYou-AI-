@@ -4,17 +4,18 @@
  */
 
 import { useState, ReactNode, useEffect, lazy, Suspense, useCallback } from 'react';
-import { LayoutDashboard, Camera, BookOpen, Headphones, UserCircle, Sparkles, Home, Moon, Sun, X } from 'lucide-react';
+import { LayoutDashboard, Camera, BookOpen, Headphones, UserCircle, Sparkles, Home, Moon, Sun, X, Wifi, WifiOff } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import LockedFeature from './components/LockedFeature';
 import AdvancedLoader from './components/AdvancedLoader';
 import { billingService } from './services/BillingService';
 import { auth, db } from './lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, orderBy, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { collection, query, where, orderBy, onSnapshot, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
 import { triggerVibration } from './utils/vibrate';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
+import { Network } from '@capacitor/network';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { safeGetItem, safeSetItem, safeClearAll } from './utils/storage';
 import { refillDailyCoins } from './utils/coins';
@@ -107,6 +108,85 @@ export default function App() {
   
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  const [networkStatus, setNetworkStatus] = useState<{
+    connected: boolean;
+    visible: boolean;
+    isRestored: boolean;
+  }>({
+    connected: true,
+    visible: false,
+    isRestored: false
+  });
+
+  // Listen for online/offline events globally across the application
+  useEffect(() => {
+    let active = true;
+
+    const updateStatus = (isConnected: boolean) => {
+      if (!active) return;
+      setNetworkStatus(prev => {
+        const wasOffline = !prev.connected;
+        const nowOnline = isConnected;
+
+        if (wasOffline && nowOnline) {
+          // Connection restored: switch to 'Back Online' green status and schedule automatic dismissal
+          setTimeout(() => {
+            if (active) {
+              setNetworkStatus(current => ({
+                ...current,
+                visible: false
+              }));
+            }
+          }, 3000);
+
+          return {
+            connected: true,
+            visible: true,
+            isRestored: true
+          };
+        } else if (!nowOnline) {
+          // Connection lost: show 'Currently Offline' red status indefinitely
+          return {
+            connected: false,
+            visible: true,
+            isRestored: false
+          };
+        }
+
+        return prev;
+      });
+    };
+
+    if (Capacitor.isNativePlatform()) {
+      Network.getStatus().then(status => {
+        updateStatus(status.connected);
+      });
+
+      const listener = Network.addListener('networkStatusChange', status => {
+        updateStatus(status.connected);
+      });
+
+      return () => {
+        active = false;
+        listener.then(h => h.remove());
+      };
+    } else {
+      updateStatus(window.navigator.onLine);
+
+      const handleOnline = () => updateStatus(true);
+      const handleOffline = () => updateStatus(false);
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      return () => {
+        active = false;
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
@@ -114,8 +194,13 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Initialize RevenueCat for In-App Purchases
+  // Initialize RevenueCat for In-App Purchases and setup local notifications
   useEffect(() => {
+    // Setup daily recurring local notifications on app startup
+    setupDailyLocalNotifications(true).catch(e => {
+      console.warn('Local notifications setup notice:', e);
+    });
+
     // TODO: SETUP - Replace 'YOUR_REVENUECAT_API_KEY_ANDROID' with your real public API key from the RevenueCat dashboard before launching.
     if (Capacitor.isNativePlatform()) {
       try {
@@ -256,6 +341,14 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
+        if (!currentUser.emailVerified && !isGoogle) {
+          setUser(null);
+          signOut(auth).catch(err => console.warn('Sign out on unverified error:', err));
+          return;
+        }
+      }
       setUser(currentUser);
       if (currentUser) {
         refillDailyCoins();
@@ -508,6 +601,115 @@ export default function App() {
     return () => unsubscribeItems();
   }, [user, authLoading]);
 
+  // Manual force sync handler for Pull-to-Refresh
+  const handleForceSync = async () => {
+    if (!user) return;
+    try {
+      const q = query(
+        collection(db, 'pocket_items'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPocketItems(fetched);
+      safeSetItem(`stale_pocket_items_${user.uid}`, JSON.stringify(fetched));
+      console.log('[ForceSync] Successfully force-synced pocket items:', fetched.length);
+    } catch (err) {
+      console.error('[ForceSync] Error during manual force-sync of pocket items:', err);
+      throw err;
+    }
+  };
+
+  // 3. User document listener for coins, subscriptions, and auto-calculated study streak
+  useEffect(() => {
+    if (!user) return;
+
+    // Helper functions for date matching
+    const getLocalDateString = () => {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const getYesterdayDateString = () => {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const unsubscribeUser = onSnapshot(doc(db, 'users', user.uid), {
+      next: async (snapshot) => {
+        if (!snapshot.exists()) return;
+        const userData = snapshot.data();
+        if (!userData) return;
+
+        // 1. Sync coins
+        if (typeof userData.coins === 'number') {
+          const userKey = `study_daily_limit_${user.uid}`;
+          safeSetItem(userKey, String(userData.coins));
+          window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: userData.coins }));
+        }
+
+        // 2. Sync Pro status
+        if (typeof userData.isPro === 'boolean') {
+          setIsVip(userData.isPro);
+          safeSetItem('study_is_vip', String(userData.isPro));
+          safeSetItem(`study_is_vip_${user.uid}`, String(userData.isPro));
+        }
+
+        // 3. Sync & Auto-calculate study streak
+        const currentStreak = typeof userData.currentStreak === 'number' ? userData.currentStreak : 0;
+        const lastActiveDate = userData.lastActiveDate || '';
+        const todayStr = getLocalDateString();
+        const yesterdayStr = getYesterdayDateString();
+
+        // Let's check if the streak needs auto-calculation for today
+        if (lastActiveDate !== todayStr) {
+          let updatedStreak = 1;
+          if (lastActiveDate === yesterdayStr) {
+            updatedStreak = currentStreak + 1;
+          } else if (!lastActiveDate) {
+            updatedStreak = 1;
+          } else {
+            // Older than yesterday, reset streak to 1
+            updatedStreak = 1;
+          }
+
+          // Instantly update the database with today's activity and calculated streak
+          try {
+            await setDoc(doc(db, 'users', user.uid), {
+              currentStreak: updatedStreak,
+              lastActiveDate: todayStr
+            }, { merge: true });
+            
+            // Sync locally
+            safeSetItem('study_punches', String(updatedStreak));
+            safeSetItem('study_last_punch_date', todayStr);
+            window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: updatedStreak }));
+          } catch (e) {
+            console.error("Failed to auto-update study streak in Firestore:", e);
+          }
+        } else {
+          // Streak is already up-to-date for today. Sync locally and dispatch event
+          safeSetItem('study_punches', String(currentStreak));
+          safeSetItem('study_last_punch_date', lastActiveDate);
+          window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: currentStreak }));
+        }
+      },
+      error: (err) => {
+        console.error("Error watching user document:", err);
+      }
+    });
+
+    return () => unsubscribeUser();
+  }, [user]);
+
   // Native back button navigation handler
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -600,6 +802,34 @@ export default function App() {
       fallbackSkeleton={<FullPageSkeleton />}
     >
       <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-[#FAF9F6] text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative`}>
+        {/* Global Network Status Banner */}
+        <AnimatePresence>
+          {networkStatus.visible && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className={`w-full py-2 px-4 z-[999] flex items-center justify-center gap-2 text-xs font-bold shadow-md select-none ${
+                !networkStatus.connected
+                  ? 'bg-red-600 text-white dark:bg-red-950 dark:text-red-200 border-b border-red-500/30'
+                  : 'bg-emerald-600 text-white dark:bg-emerald-950 dark:text-emerald-200 border-b border-emerald-500/30'
+              }`}
+            >
+              {!networkStatus.connected ? (
+                <>
+                  <WifiOff className="w-3.5 h-3.5 animate-pulse" />
+                  <span>Currently Offline</span>
+                </>
+              ) : (
+                <>
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span>Back Online</span>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       {activeTab !== 'scanner' && activeTab !== 'aitutor' && activeTab !== 'notes' && activeTab !== 'profile' && activeTool === null && (
         <header className="px-6 py-5 bg-white border-b border-zinc-200/60 z-10 flex justify-between items-center">
           <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">HelpYou AI</h1>
@@ -664,6 +894,7 @@ export default function App() {
                 onOpenLogin={handleOpenLoginFromDashboard}
                 onSelectTool={handleSelectToolFromDashboard} 
                 activeTab={activeTab}
+                onForceSync={handleForceSync}
               />
             </Suspense>
           </div>

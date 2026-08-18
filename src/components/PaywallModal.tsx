@@ -47,8 +47,8 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
   const monthlyNum = numericMatch ? parseFloat(numericMatch[1]) : 14.99;
 
   const convertedMonthlyPrice = `${basePrice}/mo`;
-  const convertedYearlyPrice = `${symbol}${(monthlyNum * 10).toFixed(2)}`;
-  const convertedOriginalYearlyPrice = `${symbol}${(monthlyNum * 20).toFixed(2)}`;
+  const convertedYearlyPrice = `${symbol}${Math.floor(monthlyNum * 10)}.99`;
+  const convertedOriginalYearlyPrice = `${symbol}${(monthlyNum * 12).toFixed(2)}`;
 
   // Placeholder function to update user's Pro status in global state or Firebase backend
   const updateUserProStatus = (isPro: boolean, plan: 'monthly' | 'yearly') => {
@@ -260,7 +260,7 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
                   <div>
                     <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wide">Monthly</span>
                     <h3 className="text-base font-black text-zinc-900 leading-tight mt-1">{convertedMonthlyPrice}</h3>
-                    <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">Renews monthly</p>
+                    <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">Billed monthly</p>
                   </div>
                 </button>
 
@@ -279,7 +279,7 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
                 >
                   {/* SAVE 50% Psychological Pricing Badge */}
                   <div className="absolute top-0 right-0 bg-red-500 text-white font-black text-[8px] px-2 py-0.5 rounded-bl-lg select-none uppercase tracking-wide">
-                    SAVE 50%
+                    2 Months FREE
                   </div>
 
                   <div>
@@ -296,7 +296,7 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
                         {convertedYearlyPrice}/yr
                       </span>
                     </h3>
-                    <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">Renews annually</p>
+                    <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">Billed annually</p>
                   </div>
                 </button>
               </div>

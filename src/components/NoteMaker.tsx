@@ -12,6 +12,13 @@ import { triggerVibration } from '../utils/vibrate';
 import { Capacitor } from '@capacitor/core';
 import { pickNativeFiles } from '../utils/mobilePicker';
 
+const AUDIO_STEPS = [
+  { title: "Analyzing summary contents... 🧠", desc: "Reading and structuring major topics" },
+  { title: "Structuring podcast dialog... 🎙️", desc: "Scripting natural conversational highlights" },
+  { title: "Synthesizing ultra-realistic voice host... ⚡", desc: "Rendering professional neural audio frequencies" },
+  { title: "Finalizing audio masterclass mix... ✨", desc: "Polishing vocal balance and mastering compression" }
+];
+
 export default function NoteMaker({ onBack }: { onBack: () => void }) {
   // Navigation back handler
   const handleHeaderBack = () => {
@@ -64,6 +71,22 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   const [isSpeechFallback, setIsSpeechFallback] = useState(false);
   const [isPlayingFallback, setIsPlayingFallback] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [audioGenerationStep, setAudioGenerationStep] = useState(0);
+
+  useEffect(() => {
+    let interval: any;
+    if (isGeneratingAudio) {
+      setAudioGenerationStep(0);
+      interval = setInterval(() => {
+        setAudioGenerationStep(prev => (prev < 3 ? prev + 1 : prev));
+      }, 3500);
+    } else {
+      setAudioGenerationStep(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isGeneratingAudio]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const synthUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -451,17 +474,19 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
               setResult(data.text);
               setError(data.text);
             } else if (data.error) {
-              setResult(`Error: ${data.error}`);
-              setError(`Error: ${data.error}`);
+              console.error(data.error);
+              const friendly = "Oops! Something went wrong on our end. Please try again.";
+              setResult(friendly);
+              setError(friendly);
             } else {
-              const genericError = `Error: Server returned status ${xhr.status}`;
-              setResult(genericError);
-              setError(genericError);
+              const friendly = "Oops! Something went wrong on our end. Please try again.";
+              setResult(friendly);
+              setError(friendly);
             }
           } catch {
-            const finalError = `Error: Server returned status ${xhr.status}`;
-            setResult(finalError);
-            setError(finalError);
+            const friendly = "Oops! Something went wrong on our end. Please try again.";
+            setResult(friendly);
+            setError(friendly);
           }
           setStep('initial');
         }
@@ -916,16 +941,6 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                       <h4 className="text-lg font-black text-zinc-900 mt-2 tracking-tight">AI Audio Masterclass</h4>
                       <p className="text-[11px] text-zinc-400 font-bold">Smart Host summary of your uploaded document</p>
                     </div>
-                    {audioData && (
-                      <a 
-                        href={audioData} 
-                        download={file?.name ? `${file.name.replace('.pdf', '')}-audio.wav` : 'study-briefing.wav'}
-                        className="p-2.5 bg-zinc-50 text-zinc-600 hover:text-indigo-600 rounded-full border border-zinc-200 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all"
-                        title="Download MP3"
-                      >
-                        <Download className="w-4.5 h-4.5" />
-                      </a>
-                    )}
                   </div>
 
                   {/* HTML5 Audio Node */}
@@ -951,11 +966,43 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
 
                   {/* Standard Player Controls */}
                   {isGeneratingAudio ? (
-                    <div className="flex flex-col items-center justify-center py-8 gap-3 z-10">
-                      <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-                      <div className="text-center">
-                        <p className="text-sm font-extrabold text-indigo-900">Preparing podcast host voice...</p>
-                        <p className="text-[11px] text-zinc-400 font-bold animate-pulse">This is a premium high-quality feature & generates in background</p>
+                    <div className="flex flex-col items-center justify-center py-6 px-4 gap-4 z-10 w-full">
+                      <div className="relative flex items-center justify-center">
+                        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+                        <span className="absolute text-sm font-bold text-indigo-700 animate-pulse">🎙️</span>
+                      </div>
+                      
+                      <div className="text-center w-full max-w-sm">
+                        <p className="text-sm font-black text-indigo-900 transition-all duration-300">
+                          {AUDIO_STEPS[audioGenerationStep].title}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 font-bold mt-0.5 transition-all duration-300">
+                          {AUDIO_STEPS[audioGenerationStep].desc}
+                        </p>
+                      </div>
+
+                      {/* Horizontal progress indicators */}
+                      <div className="flex items-center gap-1.5 w-full max-w-xs mt-1">
+                        {AUDIO_STEPS.map((_, idx) => (
+                          <div 
+                            key={idx}
+                            className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                              idx < audioGenerationStep 
+                                ? 'bg-indigo-600' 
+                                : idx === audioGenerationStep 
+                                  ? 'bg-indigo-400 animate-pulse' 
+                                  : 'bg-zinc-150'
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="bg-indigo-50/50 border border-indigo-100/50 rounded-2xl px-3 py-2 text-center text-[10px] text-indigo-700 font-black tracking-wide flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                        </span>
+                        <span>GENERATING YOUR PODCAST SUMMARY IN BACKGROUND</span>
                       </div>
                     </div>
                   ) : !isSpeechFallback ? (

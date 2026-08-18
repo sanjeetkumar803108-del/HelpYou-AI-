@@ -74,9 +74,31 @@
         "email": { "type": "string" },
         "coins": { "type": "number" },
         "isPro": { "type": "boolean" },
+        "currentStreak": { "type": "number" },
+        "lastActiveDate": { "type": "string" },
+        "usageStats": { 
+          "type": "object", 
+          "description": "Daily focus time map with keys as 'YYYY-MM-DD' and values as minutes spent."
+        },
         "createdAt": { "type": "string" }
       },
       "required": ["userId", "email", "coins"]
+    },
+    "PdfHistory": {
+      "title": "PDF History",
+      "description": "Stores user generated/imported PDF records securely.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "fileUri": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "featureTag": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "pageCount": { "type": "number" }
+      },
+      "required": ["userId", "title", "fileUri", "timestamp", "featureTag"]
     }
   },
   "firestore": {
@@ -99,6 +121,10 @@
     "/MistakeVault/{mistakeId}": {
       "schema": { "$ref": "#/entities/Mistake" },
       "description": "Stores logged user academic errors and misconceptions."
+    },
+    "/pdf_history/{pdfId}": {
+      "schema": { "$ref": "#/entities/PdfHistory" },
+      "description": "Stores user generated/imported PDF records securely."
     }
   }
 }

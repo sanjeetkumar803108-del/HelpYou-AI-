@@ -7,6 +7,7 @@ import { saveMistakeToVault } from '../utils/mistakes';
 import { safeGetItem } from '../utils/storage';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
+import { Network } from '@capacitor/network';
 import { auth } from '../lib/firebase';
 import { getCoins, deductCoins, isProUser } from '../utils/coins';
 
@@ -23,6 +24,24 @@ interface TriviaQuestion {
 }
 
 export default function DailyTrivia({ onBack }: DailyTriviaProps) {
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    Network.getStatus().then((status) => {
+      setIsOffline(!status.connected);
+    }).catch(err => {
+      console.warn("DailyTrivia: Failed to get initial network status", err);
+    });
+
+    const listener = Network.addListener('networkStatusChange', (status) => {
+      setIsOffline(!status.connected);
+    });
+
+    return () => {
+      listener.then(l => l.remove());
+    };
+  }, []);
+
   const handleHeaderBack = () => {
     triggerVibration(10);
     if (isCustomizing) {
@@ -63,7 +82,14 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     return ["General Science", "World History", "Geography", "English Idioms", "Space Exploration"];
   };
 
+  const [triviaError, setTriviaError] = useState<string | null>(null);
+
   const fetchTrivia = async (forcedTopic?: string) => {
+    if (isOffline) {
+      setLoading(false);
+      return;
+    }
+
     // Check if user has sufficient coins first
     if (!isProUser()) {
       const currentCoins = getCoins();
@@ -75,6 +101,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     }
 
     setLoading(true);
+    setTriviaError(null);
     setSelectedOption(null);
     setHasAnswered(false);
     setAnswerCorrect(null);
@@ -104,8 +131,8 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
         const deducted = deductCoins(1, "Daily Trivia Booster");
         if (deducted) {
           setTrivia(data.trivia);
-          // Track the question to prevent repetition
-          const updatedExcludes = [...excludeList, data.trivia.question].slice(-30);
+          // Track the question to prevent repetition - store up to 150 questions
+          const updatedExcludes = [...excludeList, data.trivia.question].slice(-150);
           setExcludeList(updatedExcludes);
           localStorage.setItem('study_trivia_excludes', JSON.stringify(updatedExcludes));
         } else {
@@ -115,6 +142,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
       }
     } catch (error) {
       console.error('Failed to generate dynamic trivia:', error);
+      setTriviaError("Oops! Something went wrong on our end. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -345,8 +373,40 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
           </AnimatePresence>
         </div>
 
-        {/* Loading Spinner Skeleton */}
-        {loading ? (
+        {/* Offline View */}
+        {isOffline ? (
+          <div className="bg-white rounded-[2rem] border border-zinc-200/60 p-6 shadow-sm flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-4">
+              <span className="text-xl">🔌</span>
+            </div>
+            <p className="text-sm font-black text-zinc-800">You are offline</p>
+            <p className="text-xs text-zinc-400 mt-1.5 px-6 font-medium leading-relaxed">
+              Daily Trivia Booster requires an active internet connection to generate fresh personalized questions. Please reconnect and try again.
+            </p>
+            <button
+              onClick={() => fetchTrivia()}
+              className="mt-5 px-5 py-2.5 bg-zinc-950 text-white rounded-xl text-xs font-bold shadow-sm"
+            >
+              Retry Connection
+            </button>
+          </div>
+        ) : triviaError ? (
+          <div className="bg-white rounded-[2rem] border border-zinc-200/60 p-6 shadow-sm flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-4">
+              <span className="text-xl">⚠️</span>
+            </div>
+            <p className="text-sm font-black text-zinc-800">Connection Issue</p>
+            <p className="text-xs text-zinc-400 mt-1.5 px-6 font-medium leading-relaxed">
+              {triviaError}
+            </p>
+            <button
+              onClick={() => fetchTrivia()}
+              className="mt-5 px-5 py-2.5 bg-zinc-950 text-white rounded-xl text-xs font-bold shadow-sm"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : loading ? (
           <div className="bg-white rounded-[2rem] border border-zinc-200/60 p-6 shadow-sm flex flex-col items-center justify-center py-16">
             <div className="relative flex items-center justify-center mb-6">
               <motion.div 
@@ -411,7 +471,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
                     <button
                       key={idx}
                       onClick={() => handleAnswerOption(idx)}
-                      disabled={hasAnswered}
+                      disabled={hasAnswered || isOffline}
                       className={`w-full py-3.5 px-4 rounded-2xl text-center text-xs transition-all duration-200 flex items-center justify-center gap-1.5 ${btnStyle} ${!hasAnswered ? 'cursor-pointer active:scale-98' : 'cursor-default'}`}
                     >
                       {hasAnswered && idx === trivia.correctIndex && (
@@ -444,7 +504,8 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
               {/* Next Question / Shuffle button */}
               <button 
                 onClick={handleNextQuestion}
-                className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-xs py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-98"
+                disabled={isOffline}
+                className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-xs py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-98 disabled:opacity-50"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>{hasAnswered ? "Next Question" : "Skip Quiz"}</span>

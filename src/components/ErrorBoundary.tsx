@@ -23,7 +23,8 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary] Uncaught component error:', error, errorInfo);
+    console.error('[ErrorBoundary] Uncaught component error:', error);
+    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
     triggerVibration(50);
   }
 
@@ -45,6 +46,16 @@ export default class ErrorBoundary extends Component<Props, State> {
           <p className="text-sm text-zinc-500 font-medium max-w-xs mt-2 leading-relaxed">
             The screen encountered an unexpected rendering issue. Try resetting below.
           </p>
+          {this.state.error && (
+            <div className="mt-4 p-4 bg-red-50/50 border border-red-150 rounded-2xl max-w-sm text-left font-mono text-[10px] text-red-800 leading-normal overflow-auto whitespace-pre-wrap max-h-[150px] w-full">
+              <strong>Error:</strong> {this.state.error.message || String(this.state.error)}
+              {this.state.error.stack && (
+                <div className="mt-2 text-zinc-500 text-[9px] border-t border-red-200/40 pt-2 overflow-x-auto">
+                  {this.state.error.stack}
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={this.handleReset}
             className="mt-6 px-5 py-3 bg-zinc-950 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-zinc-900 shadow-sm border border-zinc-900 cursor-pointer active:scale-95 transition-transform"

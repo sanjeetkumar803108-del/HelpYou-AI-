@@ -1,3 +1,6 @@
+import { auth, db } from '../lib/firebase';
+import { collection, addDoc, getDocs, query, where, deleteDoc, doc, writeBatch } from 'firebase/firestore';
+
 export interface PdfHistoryItem {
   id: string;
   title: string;
@@ -94,6 +97,22 @@ export function savePdfToHistory(item: {
     }
   }
 
+  // Asynchronously synchronize with Firestore if the user is authenticated
+  if (auth.currentUser) {
+    addDoc(collection(db, 'pdf_history'), {
+      userId: auth.currentUser.uid,
+      id: targetRecord.id,
+      title: targetRecord.title,
+      fileUri: targetRecord.fileUri,
+      timestamp: targetRecord.timestamp,
+      featureTag: targetRecord.featureTag,
+      fileSize: targetRecord.fileSize || null,
+      pageCount: targetRecord.pageCount || null
+    }).catch(err => {
+      console.error('[PDFHistory] Error writing PDF history to cloud database:', err);
+    });
+  }
+
   return targetRecord;
 }
 
@@ -109,6 +128,21 @@ export function deletePdfFromHistory(id: string): void {
   } catch (err) {
     console.warn('[PDFHistory] Error deleting item from history:', err);
   }
+
+  // Delete from Firestore if the user is authenticated
+  if (auth.currentUser) {
+    getDocs(query(collection(db, 'pdf_history'), where('userId', '==', auth.currentUser.uid), where('id', '==', id)))
+      .then(snapshot => {
+        snapshot.forEach(document => {
+          deleteDoc(doc(db, 'pdf_history', document.id)).catch(err => {
+            console.error('[PDFHistory] Error deleting PDF record from cloud:', err);
+          });
+        });
+      })
+      .catch(err => {
+        console.error('[PDFHistory] Error querying cloud document for deletion:', err);
+      });
+  }
 }
 
 /**
@@ -120,5 +154,22 @@ export function clearPdfHistory(): void {
     window.dispatchEvent(new CustomEvent('pdf-history-updated', { detail: { cleared: true } }));
   } catch (err) {
     console.warn('[PDFHistory] Error clearing PDF history:', err);
+  }
+
+  // Clear from Firestore if the user is authenticated
+  if (auth.currentUser) {
+    getDocs(query(collection(db, 'pdf_history'), where('userId', '==', auth.currentUser.uid)))
+      .then(snapshot => {
+        const batch = writeBatch(db);
+        snapshot.forEach(document => {
+          batch.delete(doc(db, 'pdf_history', document.id));
+        });
+        batch.commit().catch(err => {
+          console.error('[PDFHistory] Error committing cloud clear batch:', err);
+        });
+      })
+      .catch(err => {
+        console.error('[PDFHistory] Error querying cloud documents for clear:', err);
+      });
   }
 }

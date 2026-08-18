@@ -57,33 +57,21 @@ export async function requestNotificationPermissions(forcePrompt = false): Promi
  */
 export async function scheduleDailyNotification() {
   try {
-    // Check if already scheduled in LocalStorage to prevent duplicates
-    const isAlreadyScheduled = localStorage.getItem(STORAGE_KEY_SCHEDULED) === 'true';
-    
     if (Capacitor.isNativePlatform()) {
-      // Fetch currently scheduled pending notifications to be absolutely sure
-      const pendingResult = await LocalNotifications.getPending();
-      const hasNotificationScheduled = pendingResult.notifications.some(
-        (n: any) => n.id === NOTIFICATION_ID
-      );
-      
-      if (isAlreadyScheduled && hasNotificationScheduled) {
-        console.log('[NotificationService] Daily local notification already scheduled on Native.');
-        return;
-      }
-      
-      // Cancel existing if any just to be clean
+      // ALWAYS cancel existing notification with our ID first to prevent duplicate scheduling
       await LocalNotifications.cancel({
         notifications: [{ id: NOTIFICATION_ID }]
-      }).catch(() => {});
+      }).catch((e) => {
+        console.log('[NotificationService] Cancel error (benign):', e);
+      });
 
-      // Schedule the daily notification at 5:00 PM (17:00)
+      // Schedule the daily notification at 5:00 PM (17:00) strictly based on device local timezone
       await LocalNotifications.schedule({
         notifications: [
           {
             id: NOTIFICATION_ID,
-            title: 'Homework Pending? 📚',
-            body: 'Scan & solve your math & science doubts instantly with your AI Tutor!',
+            title: "🔥 Don't break your study streak!",
+            body: "School is out! Take 15 minutes to review today's topics and keep your streak alive on HelpYou AI. 🚀",
             schedule: {
               every: 'day',
               on: {
@@ -100,16 +88,10 @@ export async function scheduleDailyNotification() {
       console.log('[NotificationService] Daily local notification successfully scheduled at 17:00 on Native.');
     } else {
       // Web Fallback: Register log or mock daily timer
-      if (isAlreadyScheduled) {
-        console.log('[NotificationService] Daily notification already scheduled on Web.');
-        return;
-      }
-
-      console.log('[NotificationService] Daily notification scheduled at 5:00 PM (Web Fallback simulated).');
+      console.log('[NotificationService] Web Fallback: Cancelled prior schedule and registered new daily schedule at 5:00 PM.');
       
       // We can trigger a Web Notification immediately if permissions are granted for user feedback
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        // Just for demo/onboarding feedback
         console.log('[NotificationService] Web notification permission is active. Daily schedule registered.');
       }
       
@@ -124,7 +106,7 @@ export async function scheduleDailyNotification() {
  * Initialize and trigger the setup workflow.
  * Checks permissions, requests if needed, and schedules the notification.
  */
-export async function setupDailyLocalNotifications(forcePrompt = false) {
+export async function setupDailyLocalNotifications(forcePrompt = true) {
   console.log('[NotificationService] Starting setup of daily local notifications...');
   const hasPermission = await requestNotificationPermissions(forcePrompt);
   if (hasPermission) {

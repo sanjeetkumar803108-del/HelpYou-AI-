@@ -40,31 +40,17 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
   const [toast, setToast] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
 
-  // Automatically check & reset streak if missed
   useEffect(() => {
-    try {
-      const today = new Date().toDateString();
-      const lastPunchDate = safeGetItem('study_last_punch_date');
-      if (!lastPunchDate) {
-        safeSetItem('study_punches', '0');
-        setStudyStreak(0);
-      } else {
-        const lastDate = new Date(lastPunchDate);
-        const currentDate = new Date(today);
-        lastDate.setHours(0, 0, 0, 0);
-        currentDate.setHours(0, 0, 0, 0);
-        
-        const diffTime = currentDate.getTime() - lastDate.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays > 1) {
-          safeSetItem('study_punches', '0');
-          setStudyStreak(0);
-        }
+    const handleStreakUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail !== undefined) {
+        setStudyStreak(Number(customEvent.detail || 0));
       }
-    } catch (error) {
-      console.error("Error updating streak:", error);
-    }
+    };
+    window.addEventListener('study-streak-updated', handleStreakUpdate);
+    return () => {
+      window.removeEventListener('study-streak-updated', handleStreakUpdate);
+    };
   }, []);
 
   const showToast = (message: string) => {
@@ -104,7 +90,10 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
       
       let isActive = false;
       if (lastPunchDate) {
-        const lastDateObj = new Date(lastPunchDate);
+        const parts = lastPunchDate.split('-');
+        const lastDateObj = parts.length === 3 
+          ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+          : new Date(lastPunchDate);
         lastDateObj.setHours(0, 0, 0, 0);
         
         const currentCheckDateObj = new Date(dateString);
@@ -130,55 +119,9 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
     return days;
   };
 
-  const handleDailyPunch = () => {
-    triggerVibration(20);
-    const today = new Date().toDateString();
-    const lastPunchDate = safeGetItem('study_last_punch_date');
-    
-    if (lastPunchDate === today) {
-      showToast("✨ Today's attendance already punched!");
-      return;
-    }
-
-    let newStreak = 1;
-    if (lastPunchDate) {
-      const lastDate = new Date(lastPunchDate);
-      const currentDate = new Date(today);
-      lastDate.setHours(0, 0, 0, 0);
-      currentDate.setHours(0, 0, 0, 0);
-      
-      const diffTime = currentDate.getTime() - lastDate.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 1) {
-        newStreak = studyStreak + 1;
-      }
-    }
-
-    safeSetItem('study_punches', String(newStreak));
-    safeSetItem('study_last_punch_date', today);
-    setStudyStreak(newStreak);
-
-    if (!isPro) {
-      addCoins(2, "Daily Streak Punch-In 🎯");
-    }
-
-    confetti({
-      particleCount: 125,
-      spread: 85,
-      origin: { y: 0.6 }
-    });
-
-    if (isPro) {
-      showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! 🚀`);
-    } else {
-      showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! +2 Coins Added! 🚀`);
-    }
-  };
-
   const today = new Date().toDateString();
   const lastPunchDate = safeGetItem('study_last_punch_date');
-  const hasPunchedToday = lastPunchDate === today;
+  const hasPunchedToday = !!lastPunchDate;
 
   return (
     <div className="w-full h-full min-h-screen bg-[#FAF9F6] text-zinc-900 font-sans flex flex-col relative pb-12">
@@ -246,52 +189,30 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
             </span>
             
             <p className="text-xs font-bold text-white/95 mt-5 leading-relaxed max-w-xs">
-              Fantastic Performance! You are working hard every day! Punch in your daily attendance to stay ahead of the rest! 🎯
+              Fantastic Performance! You are working hard every day! Your study streak keeps glowing brighter with every visit! 🎯
             </p>
           </div>
         </div>
 
-        {/* Daily attendance punch-in card */}
+        {/* Auto-tracked attendance streak card */}
         <div className="bg-white rounded-[2rem] p-6 border border-zinc-200/80 shadow-sm flex flex-col items-center text-center space-y-4">
           <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasPunchedToday ? 'bg-green-50 text-green-500 border border-green-100' : 'bg-orange-50 text-orange-500 border border-orange-100'}`}>
-              {hasPunchedToday ? <Check className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-orange-50 text-orange-500 border border-orange-100">
+              <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
             </div>
             <h4 className="text-xs font-black text-zinc-800 uppercase tracking-wider">
-              Daily Attendance Check-In
+              Auto-Tracked Study Streak
             </h4>
           </div>
 
           <p className="text-[11px] font-bold text-zinc-500 max-w-xs leading-relaxed">
-            {hasPunchedToday 
-              ? "Your attendance for today is successfully registered! Come back tomorrow to continue your daily study streak! ✨"
-              : isPro
-                ? "Your attendance hasn't been punched today! Start studying and mark your attendance now! 🔥"
-                : "Your attendance hasn't been punched today! Start studying and earn +2 Study Coins now! 🪙"
-            }
+            Your daily study streak is calculated automatically in the background when you open the app. No manual check-in needed! Keep up the incredible learning habit! ✨🚀
           </p>
 
-          <button
-            onClick={handleDailyPunch}
-            disabled={hasPunchedToday}
-            className={`w-full py-4 rounded-2xl font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
-              hasPunchedToday 
-                ? 'bg-zinc-100 text-zinc-400 border border-zinc-200/50 cursor-default pointer-events-none' 
-                : 'bg-zinc-950 hover:bg-zinc-800 text-white shadow-md border-none'
-            }`}
-          >
-            {hasPunchedToday ? (
-              <>
-                <Check className="w-4 h-4" />
-                Attendance Verified!
-              </>
-            ) : (
-              <>
-                <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
-                {isPro ? "Punch Attendance" : "Punch Attendance (+2 Coins)"}
-              </>
-            )}
-          </button>
+          <div className="w-full bg-zinc-50 border border-zinc-150 py-3.5 px-4 rounded-xl text-xs font-black text-zinc-700 flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            Streak Active: {studyStreak} Days Verified
+          </div>
         </div>
 
         {/* Attendance Calendar Grid */}

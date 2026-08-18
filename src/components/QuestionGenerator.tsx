@@ -499,7 +499,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       }
     } catch (e: any) {
       console.error(e);
-      setError(e.message || "An unexpected error occurred. Please try again.");
+      setError("Oops! Something went wrong on our end. Please try again.");
     } finally {
       setLoading(false);
     }

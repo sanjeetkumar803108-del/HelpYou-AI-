@@ -16,6 +16,7 @@ import { detectUserRegion } from '../utils/regionDetector';
 import { useSettings } from '../hooks/useSettings';
 import { saveMistakeToVault } from '../utils/mistakes';
 import { Capacitor } from '@capacitor/core';
+import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import AdvancedLoader from './AdvancedLoader';
 import {
@@ -31,6 +32,8 @@ import {
   Legend, 
   Area 
 } from 'recharts';
+
+import { getScalableRelevantQuizzes } from '../utils/curriculumMap';
 
 interface Question {
   question: string;
@@ -97,42 +100,42 @@ export const isCollegeGrade = (grade: string): boolean => {
  */
 export const subjectAliases: Record<string, Record<string, string>> = {
   // High School Core & Track
-  'core_reading': { USA: 'SAT Reading & Writing', UK: 'GCSE English Language', IB: 'SL English A', Global: 'Core Reading & Writing' },
-  'core_math': { USA: 'SAT Math', UK: 'GCSE Maths', IB: 'SL Mathematics', Global: 'Core Mathematics' },
-  'adv_english': { USA: 'AP English Language', UK: 'A-Level English Language', IB: 'HL English A', Global: 'Advanced English Language' },
-  'adv_cs': { USA: 'AP Computer Science A', UK: 'A-Level Computer Science', IB: 'HL Computer Science', Global: 'Advanced Computer Science' },
-  'discrete_math': { USA: 'Discrete Math', UK: 'Discrete Mathematics', IB: 'Discrete Math', Global: 'Discrete Mathematics' },
-  'python_basics': { USA: 'Python Basics', UK: 'Python Programming', IB: 'Python Basics', Global: 'Python Programming' },
-  'adv_macro': { USA: 'AP Macroeconomics', UK: 'A-Level Economics', IB: 'HL Economics', Global: 'Advanced Macroeconomics' },
-  'adv_stats': { USA: 'AP Statistics', UK: 'A-Level Statistics', IB: 'HL Statistics', Global: 'Advanced Statistics' },
-  'fin_accounting': { USA: 'Financial Accounting', UK: 'Financial Accounting', IB: 'Financial Accounting', Global: 'Financial Accounting' },
-  'adv_biology': { USA: 'AP Biology', UK: 'A-Level Biology', IB: 'HL Biology', Global: 'Advanced Biology' },
-  'adv_chem': { USA: 'AP Chemistry', UK: 'A-Level Chemistry', IB: 'HL Chemistry', Global: 'Advanced Chemistry' },
-  'anatomy_phys': { USA: 'Anatomy & Physiology', UK: 'Human Anatomy & Physiology', IB: 'Anatomy & Physiology', Global: 'Anatomy & Physiology' },
-  'adv_ushistory': { USA: 'AP US History', UK: 'A-Level History', IB: 'HL History', Global: 'Advanced History' },
-  'adv_psych': { USA: 'AP Psychology', UK: 'A-Level Psychology', IB: 'HL Psychology', Global: 'Advanced Psychology' },
-  'adv_gov': { USA: 'AP US Government', UK: 'A-Level Government & Politics', IB: 'HL Global Politics', Global: 'Advanced Civics & Politics' },
-  'adv_calc': { USA: 'AP Calculus BC', UK: 'A-Level Further Maths', IB: 'HL Mathematics Analysis', Global: 'Advanced Calculus' },
-  'adv_physics': { USA: 'AP Physics C: Mechanics', UK: 'A-Level Physics', IB: 'HL Physics', Global: 'Advanced Physics' },
-  'eng_design': { USA: 'Engineering Design', UK: 'Design & Technology', IB: 'Design Technology', Global: 'Engineering Design' },
+  'core_reading': { USA: 'SAT Reading & Writing', UK: 'GCSE English Language', IB: 'SL English A', CA: 'University Preparation English', AU: 'ATAR English', Global: 'Core Reading & Writing' },
+  'core_math': { USA: 'SAT Math', UK: 'GCSE Maths', IB: 'SL Mathematics', CA: 'Grade 11/12 Functions & Applications', AU: 'ATAR Mathematics Methods', Global: 'Core Mathematics' },
+  'adv_english': { USA: 'AP English Language', UK: 'A-Level English Language', IB: 'HL English A', CA: 'University Preparation English', AU: 'ATAR English', Global: 'Advanced English Language' },
+  'adv_cs': { USA: 'AP Computer Science A', UK: 'A-Level Computer Science', IB: 'HL Computer Science', CA: 'Grade 12 Computer Science (ICS4U)', AU: 'ATAR Computer Science', Global: 'Advanced Computer Science' },
+  'discrete_math': { USA: 'Discrete Math', UK: 'Discrete Mathematics', IB: 'Discrete Math', CA: 'Grade 12 Data Management (MDM4U)', AU: 'ATAR Mathematics Applications', Global: 'Discrete Mathematics' },
+  'python_basics': { USA: 'Python Basics', UK: 'Python Programming', IB: 'Python Basics', CA: 'Python Programming', AU: 'ATAR Computer Science Basics', Global: 'Python Programming' },
+  'adv_macro': { USA: 'AP Macroeconomics', UK: 'A-Level Economics', IB: 'HL Economics', CA: 'Grade 12 Economics (CIA4U)', AU: 'ATAR Economics', Global: 'Advanced Macroeconomics' },
+  'adv_stats': { USA: 'AP Statistics', UK: 'A-Level Statistics', IB: 'HL Statistics', CA: 'Grade 12 Data Management (MDM4U)', AU: 'ATAR Mathematics Applications', Global: 'Advanced Statistics' },
+  'fin_accounting': { USA: 'Financial Accounting', UK: 'Financial Accounting', IB: 'Financial Accounting', CA: 'Grade 12 Financial Accounting (BAT4M)', AU: 'ATAR Accounting & Finance', Global: 'Financial Accounting' },
+  'adv_biology': { USA: 'AP Biology', UK: 'A-Level Biology', IB: 'HL Biology', CA: 'Grade 12 Biology (SBI4U)', AU: 'ATAR Biology', Global: 'Advanced Biology' },
+  'adv_chem': { USA: 'AP Chemistry', UK: 'A-Level Chemistry', IB: 'HL Chemistry', CA: 'Grade 12 Chemistry (SCH4U)', AU: 'ATAR Chemistry', Global: 'Advanced Chemistry' },
+  'anatomy_phys': { USA: 'Anatomy & Physiology', UK: 'Human Anatomy & Physiology', IB: 'Anatomy & Physiology', CA: 'Grade 12 Anatomy & Physiology', AU: 'ATAR Human Biology', Global: 'Anatomy & Physiology' },
+  'adv_ushistory': { USA: 'AP US History', UK: 'A-Level History', IB: 'HL History', CA: 'Canadian History (CHI4U)', AU: 'ATAR Modern History', Global: 'Advanced History' },
+  'adv_psych': { USA: 'AP Psychology', UK: 'A-Level Psychology', IB: 'HL Psychology', CA: 'Grade 12 Psychology', AU: 'ATAR Psychology', Global: 'Advanced Psychology' },
+  'adv_gov': { USA: 'AP US Government', UK: 'A-Level Government & Politics', IB: 'HL Global Politics', CA: 'Grade 12 Canadian Government & Politics', AU: 'ATAR Politics & Law', Global: 'Advanced Civics & Politics' },
+  'adv_calc': { USA: 'AP Calculus BC', UK: 'A-Level Further Maths', IB: 'HL Mathematics Analysis', CA: 'Calculus and Vectors (MCV4U)', AU: 'ATAR Specialist Mathematics', Global: 'Advanced Calculus' },
+  'adv_physics': { USA: 'AP Physics C: Mechanics', UK: 'A-Level Physics', IB: 'HL Physics', CA: 'Grade 12 Physics (SPH4U)', AU: 'ATAR Physics', Global: 'Advanced Physics' },
+  'eng_design': { USA: 'Engineering Design', UK: 'Design & Technology', IB: 'Design Technology', CA: 'Grade 12 Technological Design (TDJ4M)', AU: 'ATAR Engineering Studies', Global: 'Engineering Design' },
 
   // College 101 Keys
-  'college_comp': { USA: 'College Composition', UK: 'Academic Writing 101', IB: 'University Writing', Global: 'College Composition' },
-  'calc_1': { USA: 'Calculus I', UK: 'University Calculus 1', IB: 'Calculus I', Global: 'Calculus I' },
-  'intro_cs': { USA: 'Intro to Programming (CS101)', UK: 'Intro to Programming 101', IB: 'Programming Fundamentals', Global: 'Intro to Programming' },
-  'data_struct': { USA: 'Data Structures', UK: 'Data Structures & Algorithms', IB: 'Data Structures', Global: 'Data Structures' },
-  'discrete_math_college': { USA: 'Discrete Mathematics', UK: 'Discrete Mathematics', IB: 'Discrete Mathematics', Global: 'Discrete Mathematics' },
-  'gen_chem_101': { USA: 'General Chemistry 101', UK: 'Chemistry 101', IB: 'General Chemistry', Global: 'General Chemistry 101' },
-  'intro_bio_101': { USA: 'Introductory Biology 101', UK: 'Biology 101', IB: 'General Biology', Global: 'Introductory Biology 101' },
-  'anatomy_101': { USA: 'Anatomy & Physiology 101', UK: 'Anatomy & Physiology 101', IB: 'Human Anatomy 101', Global: 'Anatomy & Physiology 101' },
-  'micro_econ_101': { USA: 'Microeconomics 101', UK: 'Microeconomics 101', IB: 'Intro Microeconomics', Global: 'Microeconomics 101' },
-  'principles_mgmt': { USA: 'Principles of Management', UK: 'Management Principles', IB: 'Business Management', Global: 'Principles of Management' },
-  'us_hist_101': { USA: 'US History 101', UK: 'Modern History 101', IB: 'World History 101', Global: 'History 101' },
-  'intro_psych_101': { USA: 'Intro to Psychology 101', UK: 'Psychology 101', IB: 'General Psychology', Global: 'Intro to Psychology 101' },
-  'amer_govt_101': { USA: 'American Government 101', UK: 'Political Systems 101', IB: 'Global Politics 101', Global: 'Intro to Political Science' },
-  'calc_2': { USA: 'Calculus II', UK: 'University Calculus 2', IB: 'Calculus II', Global: 'Calculus II' },
-  'phys_1_mech': { USA: 'Physics I: Mechanics', UK: 'University Physics 1', IB: 'Physics Mechanics 101', Global: 'Physics I: Mechanics' },
-  'eng_fund': { USA: 'Engineering Fundamentals', UK: 'Engineering Science 101', IB: 'Engineering Fundamentals', Global: 'Engineering Fundamentals' }
+  'college_comp': { USA: 'College Composition', UK: 'Academic Writing 101', IB: 'University Writing', CA: 'College Composition', AU: 'College Composition', Global: 'College Composition' },
+  'calc_1': { USA: 'Calculus I', UK: 'University Calculus 1', IB: 'Calculus I', CA: 'Calculus I', AU: 'Calculus I', Global: 'Calculus I' },
+  'intro_cs': { USA: 'Intro to Programming (CS101)', UK: 'Intro to Programming 101', IB: 'Programming Fundamentals', CA: 'Intro to Programming', AU: 'Intro to Programming', Global: 'Intro to Programming' },
+  'data_struct': { USA: 'Data Structures', UK: 'Data Structures & Algorithms', IB: 'Data Structures', CA: 'Data Structures', AU: 'Data Structures', Global: 'Data Structures' },
+  'discrete_math_college': { USA: 'Discrete Mathematics', UK: 'Discrete Mathematics', IB: 'Discrete Mathematics', CA: 'Discrete Mathematics', AU: 'Discrete Mathematics', Global: 'Discrete Mathematics' },
+  'gen_chem_101': { USA: 'General Chemistry 101', UK: 'Chemistry 101', IB: 'General Chemistry', CA: 'General Chemistry 101', AU: 'General Chemistry 101', Global: 'General Chemistry 101' },
+  'intro_bio_101': { USA: 'Introductory Biology 101', UK: 'Biology 101', IB: 'General Biology', CA: 'Introductory Biology 101', AU: 'Introductory Biology 101', Global: 'Introductory Biology 101' },
+  'anatomy_101': { USA: 'Anatomy & Physiology 101', UK: 'Anatomy & Physiology 101', IB: 'Human Anatomy 101', CA: 'Anatomy & Physiology 101', AU: 'Anatomy & Physiology 101', Global: 'Anatomy & Physiology 101' },
+  'micro_econ_101': { USA: 'Microeconomics 101', UK: 'Microeconomics 101', IB: 'Intro Microeconomics', CA: 'Microeconomics 101', AU: 'Microeconomics 101', Global: 'Microeconomics 101' },
+  'principles_mgmt': { USA: 'Principles of Management', UK: 'Management Principles', IB: 'Business Management', CA: 'Principles of Management', AU: 'Principles of Management', Global: 'Principles of Management' },
+  'us_hist_101': { USA: 'US History 101', UK: 'Modern History 101', IB: 'World History 101', CA: 'History 101', AU: 'History 101', Global: 'History 101' },
+  'intro_psych_101': { USA: 'Intro to Psychology 101', UK: 'Psychology 101', IB: 'General Psychology', CA: 'Intro to Psychology 101', AU: 'Intro to Psychology 101', Global: 'Intro to Psychology 101' },
+  'amer_govt_101': { USA: 'American Government 101', UK: 'Political Systems 101', IB: 'Global Politics 101', CA: 'Intro to Political Science', AU: 'Intro to Political Science', Global: 'Intro to Political Science' },
+  'calc_2': { USA: 'Calculus II', UK: 'University Calculus 2', IB: 'Calculus II', CA: 'Calculus II', AU: 'Calculus II', Global: 'Calculus II' },
+  'phys_1_mech': { USA: 'Physics I: Mechanics', UK: 'University Physics 1', IB: 'Physics Mechanics 101', CA: 'Physics I: Mechanics', AU: 'Physics I: Mechanics', Global: 'Physics I: Mechanics' },
+  'eng_fund': { USA: 'Engineering Fundamentals', UK: 'Engineering Science 101', IB: 'Engineering Fundamentals', CA: 'Engineering Fundamentals', AU: 'Engineering Fundamentals', Global: 'Engineering Fundamentals' }
 };
 
 export const highSchoolUniversalCoreKeys = ['core_reading', 'core_math', 'adv_english'];
@@ -390,6 +393,65 @@ const SUBJECT_DETAILS: Record<string, { subtitle: string; themeColor: string; ic
  */
 export function getRelevantQuizzes(grade: string, track: string, regionSystem: string = 'USA') {
   const inCollege = isCollegeGrade(grade);
+  
+  if (!inCollege && (regionSystem === 'CA' || regionSystem === 'Canada')) {
+    const caKeys = ['core_math', 'adv_calc', 'core_reading', 'adv_physics'];
+    const caTitles: Record<string, string> = {
+      'core_math': 'Grade 11/12 Functions',
+      'adv_calc': 'Calculus and Vectors (MCV4U)',
+      'core_reading': 'University Preparation English',
+      'adv_physics': 'Grade 12 Physics (SPH4U)'
+    };
+    return caKeys.map(key => {
+      const details = SUBJECT_DETAILS[key] || {
+        subtitle: 'Practice Questions & Exam Prep',
+        themeColor: 'bg-purple-50/70 text-purple-600 border-purple-100',
+        icon: '📚',
+        topics: ['Core Concepts', 'Practice Problems', 'Exam Strategies']
+      };
+      return {
+        id: key,
+        key,
+        title: caTitles[key],
+        subtitle: details.subtitle,
+        themeColor: details.themeColor,
+        icon: details.icon,
+        topics: details.topics,
+        isCore: key === 'core_reading' || key === 'core_math',
+        tierLabel: 'High School'
+      };
+    });
+  }
+
+  if (!inCollege && (regionSystem === 'AU' || regionSystem === 'Australia')) {
+    const auKeys = ['core_math', 'adv_calc', 'core_reading', 'adv_physics'];
+    const auTitles: Record<string, string> = {
+      'core_math': 'ATAR Mathematics Methods',
+      'adv_calc': 'ATAR Specialist Mathematics',
+      'core_reading': 'ATAR English',
+      'adv_physics': 'ATAR Physics'
+    };
+    return auKeys.map(key => {
+      const details = SUBJECT_DETAILS[key] || {
+        subtitle: 'Practice Questions & Exam Prep',
+        themeColor: 'bg-purple-50/70 text-purple-600 border-purple-100',
+        icon: '📚',
+        topics: ['Core Concepts', 'Practice Problems', 'Exam Strategies']
+      };
+      return {
+        id: key,
+        key,
+        title: auTitles[key],
+        subtitle: details.subtitle,
+        themeColor: details.themeColor,
+        icon: details.icon,
+        topics: details.topics,
+        isCore: key === 'core_reading' || key === 'core_math',
+        tierLabel: 'High School'
+      };
+    });
+  }
+
   const coreKeys = inCollege ? collegeUniversalCoreKeys : highSchoolUniversalCoreKeys;
   const trackKeysMap = inCollege ? collegeTrackSubjectKeys : highSchoolTrackSubjectKeys;
   
@@ -629,6 +691,23 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
     }
   };
   const [topic, setTopic] = useState('');
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    Network.getStatus().then((status) => {
+      setIsOffline(!status.connected);
+    }).catch(err => {
+      console.warn("QuizGenerator: Failed to get initial network status", err);
+    });
+
+    const listener = Network.addListener('networkStatusChange', (status) => {
+      setIsOffline(!status.connected);
+    });
+
+    return () => {
+      listener.then(l => l.remove());
+    };
+  }, []);
   
   // Inherit academic grade, track & region directly from global profile / storage context
   const currentUser = auth.currentUser;
@@ -649,8 +728,10 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
 
   const getDerivedRegion = (uid?: string) => {
     const savedCountry = safeGetItem('academic_country') || (uid ? safeGetItem(`academic_country_${uid}`) : null);
-    if (savedCountry === 'United States' || savedCountry === 'Canada') return 'USA';
-    if (savedCountry === 'United Kingdom' || savedCountry === 'Australia') return 'UK';
+    if (savedCountry === 'United States') return 'USA';
+    if (savedCountry === 'Canada') return 'CA';
+    if (savedCountry === 'United Kingdom') return 'UK';
+    if (savedCountry === 'Australia') return 'AU';
     if (savedCountry === 'Others / International') return 'Global';
     
     const savedRegion = safeGetItem('academic_region') || (uid ? safeGetItem(`academic_region_${uid}`) : null);
@@ -696,7 +777,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   }, []);
 
   // Dynamic quiz generation (Grade Tier + Academic Track + Region Alias System)
-  const mergedSubjects = getRelevantQuizzes(gradeLevel, academicTrack, regionSystem);
+  const mergedSubjects = getScalableRelevantQuizzes(gradeLevel, academicTrack, regionSystem);
 
   const [loading, setLoading] = useState(false);
   const [quiz, setQuiz] = useState<Question[]>([]);
@@ -1865,15 +1946,16 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                       type="text"
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
-                      placeholder="e.g. SAT Math - Trigonometry, AP US Gov"
-                      className="flex-1 p-4 rounded-2xl border border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-semibold text-sm h-14"
+                      disabled={isOffline}
+                      placeholder={isOffline ? "You are offline. Reconnect to generate." : "e.g. SAT Math - Trigonometry, AP US Gov"}
+                      className="flex-1 p-4 rounded-2xl border border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-semibold text-sm h-14 disabled:cursor-not-allowed disabled:bg-zinc-50"
                     />
                     <button
                       onClick={() => {
                         triggerVibration(20);
                         handleGenerate(topic);
                       }}
-                      disabled={!topic.trim() || loading}
+                      disabled={!topic.trim() || loading || isOffline}
                       className="bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 w-14 h-14 rounded-2xl font-bold transition-all flex items-center justify-center border border-indigo-500/30 shrink-0 shadow-md shadow-indigo-600/15"
                     >
                       {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-xl filter drop-shadow-sm select-none">🪄</span>}
@@ -1886,6 +1968,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                 {/* PDF to Quiz Card */}
                 <div 
                   onClick={async () => {
+                    if (isOffline) return;
                     triggerVibration(10);
                     if (Capacitor.isNativePlatform()) {
                       try {
@@ -1900,13 +1983,13 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                         }
                       } catch (err: any) {
                         console.error("Native file picking failed", err);
-                        setError("Failed to open native file explorer: " + (err.message || err));
+                        setError("Oops! Something went wrong on our end. Please try again.");
                       }
                     } else {
                       fileInputRef.current?.click();
                     }
                   }}
-                  className="mb-4 cursor-pointer relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-4 hover:border-indigo-200 hover:shadow-md transition-all duration-300 active:scale-[0.99] group shadow-sm"
+                  className={`mb-4 cursor-pointer relative overflow-hidden rounded-3xl border border-zinc-200/80 p-4 transition-all duration-300 shadow-sm ${isOffline ? 'bg-zinc-100/50 opacity-50 cursor-not-allowed pointer-events-none' : 'bg-white hover:border-indigo-200 hover:shadow-md active:scale-[0.99] group'}`}
                 >
                   <input 
                     type="file" 
@@ -1943,6 +2026,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                 {/* Textbook Photo to Quiz Card */}
                 <div 
                   onClick={async () => {
+                    if (isOffline) return;
                     triggerVibration(10);
                     if (Capacitor.isNativePlatform()) {
                       try {
@@ -1957,13 +2041,13 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                         }
                       } catch (err: any) {
                         console.error("Native camera photo failed", err);
-                        setError("Failed to open native camera: " + (err.message || err));
+                        setError("Oops! Something went wrong on our end. Please try again.");
                       }
                     } else {
                       photoInputRef.current?.click();
                     }
                   }}
-                  className="mb-6 cursor-pointer relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white p-4 hover:border-amber-200 hover:shadow-md transition-all duration-300 active:scale-[0.99] group shadow-sm"
+                  className={`mb-6 cursor-pointer relative overflow-hidden rounded-3xl border border-zinc-200/80 p-4 transition-all duration-300 shadow-sm ${isOffline ? 'bg-zinc-100/50 opacity-50 cursor-not-allowed pointer-events-none' : 'bg-white hover:border-amber-200 hover:shadow-md active:scale-[0.99] group'}`}
                 >
                   <input 
                     type="file" 

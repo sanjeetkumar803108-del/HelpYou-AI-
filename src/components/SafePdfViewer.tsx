@@ -170,7 +170,7 @@ export default function SafePdfViewer({ pdfUrlOrBase64 }: SafePdfViewerProps) {
       } catch (err: any) {
         console.error('[PDFViewer] Critical preview error:', err);
         if (active) {
-          setError(err.message || 'Unable to load PDF document.');
+          setError('Oops! Something went wrong on our end. Please try again.');
           setLoading(false);
         }
       }

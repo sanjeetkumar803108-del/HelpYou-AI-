@@ -44,15 +44,43 @@ export async function pickNativeFiles(options: {
   const types = options.types ?? 'all';
 
   try {
-    if (types === 'image' && !multiple) {
-      // Prompt user to choose between Camera or Gallery
-      // On mobile, this is a clean native experience or we can use FilePicker or Camera
+    if (types === 'image') {
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Photos,
+      });
+
+      if (!photo.webPath) return [];
+
+      const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
+      const name = `gallery_${Date.now()}.${photo.format || 'jpg'}`;
+      
+      const response = await fetch(photo.webPath);
+      const blob = await response.blob();
+      const fileObj = blobToFile(blob, name);
+
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const base64 = dataUrl.split(',')[1] || '';
+
+      return [{
+        name,
+        mimeType,
+        base64,
+        dataUrl,
+        blob,
+        fileObj,
+      }];
     }
 
     let pickerTypes: string[] = [];
-    if (types === 'image') {
-      pickerTypes = ['image/*'];
-    } else if (types === 'pdf') {
+    if (types === 'pdf') {
       // Multiple mime-types forces Android to open the full device File Manager / Document Explorer
       pickerTypes = [
         'application/pdf', 
@@ -128,18 +156,28 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
     const photo = await Camera.getPhoto({
       quality: 90,
       allowEditing: false,
-      resultType: CameraResultType.Base64,
+      resultType: CameraResultType.Uri,
       source: CameraSource.Camera,
     });
 
-    if (!photo.base64String) return null;
+    if (!photo.webPath) return null;
 
     const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
     const name = `camera_${Date.now()}.${photo.format || 'jpg'}`;
-    const base64 = photo.base64String;
-    const dataUrl = `data:${mimeType};base64,${base64}`;
-    const blob = base64ToBlob(base64, mimeType);
+    
+    // Fetch blob properly using native webPath
+    const response = await fetch(photo.webPath);
+    const blob = await response.blob();
     const fileObj = blobToFile(blob, name);
+
+    // Convert blob to Data URL for preview compatibility
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const base64 = dataUrl.split(',')[1] || '';
 
     return {
       name,
@@ -151,6 +189,7 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
     };
   } catch (err) {
     console.error('[mobilePicker] Error capturing native camera:', err);
+    alert("Camera Capture Failed\n\nThere was an issue capturing the photo. Please check permissions and try again.");
     return null;
   }
 }

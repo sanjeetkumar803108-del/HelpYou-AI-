@@ -14,6 +14,8 @@ import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
 import { triggerVibration } from '../utils/vibrate';
 import { Capacitor } from '@capacitor/core';
 import SafePdfViewer from './SafePdfViewer';
+import { auth, db } from '../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 interface PdfHistoryScreenProps {
   onBack: () => void;
@@ -55,9 +57,46 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
   }, [selectedPdf, previewBlobUrl, pdfToDelete, showClearConfirm]);
 
   // Load PDF history from centralized store
-  const loadHistory = () => {
-    const items = getPdfHistory();
-    setHistoryItems(items);
+  const loadHistory = async () => {
+    const localItems = getPdfHistory();
+    if (auth.currentUser) {
+      try {
+        const q = query(
+          collection(db, 'pdf_history'),
+          where('userId', '==', auth.currentUser.uid)
+        );
+        const snapshot = await getDocs(q);
+        const cloudItems: PdfHistoryItem[] = [];
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          cloudItems.push({
+            id: data.id || docSnap.id,
+            title: data.title,
+            fileUri: data.fileUri,
+            timestamp: data.timestamp,
+            featureTag: data.featureTag,
+            fileSize: data.fileSize || undefined,
+            pageCount: data.pageCount || undefined,
+          });
+        });
+        
+        // Merge cloud items with local
+        const merged = [...cloudItems];
+        localItems.forEach(local => {
+          if (!merged.some(m => m.id === local.id || m.title === local.title)) {
+            merged.push(local);
+          }
+        });
+        
+        // Sort by newest
+        merged.sort((a, b) => b.timestamp - a.timestamp);
+        setHistoryItems(merged);
+        return;
+      } catch (err) {
+        console.error('[PDFHistoryScreen] Error fetching from cloud:', err);
+      }
+    }
+    setHistoryItems(localItems);
   };
 
   useEffect(() => {

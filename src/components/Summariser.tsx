@@ -170,7 +170,7 @@ export default function Summariser({ onBack }: SummariserProps) {
       setPreviewPdfName(filename);
     } catch (err: any) {
       console.error("Failed to export PDF", err);
-      setError(err.message || "Failed to generate PDF");
+      setError("Oops! Something went wrong on our end. Please try again.");
     }
   };
 
@@ -252,7 +252,8 @@ export default function Summariser({ onBack }: SummariserProps) {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
+      console.error(err);
+      setError('Oops! Something went wrong on our end. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -339,7 +340,8 @@ export default function Summariser({ onBack }: SummariserProps) {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred while uploading and summarizing file.');
+      console.error(err);
+      setError('Oops! Something went wrong on our end. Please try again.');
     } finally {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

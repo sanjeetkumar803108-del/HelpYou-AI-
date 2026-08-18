@@ -18,6 +18,7 @@ interface ToolsDashboardProps {
   onOpenLogin?: () => void;
   pocketItems?: any[];
   activeTab?: string;
+  onForceSync?: () => Promise<void>;
 }
 
 const FEATURE_COSTS: Record<string, number> = {
@@ -76,11 +77,104 @@ function ToolsDashboard({
   onOpenProfile,
   onOpenLogin,
   pocketItems = [],
-  activeTab
+  activeTab,
+  onForceSync
 }: ToolsDashboardProps) {
   const [showAllTools, setShowAllTools] = useState(false);
   const loggedIn = isUserLoggedIn();
   const { deepFocus } = useSettings();
+
+  // --- Pull-To-Refresh Implementation ---
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshState, setRefreshState] = useState<'idle' | 'pulling' | 'ready' | 'refreshing' | 'success'>('idle');
+  
+  const startY = useRef(0);
+  const isDragging = useRef(false);
+
+  const handleDragStart = (clientY: number) => {
+    if (!scrollRef.current) return;
+    // Only allow pull-to-refresh if the scrollbar is completely at the top
+    if (scrollRef.current.scrollTop === 0 && refreshState === 'idle') {
+      startY.current = clientY;
+      isDragging.current = true;
+    }
+  };
+
+  const handleDragMove = (clientY: number, e?: { preventDefault?: () => void }) => {
+    if (!isDragging.current || refreshState === 'refreshing' || refreshState === 'success') return;
+    const dy = clientY - startY.current;
+    if (dy > 0) {
+      // Apply a spring resistance damping ratio
+      const damped = Math.min(100, dy * 0.35);
+      setPullDistance(damped);
+      if (damped >= 55) {
+        setRefreshState('ready');
+      } else {
+        setRefreshState('pulling');
+      }
+      // Prevent default overscroll bounce/refreshes in some WebView frames
+      if (e?.preventDefault) {
+        e.preventDefault();
+      }
+    }
+  };
+
+  const handleDragEnd = async () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+
+    if (refreshState === 'ready' && onForceSync) {
+      triggerVibration(10);
+      setRefreshState('refreshing');
+      setPullDistance(55); // Lock it at loading distance
+      try {
+        await onForceSync();
+        setRefreshState('success');
+        triggerVibration(15);
+      } catch (err) {
+        console.error('[PTR] Manual refresh failed:', err);
+        setRefreshState('idle');
+        setPullDistance(0);
+        return;
+      }
+      
+      // Keep success state briefly so it feels high-fidelity
+      setTimeout(() => {
+        setRefreshState('idle');
+        setPullDistance(0);
+      }, 1000);
+    } else {
+      setRefreshState('idle');
+      setPullDistance(0);
+    }
+  };
+
+  // Connect touch and mouse fallback handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    handleDragStart(e.touches[0].pageY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    handleDragMove(e.touches[0].pageY, e);
+  };
+
+  const handleTouchEnd = () => {
+    handleDragEnd();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    handleDragStart(e.pageY);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    handleDragMove(e.pageY, e);
+  };
+
+  const handleMouseUpOrLeave = () => {
+    handleDragEnd();
+  };
+  // --------------------------------------
 
   // WebView / Capacitor safe layout force-render trick
   const [forceRenderCount, setForceRenderCount] = useState(0);
@@ -314,7 +408,69 @@ function ToolsDashboard({
   };
 
   return (
-    <div className="w-full p-6 h-full flex flex-col text-zinc-900 bg-gradient-to-b from-[#F9FBE7]/15 via-[#FAF9F6] to-[#FAF9F6] overflow-y-auto relative font-sans">
+    <div 
+      ref={scrollRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUpOrLeave}
+      onMouseLeave={handleMouseUpOrLeave}
+      className="w-full p-6 h-full flex flex-col text-zinc-900 bg-gradient-to-b from-[#F9FBE7]/15 via-[#FAF9F6] to-[#FAF9F6] overflow-y-auto relative font-sans select-none touch-pan-y"
+    >
+      {/* Pull-To-Refresh Visual Indicator Container */}
+      <AnimatePresence>
+        {pullDistance > 0 && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: pullDistance, opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="w-full overflow-hidden flex items-center justify-center shrink-0 mb-4"
+          >
+            <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs bg-white/95 border border-zinc-200/80 shadow-md px-4 py-2 rounded-full backdrop-blur-sm">
+              {refreshState === 'pulling' && (
+                <>
+                  <motion.div 
+                    animate={{ rotate: pullDistance * 5 }}
+                    className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-600 rounded-full"
+                  />
+                  <span>Pull to sync cloud...</span>
+                </>
+              )}
+              {refreshState === 'ready' && (
+                <>
+                  <motion.div 
+                    animate={{ y: [0, 3, 0] }}
+                    transition={{ repeat: Infinity, duration: 0.8 }}
+                    className="w-4 h-4 flex items-center justify-center text-zinc-800 font-black text-sm"
+                  >
+                    ↓
+                  </motion.div>
+                  <span className="text-zinc-800 font-black">Release to force-sync</span>
+                </>
+              )}
+              {refreshState === 'refreshing' && (
+                <>
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                    className="w-4 h-4 border-2 border-zinc-200 border-t-blue-600 rounded-full"
+                  />
+                  <span className="text-blue-600 font-black animate-pulse">Syncing latest data...</span>
+                </>
+              )}
+              {refreshState === 'success' && (
+                <>
+                  <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
+                  <span className="text-emerald-600 font-black">Sync complete!</span>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Top Header Mockup Bar */}
       <div className="flex items-center justify-between mb-8">

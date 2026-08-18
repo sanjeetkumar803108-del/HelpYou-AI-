@@ -236,7 +236,8 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
+      console.error(err);
+      setError('Oops! Something went wrong on our end. Please try again.');
     } finally {
       setLoading(false);
     }

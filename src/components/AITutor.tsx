@@ -18,6 +18,7 @@ import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, orde
 import { db, auth, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Capacitor } from '@capacitor/core';
+import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 
 interface ChatMessage {
@@ -108,7 +109,8 @@ function AITutorMessageItem({
   onToggleLike, 
   onToggleDislike,
   onSuggestionClick,
-  onAskDoubt
+  onAskDoubt,
+  activePersona = 'owl'
 }: { 
   msg: ChatMessage; 
   idx: number; 
@@ -118,6 +120,7 @@ function AITutorMessageItem({
   onToggleDislike: () => void;
   onSuggestionClick?: (text: string) => void;
   onAskDoubt?: (stepId: number, title: string, content: string) => void;
+  activePersona?: 'owl' | 'cosmo' | 'wizard' | 'dino';
 }) {
   const cleanText = useMemo(() => {
     return msg.text.replace(/\[SUGGESTION:\s*([^\]]+)\]/g, '').trim();
@@ -223,7 +226,7 @@ function AITutorMessageItem({
     <motion.div 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      className={`flex items-start w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
     >
       <div className={`max-w-[92%] w-full rounded-3xl p-5 shadow-sm border overflow-hidden break-words ${
         msg.role === 'user' 
@@ -611,6 +614,24 @@ const SAMPLE_PROMPTS_POOL = [
 ];
 
 export default function AITutor({ isVip }: { isVip: boolean }) {
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    Network.getStatus().then((status) => {
+      setIsOffline(!status.connected);
+    }).catch(err => {
+      console.warn("AITutor: Failed to get initial network status", err);
+    });
+
+    const listener = Network.addListener('networkStatusChange', (status) => {
+      setIsOffline(!status.connected);
+    });
+
+    return () => {
+      listener.then(l => l.remove());
+    };
+  }, []);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [samplePrompts, setSamplePrompts] = useState<typeof SAMPLE_PROMPTS_POOL>([]);
 
@@ -697,6 +718,10 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [attachedFilePreview, setAttachedFilePreview] = useState<string | null>(null);
   const [attachedFileType, setAttachedFileType] = useState<'image' | 'document' | null>(null);
+  const [fullscreenPreviewUrl, setFullscreenPreviewUrl] = useState<string | null>(null);
+  const [failedAttachment, setFailedAttachment] = useState<File | null>(null);
+  const [failedAttachmentPreview, setFailedAttachmentPreview] = useState<string | null>(null);
+  const [failedAttachmentType, setFailedAttachmentType] = useState<'image' | 'document' | null>(null);
   const [documentContent, setDocumentContent] = useState<string>('');
 
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -1009,26 +1034,33 @@ Please evaluate this answer strictly according to your system rubric.`;
           ? `📎 Attached: ${activeAttachedFile.name || 'Image'}\n\n${textToShow}` 
           : textToShow);
 
-    let imageUrl: string | undefined = undefined;
-    let imageTimestamp: number | undefined = undefined;
+    let persistentImageUrl: string | undefined = undefined;
+    let persistentImageTimestamp: number | undefined = undefined;
 
-    if (activeAttachedFile && activeAttachedType === 'image') {
-      try {
-        const fileExtension = activeAttachedFile.name?.split('.').pop() || 'jpg';
-        const uniqueFileName = `chat_images/${auth.currentUser?.uid || 'anon'}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExtension}`;
-        const storageRef = ref(storage, uniqueFileName);
-        const uploadResult = await uploadBytes(storageRef, activeAttachedFile);
-        imageUrl = await getDownloadURL(uploadResult.ref);
-        imageTimestamp = Date.now();
-      } catch (err) {
-        console.error("Failed to upload image to Firebase Storage:", err);
+    const backgroundUploadPromise = (async () => {
+      if (activeAttachedFile && activeAttachedType === 'image') {
+        try {
+          const fileExtension = activeAttachedFile.name?.split('.').pop() || 'jpg';
+          const uniqueFileName = `chat_images/${auth.currentUser?.uid || 'anon'}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExtension}`;
+          const storageRef = ref(storage, uniqueFileName);
+          const uploadResult = await uploadBytes(storageRef, activeAttachedFile);
+          persistentImageUrl = await getDownloadURL(uploadResult.ref);
+          persistentImageTimestamp = Date.now();
+          console.log("Background image upload completed successfully:", persistentImageUrl);
+        } catch (err) {
+          console.warn("Background image upload failed, using local fallback:", err);
+        }
       }
-    }
+    })();
+
+    const localImageUrl = (activeAttachedFile && activeAttachedType === 'image')
+      ? (attachedFilePreview || URL.createObjectURL(activeAttachedFile))
+      : undefined;
 
     const updatedMessages = [...messages, { 
       role: 'user' as const, 
       text: userMsgText,
-      ...(imageUrl ? { imageUrl, imageTimestamp } : {})
+      ...(localImageUrl ? { imageUrl: localImageUrl, imageTimestamp: Date.now() } : {})
     }];
     setMessages(updatedMessages);
 
@@ -1236,12 +1268,26 @@ Please evaluate this answer strictly according to your system rubric.`;
       // Save messages and chat state to Firestore
       if (auth.currentUser) {
         try {
+          // Wait up to 2 seconds for background upload to complete if it is still running
+          await Promise.race([
+            backgroundUploadPromise,
+            new Promise(resolve => setTimeout(resolve, 2000))
+          ]);
+
+          const dbImageUrl = persistentImageUrl || localImageUrl;
+          const dbImageTimestamp = persistentImageTimestamp || (localImageUrl ? Date.now() : undefined);
+
           const finalMessages = [...updatedMessages, { 
             role: 'model' as const, 
             text: finalAIResponseText,
             isTyping: false,
             displayedText: finalAIResponseText.trim().startsWith('{') || finalAIResponseText.trim().includes('"solution_steps"') ? finalAIResponseText : ''
-          }];
+          }].map(m => {
+            if (m.role === 'user' && m.imageUrl === localImageUrl && dbImageUrl) {
+              return { ...m, imageUrl: dbImageUrl, imageTimestamp: dbImageTimestamp };
+            }
+            return m;
+          });
 
           if (!chatDocId) {
             const docRef = await addDoc(collection(db, 'pocket_items'), {
@@ -1301,6 +1347,14 @@ Please evaluate this answer strictly according to your system rubric.`;
       }
       console.error(err);
       hapticNotification('ERROR');
+      
+      // Preserve failed attachment context for retry
+      if (activeAttachedFile) {
+        setFailedAttachment(activeAttachedFile);
+        setFailedAttachmentPreview(localImageUrl || null);
+        setFailedAttachmentType(activeAttachedType);
+      }
+
       let errorMessage = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.";
       if (err instanceof Error) {
         if (err.message === "Quota exceeded") {
@@ -1337,7 +1391,22 @@ Please evaluate this answer strictly according to your system rubric.`;
         return prev;
       });
       
-      await handleSendMessage(originalText);
+      // Re-hydrate failed attachment if available
+      const retryFile = failedAttachment;
+      const retryType = failedAttachmentType;
+      
+      if (retryFile) {
+        setAttachedFile(retryFile);
+        setAttachedFilePreview(failedAttachmentPreview);
+        setAttachedFileType(retryType);
+        
+        // Clear failed attachment reference now that it's being retried
+        setFailedAttachment(null);
+        setFailedAttachmentPreview(null);
+        setFailedAttachmentType(null);
+      }
+      
+      await handleSendMessage(originalText, retryFile || undefined, retryType || undefined);
     }
   };
 
@@ -1801,6 +1870,7 @@ Please evaluate this answer strictly according to your system rubric.`;
                   msg={msg}
                   idx={idx}
                   isHolding={isHolding}
+                  activePersona={activePersona}
                   onTypingComplete={() => {
                     setMessages(prev => prev.map((m, i) => i === idx ? { ...m, isTyping: false, displayedText: msg.text } : m));
                   }}
@@ -1825,14 +1895,21 @@ Please evaluate this answer strictly according to your system rubric.`;
                 const lastMsg = messages[messages.length - 1];
                 const isErrorState = lastMsg && (lastMsg.isError || lastMsg.text.includes("hiccup") || lastMsg.text.includes("network"));
                 return (
-                  <div className="flex flex-wrap gap-2 pt-2 justify-start pl-2">
+                  <div className="flex flex-col gap-2 pt-2 justify-start pl-2">
                     {isErrorState ? (
-                      <button
-                        onClick={handleRetryMessage}
-                        className="text-xs bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border border-purple-500/30 px-4 py-2 rounded-full transition-all flex items-center gap-1.5 font-bold shadow-md shadow-purple-500/20 active:scale-95"
-                      >
-                        <span>🔄</span> Try Again
-                      </button>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <button
+                          onClick={handleRetryMessage}
+                          className="text-xs bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border border-purple-500/30 px-4 py-2 rounded-full transition-all flex items-center gap-1.5 font-bold shadow-md shadow-purple-500/20 active:scale-95"
+                        >
+                          <span>🔄</span> Try Again
+                        </button>
+                        {failedAttachment && (
+                          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 rounded-xl px-3 py-1.5 flex items-center gap-1.5 animate-pulse">
+                            <span>📎</span> <strong>Preserved Image:</strong> {failedAttachment.name} (Ready to retry)
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <>
                          <></>
@@ -2006,41 +2083,60 @@ Please evaluate this answer strictly according to your system rubric.`;
 
         {/* Attachment Card View */}
         <AnimatePresence>
-          {attachedFile && (
-            <motion.div 
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              className="flex items-center gap-3 bg-[#FAF9F6] border border-zinc-200 p-2.5 rounded-2xl mb-3 shrink-0 relative shadow-sm"
-            >
-              {attachedFileType === 'image' ? (
-                <img src={attachedFilePreview!} className="w-10 h-10 rounded-xl object-cover border border-zinc-250" alt="Thumbnail" />
-              ) : (
-                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0">
-                  <FileText className="w-5 h-5 text-purple-600" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-zinc-850 truncate leading-tight">
-                  {attachedFileType === 'image' ? 'Attached Photo' : attachedFile.name}
-                </div>
-                <div className="text-[9px] text-zinc-500 mt-0.5 uppercase tracking-wider font-bold">
-                  {(attachedFile.size / 1024).toFixed(1)} KB • {attachedFileType === 'image' ? 'IMAGE SCAN' : 'DOCUMENT'}
-                </div>
-              </div>
-              <button 
-                onClick={() => {
-                  setAttachedFile(null);
-                  setAttachedFilePreview(null);
-                  setAttachedFileType(null);
-                  setDocumentContent('');
-                }}
-                className="p-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-400 hover:text-zinc-700 transition-colors"
+          {attachedFile && (() => {
+            const previewUrl = (attachedFilePreview && (attachedFilePreview.startsWith('data:') || attachedFilePreview.startsWith('blob:') || attachedFilePreview.startsWith('http'))) 
+              ? attachedFilePreview 
+              : attachedFile 
+                ? URL.createObjectURL(attachedFile) 
+                : '';
+            return (
+              <motion.div 
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                className="flex items-center gap-3 bg-[#FAF9F6] border border-zinc-200 p-2.5 rounded-2xl mb-3 shrink-0 relative shadow-sm"
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </motion.div>
-          )}
+                {attachedFileType === 'image' ? (
+                  <img 
+                    src={previewUrl} 
+                    onClick={() => setFullscreenPreviewUrl(previewUrl)}
+                    className="w-10 h-10 rounded-xl object-cover border border-zinc-250 cursor-pointer hover:opacity-85 transition-opacity" 
+                    alt="Thumbnail" 
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-purple-600" />
+                  </div>
+                )}
+                <div 
+                  className={`flex-1 min-w-0 ${attachedFileType === 'image' ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                  onClick={() => {
+                    if (attachedFileType === 'image') {
+                      setFullscreenPreviewUrl(previewUrl);
+                    }
+                  }}
+                >
+                  <div className="text-xs font-bold text-zinc-850 truncate leading-tight">
+                    {attachedFileType === 'image' ? 'Attached Photo (Tap to Preview)' : attachedFile.name}
+                  </div>
+                  <div className="text-[9px] text-zinc-500 mt-0.5 uppercase tracking-wider font-bold">
+                    {(attachedFile.size / 1024).toFixed(1)} KB • {attachedFileType === 'image' ? 'IMAGE SCAN' : 'DOCUMENT'}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setAttachedFile(null);
+                    setAttachedFilePreview(null);
+                    setAttachedFileType(null);
+                    setDocumentContent('');
+                  }}
+                  className="p-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-400 hover:text-zinc-700 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </motion.div>
+            );
+          })()}
         </AnimatePresence>
 
         {/* Dynamic Main Input Bar - Highly Visible High-Contrast Design */}
@@ -2065,13 +2161,14 @@ Please evaluate this answer strictly according to your system rubric.`;
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.shiftKey && !isOffline) {
                   e.preventDefault();
                   handleSendMessage();
                 }
               }}
-              placeholder="Type your message..."
-              className="w-full bg-transparent border-none focus:outline-none text-zinc-900 placeholder-zinc-400 font-medium py-1.5 text-sm pr-12 resize-none overflow-y-auto leading-relaxed whitespace-pre-wrap break-words"
+              disabled={isOffline}
+              placeholder={isOffline ? "You are offline. Reconnect to ask." : "Type your message..."}
+              className="w-full bg-transparent border-none focus:outline-none text-zinc-900 placeholder-zinc-400 font-medium py-1.5 text-sm pr-12 resize-none overflow-y-auto leading-relaxed whitespace-pre-wrap break-words disabled:cursor-not-allowed"
               style={{ height: 'auto', maxHeight: '144px' }}
             />
             <span className="absolute right-1.5 bottom-1.5 text-[9px] font-black tracking-wider text-zinc-400">
@@ -2081,7 +2178,8 @@ Please evaluate this answer strictly according to your system rubric.`;
 
           <button 
             onClick={toggleListening}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 shadow-sm ${isListening ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-white hover:bg-zinc-100 text-zinc-500 border border-zinc-200/60'}`}
+            disabled={isOffline}
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 shadow-sm ${isOffline ? 'bg-zinc-100 text-zinc-300 border-zinc-200/40 cursor-not-allowed opacity-50' : isListening ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-white hover:bg-zinc-100 text-zinc-500 border border-zinc-200/60'}`}
           >
             {isListening ? <MicOff className="w-4 h-4 animate-pulse" /> : <Mic className="w-4 h-4" />}
           </button>
@@ -2109,7 +2207,7 @@ Please evaluate this answer strictly according to your system rubric.`;
           ) : (
             <button 
               onClick={() => handleSendMessage()}
-              disabled={(!chatInput.trim() && !attachedFile) || loading || false}
+              disabled={(!chatInput.trim() && !attachedFile) || loading || isOffline}
               className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center text-white disabled:opacity-40 hover:bg-purple-500 transition-colors shrink-0 shadow-md"
             >
               <Send className="w-4 h-4 ml-0.5" />
@@ -2117,6 +2215,44 @@ Please evaluate this answer strictly according to your system rubric.`;
           )}
         </div>
       </div>
+
+      {/* Full-Screen Image Preview Modal */}
+      <AnimatePresence>
+        {fullscreenPreviewUrl && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[2000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setFullscreenPreviewUrl(null)}
+          >
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setFullscreenPreviewUrl(null);
+              }}
+              className="absolute top-6 right-6 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all shadow-md cursor-pointer border border-white/10"
+              title="Close Preview"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="relative max-w-full max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl border border-white/5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img 
+                src={fullscreenPreviewUrl} 
+                className="max-w-full max-h-[85vh] object-contain select-none" 
+                alt="Fullscreen Preview" 
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

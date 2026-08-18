@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { X, UserPlus, LogIn, Chrome, LogOut, Loader2, Eye, EyeOff } from 'lucide-react';
+import { X, UserPlus, LogIn, Chrome, LogOut, Loader2, Eye, EyeOff, Check } from 'lucide-react';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { safeClearAll, safeSetItem, safeGetItem } from '../utils/storage';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -11,6 +11,7 @@ import {
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  sendEmailVerification,
   User
 } from 'firebase/auth';
 import appLogo from '../assets/logo.svg';
@@ -107,11 +108,22 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     onClose();
   };
 
+  const isPasswordValid = (pw: string) => {
+    const hasMinLength = pw.length >= 8;
+    const hasUppercase = /[A-Z]/.test(pw);
+    const hasNumber = /[0-9]/.test(pw);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+    return hasMinLength && hasUppercase && hasNumber && hasSpecial;
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        routeUserAfterAuth(currentUser);
+        const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
+        if (currentUser.emailVerified || isGoogle) {
+          routeUserAfterAuth(currentUser);
+        }
       }
     });
     return () => unsubscribe();
@@ -127,9 +139,16 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
-      return;
+    if (isSignUp) {
+      if (!isPasswordValid(password)) {
+        setError('Password must have at least 8 characters, 1 uppercase letter, 1 number, and 1 special character.');
+        return;
+      }
+    } else {
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -138,6 +157,9 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       if (isSignUp) {
         const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         const newUser = userCredential.user;
+
+        // Trigger email verification
+        await sendEmailVerification(newUser);
         
         // Lifetime limit check for email
         const emailKey = cleanEmail.toLowerCase();
@@ -176,8 +198,28 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         } catch (dbErr) {
           console.error("Failed to write initial user profile to Firestore:", dbErr);
         }
+
+        // Sign out immediately so unverified account cannot access the app
+        await signOut(auth);
+
+        Alert.alert("Verification Email Sent", "Please verify your email address before logging in. A verification link has been sent to your inbox.");
+        setError("Verification email sent! Please check your inbox and verify your email before logging in.");
+        setIsSignUp(false);
+        setPassword('');
+        setLoading(false);
+        return;
       } else {
-        await signInWithEmailAndPassword(auth, cleanEmail, password);
+        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+        const loggedUser = userCredential.user;
+        const isGoogle = loggedUser.providerData?.some(p => p.providerId === 'google.com') || false;
+
+        if (!loggedUser.emailVerified && !isGoogle) {
+          setError('Please verify your email address before logging in.');
+          Alert.alert("Verification Required", "Please verify your email address before logging in.");
+          await signOut(auth);
+          setLoading(false);
+          return;
+        }
       }
       if (auth.currentUser) {
         await routeUserAfterAuth(auth.currentUser);
@@ -392,8 +434,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className={`w-full bg-white pl-4 pr-12 py-4 rounded-2xl border border-zinc-200 outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 shadow-sm text-zinc-800 font-medium placeholder-zinc-350 transition-all ${showPassword ? '' : 'tracking-widest'}`}
-                placeholder={showPassword ? "Password" : "••••••"}
+                className={`w-full bg-white pl-4 pr-12 py-4 rounded-2xl border border-zinc-200 outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50 shadow-sm text-zinc-800 font-medium placeholder-zinc-350 transition-all ${showPassword ? '' : 'placeholder:tracking-normal'}`}
+                placeholder="e.g. Student@2026"
               />
               <button
                 type="button"
@@ -403,6 +445,42 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            {isSignUp && (
+              <div className="mt-3 space-y-1.5 bg-zinc-50 border border-zinc-150 rounded-xl p-3 shadow-inner">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  Password Requirements:
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {[
+                    { label: 'At least 8 characters', met: password.length >= 8 },
+                    { label: 'Contains uppercase', met: /[A-Z]/.test(password) },
+                    { label: 'Contains a number', met: /[0-9]/.test(password) },
+                    { label: 'Contains a special character', met: /[^A-Za-z0-9]/.test(password) }
+                  ].map((rule, idx) => {
+                    const hasTyped = password.length > 0;
+                    const textClass = rule.met 
+                      ? 'text-emerald-600 font-semibold' 
+                      : hasTyped 
+                        ? 'text-rose-500/85 font-medium' 
+                        : 'text-zinc-400 font-medium';
+                    return (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        {rule.met ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                        ) : (
+                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] font-black ${hasTyped ? 'border-rose-200 text-rose-400 bg-rose-50' : 'border-zinc-250 text-zinc-400 bg-zinc-50'}`}>
+                            •
+                          </div>
+                        )}
+                        <span className={`text-[11px] transition-colors duration-200 ${textClass}`}>
+                          {rule.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {!isSignUp && (
               <div className="flex justify-end mt-2">
                 <TouchableOpacity onPress={handleForgotPasswordPress}>
@@ -422,8 +500,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
           <button 
             type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all disabled:opacity-70 mt-2 shadow-md shadow-teal-500/10 border border-teal-400/50 active:scale-[0.98]"
+            disabled={loading || (isSignUp && !isPasswordValid(password))}
+            className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2 shadow-md shadow-teal-500/10 border border-teal-400/50 active:scale-[0.98] disabled:pointer-events-none"
           >
             {isSignUp ? 'SIGN UP' : 'SIGN IN'}
             {isSignUp ? <UserPlus className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
@@ -456,8 +534,27 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
             {isSignUp ? 'Sign In' : 'Sign Up'}
           </button>
         </div>
+
+        <div className="mt-6 max-w-xs text-center text-[11px] text-zinc-400 leading-relaxed font-medium px-4">
+          By continuing, you agree to our{' '}
+          <button
+            type="button"
+            onClick={() => window.open('https://docs.google.com/document/d/1BVo4XSvzxUPW_Bmn703ncimO5skWtxtx0NSPcKgB9NQ/edit?usp=drivesdk', '_blank')}
+            className="text-teal-600 underline font-semibold hover:text-teal-700 transition-colors cursor-pointer inline-block"
+          >
+            Privacy Policy
+          </button>{' '}
+          and{' '}
+          <button
+            type="button"
+            onClick={() => window.open('https://docs.google.com/document/d/1yWNiI1j7waXE5PBGcFfQORJCE9Aaezy-AvgWIJRjGVg/edit?usp=drivesdk', '_blank')}
+            className="text-teal-600 underline font-semibold hover:text-teal-700 transition-colors cursor-pointer inline-block"
+          >
+            Terms of Service
+          </button>.
+        </div>
         
-        <div className="mt-auto pt-8 pb-4 text-[10px] text-zinc-400 font-bold tracking-widest uppercase flex items-center justify-center gap-2">
+        <div className="mt-auto pt-6 pb-4 text-[10px] text-zinc-400 font-bold tracking-widest uppercase flex items-center justify-center gap-2">
            Secure AI Authentication
         </div>
       </div>

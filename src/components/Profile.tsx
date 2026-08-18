@@ -8,9 +8,11 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import html2canvas from 'html2canvas';
 import { App as CapApp } from '@capacitor/app';
 import { auth, db } from '../lib/firebase';
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc, increment } from 'firebase/firestore';
 import { 
   signOut, 
   User as FirebaseUser, 
@@ -216,6 +218,9 @@ export default function Profile({
     return safeGetItem('academic_grade') || '11th Grade (Junior)';
   });
   const [streamMajor, setStreamMajor] = useState(() => {
+    const savedGrade = safeGetItem('academic_grade') || '11th Grade (Junior)';
+    const isFoundational = savedGrade.includes('9th Grade') || savedGrade.includes('10th Grade');
+    if (isFoundational) return 'Core / Foundation';
     return safeGetItem('academic_stream') || 'STEM / Engineering';
   });
   const [selectedCountryName, setSelectedCountryName] = useState(() => {
@@ -265,6 +270,32 @@ export default function Profile({
   });
 
   const lastActiveTimeRef = useRef<number>(Date.now());
+  const pendingSyncRef = useRef<number>(0);
+
+  // Sync remaining accumulated focus time to Firestore
+  const syncUsageToFirestore = async (force = false) => {
+    const unsynced = pendingSyncRef.current;
+    if (unsynced <= 0 && !force) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    try {
+      const todayStr = getTodayDateString();
+      const userRef = doc(db, 'users', currentUser.uid);
+
+      await setDoc(userRef, {
+        usageStats: {
+          [todayStr]: increment(unsynced)
+        }
+      }, { merge: true });
+
+      pendingSyncRef.current = 0;
+      console.log(`[UsageTracker] Synced ${unsynced.toFixed(2)} mins to Firestore.`);
+    } catch (err) {
+      console.error("[UsageTracker] Error syncing usage to Firestore:", err);
+    }
+  };
 
   const accumulateTime = (mins: number) => {
     if (mins <= 0) return;
@@ -275,10 +306,47 @@ export default function Profile({
     
     safeSetItem('study_passive_usage_data', JSON.stringify(currentData));
     setChartData(generateChartData(currentData));
+
+    pendingSyncRef.current += mins;
   };
 
-  // 1. Periodic Flush Interval (every 5 seconds) to update active session time in real-time
+  // Fetch usageStats from Firestore on login or app open
   useEffect(() => {
+    if (!user) {
+      const stored = cleanAndGetUsageData();
+      setChartData(generateChartData(stored));
+      return;
+    }
+
+    let active = true;
+
+    const fetchFirestoreUsage = async () => {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists() && active) {
+          const userData = userSnap.data();
+          const firestoreUsage: Record<string, number> = userData.usageStats || {};
+          
+          // Overwrite local storage and update state
+          safeSetItem('study_passive_usage_data', JSON.stringify(firestoreUsage));
+          setChartData(generateChartData(firestoreUsage));
+        }
+      } catch (err) {
+        console.error("[UsageTracker] Error loading Firestore usage stats:", err);
+      }
+    };
+
+    fetchFirestoreUsage();
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  // 1. Periodic Flush Interval (every 5 seconds for local, every 5 minutes for Firestore sync)
+  useEffect(() => {
+    let tickCount = 0;
     const interval = setInterval(() => {
       const now = Date.now();
       const elapsedMs = now - lastActiveTimeRef.current;
@@ -288,14 +356,24 @@ export default function Profile({
         const elapsedMins = elapsedMs / 60000;
         accumulateTime(elapsedMins);
       }
+
+      // 5 minutes is 60 ticks of 5 seconds
+      tickCount++;
+      if (tickCount >= 60) {
+        tickCount = 0;
+        syncUsageToFirestore();
+      }
     }, 5000);
     
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      clearInterval(interval);
+      syncUsageToFirestore();
+    };
+  }, [user]);
 
   // 2. AppState / Visibility Change Event Listeners to flush on pause/background
   useEffect(() => {
-    const handleAppStateChange = (isActive: boolean) => {
+    const handleAppStateChange = async (isActive: boolean) => {
       const now = Date.now();
       if (isActive) {
         lastActiveTimeRef.current = now;
@@ -306,6 +384,9 @@ export default function Profile({
           accumulateTime(elapsedMins);
         }
         lastActiveTimeRef.current = now;
+
+        // Instantly sync the remaining accumulated time to Firestore
+        await syncUsageToFirestore();
       }
     };
 
@@ -338,10 +419,24 @@ export default function Profile({
   }, []);
 
   // Fetch coins & streak
+  const streakCardRef = useRef<HTMLDivElement>(null);
   const coinsBalance = getCoins();
   const [studyStreak, setStudyStreak] = useState<number>(() => {
     return Number(safeGetItem('study_punches') || '0');
   });
+
+  useEffect(() => {
+    const handleStreakUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail !== undefined) {
+        setStudyStreak(Number(customEvent.detail || 0));
+      }
+    };
+    window.addEventListener('study-streak-updated', handleStreakUpdate);
+    return () => {
+      window.removeEventListener('study-streak-updated', handleStreakUpdate);
+    };
+  }, []);
 
   const generateStreakCalendar = () => {
     const days = [];
@@ -356,7 +451,10 @@ export default function Profile({
       
       let isActive = false;
       if (lastPunchDate) {
-        const lastDateObj = new Date(lastPunchDate);
+        const parts = lastPunchDate.split('-');
+        const lastDateObj = parts.length === 3 
+          ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+          : new Date(lastPunchDate);
         lastDateObj.setHours(0, 0, 0, 0);
         
         const currentCheckDateObj = new Date(dateString);
@@ -381,86 +479,6 @@ export default function Profile({
     }
     return days;
   };
-
-  const handleDailyPunch = () => {
-    triggerVibration(20);
-    const today = new Date().toDateString();
-    const lastPunchDate = safeGetItem('study_last_punch_date');
-    
-    if (lastPunchDate === today) {
-      showToast("✨ Today's attendance already punched!");
-      return;
-    }
-
-    let newStreak = 1;
-    if (lastPunchDate) {
-      const lastDate = new Date(lastPunchDate);
-      const currentDate = new Date(today);
-      lastDate.setHours(0, 0, 0, 0);
-      currentDate.setHours(0, 0, 0, 0);
-      
-      const diffTime = currentDate.getTime() - lastDate.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 1) {
-        newStreak = studyStreak + 1;
-      } else if (diffDays === 0) {
-        newStreak = studyStreak;
-      } else {
-        // Missed yesterday, reset and start a new 1-day streak today
-        newStreak = 1;
-      }
-    } else {
-      // First ever punch, start at 1
-      newStreak = Math.max(1, studyStreak);
-    }
-
-    safeSetItem('study_punches', String(newStreak));
-    safeSetItem('study_last_punch_date', today);
-    setStudyStreak(newStreak);
-
-    confetti({
-      particleCount: 120,
-      spread: 80,
-      origin: { y: 0.6 }
-    });
-
-    showToast(`🔥 Shandaar! Today's attendance marked! Streak is now ${newStreak} days! 🚀`);
-  };
-
-  // Automatically check & update study streak
-  useEffect(() => {
-    try {
-      const today = new Date().toDateString();
-      const lastPunchDate = safeGetItem('study_last_punch_date');
-
-      if (!lastPunchDate) {
-        // First ever visit - streak is 0 until they manually punch
-        if (!safeGetItem('study_punches')) {
-          safeSetItem('study_punches', '0');
-          setStudyStreak(0);
-        }
-      } else {
-        const lastDate = new Date(lastPunchDate);
-        const currentDate = new Date(today);
-        
-        // Normalize dates to midnight to compute precise difference in days
-        lastDate.setHours(0, 0, 0, 0);
-        currentDate.setHours(0, 0, 0, 0);
-        
-        const diffTime = currentDate.getTime() - lastDate.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays > 1) {
-          // More than a day gap (user missed yesterday) - reset streak to 0
-          safeSetItem('study_punches', '0');
-          setStudyStreak(0);
-        }
-      }
-    } catch (error) {
-      console.error("Error updating streak:", error);
-    }
-  }, []);
 
   // Sync state to local storage
   useEffect(() => {
@@ -558,13 +576,79 @@ export default function Profile({
   };
 
   const handleShareStreak = async () => {
-    const shareText = `🔥 I have kept my daily study streak alive for ${studyStreak} days in HelpYou AI Study Tutor! Join me and boost your grades! 🎓🎯`;
-    await handleShare(
-      'My Study Streak',
-      shareText,
-      window.location.origin,
-      "🔥 Streak stats copied to clipboard! Share it anywhere! 🚀"
-    );
+    if (!streakCardRef.current) {
+      showToast("Could not locate streak element.");
+      return;
+    }
+
+    triggerVibration(15);
+    const originalText = `🔥 I have kept my daily study streak alive for ${studyStreak} days in HelpYou AI! Keep up the grind! 🎓🎯`;
+
+    try {
+      showToast("📸 Capturing streak card...");
+
+      // Temporarily hide the share button inside the streak card if needed or render beautifully
+      const canvas = await html2canvas(streakCardRef.current, {
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false
+      });
+
+      const imgDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+      // 1. Native Capacitor Share (Mobile App)
+      if (Capacitor.isNativePlatform()) {
+        const rawBase64 = imgDataUrl.split(',')[1];
+        const fileName = `study_streak_${studyStreak}.jpg`;
+
+        // Write image file to Native Cache folder
+        const tempFile = await Filesystem.writeFile({
+          path: fileName,
+          data: rawBase64,
+          directory: Directory.Cache
+        });
+
+        await Share.share({
+          title: 'My Study Streak',
+          text: originalText,
+          url: tempFile.uri,
+          dialogTitle: 'Share your Study Streak'
+        });
+        return;
+      }
+
+      // 2. Web Share API with File payload (Mobile & Modern Web Browsers)
+      if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+        const responseBlob = await fetch(imgDataUrl);
+        const blob = await responseBlob.blob();
+        const file = new File([blob], 'study-streak.jpg', { type: 'image/jpeg' });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'My Study Streak',
+            text: originalText
+          });
+          return;
+        }
+      }
+
+      // 3. Fallback: Copy message to clipboard and download card image
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(originalText);
+        const link = document.createElement('a');
+        link.download = 'study-streak.jpg';
+        link.href = imgDataUrl;
+        link.click();
+        showToast("🔥 Streak message copied! Card image downloaded! Paste to share! 🚀");
+      } else {
+        showToast("Sharing is not supported on this browser.");
+      }
+    } catch (err) {
+      console.error("Failed to generate and share streak card:", err);
+      showToast("❌ Failed to share streak card.");
+    }
   };
 
   const handleShareMastery = async () => {
@@ -611,6 +695,8 @@ export default function Profile({
 
   const handleLogout = async () => {
     triggerVibration(15);
+    // Sync any unsynced focus time to Firestore before logging out
+    await syncUsageToFirestore();
     setIsVip(false);
     safeClearAll();
     await signOut(auth);
@@ -746,7 +832,8 @@ export default function Profile({
           'ai_tutor_chats',
           'quiz_results',
           'generated_questions',
-          'MistakeVault'
+          'MistakeVault',
+          'pdf_history'
         ];
         
         // 2. Query and delete all user documents across all related collections
@@ -993,6 +1080,22 @@ export default function Profile({
                                 if (auth.currentUser?.uid) {
                                   safeSetItem(`academic_grade_${auth.currentUser.uid}`, grade);
                                 }
+                                const isFoundational = grade.includes('9th Grade') || grade.includes('10th Grade');
+                                if (isFoundational) {
+                                  setStreamMajor('Core / Foundation');
+                                  safeSetItem('academic_stream', 'Core / Foundation');
+                                  if (auth.currentUser?.uid) {
+                                    safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'Core / Foundation');
+                                  }
+                                } else {
+                                  if (streamMajor === 'Core / Foundation') {
+                                    setStreamMajor('STEM / Engineering');
+                                    safeSetItem('academic_stream', 'STEM / Engineering');
+                                    if (auth.currentUser?.uid) {
+                                      safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'STEM / Engineering');
+                                    }
+                                  }
+                                }
                                 setIsGradeDropdownOpen(false);
                                 triggerVibration(10);
                               }}
@@ -1014,23 +1117,33 @@ export default function Profile({
                     const activeTracks = REGIONAL_TRACKS[selectedCountryName] || REGIONAL_TRACKS['Others / International'];
                     const currentTrackObj = activeTracks.find(t => t.id === streamMajor || t.title === streamMajor) || activeTracks[0];
                     const displayTitle = currentTrackObj ? currentTrackObj.title : streamMajor;
+                    const isFoundationalGrade = gradeLevel.includes('9th Grade') || gradeLevel.includes('10th Grade');
 
                     return (
                       <>
                         <button 
+                          disabled={isFoundationalGrade}
                           onClick={() => {
+                            if (isFoundationalGrade) return;
                             setIsTrackDropdownOpen(!isTrackDropdownOpen);
                             setIsGradeDropdownOpen(false);
                             setIsCountryDropdownOpen(false);
                           }}
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
+                          className={`w-full border rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold font-sans shadow-sm transition-all ${
+                            isFoundationalGrade 
+                              ? 'bg-zinc-50 border-zinc-200 text-zinc-400 cursor-not-allowed opacity-75' 
+                              : 'bg-white border-zinc-200 text-zinc-800 hover:bg-zinc-50'
+                          }`}
                         >
-                          <span className="truncate pr-2">{displayTitle}</span>
-                          <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                          <span className="truncate pr-2 flex items-center gap-1.5">
+                            {isFoundationalGrade && <Lock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />}
+                            {isFoundationalGrade ? 'Core / Foundation' : displayTitle}
+                          </span>
+                          {!isFoundationalGrade && <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />}
                         </button>
 
                         <AnimatePresence>
-                          {isTrackDropdownOpen && (
+                          {!isFoundationalGrade && isTrackDropdownOpen && (
                             <motion.div 
                               initial={{ opacity: 0, y: -4, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1101,8 +1214,8 @@ export default function Profile({
                         {[
                           { name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
                           { name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
-                          { name: 'Canada', flag: '🇨🇦', regionSystem: 'USA' },
-                          { name: 'Australia', flag: '🇦🇺', regionSystem: 'UK' },
+                          { name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
+                          { name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
                           { name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
                         ].map((c) => (
                           <div 
@@ -1117,12 +1230,21 @@ export default function Profile({
                               }
 
                               // Auto-sync track to match newly selected country
-                              const newTracks = REGIONAL_TRACKS[c.name] || REGIONAL_TRACKS['Others / International'];
-                              const matchedTrack = newTracks.find(t => t.id === streamMajor) || newTracks[0];
-                              setStreamMajor(matchedTrack.id);
-                              safeSetItem('academic_stream', matchedTrack.id);
-                              if (auth.currentUser?.uid) {
-                                safeSetItem(`academic_stream_${auth.currentUser.uid}`, matchedTrack.id);
+                              const isFoundational = gradeLevel.includes('9th Grade') || gradeLevel.includes('10th Grade');
+                              if (isFoundational) {
+                                setStreamMajor('Core / Foundation');
+                                safeSetItem('academic_stream', 'Core / Foundation');
+                                if (auth.currentUser?.uid) {
+                                  safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'Core / Foundation');
+                                }
+                              } else {
+                                const newTracks = REGIONAL_TRACKS[c.name] || REGIONAL_TRACKS['Others / International'];
+                                const matchedTrack = newTracks.find(t => t.id === streamMajor) || newTracks[0];
+                                setStreamMajor(matchedTrack.id);
+                                safeSetItem('academic_stream', matchedTrack.id);
+                                if (auth.currentUser?.uid) {
+                                  safeSetItem(`academic_stream_${auth.currentUser.uid}`, matchedTrack.id);
+                                }
                               }
 
                               setIsCountryDropdownOpen(false);
@@ -1344,6 +1466,7 @@ export default function Profile({
 
             {/* Study Streak Card */}
             <div 
+              ref={streakCardRef}
               onClick={() => {
                 triggerVibration(15);
                 if (onNavigateToStreakPage) {
@@ -1441,7 +1564,6 @@ export default function Profile({
                       <button 
                         onClick={() => {
                           triggerVibration(15);
-                          setShowSettings(false);
                           setActiveModal('manage_sub');
                         }}
                         className="bg-white text-amber-700 hover:bg-zinc-50 px-3 py-1.5 rounded-xl text-[10px] font-black shadow-sm transition-all active:scale-95 shrink-0"
@@ -1457,14 +1579,13 @@ export default function Profile({
                         <Crown className="w-4 h-4 fill-amber-100" />
                       </div>
                       <div>
-                        <h4 className="text-[11px] font-black text-zinc-900 leading-tight">HelpYou AI Free</h4>
+                        <h4 className="text-[11px] font-black text-zinc-900 leading-tight">HelpYou AI</h4>
                         <p className="text-[9px] text-zinc-400 font-bold mt-0.5">Upgrade for unlimited tools</p>
                       </div>
                     </div>
                     <button 
                       onClick={() => {
                         triggerVibration([20, 40]);
-                        setShowSettings(false);
                         window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "PRO Benefits" } }));
                       }}
                       className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-black text-[10px] py-2 px-3 rounded-xl shadow-md active:scale-95 transition-all shrink-0"
@@ -1478,7 +1599,6 @@ export default function Profile({
                 <div 
                   onClick={() => {
                     triggerVibration(15);
-                    setShowSettings(false);
                     if (isVip) {
                       setActiveModal('manage_sub');
                     } else {
@@ -1550,14 +1670,14 @@ export default function Profile({
 
 
                 {/* Account Info for Social Users */}
-                {user && !user.providerData.some(p => p.providerId === 'password') && (
+                {user && !user.providerData?.some(p => p.providerId === 'password') && (
                   <div className="bg-white rounded-[2rem] border border-zinc-200 shadow-sm p-5 flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
                       <Shield className="w-5 h-5 text-blue-500" />
                     </div>
                     <div>
                       <h4 className="text-xs font-black text-zinc-800">Verified Social Account</h4>
-                      <p className="text-[10px] font-bold text-zinc-400">Security is managed via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'your provider'}.</p>
+                      <p className="text-[10px] font-bold text-zinc-400">Security is managed via {user.providerData?.[0]?.providerId === 'google.com' ? 'Google' : 'your provider'}.</p>
                     </div>
                   </div>
                 )}
@@ -1614,7 +1734,6 @@ export default function Profile({
                   <button 
                     onClick={() => { 
                       triggerVibration(15); 
-                      setShowSettings(false);
                       setActiveModal('privacy');
                     }}
                     className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
@@ -1629,7 +1748,6 @@ export default function Profile({
                   <button 
                     onClick={() => { 
                       triggerVibration(15); 
-                      setShowSettings(false);
                       setActiveModal('terms');
                     }}
                     className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
@@ -1675,7 +1793,7 @@ export default function Profile({
 
                   {user && (
                     <button 
-                      onClick={() => { triggerVibration(25); setShowSettings(false); setActiveModal('delete_account'); }}
+                      onClick={() => { triggerVibration(25); setActiveModal('delete_account'); }}
                       disabled={isDeleting}
                       className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-50 text-zinc-500 hover:text-rose-600 py-3 rounded-2xl font-bold border-2 border-zinc-200/80 active:scale-99 transition-all cursor-pointer text-[10px] tracking-wide disabled:opacity-50"
                     >
@@ -1966,7 +2084,7 @@ export default function Profile({
                             <span className="font-bold text-zinc-800">Image & Camera Data:</span> All user-uploaded images in chats or other features are strictly temporary. They are automatically and permanently deleted from our servers within 1 hour of upload to ensure maximum privacy.
                           </li>
                           <li>
-                            <span className="font-bold text-zinc-800">Generated PDFs & Local Files:</span> Any local files generated by the user, such as exported conversation PDFs, are saved directly to the user's device storage and are completely exempt from our server-side deletion.
+                            <span className="font-bold text-zinc-800">Generated Content & History:</span> Any generated content such as PDFs, notes, and study summaries are not downloaded directly to your local device storage. Instead, they are securely saved in the 'History' section of your account on our cloud servers. This allows you to access your study history seamlessly across any device. If you choose to permanently delete your account, all associated generated data and history will be automatically and completely removed from our servers.
                           </li>
                         </ul>
                       </div>
@@ -2319,59 +2437,31 @@ export default function Profile({
                     
                     {/* Encouraging Hindi/Hinglish sub-caption */}
                     <p className="text-xs font-bold text-white/95 mt-4 leading-relaxed max-w-xs">
-                      Fantastic Performance! You are working hard every day! Punch in your daily attendance to stay ahead of the rest! 🎯
+                      Fantastic Performance! You are working hard every day! Your study streak keeps glowing brighter with every visit! 🎯
                     </p>
                   </div>
                 </div>
 
-                {/* Daily attendance punch-in card */}
-                {(() => {
-                  const today = new Date().toDateString();
-                  const lastPunchDate = safeGetItem('study_last_punch_date');
-                  const hasPunchedToday = lastPunchDate === today;
-
-                  return (
-                    <div className="bg-white rounded-[2rem] p-5 border border-zinc-200/80 shadow-sm flex flex-col items-center text-center space-y-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasPunchedToday ? 'bg-green-50 text-green-500 border border-green-100' : 'bg-orange-50 text-orange-500 border border-orange-100'}`}>
-                          {hasPunchedToday ? <Check className="w-4 h-4" /> : <Target className="w-4 h-4" />}
-                        </div>
-                        <h4 className="text-xs font-black text-zinc-800 uppercase tracking-wider">
-                          Daily Attendance Check-In
-                        </h4>
-                      </div>
-
-                      <p className="text-[11px] font-bold text-zinc-500 max-w-xs">
-                        {hasPunchedToday 
-                          ? "Your attendance for today is successfully registered! Come back tomorrow to continue your daily study streak! ✨"
-                          : "Your attendance hasn't been punched today! Mark your attendance to keep your daily study habit alive! 🔥"
-                        }
-                      </p>
-
-                      <button
-                        onClick={handleDailyPunch}
-                        disabled={hasPunchedToday}
-                        className={`w-full py-3.5 rounded-2xl font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
-                          hasPunchedToday 
-                            ? 'bg-zinc-100 text-zinc-400 border border-zinc-200/50 cursor-default pointer-events-none' 
-                            : 'bg-zinc-950 hover:bg-zinc-800 text-white shadow-md border-none'
-                        }`}
-                      >
-                        {hasPunchedToday ? (
-                          <>
-                            <Check className="w-4 h-4" />
-                            Attendance Verified!
-                          </>
-                        ) : (
-                          <>
-                            <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
-                            Punch Attendance
-                          </>
-                        )}
-                      </button>
+                {/* Auto-tracked attendance streak card */}
+                <div className="bg-white rounded-[2rem] p-5 border border-zinc-200/80 shadow-sm flex flex-col items-center text-center space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-orange-50 text-orange-500 border border-orange-100">
+                      <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
                     </div>
-                  );
-                })()}
+                    <h4 className="text-xs font-black text-zinc-800 uppercase tracking-wider">
+                      Auto-Tracked Study Streak
+                    </h4>
+                  </div>
+
+                  <p className="text-[11px] font-bold text-zinc-500 max-w-xs leading-relaxed">
+                    Your daily study streak is calculated automatically in the background when you open the app. No manual check-in needed! Keep up the incredible learning habit! ✨🚀
+                  </p>
+
+                  <div className="w-full bg-zinc-50 border border-zinc-150 py-3.5 px-4 rounded-xl text-xs font-black text-zinc-700 flex items-center justify-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    Streak Active: {studyStreak} Days Verified
+                  </div>
+                </div>
 
                 {/* Attendance Calendar Grid */}
                 <div className="bg-white rounded-[2rem] p-5 border border-zinc-200/80 shadow-sm space-y-4">

@@ -4,6 +4,14 @@
 		"classpath": "com.ryltsov.alex.plugins.file.opener.FileOpenerPlugin"
 	},
 	{
+		"pkg": "@capacitor-firebase/analytics",
+		"classpath": "io.capawesome.capacitorjs.plugins.firebase.analytics.FirebaseAnalyticsPlugin"
+	},
+	{
+		"pkg": "@capacitor-firebase/crashlytics",
+		"classpath": "io.capawesome.capacitorjs.plugins.firebase.crashlytics.FirebaseCrashlyticsPlugin"
+	},
+	{
 		"pkg": "@capacitor/app",
 		"classpath": "com.capacitorjs.plugins.app.AppPlugin"
 	},
@@ -22,6 +30,10 @@
 	{
 		"pkg": "@capacitor/local-notifications",
 		"classpath": "com.capacitorjs.plugins.localnotifications.LocalNotificationsPlugin"
+	},
+	{
+		"pkg": "@capacitor/network",
+		"classpath": "com.capacitorjs.plugins.network.NetworkPlugin"
 	},
 	{
 		"pkg": "@capacitor/push-notifications",

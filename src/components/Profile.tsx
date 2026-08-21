@@ -174,6 +174,14 @@ export default function Profile({
   const [specialOffers, setSpecialOffers] = useState<boolean>(() => {
     return safeGetItem('pref_special_offers') !== 'false';
   });
+  // Haptic Vibration Toggle — persisted preference
+  const [hapticEnabled, setHapticEnabled] = useState<boolean>(() => {
+    return safeGetItem('pref_haptic_enabled') !== 'false';
+  });
+  // Notification Reminder Toggle
+  const [notifEnabled, setNotifEnabled] = useState<boolean>(() => {
+    return safeGetItem('pref_notif_enabled') !== 'false';
+  });
 
   // Settings Slideover Panel
   const [showSettings, setShowSettings] = useState(false);
@@ -1654,15 +1662,75 @@ export default function Profile({
                   {/* Dark Mode Toggle */}
                   <div 
                     onClick={() => {
-                      triggerVibration(10);
+                      triggerVibration(hapticEnabled ? 10 : 0);
                       onToggleDarkMode();
                       showToast(!isDarkMode ? "🌙 Dark Mode enabled" : "☀️ Light Mode enabled");
                     }}
                     className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
                   >
-                    <span className="text-xs font-bold text-zinc-650">Dark Mode</span>
+                    <div className="flex items-center gap-2">
+                      <Moon className="w-3.5 h-3.5 text-zinc-400" />
+                      <span className="text-xs font-bold text-zinc-700">Dark Mode</span>
+                    </div>
                     <div className={`w-9 h-5 ${isDarkMode ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${isDarkMode ? 'right-0.5' : 'left-0.5'}`} />
+                    </div>
+                  </div>
+
+                  {/* Notification Reminders Toggle */}
+                  <div
+                    onClick={async () => {
+                      const newVal = !notifEnabled;
+                      setNotifEnabled(newVal);
+                      safeSetItem('pref_notif_enabled', String(newVal));
+                      if (hapticEnabled) triggerVibration(10);
+                      if (newVal) {
+                        // Re-enable: reschedule notifications
+                        const { setupDailyLocalNotifications } = await import('../utils/notifications');
+                        await setupDailyLocalNotifications(false);
+                        showToast('🔔 Daily reminders turned ON');
+                      } else {
+                        // Disable: cancel all scheduled notifications
+                        const { LocalNotifications } = await import('@capacitor/local-notifications');
+                        const cancelIds = Array.from({ length: 10 }, (_, i) => ({ id: 17001 + i }));
+                        await LocalNotifications.cancel({ notifications: cancelIds }).catch(() => {});
+                        showToast('🔕 Daily reminders turned OFF');
+                      }
+                    }}
+                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-3.5 h-3.5 text-zinc-400" />
+                      <div>
+                        <span className="text-xs font-bold text-zinc-700 block">Daily Reminders</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Study notification at 4:00 PM</span>
+                      </div>
+                    </div>
+                    <div className={`w-9 h-5 ${notifEnabled ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${notifEnabled ? 'right-0.5' : 'left-0.5'}`} />
+                    </div>
+                  </div>
+
+                  {/* Haptic Vibration Toggle */}
+                  <div
+                    onClick={() => {
+                      const newVal = !hapticEnabled;
+                      setHapticEnabled(newVal);
+                      safeSetItem('pref_haptic_enabled', String(newVal));
+                      if (newVal) triggerVibration(15); // Give a test buzz when turning ON
+                      showToast(newVal ? '📳 Vibration turned ON' : '🔇 Vibration turned OFF');
+                    }}
+                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-3.5 h-3.5 text-zinc-400" />
+                      <div>
+                        <span className="text-xs font-bold text-zinc-700 block">Haptic Feedback</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Vibrations on button taps</span>
+                      </div>
+                    </div>
+                    <div className={`w-9 h-5 ${hapticEnabled ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${hapticEnabled ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
                   </div>
                 </div>
@@ -1689,12 +1757,44 @@ export default function Profile({
                     <span className="font-extrabold text-[10px] text-zinc-500 uppercase tracking-wide">Support & Legal</span>
                   </div>
                   
-                  <button 
-                    onClick={() => { 
-                      triggerVibration(15); 
-                      window.location.href = 'mailto:helpyou.ai.support@gmail.com?subject=HelpYou%20AI%20App%20-%20Support%20Request';
+                  {/* Share App Button */}
+                  <button
+                    onClick={async () => {
+                      triggerVibration(hapticEnabled ? 15 : 0);
+                      try {
+                        if (Capacitor.isNativePlatform()) {
+                          await Share.share({
+                            title: '📚 HelpYou AI — Smart Study App',
+                            text: '🚀 I use HelpYou AI to solve homework, generate quizzes & get AI tutoring! Try it free 👇',
+                            url: 'https://play.google.com/store/apps/details?id=com.helpyou.ai',
+                            dialogTitle: 'Share HelpYou AI with friends'
+                          });
+                        } else {
+                          await navigator.clipboard.writeText('https://play.google.com/store/apps/details?id=com.helpyou.ai');
+                          showToast('🔗 App link copied to clipboard!');
+                        }
+                      } catch (e) {
+                        console.warn('Share failed:', e);
+                      }
                     }}
                     className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-none transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
+                      <Share2 className="w-3.5 h-3.5 text-zinc-400" />
+                      <div>
+                        <span className="block">Share HelpYou AI</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Invite your friends to study smarter</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-zinc-400" />
+                  </button>
+
+                  <button 
+                    onClick={() => { 
+                      triggerVibration(hapticEnabled ? 15 : 0); 
+                      window.location.href = 'mailto:helpyou.ai.support@gmail.com?subject=HelpYou%20AI%20App%20-%20Support%20Request';
+                    }}
+                    className="w-full p-4 flex justify-between items-center bg-white hover:bg-zinc-50/30 border-t border-zinc-100 transition-colors text-left"
                   >
                     <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs">
                       <MessageSquare className="w-3.5 h-3.5 text-zinc-400" />
@@ -1810,6 +1910,15 @@ export default function Profile({
                       )}
                     </button>
                   )}
+                </div>
+
+                {/* App Version Footer */}
+                <div className="flex flex-col items-center gap-1 pt-2 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Info className="w-3 h-3 text-zinc-300" />
+                    <span className="text-[10px] font-bold text-zinc-350 tracking-wide">HelpYou AI • Version 1.0.0</span>
+                  </div>
+                  <span className="text-[9px] text-zinc-300 font-semibold">Made with ❤️ for students worldwide</span>
                 </div>
 
               </div>

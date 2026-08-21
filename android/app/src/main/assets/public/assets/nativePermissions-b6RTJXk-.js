@@ -1,1 +1,0 @@
-import"./index-pZHk_nXh.js";import{a2 as i}from"./index-BWqsOpqb.js";i("PushNotifications",{});async function t(){try{return(await navigator.mediaDevices.getUserMedia({audio:!0})).getTracks().forEach(e=>e.stop()),!0}catch(r){return console.error("[NativePermissions] Microphone permission denied or failed:",r),!1}}export{t as r};

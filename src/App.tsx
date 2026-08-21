@@ -78,6 +78,7 @@ import SplashScreen from './components/SplashScreen';
 import AuthGuard from './components/AuthGuard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { setupDailyLocalNotifications } from './utils/notifications';
+import { requestCameraPermission, requestMicrophonePermission, requestNotificationPermission } from './utils/nativePermissions';
 
 function WidgetSkeleton() {
   return (
@@ -194,17 +195,25 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Permissions are requested Just-In-Time (JIT) when features are tapped (Camera button, Mic button, Notification toggle)
+  // to adhere to Android WebView security policies and avoid launch dismissal crashes.
+
   // Initialize RevenueCat for In-App Purchases and setup local notifications
   useEffect(() => {
-    // Setup daily recurring local notifications on app startup
-    setupDailyLocalNotifications(true).catch(e => {
+    // Setup daily recurring local notifications silently on startup (only if already granted)
+    setupDailyLocalNotifications(false).catch(e => {
       console.warn('Local notifications setup notice:', e);
     });
 
-    // TODO: SETUP - Replace 'YOUR_REVENUECAT_API_KEY_ANDROID' with your real public API key from the RevenueCat dashboard before launching.
+    // Initialize RevenueCat ONLY if a valid non-placeholder API key is set
     if (Capacitor.isNativePlatform()) {
       try {
-        Purchases.configure({ apiKey: 'YOUR_REVENUECAT_API_KEY_ANDROID' });
+        const rcKey = (import.meta.env.VITE_REVENUECAT_API_KEY as string) || '';
+        if (rcKey && !rcKey.includes('YOUR_REVENUECAT') && rcKey.length > 10) {
+          Purchases.configure({ apiKey: rcKey });
+        } else {
+          console.log('[App] RevenueCat configuration skipped (placeholder API key).');
+        }
       } catch (e) {
         console.warn('RevenueCat configuration notice:', e);
       }
@@ -355,16 +364,18 @@ export default function App() {
         
         // Dynamic configuration & login to prevent subscription aliasing/wrong email issue
         if (Capacitor.isNativePlatform()) {
-          const apiKey = (import.meta.env.VITE_REVENUECAT_API_KEY as string) || 'YOUR_REVENUECAT_API_KEY_ANDROID';
-          Purchases.configure({ apiKey, appUserID: currentUser.uid })
-            .then(() => {
-              Purchases.logIn({ appUserID: currentUser.uid }).catch(err => {
-                console.warn('RevenueCat logIn error on auth state change:', err);
+          const apiKey = (import.meta.env.VITE_REVENUECAT_API_KEY as string) || '';
+          if (apiKey && !apiKey.includes('YOUR_REVENUECAT') && apiKey.length > 10) {
+            Purchases.configure({ apiKey, appUserID: currentUser.uid })
+              .then(() => {
+                Purchases.logIn({ appUserID: currentUser.uid }).catch(err => {
+                  console.warn('RevenueCat logIn error on auth state change:', err);
+                });
+              })
+              .catch(err => {
+                console.warn('RevenueCat configure error on auth state change:', err);
               });
-            })
-            .catch(err => {
-              console.warn('RevenueCat configure error on auth state change:', err);
-            });
+          }
         }
         
         // 1. Initially set to specific user cached state or false (prevent leak from other sessions)

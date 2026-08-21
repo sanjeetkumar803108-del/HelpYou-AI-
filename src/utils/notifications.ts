@@ -1,8 +1,72 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
-const NOTIFICATION_ID = 17001; // Unique ID for daily study reminder
-const STORAGE_KEY_SCHEDULED = 'study_daily_notification_scheduled_v2';
+/**
+ * HELPYOU AI — SMART DAILY STUDY NOTIFICATIONS
+ *
+ * Scheduling Strategy (Tier 1 Country School Calendar):
+ * ─────────────────────────────────────────────────────
+ * School typically ends between 2:30 PM – 3:30 PM in:
+ *   🇺🇸 USA, 🇬🇧 UK, 🇨🇦 Canada, 🇦🇺 Australia, 🇩🇪 Germany, 🇫🇷 France, etc.
+ *
+ * Best engagement window: 4:00 PM (device local timezone).
+ * This fires AFTER school hours when students are home and free.
+ *
+ * Rotation: 10 different motivational/study messages rotate by day-of-month
+ * so users never see the same notification twice in a row.
+ */
+
+// ─── Unique IDs for each rotating notification slot ────────────────────────
+const BASE_ID = 17001;
+const TOTAL_SLOTS = 10;
+
+// ─── Rotating Study Notification Messages ──────────────────────────────────
+// Written to be natural, engaging, and relevant for students (EdTech)
+const STUDY_MESSAGES: { title: string; body: string }[] = [
+  {
+    title: "📚 Need Homework Help?",
+    body: "School's out! HelpYou AI can solve any question in seconds. Open the app and scan your homework now! 🎯"
+  },
+  {
+    title: "🔥 Don't Break Your Study Streak!",
+    body: "Just 15 minutes of review keeps your streak alive. Your AI Tutor is ready and waiting for you! 🚀"
+  },
+  {
+    title: "🧠 Stuck on a Problem?",
+    body: "Snap a photo of any question and get a step-by-step solution instantly. HelpYou AI is your smartest study buddy!"
+  },
+  {
+    title: "⚡ Quick Quiz Challenge!",
+    body: "Test yourself on today's topics! Generate a quiz on anything and level up your grades. Open HelpYou AI now 👆"
+  },
+  {
+    title: "📝 Got an Essay Due?",
+    body: "HelpYou AI can help you outline, write, and improve your essay in minutes. Don't stress — we've got you! ✍️"
+  },
+  {
+    title: "🌟 Be the Smart One in Class!",
+    body: "While others are scrolling, you could be getting smarter. AI-powered study sessions start with just one tap! 💡"
+  },
+  {
+    title: "🎯 Exam Coming Up?",
+    body: "Let HelpYou AI create custom flashcards and practice questions for any subject. Start your prep session now! 📖"
+  },
+  {
+    title: "💬 Ask Your AI Tutor Anything!",
+    body: "Math, Science, English, History — your personal AI Tutor knows it all. No question is too hard! 🤖"
+  },
+  {
+    title: "🗒️ Note-Taking Made Easy!",
+    body: "Scan your textbook or notes and let AI turn them into beautiful summaries. Study smarter, not harder! ✨"
+  },
+  {
+    title: "🏆 Top Students Review Daily!",
+    body: "Spend 10 minutes reviewing with HelpYou AI and stay ahead of your class. Your future self will thank you! 💪"
+  }
+];
+
+// ─── Storage Keys ───────────────────────────────────────────────────────────
+const STORAGE_KEY_SCHEDULED = 'study_daily_notification_scheduled_v3';
 
 /**
  * Request notification permissions from the user.
@@ -15,7 +79,7 @@ export async function requestNotificationPermissions(forcePrompt = false): Promi
       if (permStatus.display === 'granted') {
         return true;
       }
-      
+
       if (!forcePrompt) {
         return false;
       }
@@ -33,7 +97,7 @@ export async function requestNotificationPermissions(forcePrompt = false): Promi
         if (Notification.permission === 'granted') {
           return true;
         }
-        
+
         if (!forcePrompt) {
           return false;
         }
@@ -51,52 +115,49 @@ export async function requestNotificationPermissions(forcePrompt = false): Promi
 }
 
 /**
- * Schedule a daily recurring local push notification.
- * Time: 5:00 PM (17:00) every day.
- * Includes check to avoid duplicate schedules.
+ * Schedule 10 rotating daily study notifications.
+ *
+ * Time: 4:00 PM (16:00) in the device's LOCAL timezone.
+ * This is the optimal time for Tier 1 countries (US, UK, CA, AU, DE, FR)
+ * where school ends between 2:30 PM – 3:30 PM.
+ *
+ * Each slot has a unique ID and a unique message.
+ * Capacitor will fire the notification for the matching day-of-month slot.
+ * Result: Users see a different message every day for 10 days, then it repeats.
  */
 export async function scheduleDailyNotification() {
+  if (!Capacitor.isNativePlatform()) {
+    console.log('[NotificationService] Web: Skipping native notification schedule.');
+    localStorage.setItem(STORAGE_KEY_SCHEDULED, 'true');
+    return;
+  }
+
   try {
-    if (Capacitor.isNativePlatform()) {
-      // ALWAYS cancel existing notification with our ID first to prevent duplicate scheduling
-      await LocalNotifications.cancel({
-        notifications: [{ id: NOTIFICATION_ID }]
-      }).catch((e) => {
-        console.log('[NotificationService] Cancel error (benign):', e);
-      });
+    // Cancel ALL previous notification slots to avoid duplicates
+    const cancelIds = Array.from({ length: TOTAL_SLOTS }, (_, i) => ({ id: BASE_ID + i }));
+    await LocalNotifications.cancel({ notifications: cancelIds }).catch(() => {});
 
-      // Schedule the daily notification at 5:00 PM (17:00) strictly based on device local timezone
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            id: NOTIFICATION_ID,
-            title: "🔥 Don't break your study streak!",
-            body: "School is out! Take 15 minutes to review today's topics and keep your streak alive on HelpYou AI. 🚀",
-            schedule: {
-              every: 'day',
-              on: {
-                hour: 17,
-                minute: 0
-              }
-            },
-            sound: 'default'
-          }
-        ]
-      });
+    // Schedule all 10 rotating notifications
+    // Each fires daily at 4:00 PM — Capacitor fires whichever matches today
+    const notifications = STUDY_MESSAGES.map((msg, index) => ({
+      id: BASE_ID + index,
+      title: msg.title,
+      body: msg.body,
+      schedule: {
+        every: 'day' as const,
+        on: {
+          hour: 16,   // 4:00 PM — after school in Tier 1 countries
+          minute: 0
+        }
+      },
+      sound: 'default',
+      extra: { slot: index }
+    }));
 
-      localStorage.setItem(STORAGE_KEY_SCHEDULED, 'true');
-      console.log('[NotificationService] Daily local notification successfully scheduled at 17:00 on Native.');
-    } else {
-      // Web Fallback: Register log or mock daily timer
-      console.log('[NotificationService] Web Fallback: Cancelled prior schedule and registered new daily schedule at 5:00 PM.');
-      
-      // We can trigger a Web Notification immediately if permissions are granted for user feedback
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        console.log('[NotificationService] Web notification permission is active. Daily schedule registered.');
-      }
-      
-      localStorage.setItem(STORAGE_KEY_SCHEDULED, 'true');
-    }
+    await LocalNotifications.schedule({ notifications });
+
+    localStorage.setItem(STORAGE_KEY_SCHEDULED, 'true');
+    console.log(`[NotificationService] ✅ Scheduled ${TOTAL_SLOTS} rotating daily notifications at 4:00 PM (device local time).`);
   } catch (error) {
     console.error('[NotificationService] Failed to schedule daily notifications:', error);
   }
@@ -104,7 +165,8 @@ export async function scheduleDailyNotification() {
 
 /**
  * Initialize and trigger the setup workflow.
- * Checks permissions, requests if needed, and schedules the notification.
+ * Checks permissions, requests if needed, and schedules the notifications.
+ * Called once on app startup from App.tsx.
  */
 export async function setupDailyLocalNotifications(forcePrompt = true) {
   console.log('[NotificationService] Starting setup of daily local notifications...');

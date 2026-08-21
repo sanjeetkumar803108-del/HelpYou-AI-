@@ -41,7 +41,6 @@ var import_crypto = __toESM(require("crypto"), 1);
 var import_youtube_transcript = require("youtube-transcript");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_xss = __toESM(require("xss"), 1);
-var import_pdf_parse = __toESM(require("pdf-parse"), 1);
 var import_fs = __toESM(require("fs"), 1);
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -172,6 +171,16 @@ app.use((err, req, res, next) => {
       return res.status(400).json({ error: "File too large. Maximum size is 30MB." });
     }
   }
+  console.error("[Global Error Handler] Caught unhandled error:", err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  if (req.path && req.path.startsWith("/api")) {
+    return res.status(err.status || 500).json({
+      error: err.message || "An unexpected error occurred on the server.",
+      success: false
+    });
+  }
   next(err);
 });
 var upload = (0, import_multer.default)({
@@ -273,7 +282,7 @@ function extractUserQuery(params) {
   }
   return "";
 }
-async function safeGenerateContent(params, retries = 3, delay = 500) {
+async function safeGenerateContent(params, retries = 3, delay = 200) {
   const gradeLevel = params.gradeLevel;
   const clonedParams = { ...params };
   delete clonedParams.gradeLevel;
@@ -326,6 +335,9 @@ ${text}`.trim() },
         ...parts.slice(1)
       ];
     }
+    if (!clonedParams.config.thinkingConfig) {
+      clonedParams.config.thinkingConfig = { thinkingBudget: 0 };
+    }
   }
   const query = extractUserQuery(clonedParams);
   const sysInstr = clonedParams?.config?.systemInstruction?.parts?.[0]?.text || "";
@@ -333,10 +345,12 @@ ${text}`.trim() },
   const isSpecialtyModel = params.model && (params.model.includes("tts") || params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
   let requestedModel = params.model;
   if (requestedModel === "gemini-flash-latest") {
-    requestedModel = "gemini-3.6-flash";
+    requestedModel = "gemini-3.7-flash";
   }
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-3.6-flash",
+    requestedModel || "gemini-2.0-flash",
+    "gemini-2.0-flash",
+    "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
@@ -406,9 +420,9 @@ ${text}`.trim() },
             attempt--;
             continue;
           }
-          const isHardQuotaLimit = errorStr.includes("quota") || errorStr.includes("resource_exhausted") || errorStr.includes("429") && !errorStr.includes("overloaded");
+          const isHardQuotaLimit = errorStr.includes("quota") || errorStr.includes("resource_exhausted") || errorStr.includes("503") || errorStr.includes("unavailable") || errorStr.includes("overloaded") || errorStr.includes("demand") || errorStr.includes("429") && !errorStr.includes("overloaded");
           if (isHardQuotaLimit) {
-            console.warn(`[ai-client] Model ${model} hit hard quota limit. Skipping retries for this model and trying fallback...`);
+            console.warn(`[ai-client] Model ${model} is unavailable, overloaded, or hit quota. Skipping retries for this model and instantly routing to fallback...`);
             break;
           }
           if (attempt < retries) {
@@ -528,10 +542,16 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
     };
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        // ⚡ Low temp = focused, faster JSON output
+        maxOutputTokens: 2048,
+        // ⚡ Cap tokens — prevents unbounded slow generation
+        candidateCount: 1
+        // ⚡ Only generate 1 candidate, not multiple
       }
     });
     res.json({ text: response.text });
@@ -726,6 +746,9 @@ ${systemInstruction}`;
 
 The current date and time is: ${(/* @__PURE__ */ new Date()).toISOString()}. You must treat this as the absolute present moment.`;
     }
+    systemInstruction += `
+
+CRITICAL LANGUAGE RULE: You MUST strictly mirror the user's language, tone, and script. If the user writes in English, reply in English. If the user writes in Hindi (Devanagari), reply in Hindi. If the user writes in Hinglish (Hindi words written in the English alphabet, e.g., "kya haal hai"), you MUST reply completely in Hinglish. Do NOT default to English or mix English sentences if the user initiated the conversation in Hinglish or another language.`;
     if (shouldEnableSearch) {
       systemInstruction += `
 
@@ -774,6 +797,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     const shouldStream = stream === "true" || stream === true;
     if (shouldStream) {
       let modelsToTry = [
+        "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash",
         "gemini-3.1-flash-lite",
@@ -812,9 +836,9 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
           break;
         } catch (err) {
           const errStr = String(err.message || err).toLowerCase();
-          const isRateLimitOrQuota = errStr.includes("429") || errStr.includes("quota") || errStr.includes("resource_exhausted") || errStr.includes("limit");
+          const isRateLimitOrQuota = errStr.includes("429") || errStr.includes("503") || errStr.includes("502") || errStr.includes("quota") || errStr.includes("resource_exhausted") || errStr.includes("limit") || errStr.includes("unavailable") || errStr.includes("overloaded") || errStr.includes("demand") || errStr.includes("temporary");
           if (isRateLimitOrQuota) {
-            console.warn(`[chat stream] Model ${model} hit rate-limit or quota constraint:`, errStr);
+            console.warn(`[chat stream] Model ${model} hit rate-limit, 503, or quota constraint:`, errStr);
             rateLimitedModels[model] = Date.now();
           } else {
             console.error(`Stream start failed for model ${model}:`, err);
@@ -850,11 +874,17 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       }
     } else {
       const response = await safeGenerateContent({
-        model: "gemini-flash-latest",
+        model: "gemini-2.0-flash",
         contents,
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: isEvaluation === "true" || isEvaluation === true ? "text/plain" : "application/json",
+          temperature: 0.7,
+          // ⚡ Balanced temp for conversational AI
+          maxOutputTokens: 1500,
+          // ⚡ Cap output for fast chat responses
+          candidateCount: 1,
+          // ⚡ Single candidate only
           ...shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {}
         }
       });
@@ -899,7 +929,8 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     let useRawFile = false;
     if (req.file) {
       try {
-        const pdfData = await (0, import_pdf_parse.default)(req.file.buffer, { max: 60 });
+        const { default: pdf2 } = await import("pdf-parse/lib/pdf-parse.js");
+        const pdfData = await pdf2(req.file.buffer, { max: 60 });
         if (pdfData.numpages > 60) {
           return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
         }
@@ -1036,7 +1067,7 @@ ${extractedText}` };
       return res.status(400).json({ error: "Text content is too short to process." });
     }
     const response = await safeGenerateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: contentsPayload,
       config: {
         responseMimeType
@@ -1103,10 +1134,10 @@ app.post("/api/tts", async (req, res) => {
 });
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const { text, curriculum, subject, gradeLevel } = req.body;
+    const { text, curriculum, subject, gradeLevel, images } = req.body;
     const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
-    if (!text) {
-      return res.status(400).json({ error: "Missing text" });
+    if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
+      return res.status(400).json({ error: "Missing text or images" });
     }
     const aiClient = getAI();
     const curr = curriculum || "AP (Advanced Placement)";
@@ -1183,8 +1214,9 @@ GRAMMAR AND POLISH:
 
 OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
-    const originalModel = "gemini-3.6-flash";
+    const originalModel = "gemini-3.7-flash";
     let modelsToTry = [
+      "gemini-3.7-flash",
       "gemini-3.6-flash",
       "gemini-3.5-flash",
       "gemini-3.1-flash-lite",
@@ -1205,6 +1237,23 @@ OVERALL VERDICT:
     if (activeModels.length > 0) {
       modelsToTry = [...activeModels, ...backburnerModels];
     }
+    const contentParts = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+      for (const img of images) {
+        if (!img) continue;
+        const parts = img.split(",");
+        const base64Data = parts[1] || img;
+        const mimeType = parts[0]?.split(";")[0]?.split(":")[1] || "image/jpeg";
+        contentParts.push({
+          inlineData: {
+            mimeType,
+            data: base64Data
+          }
+        });
+      }
+    }
+    const targetText = text || "Please read the student's handwritten or typed essay from the attached image(s) and grade it strictly according to the rubric.";
+    contentParts.push({ text: targetText });
     let streamResponse = null;
     let lastError = null;
     let anyQuotaExceeded = false;
@@ -1212,7 +1261,7 @@ OVERALL VERDICT:
       try {
         streamResponse = await aiClient.models.generateContentStream({
           model,
-          contents: text,
+          contents: { parts: contentParts },
           config: {
             systemInstruction,
             temperature: 0.15,
@@ -1286,7 +1335,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
       }
     };
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: [
         {
           parts: [
@@ -1316,7 +1365,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
       }
     }));
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: [
         {
           parts: [
@@ -1365,7 +1414,7 @@ Format exactly like this:
   }
 ]`;
     const response = await safeGenerateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text: `Generate exactly ${requestedCount} flashcards from this text: ${text}` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1680,7 +1729,7 @@ ${previousSummary}
 Student's Request: "${followUp}"`;
       const response2 = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-flash-latest",
+        model: "gemini-2.0-flash",
         contents: { parts: [{ text: promptText }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] }
@@ -1739,7 +1788,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 \`[SUGGESTION: Deep dive into the first half]\``;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text: transcriptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -1830,7 +1879,7 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 - Standard: Standard introduction, body, and conclusion.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone. Topic: ${topic}` }] },
       config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
     });
@@ -1847,10 +1896,10 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 });
 app.post("/api/grammar-enhance", async (req, res) => {
   try {
-    const { text, mode, gradeLevel } = req.body;
+    const { text, mode, gradeLevel, images } = req.body;
     const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
-    if (!text) {
-      return res.status(400).json({ error: "Missing text" });
+    if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
+      return res.status(400).json({ error: "Missing text or images" });
     }
     const aiClient = getAI();
     const userMode = mode === "academic" ? "academic" : "fix";
@@ -1878,10 +1927,27 @@ You must return your output strictly in JSON format matching the following schem
     "A concise, educational bullet point of what was fixed and why (e.g., 'Corrected spelling of "milks" to "milk" because "milk" is an uncountable noun.'). Limit to 3-6 key educational fixes."
   ]
 }`;
+    const contentParts = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+      for (const img of images) {
+        if (!img) continue;
+        const parts = img.split(",");
+        const base64Data = parts[1] || img;
+        const mimeType = parts[0]?.split(";")[0]?.split(":")[1] || "image/jpeg";
+        contentParts.push({
+          inlineData: {
+            mimeType,
+            data: base64Data
+          }
+        });
+      }
+    }
+    const targetText = text || "Please read the text inside the attached image(s), correct any grammatical errors, and enhance it according to the chosen mode.";
+    contentParts.push({ text: targetText });
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-latest",
-      contents: { parts: [{ text }] },
+      model: "gemini-2.0-flash",
+      contents: { parts: contentParts },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
@@ -1917,7 +1983,7 @@ app.post("/api/extract-file-text", upload.single("file"), async (req, res) => {
     let extractedText = "";
     if (req.file.mimetype === "application/pdf" || req.file.originalname.toLowerCase().endsWith(".pdf")) {
       try {
-        const pdfData = await (0, import_pdf_parse.default)(req.file.buffer, { max: 60 });
+        const pdfData = await pdf(req.file.buffer, { max: 60 });
         if (pdfData.numpages > 60) {
           return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
         }
@@ -2032,7 +2098,7 @@ IF FORMAT IS "Explain Like I'm 5":
 4. Use short paragraphs and emojis to make it visually friendly for beginners.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text }] },
       config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
     });
@@ -2086,7 +2152,7 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-3.6-flash",
+        model: "gemini-3.7-flash",
         contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || "11th Grade (Junior)"}. Academic Stream: ${stream || "STEM / Engineering"}. Count: Generate exactly ${requestedCount} questions now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2144,7 +2210,7 @@ app.post("/api/evaluate-answer", async (req, res) => {
 [Explain mistakes and provide the perfect 10/10 mathematical solution]`;
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text: `Evaluate the student's answer for: "${questionText}". Student's Answer is: "${userAnswer}".` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -2195,7 +2261,7 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-flash-latest",
+        model: "gemini-2.0-flash",
         contents: { parts: [{ text: `Topic: ${topic}. Generate the ${requestedCount}-question JSON quiz now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2229,8 +2295,10 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
   try {
     const { gradeLevel, count } = req.body;
     if (!req.file) {
+      console.warn("[PDF Quiz API] No PDF file provided in request.");
       return res.status(400).json({ error: "No PDF file provided" });
     }
+    console.log(`[PDF Quiz API] Received file: ${req.file.originalname}, Size: ${req.file.size} bytes`);
     const maxSizeBytes = 10 * 1024 * 1024;
     if (req.file.size > maxSizeBytes) {
       return res.status(400).json({ error: "PDF file size must not exceed 10MB." });
@@ -2238,41 +2306,54 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
     let extractedText = "";
     let numPages = 0;
     try {
-      const pdfData = await (0, import_pdf_parse.default)(req.file.buffer, { max: 51 });
+      const pdfData = await pdf(req.file.buffer, { max: 51 });
       numPages = pdfData.numpages;
       extractedText = pdfData.text || "";
+      console.log(`[PDF Quiz API] PDF parse complete. Pages: ${numPages}, Extracted text length: ${extractedText.trim().length}`);
     } catch (parseError) {
-      console.warn("Failed to parse PDF locally with pdf-parse:", parseError);
+      console.warn("[PDF Quiz API] Failed to parse PDF locally with pdf-parse:", parseError);
     }
     if (numPages > 50) {
       return res.status(400).json({ error: "PDF document exceeds 50 pages limit. Please upload a shorter document (max 50 pages)." });
     }
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
-    const systemInstruction = `You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate exactly ${requestedCount} multiple choice questions based ONLY on this text/document. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
+    const systemInstruction = `You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate exactly ${requestedCount} multiple choice questions based strictly on this text/document. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
 2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
-4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.`;
+4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+
+Use this exact JSON structure:
+[
+  {
+    "question": "Sample multiple choice question...",
+    "options": ["A) Option A", "B) Option B", "C) Option C", "D) Option D"],
+    "correctAnswer": "A) Option A",
+    "explanation": "Because..."
+  }
+]`;
     let response;
     if (extractedText && extractedText.trim().length >= 50) {
+      console.log("[PDF Quiz API] Using high-reliability text extraction path...");
       const slicedText = extractedText.length > 15e4 ? extractedText.slice(0, 15e4) : extractedText;
       response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-flash-latest",
-        contents: {
+        model: "gemini-2.0-flash",
+        contents: [{
           parts: [{ text: `DOCUMENT CONTENT:
 ${slicedText}
 
 Generate the ${requestedCount}-question JSON quiz now based strictly on the content above.` }]
-        },
+        }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json"
         }
       });
     } else {
+      console.log("[PDF Quiz API] Falling back to base64 PDF multimodal processing path (scanned PDF or low-quality extraction)...");
       const pdfPart = {
         inlineData: {
           mimeType: "application/pdf",
@@ -2281,13 +2362,13 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
       };
       response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-flash-latest",
-        contents: {
+        model: "gemini-2.0-flash",
+        contents: [{
           parts: [
             pdfPart,
             { text: `Analyze the attached PDF document and generate the ${requestedCount}-question JSON quiz now based strictly on its content.` }
           ]
-        },
+        }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json"
@@ -2295,13 +2376,15 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
       });
     }
     let quizText = response.text || "";
+    console.log(`[PDF Quiz API] Gemini response received. Length: ${quizText.length} characters.`);
     try {
       const parsed = safeParseJSON(quizText, "array");
       if (Array.isArray(parsed) && parsed.length > 0) {
+        console.log(`[PDF Quiz API] Successfully parsed quiz with ${parsed.length} questions.`);
         return res.json({ quiz: parsed });
       }
     } catch (parseError) {
-      console.error("JSON parse error for PDF quiz output:", parseError, quizText);
+      console.error("[PDF Quiz API] JSON parse error for PDF quiz output:", parseError, quizText);
     }
     return res.status(400).json({ error: "Failed to generate a valid quiz structure from the PDF. Please ensure it has readable text or images." });
   } catch (error) {
@@ -2313,7 +2396,7 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
 The Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
       });
     }
-    console.error("PDF quiz generation error:", error);
+    console.error("[PDF Quiz API] PDF quiz generation error:", error);
     res.status(400).json({ error: error.message || "Failed to generate quiz from PDF" });
   }
 });
@@ -2349,7 +2432,7 @@ Use this exact JSON structure:
 ]`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2544,7 +2627,7 @@ Correct Concept/Answer: ${correctConcept}
 Please analyze this mistake and output the correction in the strict JSON format specified.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text: prompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2617,7 +2700,7 @@ Please generate exactly 3 similar practice questions to help the student test an
 Return the response in the strict JSON array format specified.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text: prompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2712,7 +2795,7 @@ ${studentNotes ? `LOCAL STUDY NOTES / STUDY FILE CONTENT: ${studentNotes}` : ""}
 Please perform a Google Search, combine the facts with the student profile context, and format the response strictly in JSON according to our specified schema (with NO markdown bolding '**').`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-latest",
+      model: "gemini-2.0-flash",
       contents: { parts: [{ text: contentPrompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2762,24 +2845,39 @@ app.post("/api/generate-trivia", async (req, res) => {
   try {
     const { gradeLevel, academicStream, topic, excludeQuestions, country } = req.body;
     const aiClient = getAI();
-    let promptText = `Generate a single, unique, highly engaging educational trivia question tailored for:
+    const normalizeStr = (s) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    const excludesSet = new Set((excludeQuestions || []).map((q) => normalizeStr(q)));
+    let attempts = 0;
+    let finalTrivia = null;
+    let extraAvoidInstruction = "";
+    while (attempts < 3) {
+      attempts++;
+      let promptText = `Generate a single, unique, highly engaging educational trivia question tailored for:
 - Student Academic Grade: ${gradeLevel || "11th Grade (Junior)"}
 - Academic Track/Stream: ${academicStream || "STEM / Engineering"}
 - Student's Country: ${country || "United States"}`;
-    if (country && country.trim().length > 0) {
-      promptText += `
-- Country-Specific Customization: Design a question that relates to, is contextualised for, or is based on the school curriculum, general knowledge, history, geography, science, famous figures, or academic themes of ${country}. For instance, if the student is from India, ask about Indian history, science achievements, or geography. If from United States, ask about US-relevant topics, etc.`;
-    }
-    if (topic && topic.trim().length > 0) {
-      promptText += `
-- Specific Topic/Subject: ${topic}`;
-    }
-    if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
-      promptText += `
-- EXCLUDE the following questions (do not generate similar questions): ${JSON.stringify(excludeQuestions.slice(-10))}`;
-    }
-    const systemInstruction = `You are an Elite Interactive Quiz and Trivia Game Creator.
-Generate a single multiple-choice trivia question that is highly informative, accurate, and customized to the student's grade level and academic track.
+      if (country && country.trim().length > 0) {
+        promptText += `
+- Country-Specific Customization: Design a question that relates to, is contextualised for, or is based on the school curriculum, general knowledge, history, geography, science, famous figures, or academic themes of ${country}.`;
+      }
+      if (topic && topic.trim().length > 0) {
+        promptText += `
+- Specific Topic/Subject Focus: ${topic}`;
+      }
+      if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
+        promptText += `
+- EXCLUDE the following questions (do NOT generate them or anything similar): ${JSON.stringify(excludeQuestions.slice(-120))}`;
+      }
+      if (extraAvoidInstruction) {
+        promptText += `
+${extraAvoidInstruction}`;
+      }
+      const systemInstruction = `You are an Elite Interactive Quiz and Trivia Game Creator.
+Generate a single multiple-choice trivia question that is highly informative, accurate, and customized.
+
+GAME-PLAY & UNIQUE QUESTION STYLE:
+- Design "Thinking Questions" (conceptual puzzles, scientific anomalies, real-world educational paradoxes, or reasoning riddles) rather than standard factual memorization.
+- Make it highly gamified, interactive, and stimulating to think about. It should feel like a premium educational mind game!
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON object matching the schema below. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
@@ -2795,21 +2893,33 @@ Required JSON Structure:
   "correctIndex": 0,
   "fact": "The Golgi apparatus acts like the post office of the cell, sorting and shipping proteins! \u{1F4E6}"
 }`;
-    const response = await safeGenerateContent({
-      gradeLevel: gradeLevel || "11th Grade (Junior)",
-      model: "gemini-3.5-flash",
-      contents: [{ parts: [{ text: promptText }] }],
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
+      const response = await safeGenerateContent({
+        gradeLevel: gradeLevel || "11th Grade (Junior)",
+        model: "gemini-2.0-flash",
+        contents: [{ parts: [{ text: promptText }] }],
+        config: {
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          responseMimeType: "application/json"
+        }
+      });
+      const triviaText = response.text || "";
+      const parsed = safeParseJSON(triviaText, "object");
+      if (parsed && parsed.question && Array.isArray(parsed.options)) {
+        const normQ = normalizeStr(parsed.question);
+        if (!excludesSet.has(normQ)) {
+          finalTrivia = parsed;
+          break;
+        } else {
+          console.warn(`[Trivia Loop] Duplicate question generated: "${parsed.question}". Retrying...`);
+          extraAvoidInstruction = `
+- IMPORTANT: You previously generated "${parsed.question}", which was already asked. Please choose a completely different subtopic or a creative new angle to make sure it is 100% unique.`;
+        }
       }
-    });
-    const triviaText = response.text || "";
-    const parsed = safeParseJSON(triviaText, "object");
-    if (parsed && parsed.question && Array.isArray(parsed.options)) {
-      return res.json({ trivia: parsed });
     }
-    throw new Error("Failed to parse valid trivia response from AI");
+    if (finalTrivia) {
+      return res.json({ trivia: finalTrivia });
+    }
+    throw new Error("Failed to parse or generate a unique trivia response after multiple attempts");
   } catch (error) {
     console.error("Trivia generation error:", error);
     const fallbacks = [

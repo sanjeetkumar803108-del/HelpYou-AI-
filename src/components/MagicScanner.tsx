@@ -203,21 +203,28 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       // Do not run camera stream when showing preview
       if (imagePreview) return;
       try {
-        // Request native Capacitor camera permission on Android/iOS devices
+        // REQUEST NATIVE PERMISSION: Check first, then request if needed (Android JIT flow)
         if (Capacitor.isNativePlatform()) {
-          console.log("[Capacitor Camera] Requesting native camera permissions...");
-          const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
-          if (reqStatus.camera !== 'granted') {
-            alert("Camera Permission Needed\n\nHelpYou needs camera access to scan and solve your questions directly. Please enable camera access in your device settings to use this feature.");
+          console.log("[Capacitor Camera] Checking native camera permissions...");
+          const checkStatus = await Camera.checkPermissions();
+
+          if (checkStatus.camera === 'denied') {
+            // Permission was previously denied — redirect to Settings
+            alert("Camera Permission Blocked\n\nCamera access was previously denied. Please go to Settings → Apps → HelpYou AI → Permissions → Camera and enable it manually.");
             setCameraActive(false);
             return;
           }
-        }
 
-        // Trigger native OS prompt simulation for first-time access on web fallback
-        if (!(window as any).hasRequestedCamera) {
-          (window as any).hasRequestedCamera = true;
-          console.log("Triggering native OS prompt for Camera access...");
+          if (checkStatus.camera !== 'granted') {
+            // Not yet asked — show the OS dialog
+            console.log("[Capacitor Camera] Requesting native camera permissions...");
+            const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
+            if (reqStatus.camera !== 'granted') {
+              alert("Camera Permission Needed\n\nHelpYou needs camera access to scan and solve your questions directly. Please enable camera access in your device settings to use this feature.");
+              setCameraActive(false);
+              return;
+            }
+          }
         }
 
         stream = await navigator.mediaDevices.getUserMedia({
@@ -231,7 +238,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       } catch (err: any) {
         console.warn("Camera access denied or unavailable", err);
         if (err.name === 'NotAllowedError') {
-           alert("Camera Permission Required\n\nPlease allow camera access in your settings to use the Scan feature.");
+           alert("Camera Permission Required\n\nPlease allow camera access in your device settings to use the Scan feature.");
         }
         setCameraActive(false);
       }

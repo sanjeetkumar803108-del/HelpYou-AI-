@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "702005695603",
+    "project_id": "gen-lang-client-0416312455",
+    "storage_bucket": "gen-lang-client-0416312455.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:702005695603:android:e1f151e1196c3fdba8c606",
+        "android_client_info": {
+          "package_name": "com.helpyou.ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWv7U_z8RWYB1pG5oveK9lP1bKCcmu4Ks"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "status": 1
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

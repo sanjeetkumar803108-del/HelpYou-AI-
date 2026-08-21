@@ -1,0 +1,3 @@
+import{s}from"./index-CxOTgjKp.js";const a=()=>{const i=s("onboarding_role"),o=s("onboarding_grade"),t=s("pref_visual_learner")==="true",r=s("pref_deep_focus")==="true";let e="";return i&&o&&(e+=`User is a ${i} in ${o}. Adjust difficulty and tone accordingly.`),t&&(e+=`
+USER SETTING: Visual Learner Mode is ON. You MUST prioritize explanations using HTML tables (with inline styles), bulleted lists, step-by-step formats, and where possible, suggest visual analogies.`),r&&(e+=`
+USER SETTING: Deep Focus Mode is ON. Keep responses extremely concise, distraction-free, and highly focused on the core academic concept. Avoid conversational filler.`),e};export{a as g};

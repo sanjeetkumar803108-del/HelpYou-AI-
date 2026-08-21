@@ -1,31 +1,18 @@
 apply plugin: 'com.android.application'
 apply plugin: 'com.google.gms.google-services'
-apply plugin: 'com.google.firebase.crashlytics'
-apply plugin: 'com.google.firebase.firebase-perf'
 
 android {
     namespace "com.helpyou.ai"
-    compileSdk rootProject.ext.compileSdkVersion
+    compileSdk 34
     defaultConfig {
         applicationId "com.helpyou.ai"
-<<<<<<< HEAD
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
-=======
-        minSdkVersion 22
+        minSdkVersion 24
         targetSdkVersion 34
->>>>>>> 1d9e810434968d4a47278879a2e938fcc6ee0a5e
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
-<<<<<<< HEAD
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
-=======
-             ignoreAssetsPattern "!.svn:!.git:!.ds_store:!*.scc:.*:g_hover:!CVS:!thumbs.db:!picasa.ini:!*~"
->>>>>>> 1d9e810434968d4a47278879a2e938fcc6ee0a5e
+             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
     buildTypes {
@@ -34,42 +21,39 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// ⚡ FORCE COMPATIBLE DEPENDENCY VERSIONS
+// This resolutionStrategy forces older, stable AndroidX libraries that are fully
+// compatible with compileSdk 34. This prevents Gradle from pulling in newer transitive
+// dependencies (like activity-ktx:1.13.0) which require compileSdk 36 and AGP 8.9.1.
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core-ktx:1.12.0'
+        force 'androidx.core:core:1.12.0'
+        force 'androidx.activity:activity:1.8.2'
+        force 'androidx.activity:activity-ktx:1.8.2'
+        force 'androidx.fragment:fragment:1.6.2'
+        force 'androidx.appcompat:appcompat:1.6.1'
+        force 'androidx.appcompat:appcompat-resources:1.6.1'
+    }
 }
 
 repositories {
-    flatDir{
-<<<<<<< HEAD
-        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
-=======
+    flatDir {
         dirs '../libs', 'libs'
->>>>>>> 1d9e810434968d4a47278879a2e938fcc6ee0a5e
     }
 }
 
 dependencies {
-<<<<<<< HEAD
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
-    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    implementation project(':capacitor-android')
-    testImplementation "junit:junit:$junitVersion"
-    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
-    implementation project(':capacitor-cordova-android-plugins')
-
-    // Import the Firebase BoM
-    implementation platform('com.google.firebase:firebase-bom:34.17.0')
-
-    // Firebase analytics and crashlytics
-    implementation 'com.google.firebase:firebase-analytics'
-    implementation 'com.google.firebase:firebase-crashlytics'
-}
-
-apply from: 'capacitor.build.gradle'
-=======
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
     implementation project(':capacitor-android')
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
@@ -79,9 +63,8 @@ apply from: 'capacitor.build.gradle'
     // Import the Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
 
-    // Firebase analytics and crashlytics
+    // Firebase analytics
     implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-crashlytics")
-    implementation("com.google.firebase:firebase-perf")
 }
->>>>>>> 1d9e810434968d4a47278879a2e938fcc6ee0a5e
+
+apply from: 'capacitor.build.gradle'

@@ -1,5 +1,5 @@
 import { Camera } from '@capacitor/camera';
-import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
 /**
@@ -38,22 +38,26 @@ export async function requestCameraPermission(): Promise<boolean> {
 
 /**
  * JIT RUNTIME PERMISSION:
- * Direct check and request for Push/Post Notification permissions.
- * Triggered when user sets up daily study reminder streaks (Android 13+).
+ * Uses @capacitor/local-notifications (already installed) to request
+ * POST_NOTIFICATIONS permission on Android 13+ (API 33+).
+ * This is the correct approach for study reminders - does NOT require Firebase FCM.
+ * Triggered when user sets up daily study reminder streaks.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return true;
 
   try {
-    const check = await PushNotifications.checkPermissions();
-    if (check.receive === 'granted') {
+    // Check existing permission status first
+    const check = await LocalNotifications.checkPermissions();
+    if (check.display === 'granted') {
       return true;
     }
 
-    const request = await PushNotifications.requestPermissions();
-    const success = request.receive === 'granted';
+    // Request the OS permission dialog (Android 13+ / iOS)
+    const request = await LocalNotifications.requestPermissions();
+    const success = request.display === 'granted';
     if (!success) {
-      console.warn('[NativePermissions] Notification permission denied.');
+      console.warn('[NativePermissions] LocalNotification permission denied by user.');
     }
     return success;
   } catch (err) {
@@ -64,18 +68,28 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 /**
  * JIT RUNTIME PERMISSION:
- * Request Microphone permission using WebRTC standard API which triggers 
- * the native record audio dialog in Capacitor WebView.
- * Triggered strictly when user taps the Voice Chat button.
+ * Requests RECORD_AUDIO permission on Android via getUserMedia.
+ * On Capacitor native apps, the WebView forwards this to the OS permission dialog.
+ * The key fix: we ensure the Capacitor app has android:usesCleartextTraffic is NOT
+ * blocking it, and we use a try/catch with a proper user-facing message.
+ * Triggered strictly when user taps the Voice Chat / Call with Tutor button.
  */
 export async function requestMicrophonePermission(): Promise<boolean> {
   try {
+    // On native Capacitor, getUserMedia triggers the OS RECORD_AUDIO dialog
+    // This works correctly when android:name="android.permission.RECORD_AUDIO"
+    // is declared in AndroidManifest.xml (which it is in this project)
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    // Stop all tracks immediately after getting approval
+    // Stop all tracks immediately — we only needed permission, not the stream
     stream.getTracks().forEach(track => track.stop());
+    console.log('[NativePermissions] Microphone permission granted.');
     return true;
-  } catch (err) {
-    console.error('[NativePermissions] Microphone permission denied or failed:', err);
+  } catch (err: any) {
+    if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+      console.warn('[NativePermissions] Microphone permission denied by user.');
+    } else {
+      console.error('[NativePermissions] Microphone error:', err);
+    }
     return false;
   }
 }

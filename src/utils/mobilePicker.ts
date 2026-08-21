@@ -48,26 +48,18 @@ export async function pickNativeFiles(options: {
       const photo = await Camera.getPhoto({
         quality: 90,
         allowEditing: false,
-        resultType: CameraResultType.Uri,
+        resultType: CameraResultType.Base64,
         source: CameraSource.Photos,
       });
 
-      if (!photo.webPath) return [];
+      if (!photo.base64String) return [];
 
       const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
       const name = `gallery_${Date.now()}.${photo.format || 'jpg'}`;
-      
-      const response = await fetch(photo.webPath);
-      const blob = await response.blob();
+      const base64 = photo.base64String;
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+      const blob = base64ToBlob(base64, mimeType);
       const fileObj = blobToFile(blob, name);
-
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      const base64 = dataUrl.split(',')[1] || '';
 
       return [{
         name,
@@ -140,14 +132,15 @@ export async function pickNativeFiles(options: {
 /**
  * Capture photo natively using camera (JIT Permission Flow)
  *
- * Fix: Always CHECK permission status first before REQUESTING.
- * On many Android devices, calling requestPermissions() when permission is
- * already GRANTED throws an exception — causing a false "Camera Capture Failed".
- * The correct flow: check → if granted, open camera directly.
- *                           if denied, show settings guidance.
- *                           if not_determined, request then open.
+ * Fix 1: Use CameraResultType.Base64 — much more reliable on Android WebView
+ *         than CameraResultType.Uri (which can fail with "content://" path issues)
+ * Fix 2: Always CHECK permission before REQUESTING — calling requestPermissions()
+ *         when already GRANTED throws an exception on many Android devices.
+ * Fix 3: Return error codes instead of alert() — callers show in-app toasts.
  */
-export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
+export type CameraErrorCode = 'denied' | 'blocked' | 'cancelled' | 'failed';
+
+export async function takeNativePhoto(): Promise<MobilePickedFile | { error: CameraErrorCode } | null> {
   if (!Capacitor.isNativePlatform()) {
     return null;
   }
@@ -157,46 +150,36 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
     const checkStatus = await Camera.checkPermissions();
 
     if (checkStatus.camera === 'denied') {
-      // User previously denied — guide them to Settings
-      alert("Camera Permission Blocked\n\nCamera access was denied. Please go to:\nSettings → Apps → HelpYou AI → Permissions → Camera\nand enable it manually.");
-      return null;
+      // Previously denied — caller should show settings guidance
+      return { error: 'blocked' };
     }
 
     if (checkStatus.camera !== 'granted') {
       // Not yet asked — show the OS permission dialog
       const req = await Camera.requestPermissions({ permissions: ['camera'] });
       if (req.camera !== 'granted') {
-        alert("Camera Permission Needed\n\nHelpYou needs camera access to capture photos of your study materials. Please allow camera access when prompted.");
-        return null;
+        return { error: 'denied' };
       }
     }
 
-    // STEP 2: Permission is granted — open camera directly
+    // STEP 2: Permission is granted — open camera
+    // Use Base64 result type: most reliable on Android Capacitor WebView
+    // Uri type can fail with content:// path resolution errors in some Android versions
     const photo = await Camera.getPhoto({
-      quality: 90,
+      quality: 85,
       allowEditing: false,
-      resultType: CameraResultType.Uri,
+      resultType: CameraResultType.Base64,
       source: CameraSource.Camera,
     });
 
-    if (!photo.webPath) return null;
+    if (!photo.base64String) return null;
 
     const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
     const name = `camera_${Date.now()}.${photo.format || 'jpg'}`;
-
-    // Fetch blob properly using native webPath
-    const response = await fetch(photo.webPath);
-    const blob = await response.blob();
+    const base64 = photo.base64String;
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+    const blob = base64ToBlob(base64, mimeType);
     const fileObj = blobToFile(blob, name);
-
-    // Convert blob to Data URL for preview compatibility
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    const base64 = dataUrl.split(',')[1] || '';
 
     return {
       name,
@@ -210,18 +193,20 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
   } catch (err: any) {
     console.error('[mobilePicker] Error capturing native camera:', err);
 
-    // If user simply pressed back/cancelled — do NOT show an error alert
-    const errMsg = (err?.message || '').toLowerCase();
+    // If user simply pressed back/cancelled — silent return null (no error)
+    const errMsg = (err?.message || String(err)).toLowerCase();
     const isCancelled =
       errMsg.includes('cancel') ||
-      errMsg.includes('dismissed') ||
+      errMsg.includes('dismiss') ||
       errMsg.includes('no image') ||
-      errMsg.includes('user denied');
+      errMsg.includes('user denied') ||
+      errMsg.includes('no photo') ||
+      errMsg.includes('empty');
 
-    if (!isCancelled) {
-      alert("Camera Capture Failed\n\nSomething went wrong while opening the camera. Please try again.");
+    if (isCancelled) {
+      return null; // User cancelled — caller does nothing
     }
 
-    return null;
+    return { error: 'failed' };
   }
 }

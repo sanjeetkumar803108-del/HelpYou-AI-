@@ -18,6 +18,7 @@ import { saveMistakeToVault } from '../utils/mistakes';
 import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
+import { showToast } from '../utils/toast';
 import AdvancedLoader from './AdvancedLoader';
 import {
   ResponsiveContainer, 
@@ -2032,16 +2033,26 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                       try {
                         const picked = await takeNativePhoto();
                         if (picked) {
-                          const fakeEvent = {
-                            target: {
-                              files: [picked.fileObj]
+                          if ('error' in picked) {
+                            if (picked.error === 'blocked') {
+                              showToast('Camera Permission Blocked: Please enable Camera in Device Settings', 'warning');
+                            } else if (picked.error === 'denied') {
+                              showToast('Camera Permission Denied: Camera is required to capture textbook pages.', 'warning');
+                            } else {
+                              photoInputRef.current?.click();
                             }
-                          } as unknown as React.ChangeEvent<HTMLInputElement>;
-                          await handlePhotoUpload(fakeEvent);
+                          } else {
+                            const fakeEvent = {
+                              target: {
+                                files: [picked.fileObj]
+                              }
+                            } as unknown as React.ChangeEvent<HTMLInputElement>;
+                            await handlePhotoUpload(fakeEvent);
+                          }
                         }
                       } catch (err: any) {
                         console.error("Native camera photo failed", err);
-                        setError("Oops! Something went wrong on our end. Please try again.");
+                        photoInputRef.current?.click();
                       }
                     } else {
                       photoInputRef.current?.click();

@@ -77,6 +77,8 @@ const Onboarding = lazyWithRetry(() => import('./components/Onboarding'));
 import SplashScreen from './components/SplashScreen';
 import AuthGuard from './components/AuthGuard';
 import ErrorBoundary from './components/ErrorBoundary';
+import ToastProvider from './components/ToastProvider';
+import './utils/toast';
 import { setupDailyLocalNotifications } from './utils/notifications';
 import { requestCameraPermission, requestMicrophonePermission, requestNotificationPermission } from './utils/nativePermissions';
 
@@ -801,18 +803,20 @@ export default function App() {
   }, []);
 
   return (
-    <AuthGuard
-      user={user}
-      authLoading={authLoading}
-      showSplash={showSplash}
-      showOnboarding={showOnboarding}
-      showAcademicSetup={showAcademicSetup}
-      isDarkMode={isDarkMode}
-      setShowOnboarding={setShowOnboarding}
-      setShowAcademicSetup={setShowAcademicSetup}
-      fallbackSkeleton={<FullPageSkeleton />}
-    >
-      <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-[#FAF9F6] text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative`}>
+    <>
+      <ToastProvider />
+      <AuthGuard
+        user={user}
+        authLoading={authLoading}
+        showSplash={showSplash}
+        showOnboarding={showOnboarding}
+        showAcademicSetup={showAcademicSetup}
+        isDarkMode={isDarkMode}
+        setShowOnboarding={setShowOnboarding}
+        setShowAcademicSetup={setShowAcademicSetup}
+        fallbackSkeleton={<FullPageSkeleton />}
+      >
+        <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-[#FAF9F6] text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative`}>
         {/* Global Network Status Banner */}
         <AnimatePresence>
           {networkStatus.visible && (
@@ -1185,8 +1189,9 @@ export default function App() {
           }}
         />
       </Suspense>
-    </div>
-    </AuthGuard>
+      </div>
+      </AuthGuard>
+    </>
   );
 }
 

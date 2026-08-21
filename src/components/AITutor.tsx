@@ -20,6 +20,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
+import { showToast } from '../utils/toast';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -2047,9 +2048,24 @@ Please evaluate this answer strictly according to your system rubric.`;
                 onClick={async () => {
                   setShowPlusMenu(false);
                   if (Capacitor.isNativePlatform()) {
-                    const picked = await takeNativePhoto();
-                    if (picked) {
-                      handleNativeImagePicked(picked);
+                    try {
+                      const picked = await takeNativePhoto();
+                      if (picked) {
+                        if ('error' in picked) {
+                          if (picked.error === 'blocked') {
+                            showToast('Camera Permission Blocked: Please enable Camera in Device Settings → Apps → HelpYou AI', 'warning', 4500);
+                          } else if (picked.error === 'denied') {
+                            showToast('Camera Permission Denied: Camera is required to capture study materials.', 'warning', 4000);
+                          } else {
+                            // Fallback to camera input
+                            cameraInputRef.current?.click();
+                          }
+                        } else {
+                          handleNativeImagePicked(picked);
+                        }
+                      }
+                    } catch (_) {
+                      cameraInputRef.current?.click();
                     }
                   } else {
                     cameraInputRef.current?.click();

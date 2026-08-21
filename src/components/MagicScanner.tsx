@@ -13,6 +13,8 @@ import { deductCoins, getCoins, isProUser } from '../utils/coins';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
+import { showToast } from '../utils/toast';
+import { takeNativePhoto } from '../utils/mobilePicker';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -210,7 +212,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
 
           if (checkStatus.camera === 'denied') {
             // Permission was previously denied — redirect to Settings
-            alert("Camera Permission Blocked\n\nCamera access was previously denied. Please go to Settings → Apps → HelpYou AI → Permissions → Camera and enable it manually.");
+            showToast("Camera Permission Blocked: Please enable Camera in Device Settings → Apps → HelpYou AI", "warning", 4500);
             setCameraActive(false);
             return;
           }
@@ -220,7 +222,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
             console.log("[Capacitor Camera] Requesting native camera permissions...");
             const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
             if (reqStatus.camera !== 'granted') {
-              alert("Camera Permission Needed\n\nHelpYou needs camera access to scan and solve your questions directly. Please enable camera access in your device settings to use this feature.");
+              showToast("Camera Permission Needed: Please allow camera access to scan and solve questions.", "warning", 4000);
               setCameraActive(false);
               return;
             }
@@ -238,7 +240,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       } catch (err: any) {
         console.warn("Camera access denied or unavailable", err);
         if (err.name === 'NotAllowedError') {
-           alert("Camera Permission Required\n\nPlease allow camera access in your device settings to use the Scan feature.");
+           showToast("Camera Permission Required: Please allow camera access in settings to use the Scanner.", "warning", 4000);
         }
         setCameraActive(false);
       }
@@ -539,24 +541,17 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
 
   const handleNativeCapture = async () => {
     try {
-      const reqStatus = await Camera.requestPermissions({ permissions: ['camera'] });
-      if (reqStatus.camera !== 'granted') {
-        alert("Camera Permission Needed\n\nHelpYou needs camera access to scan and solve your questions directly. Please enable camera access in your device settings to use this feature.");
-        return;
-      }
-      
-      const image = await Camera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.Uri,
-        source: CameraSource.Camera,
-      });
-
-      if (image && image.webPath) {
-        const response = await fetch(image.webPath);
-        const blob = await response.blob();
-        const file = new File([blob], `capture_${Date.now()}.${image.format || 'jpg'}`, { type: blob.type || 'image/jpeg' });
-        processFile(file);
+      const picked = await takeNativePhoto();
+      if (picked) {
+        if ('error' in picked) {
+          if (picked.error === 'blocked') {
+            showToast("Camera Permission Blocked: Please enable Camera in Device Settings → Apps → HelpYou AI", "warning", 4500);
+          } else if (picked.error === 'denied') {
+            showToast("Camera Permission Needed: Please allow camera access to scan questions.", "warning", 4000);
+          }
+        } else {
+          processFile(picked.fileObj);
+        }
       }
     } catch (err) {
       console.warn("Native capture cancelled or failed:", err);

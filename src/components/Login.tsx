@@ -48,11 +48,15 @@ const TouchableOpacity = ({ onPress, children, className, style }: { onPress?: (
   );
 };
 
+import { showToast } from '../utils/toast';
+
 const Alert = {
   alert: (title: string, message: string) => {
-    window.alert(`${title}\n\n${message}`);
+    const isSuccess = title.toLowerCase().includes('success') || title.toLowerCase().includes('sent');
+    showToast(`${title}: ${message}`, isSuccess ? 'success' : 'error', 4500);
   }
 };
+
 
 export default function Login({ onClose, onLoginSuccess, hideClose = false }: { onClose: () => void, onLoginSuccess: (target?: 'main' | 'setup' | 'onboarding') => void, hideClose?: boolean }) {
   const [isSignUp, setIsSignUp] = useState(true);

@@ -138,7 +138,14 @@ export async function pickNativeFiles(options: {
 }
 
 /**
- * Capture photo natively using camera
+ * Capture photo natively using camera (JIT Permission Flow)
+ *
+ * Fix: Always CHECK permission status first before REQUESTING.
+ * On many Android devices, calling requestPermissions() when permission is
+ * already GRANTED throws an exception — causing a false "Camera Capture Failed".
+ * The correct flow: check → if granted, open camera directly.
+ *                           if denied, show settings guidance.
+ *                           if not_determined, request then open.
  */
 export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
   if (!Capacitor.isNativePlatform()) {
@@ -146,13 +153,25 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
   }
 
   try {
-    // Request camera permission explicitly before triggering the camera
-    const req = await Camera.requestPermissions({ permissions: ['camera'] });
-    if (req.camera !== 'granted') {
-      alert("Camera Permission Needed\n\nHelpYou needs access to your camera to capture photos of your study materials, homework, or essays. Please allow camera access in your device settings.");
+    // STEP 1: Check current permission status first (never blindly request)
+    const checkStatus = await Camera.checkPermissions();
+
+    if (checkStatus.camera === 'denied') {
+      // User previously denied — guide them to Settings
+      alert("Camera Permission Blocked\n\nCamera access was denied. Please go to:\nSettings → Apps → HelpYou AI → Permissions → Camera\nand enable it manually.");
       return null;
     }
 
+    if (checkStatus.camera !== 'granted') {
+      // Not yet asked — show the OS permission dialog
+      const req = await Camera.requestPermissions({ permissions: ['camera'] });
+      if (req.camera !== 'granted') {
+        alert("Camera Permission Needed\n\nHelpYou needs camera access to capture photos of your study materials. Please allow camera access when prompted.");
+        return null;
+      }
+    }
+
+    // STEP 2: Permission is granted — open camera directly
     const photo = await Camera.getPhoto({
       quality: 90,
       allowEditing: false,
@@ -164,7 +183,7 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
 
     const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
     const name = `camera_${Date.now()}.${photo.format || 'jpg'}`;
-    
+
     // Fetch blob properly using native webPath
     const response = await fetch(photo.webPath);
     const blob = await response.blob();
@@ -187,9 +206,22 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
       blob,
       fileObj,
     };
-  } catch (err) {
+
+  } catch (err: any) {
     console.error('[mobilePicker] Error capturing native camera:', err);
-    alert("Camera Capture Failed\n\nThere was an issue capturing the photo. Please check permissions and try again.");
+
+    // If user simply pressed back/cancelled — do NOT show an error alert
+    const errMsg = (err?.message || '').toLowerCase();
+    const isCancelled =
+      errMsg.includes('cancel') ||
+      errMsg.includes('dismissed') ||
+      errMsg.includes('no image') ||
+      errMsg.includes('user denied');
+
+    if (!isCancelled) {
+      alert("Camera Capture Failed\n\nSomething went wrong while opening the camera. Please try again.");
+    }
+
     return null;
   }
 }

@@ -2074,7 +2074,7 @@ Please evaluate this answer strictly according to your system rubric.`;
                 className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors mb-1"
               >
                 <Camera className="w-4 h-4 text-emerald-600" />
-                <span>Take Photo with Camera</span>
+                <span>Camera</span>
               </button>
               <button 
                 onClick={async () => {

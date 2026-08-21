@@ -232,6 +232,22 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
       // Fallback to native Web Speech API
       if (window.speechSynthesis) {
         const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Auto-detect language (Hindi vs English)
+        const hasHindi = /[\u0900-\u097F]/.test(text);
+        utterance.lang = hasHindi ? 'hi-IN' : 'en-IN';
+        
+        const voices = window.speechSynthesis.getVoices();
+        const langPrefix = utterance.lang.split('-')[0].toLowerCase();
+        const preferredVoice = voices.find(v => 
+          v.lang.toLowerCase().startsWith(langPrefix) && 
+          (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
+        ) || voices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
+        
+        if (preferredVoice) {
+          utterance.voice = preferredVoice;
+        }
+
         utterance.onend = () => {
           if (playingIndex === id) {
             setPlayingIndex(null);

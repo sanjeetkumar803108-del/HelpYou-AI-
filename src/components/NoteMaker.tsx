@@ -41,8 +41,44 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   const [result, setResult] = useState<string | null>(null); // This is the scrolling text transcript
   const [error, setError] = useState<string | null>(null);
   const [audioData, setAudioData] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   
+  useEffect(() => {
+    if (!audioData) {
+      setAudioUrl(null);
+      return;
+    }
+
+    if (audioData.startsWith('data:')) {
+      try {
+        const parts = audioData.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'audio/wav';
+        const base64 = parts[1];
+        
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mime });
+        
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+        
+        return () => {
+          URL.revokeObjectURL(url);
+        };
+      } catch (e) {
+        console.error("Failed to parse base64 audio:", e);
+        setAudioUrl(audioData);
+      }
+    } else {
+      setAudioUrl(audioData);
+    }
+  }, [audioData]);
+
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
@@ -113,7 +149,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackRate;
     }
-  }, [playbackRate, audioData]);
+  }, [playbackRate, audioUrl]);
 
   // Local storage helpers for robust guest saving
   const saveLocalItem = (item: any) => {
@@ -574,10 +610,26 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = playbackRate;
     
+    // Auto-detect language (Hindi vs English)
+    const hasHindi = /[\u0900-\u097F]/.test(cleanText);
+    utterance.lang = hasHindi ? 'hi-IN' : 'en-IN';
+    
+    const voices = window.speechSynthesis.getVoices();
+    const langPrefix = utterance.lang.split('-')[0].toLowerCase();
+    const preferredVoice = voices.find(v => 
+      v.lang.toLowerCase().startsWith(langPrefix) && 
+      (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
+    ) || voices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+    
     utterance.onend = () => {
       setIsPlayingFallback(false);
     };
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
+      console.warn("TTS fallback speech failed:", e);
       setIsPlayingFallback(false);
     };
     
@@ -944,10 +996,10 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                   </div>
 
                   {/* HTML5 Audio Node */}
-                  {audioData && (
+                  {audioUrl && (
                     <audio 
                       ref={audioRef}
-                      src={audioData}
+                      src={audioUrl}
                       onPlay={() => setIsPlaying(true)}
                       onPause={() => setIsPlaying(false)}
                       onLoadedMetadata={() => {

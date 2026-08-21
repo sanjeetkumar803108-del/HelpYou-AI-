@@ -281,22 +281,27 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
     setIsTutorSpeaking(true);
     isTutorSpeakingRef.current = true;
 
-    // Clean markdown before speaking
+    // Clean markdown and latex before speaking
     const cleanText = text
       .replace(/[\*\#\_]/g, '')
+      .replace(/\$\$[\s\S]*?\$\$/g, '') // remove block math
+      .replace(/\$[^\$]*?\$/g, '')      // remove inline math
       .replace(/Answer Key:.*/is, '')
       .trim();
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Choose appropriate voice/speed based on selected vibe
+    const selectedLang = speechLangRef.current || 'en-IN';
+    utterance.lang = selectedLang;
+
+    // Choose appropriate voice based on selected vibe & language
     const voices = synthRef.current.getVoices();
-    // Try to find a premium English voice
+    const langPrefix = selectedLang.split('-')[0].toLowerCase();
+    
+    // Find matching voice (Google / natural preferred, matching language)
     const preferredVoice = voices.find(v => 
-      v.name.includes('Google US English') || 
-      v.name.includes('Natural') || 
-      v.lang.startsWith('en-US')
-    );
+      v.lang.toLowerCase().startsWith(langPrefix) && 
+      (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
+    ) || voices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
     
     if (preferredVoice) {
       utterance.voice = preferredVoice;
@@ -333,7 +338,8 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
       }
     };
 
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
+      console.warn("Speech Synthesis utterance error:", e);
       setIsTutorSpeaking(false);
       isTutorSpeakingRef.current = false;
       if (callStateRef.current === 'connected' && !isMutedRef.current) {
@@ -564,6 +570,19 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
     if (!micGranted) {
       setPermissionError("Microphone Permission Required. Please allow microphone access to talk with your AI Tutor.");
       return;
+    }
+
+    // Unlock Web Speech API (User Gesture bypass)
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+        const silent = new SpeechSynthesisUtterance('');
+        silent.volume = 0;
+        silent.lang = 'en-US';
+        window.speechSynthesis.speak(silent);
+      } catch (e) {
+        console.warn("TTS unlock failed:", e);
+      }
     }
 
     setCallState('connecting');

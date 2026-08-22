@@ -2044,32 +2044,38 @@ Please evaluate this answer strictly according to your system rubric.`;
                 <Image className="w-4 h-4 text-sky-600" />
                 <span>Choose From Gallery</span>
               </button>
-              <button 
+              {/* ── CAMERA BUTTON ───────────────────────── */}
+              <button
+                id="ai-tutor-camera-btn"
                 onClick={async () => {
                   setShowPlusMenu(false);
                   triggerVibration(10);
-                  if (Capacitor.isNativePlatform()) {
-                    try {
-                      // Request camera permission — only block if permanently denied
-                      const { Camera: CapCam } = await import('@capacitor/camera');
-                      const permStatus = await CapCam.requestPermissions({ permissions: ['camera'] });
-                      if (permStatus.camera === 'denied') {
-                        showToast('Camera access denied. Enable it in phone Settings → Apps → HelpYou AI → Permissions.', 'warning', 5000);
-                        return;
-                      }
-                      const picked = await takeNativePhoto();
-                      if (picked) {
-                        handleNativeImagePicked(picked);
-                      }
-                    } catch (err: any) {
-                      const msg = String(err?.message || err || '').toLowerCase();
-                      if (!msg.includes('cancel') && !msg.includes('user cancelled') && !msg.includes('dismissed')) {
-                        showToast('Could not open camera. Please try again.', 'error');
-                      }
-                      console.warn("Native camera capture error:", err);
-                    }
-                  } else {
+
+                  if (!Capacitor.isNativePlatform()) {
+                    // Web fallback — use hidden file input
                     cameraInputRef.current?.click();
+                    return;
+                  }
+
+                  // Native Android/iOS path
+                  try {
+                    const picked = await takeNativePhoto();
+                    if (picked) {
+                      handleNativeImagePicked(picked);
+                    }
+                    // If null → user cancelled, do nothing
+                  } catch (err: any) {
+                    const code = (err as any)?.code;
+                    if (code === 'denied') {
+                      showToast(
+                        '📷 Camera access denied. Go to phone Settings → Apps → HelpYou AI → Permissions → Enable Camera.',
+                        'warning',
+                        6000
+                      );
+                    } else {
+                      showToast('Could not open camera. Please try again.', 'error');
+                      console.warn('[AITutor] Camera error:', err);
+                    }
                   }
                 }}
                 className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors mb-1 cursor-pointer"

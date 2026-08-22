@@ -130,28 +130,40 @@ export async function pickNativeFiles(options: {
 }
 
 /**
- * Capture photo natively using camera (JIT Permission Flow)
+ * Capture photo natively using camera (Robust Permission Flow)
  *
- * Fix 1: Use CameraResultType.Base64 — much more reliable on Android WebView
- *         than CameraResultType.Uri (which can fail with "content://" path issues)
- * Fix 2: Always CHECK permission before REQUESTING — calling requestPermissions()
- *         when already GRANTED throws an exception on many Android devices.
- * Fix 3: Return error codes instead of alert() — callers show in-app toasts.
+ * Fix 1: Check permission status FIRST before requesting.
+ *         Calling requestPermissions() when already GRANTED throws an
+ *         exception on many Android devices.
+ * Fix 2: Use CameraResultType.Base64 — reliable on Android WebView
+ *         (CameraResultType.Uri fails with "content://" path issues).
+ * Fix 3: Return null on cancel — callers show their own toasts.
  */
-export type CameraErrorCode = 'denied' | 'blocked' | 'cancelled' | 'failed';
-
 export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
   if (!Capacitor.isNativePlatform()) {
     return null;
   }
 
   try {
-    // Launch native camera directly with Base64 result for maximum Android WebView reliability
+    // Step 1: Check current permission status first
+    const currentStatus = await Camera.checkPermissions();
+
+    // Step 2: Only request if not already granted
+    if (currentStatus.camera !== 'granted') {
+      const requested = await Camera.requestPermissions({ permissions: ['camera'] });
+      if (requested.camera !== 'granted') {
+        // Permission denied — return special sentinel so caller can show toast
+        throw Object.assign(new Error('Camera permission denied'), { code: 'denied' });
+      }
+    }
+
+    // Step 3: Launch native camera
     const photo = await Camera.getPhoto({
       quality: 85,
       allowEditing: false,
       resultType: CameraResultType.Base64,
       source: CameraSource.Camera,
+      saveToGallery: false,
     });
 
     if (!photo || !photo.base64String) return null;
@@ -163,17 +175,19 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
     const blob = base64ToBlob(base64, mimeType);
     const fileObj = blobToFile(blob, name);
 
-    return {
-      name,
-      mimeType,
-      base64,
-      dataUrl,
-      blob,
-      fileObj,
-    };
+    return { name, mimeType, base64, dataUrl, blob, fileObj };
 
   } catch (err: any) {
-    console.warn('[mobilePicker] Native camera capture cancelled or error:', err);
+    const msg = String(err?.message || err || '').toLowerCase();
+    // Rethrow permission denials so caller can show Settings toast
+    if (err?.code === 'denied' || msg.includes('denied') || msg.includes('not authorized')) {
+      throw Object.assign(new Error('Camera permission denied'), { code: 'denied' });
+    }
+    // User cancelled — return null silently
+    if (msg.includes('cancel') || msg.includes('dismissed') || msg.includes('user cancelled photos')) {
+      return null;
+    }
+    console.warn('[mobilePicker] Native camera error:', err);
     return null;
   }
 }

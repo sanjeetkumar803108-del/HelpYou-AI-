@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  FileText, Loader2, FilePlus, ChevronRight, ArrowLeft, Headphones, 
-  CheckCircle2, Volume2, Play, Pause, AlertCircle, History, Trash2, Calendar, 
+import {
+  FileText, Loader2, FilePlus, ChevronRight, ArrowLeft, Headphones,
+  CheckCircle2, Volume2, Play, Pause, AlertCircle, History, Trash2, Calendar,
   RotateCcw, Sparkles, VolumeX, Download, RefreshCw, PenTool
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,18 +21,6 @@ const AUDIO_STEPS = [
 ];
 
 export default function NoteMaker({ onBack }: { onBack: () => void }) {
-  // Navigation back handler
-  const handleHeaderBack = () => {
-    triggerVibration(10);
-    if (showHistory) {
-      setShowHistory(false);
-    } else if (step !== 'initial') {
-      resetState();
-    } else {
-      onBack();
-    }
-  };
-
   // State definitions
   const [file, setFile] = useState<File | null>(null);
   const [inputText, setInputText] = useState<string>('');
@@ -44,7 +32,95 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   const [audioData, setAudioData] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  
+  const [showHistory, setShowHistory] = useState(false);
+  const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
+
+  // Custom Player State
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [isSpeechFallback, setIsSpeechFallback] = useState(false);
+  const [isPlayingFallback, setIsPlayingFallback] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [audioGenerationStep, setAudioGenerationStep] = useState(0);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const synthUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const transcriptContainerRef = useRef<HTMLDivElement>(null);
+  const progressIntervalRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const speechQueueRef = useRef<{ sentences: string[]; index: number; lang: string }>({ sentences: [], index: 0, lang: 'en-US' });
+
+  // History State
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Reset and Cancel handler
+  const resetState = () => {
+    // 1. Abort in-flight network request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    // 2. Clear progress interval
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    // 3. Stop audio
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch (_) {}
+    }
+    try { window.speechSynthesis.cancel(); } catch (_) {}
+
+    speechQueueRef.current = { sentences: [], index: 0, lang: 'en-US' };
+    setIsSpeechFallback(false);
+    setIsPlayingFallback(false);
+    setFile(null);
+    setInputText('');
+    setInputMode('pdf');
+    setResult(null);
+    setAudioData(null);
+    setSaved(false);
+    setCurrentSavedId(null);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setUploadProgress(0);
+    setError(null);
+    setStep('initial');
+  };
+
+  // Navigation back handler (Header Arrow & Hardware Back)
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (showHistory) {
+      setShowHistory(false);
+    } else if (step === 'processing' || step === 'result') {
+      resetState();
+    } else {
+      onBack();
+    }
+  };
+
+  useEffect(() => {
+    const handleBackButton = (e: Event) => {
+      if (showHistory) {
+        e.preventDefault();
+        triggerVibration(10);
+        setShowHistory(false);
+      } else if (step === 'processing' || step === 'result') {
+        e.preventDefault();
+        triggerVibration(10);
+        resetState();
+      }
+    };
+    window.addEventListener('appBackButton', handleBackButton);
+    return () => window.removeEventListener('appBackButton', handleBackButton);
+  }, [showHistory, step]);
+
   useEffect(() => {
     if (!audioData) {
       setAudioUrl(null);
@@ -56,7 +132,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
         const parts = audioData.split(',');
         const mime = parts[0].match(/:(.*?);/)?.[1] || 'audio/wav';
         const base64 = parts[1];
-        
+
         const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -64,10 +140,10 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
         }
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: mime });
-        
+
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
-        
+
         return () => {
           URL.revokeObjectURL(url);
         };
@@ -79,36 +155,6 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       setAudioUrl(audioData);
     }
   }, [audioData]);
-
-  const [showHistory, setShowHistory] = useState(false);
-
-  useEffect(() => {
-    const handleBackButton = (e: Event) => {
-      if (showHistory) {
-        e.preventDefault();
-        triggerVibration(10);
-        setShowHistory(false);
-      } else if (step === 'result') {
-        e.preventDefault();
-        triggerVibration(10);
-        setStep('initial');
-      }
-    };
-    window.addEventListener('appBackButton', handleBackButton);
-    return () => window.removeEventListener('appBackButton', handleBackButton);
-  }, [showHistory, step]);
-
-  const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
-  
-  // Custom Player State
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [playbackRate, setPlaybackRate] = useState<number>(1);
-  const [isSpeechFallback, setIsSpeechFallback] = useState(false);
-  const [isPlayingFallback, setIsPlayingFallback] = useState(false);
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [audioGenerationStep, setAudioGenerationStep] = useState(0);
 
   useEffect(() => {
     let interval: any;
@@ -124,16 +170,6 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       if (interval) clearInterval(interval);
     };
   }, [isGeneratingAudio]);
-
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const synthUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const transcriptContainerRef = useRef<HTMLDivElement>(null);
-  const progressIntervalRef = useRef<any>(null);
-
-  // History State
-  const [historyItems, setHistoryItems] = useState<any[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Clean up speech synthesis and simulated progress interval on unmount
   useEffect(() => {
@@ -206,7 +242,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       // Merge local storage items for guests or hybrid persistence
       const localItems = getLocalItems();
       const mergedItems = [...items];
-      
+
       for (const local of localItems) {
         if (!mergedItems.some(i => i.text === local.text || i.id === local.id)) {
           mergedItems.push(local);
@@ -281,16 +317,17 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     setUploadProgress(0);
     setError(null);
     setStep('processing'); // Go directly to processing with progress bar
-    
+
     // Clear speech synthesizer
-    window.speechSynthesis.cancel();
+    try { window.speechSynthesis.cancel(); } catch (_) {}
     setIsSpeechFallback(false);
     setIsPlayingFallback(false);
 
-    // Slowly increment progress from 0% to 90% over 12 seconds
-    const intervalTime = 150; // every 150ms
-    const totalDurationMs = 12000; // 12 seconds
-    const incrementPerStep = 90 / (totalDurationMs / intervalTime); // ~1.125% per step
+    // Slowly increment progress from 5% to 90% over 15 seconds
+    setUploadProgress(5);
+    const intervalTime = 150;
+    const totalDurationMs = 15000;
+    const incrementPerStep = 85 / (totalDurationMs / intervalTime);
 
     progressIntervalRef.current = setInterval(() => {
       setUploadProgress((prev) => {
@@ -315,257 +352,182 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
 
     try {
       const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
-      // On mobile (Capacitor), if no backend URL is configured, show a clear message
-      if (!apiBase && typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+      if (!apiBase && Capacitor.isNativePlatform()) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
         setUploadProgress(0);
-        const offlineMsg = "⚠️ Backend server not configured.\n\nThis feature requires a live backend. Please contact the app developer.";
+        const offlineMsg = "⚠️ Backend server not configured. Please check connection.";
         setResult(offlineMsg);
         setError(offlineMsg);
         setStep('initial');
         return;
       }
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', apiBase + '/api/summarize', true);
-      xhr.timeout = 180000; // 3 minute timeout
 
-      xhr.ontimeout = () => {
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
+      // Create new AbortController for cancel on back button
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      const response = await fetch(apiBase + '/api/summarize', {
+        method: 'POST',
+        body: formData,
+        signal: abortController.signal,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Deduct 5 coins
+        deductCoins(5, "AI Audio Summary");
+
+        setResult(data.text);
+        setError(null);
+
+        // Generate descriptive title
+        let itemTitle = file?.name;
+        if (!itemTitle) {
+          const words = inputText.trim().split(/\s+/).slice(0, 5).join(' ');
+          itemTitle = words ? `Text: "${words}..."` : 'Pasted Text Extract';
         }
-        setUploadProgress(0);
-        const timeoutMsg = "The request timed out. This often happens with very large files or slow connections. Please try a smaller PDF.";
-        setResult(timeoutMsg);
-        setError(timeoutMsg);
-        setStep('initial');
-      };
 
-      xhr.onload = async () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
+        // Save locally
+        const localId = `local_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const localItem = {
+          id: localId,
+          userId: auth.currentUser?.uid || null,
+          type: 'note',
+          subType: 'audio',
+          text: data.text,
+          audioData: null,
+          title: itemTitle,
+          createdAt: new Date().toISOString()
+        };
+
+        saveLocalItem(localItem);
+        setCurrentSavedId(localId);
+        setSaved(true);
+
+        // Save to Firebase
+        let firebaseDocId: string | null = null;
+        if (auth.currentUser) {
           try {
-            const data = JSON.parse(xhr.responseText);
-            
-            // Deduct 5 coins now that the output has been successfully generated by the AI
-            deductCoins(5, "AI Audio Summary");
-
-            setResult(data.text);
-            setError(null);
-            
-            // Generate descriptive title
-            let itemTitle = file?.name;
-            if (!itemTitle) {
-              const words = inputText.trim().split(/\s+/).slice(0, 5).join(' ');
-              itemTitle = words ? `Text: "${words}..."` : 'Pasted Text Extract';
-            }
-
-            // Save locally (initially without audio)
-            const localId = `local_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-            const localItem = {
-              id: localId,
-              userId: auth.currentUser?.uid || null,
+            const docRef = await addDoc(collection(db, 'pocket_items'), {
+              userId: auth.currentUser.uid,
               type: 'note',
               subType: 'audio',
               text: data.text,
               audioData: null,
               title: itemTitle,
-              createdAt: new Date().toISOString()
-            };
-
-            saveLocalItem(localItem);
-            setCurrentSavedId(localId);
-            setSaved(true);
-
-            // Save to Firebase (initially without audio)
-            let firebaseDocId: string | null = null;
-            if (auth.currentUser) {
-              try {
-                const docRef = await addDoc(collection(db, 'pocket_items'), {
-                  userId: auth.currentUser.uid,
-                  type: 'note',
-                  subType: 'audio',
-                  text: data.text,
-                  audioData: null,
-                  title: itemTitle,
-                  createdAt: serverTimestamp()
-                });
-                firebaseDocId = docRef.id;
-                setCurrentSavedId(docRef.id);
-                
-                // Update state
-                setHistoryItems(prev => {
-                  const filtered = prev.filter(item => item.id !== localId);
-                  const firebaseItem = {
-                    ...localItem,
-                    id: docRef.id,
-                    createdAt: new Date()
-                  };
-                  return [firebaseItem, ...filtered];
-                });
-              } catch (e) {
-                console.error("Firebase auto-save failed, kept local copy:", e);
-                setHistoryItems(prev => [{ ...localItem, createdAt: new Date() }, ...prev]);
-              }
-            } else {
-              setHistoryItems(prev => [{ ...localItem, createdAt: new Date() }, ...prev]);
-            }
-
-            // Success! Set progress to 100%, clear interval, and transition to result screen IMMEDIATELY
-            if (progressIntervalRef.current) {
-              clearInterval(progressIntervalRef.current);
-              progressIntervalRef.current = null;
-            }
-            setUploadProgress(100);
-
-            // Wait 800ms for user to enjoy 100% state, then show result!
-            setTimeout(() => {
-              setStep('result');
-            }, 800);
-
-            // Fetch TTS in the background, without blocking the UI transition
-            setIsGeneratingAudio(true);
-            (async () => {
-              let fetchedAudio = null;
-              try {
-                const ttsResponse = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/tts', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: data.text }),
-                });
-                if (!ttsResponse.ok) {
-                  throw new Error("TTS failed");
-                }
-                const ttsContentType = ttsResponse.headers.get("content-type") || "";
-                if (!ttsContentType.includes("application/json")) {
-                  throw new Error("Invalid TTS response format");
-                }
-                const ttsData = await ttsResponse.json();
-                if (ttsData.audio) {
-                  if (ttsData.audio.startsWith('data:')) {
-                    fetchedAudio = ttsData.audio;
-                  } else {
-                    fetchedAudio = `data:audio/wav;base64,${ttsData.audio}`;
-                  }
-                  setAudioData(fetchedAudio);
-
-                  // Update the local history item with the fetched audio
-                  try {
-                    const raw = localStorage.getItem('notemaker_local_history');
-                    if (raw) {
-                      const parsed = JSON.parse(raw);
-                      const updated = parsed.map((item: any) => {
-                        if (item.id === localId) {
-                          return { ...item, audioData: fetchedAudio };
-                        }
-                        return item;
-                      });
-                      localStorage.setItem('notemaker_local_history', JSON.stringify(updated));
-                    }
-                  } catch (e) {
-                    console.error("Failed to update local history audio:", e);
-                  }
-
-                  // Update Firebase document with the fetched audio
-                  if (firebaseDocId) {
-                    try {
-                      await updateDoc(doc(db, 'pocket_items', firebaseDocId), {
-                        audioData: fetchedAudio
-                      });
-                    } catch (e) {
-                      console.error("Failed to update Firebase document audio:", e);
-                    }
-                  }
-                } else {
-                  setIsSpeechFallback(true);
-                }
-              } catch (ttsErr) {
-                console.warn("API TTS failed, fallback to browser SpeechSynthesis:", ttsErr);
-                setIsSpeechFallback(true);
-              } finally {
-                setIsGeneratingAudio(false);
-              }
-            })();
-
-          } catch (err) {
-            if (progressIntervalRef.current) {
-              clearInterval(progressIntervalRef.current);
-              progressIntervalRef.current = null;
-            }
-            setUploadProgress(0);
-            const parseError = "Error parsing AI study briefing response. Please try again.";
-            setResult(parseError);
-            setError(parseError);
-            setStep('initial');
+              createdAt: serverTimestamp()
+            });
+            firebaseDocId = docRef.id;
+            setCurrentSavedId(docRef.id);
+            setHistoryItems(prev => {
+              const filtered = prev.filter(item => item.id !== localId);
+              return [{ ...localItem, id: docRef.id, createdAt: new Date() }, ...filtered];
+            });
+          } catch (e) {
+            console.error("Firebase auto-save failed:", e);
+            setHistoryItems(prev => [{ ...localItem, createdAt: new Date() }, ...prev]);
           }
         } else {
-          if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current);
-            progressIntervalRef.current = null;
-          }
-          setUploadProgress(0);
-          try {
-            let data: any = {};
-            try {
-              data = JSON.parse(xhr.responseText);
-            } catch (e) {
-              if (xhr.status === 429) {
-                const rateLimitMsg = "⚠️ StudyAI Notice: Rate Limit Exceeded\n\nThe AI Summarizer is currently processing many requests. Please try again in a few seconds.";
-                setResult(rateLimitMsg);
-                setError(rateLimitMsg);
-                setStep('initial');
-                return;
-              }
-              throw e;
-            }
-
-            if (xhr.status === 429 && data.text) {
-              setResult(data.text);
-              setError(data.text);
-            } else if (data.error) {
-              console.error(data.error);
-              const friendly = "Oops! Something went wrong on our end. Please try again.";
-              setResult(friendly);
-              setError(friendly);
-            } else {
-              const friendly = "Oops! Something went wrong on our end. Please try again.";
-              setResult(friendly);
-              setError(friendly);
-            }
-          } catch {
-            const friendly = "Oops! Something went wrong on our end. Please try again.";
-            setResult(friendly);
-            setError(friendly);
-          }
-          setStep('initial');
+          setHistoryItems(prev => [{ ...localItem, createdAt: new Date() }, ...prev]);
         }
-      };
 
-      xhr.onerror = () => {
+        // Complete progress
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        setUploadProgress(100);
+
+        setTimeout(() => {
+          setStep('result');
+        }, 600);
+
+        // Fetch TTS audio in background
+        setIsGeneratingAudio(true);
+        (async () => {
+          try {
+            const ttsResponse = await fetch(apiBase + '/api/tts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: data.text }),
+            });
+            if (!ttsResponse.ok) throw new Error("TTS failed with status " + ttsResponse.status);
+            const ttsData = await ttsResponse.json();
+            if (ttsData.audio) {
+              const fetchedAudio = ttsData.audio.startsWith('data:')
+                ? ttsData.audio
+                : `data:audio/wav;base64,${ttsData.audio}`;
+              setAudioData(fetchedAudio);
+
+              // Update local storage
+              try {
+                const raw = localStorage.getItem('notemaker_local_history');
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  localStorage.setItem('notemaker_local_history', JSON.stringify(
+                    parsed.map((item: any) => item.id === localId ? { ...item, audioData: fetchedAudio } : item)
+                  ));
+                }
+              } catch (_) {}
+
+              // Update Firebase
+              if (firebaseDocId) {
+                try {
+                  await updateDoc(doc(db, 'pocket_items', firebaseDocId), { audioData: fetchedAudio });
+                } catch (_) {}
+              }
+            } else {
+              setIsSpeechFallback(true);
+            }
+          } catch (ttsErr) {
+            console.warn("Background TTS generation notice:", ttsErr);
+            setIsSpeechFallback(true);
+          } finally {
+            setIsGeneratingAudio(false);
+          }
+        })();
+
+      } else {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
         setUploadProgress(0);
-        const networkError = "Network error occurred. The server may be busy. Please try again with a smaller file or pasted text.";
-        setResult(networkError);
-        setError(networkError);
+        let errMsg = "Oops! Something went wrong on the server. Please try again.";
+        try {
+          const errData = await response.json();
+          if (response.status === 429) {
+            errMsg = "⚠️ AI Summarizer rate limit reached. Please try again in a moment.";
+          } else if (errData?.error) {
+            errMsg = errData.error;
+          }
+        } catch (_) {}
+        setResult(errMsg);
+        setError(errMsg);
         setStep('initial');
-      };
+      }
 
-      xhr.send(formData);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
       setUploadProgress(0);
-      const catchError = "An error occurred during generation.";
-      setResult(catchError);
-      setError(catchError);
+
+      // If user aborted / clicked back, silently return to initial without showing error
+      if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+        setStep('initial');
+        return;
+      }
+
+      console.error("Audio summary generation error:", err);
+      const networkErrMsg = "Network error. Please check your internet connection and try again.";
+      setResult(networkErrMsg);
+      setError(networkErrMsg);
       setStep('initial');
     }
   };
@@ -615,7 +577,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   };
 
   // Speech Synthesis fallback control handlers with sentence queue for Android WebView
-  const speechQueueRef = useRef<{ sentences: string[]; index: number; lang: string }>({ sentences: [], index: 0, lang: 'en-US' });
+
 
   const startSpeechFallback = async () => {
     if (!result) return;
@@ -708,11 +670,11 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     let voices: SpeechSynthesisVoice[] = [];
     try {
       voices = window.speechSynthesis.getVoices() || [];
-    } catch (e) {}
+    } catch (e) { }
 
     const langPrefix = queue.lang.split('-')[0].toLowerCase();
-    const preferredVoice = voices.find(v => 
-      v.lang.toLowerCase().startsWith(langPrefix) && 
+    const preferredVoice = voices.find(v =>
+      v.lang.toLowerCase().startsWith(langPrefix) &&
       (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
     ) || voices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
 
@@ -758,24 +720,6 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     setIsPlayingFallback(false);
   };
 
-  const resetState = () => {
-    window.speechSynthesis.cancel();
-    speechQueueRef.current = { sentences: [], index: 0, lang: 'en-US' };
-    setIsSpeechFallback(false);
-    setIsPlayingFallback(false);
-    setFile(null);
-    setInputText('');
-    setInputMode('pdf');
-    setResult(null);
-    setAudioData(null);
-    setSaved(false);
-    setCurrentSavedId(null);
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setStep('initial');
-  };
-
   // Time formatter
   const formatTime = (secs: number) => {
     if (isNaN(secs)) return '0:00';
@@ -789,7 +733,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       {/* STICKY HEADER BAR */}
       <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={handleHeaderBack}
             className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0"
           >
@@ -804,17 +748,16 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => {
             triggerVibration(15);
             setShowHistory(!showHistory);
             if (!showHistory) fetchHistory();
           }}
-          className={`w-10 h-10 rounded-full border shadow-sm flex items-center justify-center transition-all active:scale-95 shrink-0 ${
-            showHistory 
-              ? 'bg-indigo-600 text-white border-indigo-600' 
-              : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200/60'
-          }`}
+          className={`w-10 h-10 rounded-full border shadow-sm flex items-center justify-center transition-all active:scale-95 shrink-0 ${showHistory
+            ? 'bg-indigo-600 text-white border-indigo-600'
+            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200/60'
+            }`}
         >
           <History className="w-5 h-5" />
         </button>
@@ -826,7 +769,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-extrabold text-sm text-zinc-500 uppercase tracking-wider">Saved Audio Briefings</h3>
             </div>
-            
+
             {loadingHistory ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-400 font-bold">
                 <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
@@ -883,7 +826,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
         ) : (
           <AnimatePresence mode="wait">
             {step === 'initial' && (
-              <motion.div 
+              <motion.div
                 key="initial"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -918,7 +861,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                 {inputMode === 'pdf' ? (
                   <div className="space-y-4">
                     {!file ? (
-                      <div 
+                      <div
                         className="h-56 rounded-[2rem] border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center bg-white p-6 text-center hover:border-indigo-300 hover:bg-indigo-50/10 transition-all cursor-pointer shadow-sm group"
                         onClick={async () => {
                           if (Capacitor.isNativePlatform()) {
@@ -953,10 +896,10 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         <button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-2.5 rounded-xl text-xs md:text-sm font-bold active:scale-[0.98] transition-all shadow-md shadow-indigo-500/10">
                           Select File
                         </button>
-                        <input 
-                          type="file" 
-                          accept="application/pdf" 
-                          className="hidden" 
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
                           ref={fileInputRef}
                           onChange={handleFileSelect}
                         />
@@ -968,7 +911,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                             <FileText className="w-5 h-5 text-indigo-600" />
                             <span className="text-sm font-bold truncate text-indigo-900">{file.name}</span>
                           </div>
-                          <button 
+                          <button
                             onClick={() => setFile(null)}
                             className="text-xs text-red-600 font-extrabold px-3 py-1 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                           >
@@ -1023,7 +966,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
             )}
 
             {step === 'processing' && (
-              <motion.div 
+              <motion.div
                 key="processing"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -1033,7 +976,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                   {uploadProgress < 100 ? (
                     <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
                   ) : (
-                    <motion.div 
+                    <motion.div
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       className="absolute inset-0 bg-green-500 rounded-full flex items-center justify-center border-2 border-white"
@@ -1044,13 +987,13 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                 </div>
                 <h3 className="text-xl font-bold text-zinc-900 mb-2 truncate max-w-xs">{file ? file.name : "Text Extract"}</h3>
                 <p className="text-sm text-zinc-500 mb-6 text-center font-medium">
-                  {uploadProgress < 100 
-                    ? `Writing audio script and recording study podcast... (${Math.round(uploadProgress)}%)` 
+                  {uploadProgress < 100
+                    ? `Writing audio script and recording study podcast... (${Math.round(uploadProgress)}%)`
                     : 'Study podcast ready!'}
                 </p>
 
                 <div className="w-full bg-zinc-100 rounded-full h-3 mb-6 overflow-hidden border border-zinc-200 relative">
-                  <motion.div 
+                  <motion.div
                     className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
                     initial={{ width: 0 }}
                     animate={{ width: `${uploadProgress}%` }}
@@ -1058,14 +1001,24 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                   />
                 </div>
 
-                <p className="text-xs text-indigo-500 font-bold bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 animate-pulse">
+                <p className="text-xs text-indigo-500 font-bold bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100 animate-pulse mb-5">
                   Converting heavy textbooks into voice summaries
                 </p>
+
+                <button
+                  onClick={() => {
+                    triggerVibration(10);
+                    resetState();
+                  }}
+                  className="px-5 py-2 text-xs font-bold text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-xl border border-zinc-200 transition-colors cursor-pointer"
+                >
+                  Cancel & Go Back
+                </button>
               </motion.div>
             )}
 
             {step === 'result' && result && (
-              <motion.div 
+              <motion.div
                 key="result"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1086,7 +1039,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                 {/* PODCAST STYLE STUDY BRIEFING PLAYER */}
                 <div className="bg-white border-2 border-indigo-100 rounded-[2rem] p-6 shadow-md flex flex-col gap-6 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full filter blur-3xl opacity-40 -mr-10 -mt-10" />
-                  
+
                   {/* Header/Title block */}
                   <div className="flex justify-between items-start z-10">
                     <div className="text-left">
@@ -1100,7 +1053,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
 
                   {/* HTML5 Audio Node */}
                   {audioUrl && (
-                    <audio 
+                    <audio
                       ref={audioRef}
                       src={audioUrl}
                       onPlay={() => setIsPlaying(true)}
@@ -1126,7 +1079,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
                         <span className="absolute text-sm font-bold text-indigo-700 animate-pulse">🎙️</span>
                       </div>
-                      
+
                       <div className="text-center w-full max-w-sm">
                         <p className="text-sm font-black text-indigo-900 transition-all duration-300">
                           {AUDIO_STEPS[audioGenerationStep].title}
@@ -1139,15 +1092,14 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                       {/* Horizontal progress indicators */}
                       <div className="flex items-center gap-1.5 w-full max-w-xs mt-1">
                         {AUDIO_STEPS.map((_, idx) => (
-                          <div 
+                          <div
                             key={idx}
-                            className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
-                              idx < audioGenerationStep 
-                                ? 'bg-indigo-600' 
-                                : idx === audioGenerationStep 
-                                  ? 'bg-indigo-400 animate-pulse' 
-                                  : 'bg-zinc-150'
-                            }`}
+                            className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${idx < audioGenerationStep
+                              ? 'bg-indigo-600'
+                              : idx === audioGenerationStep
+                                ? 'bg-indigo-400 animate-pulse'
+                                : 'bg-zinc-150'
+                              }`}
                           />
                         ))}
                       </div>
@@ -1167,9 +1119,9 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         <span className="text-xs font-bold text-zinc-400 w-10 text-left select-none">
                           {formatTime(currentTime)}
                         </span>
-                        
+
                         <div className="flex-1 relative group">
-                          <input 
+                          <input
                             type="range"
                             min={0}
                             max={duration || 100}
@@ -1177,7 +1129,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                             onChange={handleSeekBarChange}
                             className="w-full h-1.5 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                           />
-                          <div 
+                          <div
                             className="absolute left-0 top-0 h-1.5 bg-indigo-600 rounded-lg pointer-events-none"
                             style={{ width: `${(currentTime / (duration || 100)) * 100}%` }}
                           />
@@ -1191,7 +1143,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                       {/* Control buttons */}
                       <div className="flex items-center justify-center gap-6">
                         {/* Speed Toggle */}
-                        <button 
+                        <button
                           onClick={cyclePlaybackRate}
                           className="w-10 h-10 rounded-full border border-zinc-200 text-xs font-black text-zinc-600 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-all shadow-sm"
                           title="Playback Speed"
@@ -1200,7 +1152,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         </button>
 
                         {/* Replay 10s */}
-                        <button 
+                        <button
                           onClick={replay10}
                           className="w-11 h-11 rounded-full border border-zinc-200 text-zinc-600 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-all shadow-sm active:scale-95"
                           title="Replay 10s"
@@ -1209,7 +1161,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         </button>
 
                         {/* Play/Pause Button */}
-                        <button 
+                        <button
                           onClick={togglePlay}
                           className="w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all"
                         >
@@ -1221,7 +1173,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         </button>
 
                         {/* Skip Forward 10s */}
-                        <button 
+                        <button
                           onClick={skipForward10}
                           className="w-11 h-11 rounded-full border border-zinc-200 text-zinc-600 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-all shadow-sm active:scale-95 rotate-180"
                           title="Forward 10s"
@@ -1233,7 +1185,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         {/* Visualizer animation */}
                         <div className="w-10 h-10 flex items-center justify-center gap-0.5">
                           {[1, 2, 3, 4].map((bar) => (
-                            <motion.span 
+                            <motion.span
                               key={bar}
                               className="w-1 bg-indigo-500 rounded-full"
                               animate={isPlaying ? { height: [8, 24, 8] } : { height: 8 }}
@@ -1262,7 +1214,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         {/* Controls */}
                         <div className="flex items-center gap-3">
                           {/* Speed rates */}
-                          <button 
+                          <button
                             onClick={cyclePlaybackRate}
                             className="w-9 h-9 rounded-full border border-indigo-200 text-xs font-black text-indigo-700 hover:bg-indigo-50 flex items-center justify-center transition-all"
                             title="Narraion Speed"
@@ -1271,7 +1223,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                           </button>
 
                           {!isPlayingFallback ? (
-                            <button 
+                            <button
                               onClick={startSpeechFallback}
                               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md active:scale-95"
                             >
@@ -1279,13 +1231,13 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                             </button>
                           ) : (
                             <div className="flex gap-2">
-                              <button 
+                              <button
                                 onClick={pauseSpeechFallback}
                                 className="px-4 py-2 rounded-xl bg-zinc-200 hover:bg-zinc-300 text-zinc-800 font-bold text-xs transition-all"
                               >
                                 Pause
                               </button>
-                              <button 
+                              <button
                                 onClick={stopSpeechFallback}
                                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition-all"
                               >
@@ -1300,7 +1252,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                 </div>
 
                 {/* SCROLLING TRANSCRIPT SECTION */}
-                <div 
+                <div
                   ref={transcriptContainerRef}
                   className="bg-white border border-zinc-200 rounded-[2rem] p-6 shadow-sm flex flex-col gap-4 text-left max-h-[500px] overflow-y-auto relative"
                 >
@@ -1318,8 +1270,8 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                     {result.split('\n\n').map((paragraph, idx) => {
                       if (!paragraph.trim()) return null;
                       return (
-                        <p 
-                          key={idx} 
+                        <p
+                          key={idx}
                           className="hover:text-indigo-900 transition-colors py-1 pl-1 rounded hover:bg-indigo-50/20"
                         >
                           {paragraph.trim()}

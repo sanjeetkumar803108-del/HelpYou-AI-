@@ -314,7 +314,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
 
     try {
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/summarize', true);
+      xhr.open('POST', (import.meta.env.VITE_API_BASE_URL || '') + '/api/summarize', true);
       xhr.timeout = 180000; // 3 minute timeout
 
       xhr.ontimeout = () => {

@@ -84,7 +84,7 @@ class BillingService {
         safeSetItem(`study_is_vip_${currentUser.uid}`, 'true');
 
         // Sync subscription with backend database
-        fetch('/api/set-subscription', {
+        fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/set-subscription', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -155,7 +155,7 @@ class BillingService {
         }
 
         try {
-          const res = await fetch('/api/verify-subscription', {
+          const res = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/verify-subscription', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

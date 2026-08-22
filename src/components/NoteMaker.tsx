@@ -11,6 +11,7 @@ import { deductCoins, getCoins } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { Capacitor } from '@capacitor/core';
 import { pickNativeFiles } from '../utils/mobilePicker';
+import { showToast } from '../utils/toast';
 
 const AUDIO_STEPS = [
   { title: "Analyzing summary contents... 🧠", desc: "Reading and structuring major topics" },
@@ -616,12 +617,59 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   // Speech Synthesis fallback control handlers with sentence queue for Android WebView
   const speechQueueRef = useRef<{ sentences: string[]; index: number; lang: string }>({ sentences: [], index: 0, lang: 'en-US' });
 
-  const startSpeechFallback = () => {
+  const startSpeechFallback = async () => {
     if (!result) return;
     triggerVibration(10);
 
+    // On native Android/iOS, speechSynthesis is NOT supported in WebView.
+    // Instead, re-call the /api/tts endpoint and play audio via HTML audio element.
+    if (Capacitor.isNativePlatform()) {
+      setIsGeneratingAudio(true);
+      try {
+        const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
+        if (!apiBase) {
+          showToast('Backend not configured. Audio unavailable.', 'error');
+          return;
+        }
+        showToast('Generating audio... please wait', 'info', 4000);
+        const ttsResponse = await fetch(apiBase + '/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: result }),
+        });
+        if (!ttsResponse.ok) throw new Error('TTS API returned ' + ttsResponse.status);
+        const contentType = ttsResponse.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) throw new Error('Unexpected TTS response format');
+        const ttsData = await ttsResponse.json();
+        if (ttsData.audio) {
+          const audioDataUrl = ttsData.audio.startsWith('data:')
+            ? ttsData.audio
+            : `data:audio/wav;base64,${ttsData.audio}`;
+          setAudioData(audioDataUrl);
+          setIsSpeechFallback(false);
+          // Auto-play once audioRef updates
+          setTimeout(() => {
+            if (audioRef.current) {
+              audioRef.current.play()
+                .then(() => setIsPlaying(true))
+                .catch(e => console.error('Audio play error:', e));
+            }
+          }, 600);
+        } else {
+          throw new Error('No audio field in TTS response');
+        }
+      } catch (e) {
+        console.error('TTS retry failed:', e);
+        showToast('Audio generation failed. Check your internet connection.', 'error');
+      } finally {
+        setIsGeneratingAudio(false);
+      }
+      return;
+    }
+
+    // Web browser fallback — speechSynthesis
     if (!('speechSynthesis' in window)) {
-      alert("Speech synthesis is not supported on this device.");
+      showToast('Audio playback is not supported on this browser.', 'warning');
       return;
     }
 

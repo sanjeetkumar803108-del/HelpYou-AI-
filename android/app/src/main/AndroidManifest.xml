@@ -18,8 +18,7 @@
     <!-- 3. POST_NOTIFICATIONS: Required strictly for sending daily study reminder streaks (Android 13+ / API 33+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- 4. STORAGE: Required strictly for downloading/saving PDFs and worksheets -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- 4. STORAGE: Required strictly for file picker — PDFs and images (Android 13+ split permissions) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 

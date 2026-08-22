@@ -2050,11 +2050,23 @@ Please evaluate this answer strictly according to your system rubric.`;
                   triggerVibration(10);
                   if (Capacitor.isNativePlatform()) {
                     try {
+                      // Request camera permission before capturing
+                      const { Camera: CapCam } = await import('@capacitor/camera');
+                      const permStatus = await CapCam.requestPermissions({ permissions: ['camera'] });
+                      if (permStatus.camera === 'denied' || permStatus.camera === 'prompt-with-rationale') {
+                        showToast('Camera permission is needed. Please allow camera access in Settings.', 'warning');
+                        return;
+                      }
                       const picked = await takeNativePhoto();
                       if (picked) {
                         handleNativeImagePicked(picked);
                       }
-                    } catch (err) {
+                    } catch (err: any) {
+                      if (err?.message?.includes('cancelled') || err?.message?.includes('cancel') || err?.message?.includes('User cancelled')) {
+                        // User cancelled — no need for a toast
+                      } else {
+                        showToast('Could not open camera. Please try again.', 'error');
+                      }
                       console.warn("Native camera capture error:", err);
                     }
                   } else {

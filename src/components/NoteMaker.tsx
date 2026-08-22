@@ -313,8 +313,22 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     }
 
     try {
+      const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
+      // On mobile (Capacitor), if no backend URL is configured, show a clear message
+      if (!apiBase && typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        setUploadProgress(0);
+        const offlineMsg = "⚠️ Backend server not configured.\n\nThis feature requires a live backend. Please contact the app developer.";
+        setResult(offlineMsg);
+        setError(offlineMsg);
+        setStep('initial');
+        return;
+      }
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', (import.meta.env.VITE_API_BASE_URL || '') + '/api/summarize', true);
+      xhr.open('POST', apiBase + '/api/summarize', true);
       xhr.timeout = 180000; // 3 minute timeout
 
       xhr.ontimeout = () => {

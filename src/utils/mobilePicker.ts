@@ -146,25 +146,20 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | { error: Cam
   }
 
   try {
-    // STEP 1: Check current permission status first (never blindly request)
-    const checkStatus = await Camera.checkPermissions();
-
-    if (checkStatus.camera === 'denied') {
-      // Previously denied — caller should show settings guidance
-      return { error: 'blocked' };
-    }
-
-    if (checkStatus.camera !== 'granted') {
-      // Not yet asked — show the OS permission dialog
-      const req = await Camera.requestPermissions({ permissions: ['camera'] });
-      if (req.camera !== 'granted') {
-        return { error: 'denied' };
+    // Check and request camera permission dynamically if not granted
+    try {
+      const checkStatus = await Camera.checkPermissions();
+      if (checkStatus.camera !== 'granted') {
+        const req = await Camera.requestPermissions({ permissions: ['camera'] });
+        if (req.camera === 'denied') {
+          console.warn('[mobilePicker] Camera permission denied by user');
+        }
       }
+    } catch (permErr) {
+      console.warn('[mobilePicker] Permission check warning:', permErr);
     }
 
-    // STEP 2: Permission is granted — open camera
-    // Use Base64 result type: most reliable on Android Capacitor WebView
-    // Uri type can fail with content:// path resolution errors in some Android versions
+    // Launch camera directly with Base64 result for maximum Android WebView reliability
     const photo = await Camera.getPhoto({
       quality: 85,
       allowEditing: false,
@@ -172,7 +167,7 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | { error: Cam
       source: CameraSource.Camera,
     });
 
-    if (!photo.base64String) return null;
+    if (!photo || !photo.base64String) return null;
 
     const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
     const name = `camera_${Date.now()}.${photo.format || 'jpg'}`;
@@ -201,7 +196,8 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | { error: Cam
       errMsg.includes('no image') ||
       errMsg.includes('user denied') ||
       errMsg.includes('no photo') ||
-      errMsg.includes('empty');
+      errMsg.includes('empty') ||
+      errMsg.includes('closed');
 
     if (isCancelled) {
       return null; // User cancelled — caller does nothing

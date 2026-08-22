@@ -55,7 +55,6 @@ const FlashcardGenerator = lazyWithRetry(() => import('./components/FlashcardGen
 const ContentGenerator = lazyWithRetry(() => import('./components/ContentGenerator'));
 const GrammarEnhancer = lazyWithRetry(() => import('./components/GrammarEnhancer'));
 const Summariser = lazyWithRetry(() => import('./components/Summariser'));
-const CallWithTutor = lazyWithRetry(() => import('./components/CallWithTutor'));
 const Calculator = lazyWithRetry(() => import('./components/Calculator'));
 const VIPPass = lazyWithRetry(() => import('./components/VIPPass'));
 const AcademicSetup = lazyWithRetry(() => import('./components/AcademicSetup'));
@@ -957,7 +956,7 @@ export default function App() {
                 <Summariser onBack={() => setActiveTool(null)} />
               </LockedFeature>
             )}
-            {activeTool === 'callwithtutor' && <CallWithTutor onBack={() => setActiveTool(null)} />}
+
             {activeTool === 'calculator' && (
               <Calculator 
                 onBack={() => setActiveTool(null)} 

@@ -2047,19 +2047,14 @@ Please evaluate this answer strictly according to your system rubric.`;
               <button 
                 onClick={async () => {
                   setShowPlusMenu(false);
+                  triggerVibration(10);
                   if (Capacitor.isNativePlatform()) {
                     try {
                       const picked = await takeNativePhoto();
                       if (picked) {
                         if ('error' in picked) {
-                          if (picked.error === 'blocked') {
-                            showToast('Camera Permission Blocked: Please enable Camera in Device Settings → Apps → HelpYou AI', 'warning', 4500);
-                          } else if (picked.error === 'denied') {
-                            showToast('Camera Permission Denied: Camera is required to capture study materials.', 'warning', 4000);
-                          } else {
-                            // Fallback to camera input
-                            cameraInputRef.current?.click();
-                          }
+                          // Fallback to web camera input on error
+                          cameraInputRef.current?.click();
                         } else {
                           handleNativeImagePicked(picked);
                         }
@@ -2071,7 +2066,7 @@ Please evaluate this answer strictly according to your system rubric.`;
                     cameraInputRef.current?.click();
                   }
                 }}
-                className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors mb-1"
+                className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors mb-1 cursor-pointer"
               >
                 <Camera className="w-4 h-4 text-emerald-600" />
                 <span>Camera</span>

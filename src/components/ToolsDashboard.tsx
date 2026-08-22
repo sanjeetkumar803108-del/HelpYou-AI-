@@ -314,18 +314,7 @@ function ToolsDashboard({
   const handleSelectTool = (tool: string) => {
     triggerVibration(15);
 
-    // 1. VIP/Subscription check for Ask AI Tutor (callwithtutor)
-    if (tool === 'callwithtutor') {
-      if (!isVip) {
-        alert("Ask AI Tutor (Call with AI) is a premium feature. Please upgrade to our VIP subscription model to unlock!");
-        if (onOpenVip) {
-          onOpenVip();
-        } else {
-          window.dispatchEvent(new CustomEvent('open-vip-modal'));
-        }
-        return;
-      }
-    }
+
 
     // VIP/Subscription check for Deep Search AI (livetutorsearch)
     if (tool === 'livetutorsearch') {
@@ -703,23 +692,24 @@ function ToolsDashboard({
             </motion.div>
           )}
 
-          {/* Card 5: Ask AI Tutor */}
-          {!archivedToolIds.includes('callwithtutor') && (
+          {/* Card 5: Summariser */}
+          {!archivedToolIds.includes('summariser') && (
             <motion.div 
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('callwithtutor', true, e)}
-              onTouchStart={(e) => handleStartPress('callwithtutor', true, e)}
+              onMouseDown={(e) => handleStartPress('summariser', true, e)}
+              onTouchStart={(e) => handleStartPress('summariser', true, e)}
               onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('callwithtutor'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('callwithtutor'))}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
-              <span className="text-4xl filter drop-shadow-sm select-none">🧑‍🏫</span>
-              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Call with AI Tutor</h3>
+              {renderLockIndicator('summariser')}
+              <span className="text-4xl filter drop-shadow-sm select-none">📖</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Summariser</h3>
             </motion.div>
           )}
 
@@ -883,31 +873,7 @@ function ToolsDashboard({
                     </motion.div>
                   )}
 
-                  {/* Summariser */}
-                  {!archivedToolIds.includes('summariser') && (
-                    <motion.div 
-                      variants={itemVariants}
-                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
-                      whileTap={{ scale: 0.98 }}
-                      onMouseDown={(e) => handleStartPress('summariser', true, e)}
-                      onTouchStart={(e) => handleStartPress('summariser', true, e)}
-                      onMouseMove={handleMovePress}
-                      onTouchMove={handleMovePress}
-                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
-                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
-                      onMouseLeave={handleCancelPress}
-                      className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
-                    >
-                      {renderLockIndicator('summariser', "rounded-3xl")}
-                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
-                        📖
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Summariser</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">High-yield summary</p>
-                      </div>
-                    </motion.div>
-                  )}
+
 
                   {/* Mistake Vault */}
                   {!archivedToolIds.includes('mistakevault') && (

@@ -20,6 +20,19 @@ allprojects {
         google()
         mavenCentral()
     }
+    configurations.all {
+        exclude group: 'androidx.datastore', module: 'datastore-jvm'
+        exclude group: 'androidx.datastore', module: 'datastore-preferences-jvm'
+        exclude group: 'androidx.datastore', module: 'datastore-core-jvm'
+        exclude group: 'androidx.datastore', module: 'datastore-preferences-core-jvm'
+
+        resolutionStrategy {
+            force 'androidx.datastore:datastore-preferences:1.0.0'
+            force 'androidx.datastore:datastore-preferences-core:1.0.0'
+            force 'androidx.datastore:datastore:1.0.0'
+            force 'androidx.datastore:datastore-core:1.0.0'
+        }
+    }
 }
 
 subprojects {

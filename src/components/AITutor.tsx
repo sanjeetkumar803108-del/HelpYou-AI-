@@ -2052,15 +2052,10 @@ Please evaluate this answer strictly according to your system rubric.`;
                     try {
                       const picked = await takeNativePhoto();
                       if (picked) {
-                        if ('error' in picked) {
-                          // Fallback to web camera input on error
-                          cameraInputRef.current?.click();
-                        } else {
-                          handleNativeImagePicked(picked);
-                        }
+                        handleNativeImagePicked(picked);
                       }
-                    } catch (_) {
-                      cameraInputRef.current?.click();
+                    } catch (err) {
+                      console.warn("Native camera capture error:", err);
                     }
                   } else {
                     cameraInputRef.current?.click();

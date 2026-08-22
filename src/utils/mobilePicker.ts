@@ -140,26 +140,13 @@ export async function pickNativeFiles(options: {
  */
 export type CameraErrorCode = 'denied' | 'blocked' | 'cancelled' | 'failed';
 
-export async function takeNativePhoto(): Promise<MobilePickedFile | { error: CameraErrorCode } | null> {
+export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
   if (!Capacitor.isNativePlatform()) {
     return null;
   }
 
   try {
-    // Check and request camera permission dynamically if not granted
-    try {
-      const checkStatus = await Camera.checkPermissions();
-      if (checkStatus.camera !== 'granted') {
-        const req = await Camera.requestPermissions({ permissions: ['camera'] });
-        if (req.camera === 'denied') {
-          console.warn('[mobilePicker] Camera permission denied by user');
-        }
-      }
-    } catch (permErr) {
-      console.warn('[mobilePicker] Permission check warning:', permErr);
-    }
-
-    // Launch camera directly with Base64 result for maximum Android WebView reliability
+    // Launch native camera directly with Base64 result for maximum Android WebView reliability
     const photo = await Camera.getPhoto({
       quality: 85,
       allowEditing: false,
@@ -186,23 +173,7 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | { error: Cam
     };
 
   } catch (err: any) {
-    console.error('[mobilePicker] Error capturing native camera:', err);
-
-    // If user simply pressed back/cancelled — silent return null (no error)
-    const errMsg = (err?.message || String(err)).toLowerCase();
-    const isCancelled =
-      errMsg.includes('cancel') ||
-      errMsg.includes('dismiss') ||
-      errMsg.includes('no image') ||
-      errMsg.includes('user denied') ||
-      errMsg.includes('no photo') ||
-      errMsg.includes('empty') ||
-      errMsg.includes('closed');
-
-    if (isCancelled) {
-      return null; // User cancelled — caller does nothing
-    }
-
-    return { error: 'failed' };
+    console.warn('[mobilePicker] Native camera capture cancelled or error:', err);
+    return null;
   }
 }

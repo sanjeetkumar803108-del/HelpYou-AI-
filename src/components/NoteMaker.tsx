@@ -599,43 +599,82 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     setCurrentTime(seekTime);
   };
 
-  // Speech Synthesis fallback control handlers
+  // Speech Synthesis fallback control handlers with sentence queue for Android WebView
+  const speechQueueRef = useRef<{ sentences: string[]; index: number; lang: string }>({ sentences: [], index: 0, lang: 'en-US' });
+
   const startSpeechFallback = () => {
     if (!result) return;
     triggerVibration(10);
+
+    if (!('speechSynthesis' in window)) {
+      alert("Speech synthesis is not supported on this device.");
+      return;
+    }
+
     window.speechSynthesis.cancel();
-    
-    // Clean text to avoid speakable markup
-    const cleanText = result.replace(/[*#_\-`]/g, '');
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = playbackRate;
-    
-    // Auto-detect language (Hindi vs English)
+    window.speechSynthesis.resume();
+
+    // Clean text to avoid speakable markup & markdown symbols
+    const cleanText = result.replace(/[*#_\-`]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!cleanText) return;
+
+    // Split text into manageable chunks so Android TTS engine doesn't timeout or silence
+    const sentences = cleanText.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [cleanText];
     const hasHindi = /[\u0900-\u097F]/.test(cleanText);
-    utterance.lang = hasHindi ? 'hi-IN' : 'en-IN';
-    
-    const voices = window.speechSynthesis.getVoices();
-    const langPrefix = utterance.lang.split('-')[0].toLowerCase();
+    const lang = hasHindi ? 'hi-IN' : 'en-US';
+
+    speechQueueRef.current = { sentences, index: 0, lang };
+    setIsPlayingFallback(true);
+
+    playNextSentenceChunk();
+  };
+
+  const playNextSentenceChunk = () => {
+    const queue = speechQueueRef.current;
+    if (!queue || queue.index >= queue.sentences.length) {
+      setIsPlayingFallback(false);
+      return;
+    }
+
+    const chunk = queue.sentences[queue.index].trim();
+    if (!chunk) {
+      queue.index++;
+      playNextSentenceChunk();
+      return;
+    }
+
+    let voices: SpeechSynthesisVoice[] = [];
+    try {
+      voices = window.speechSynthesis.getVoices() || [];
+    } catch (e) {}
+
+    const langPrefix = queue.lang.split('-')[0].toLowerCase();
     const preferredVoice = voices.find(v => 
       v.lang.toLowerCase().startsWith(langPrefix) && 
       (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
     ) || voices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
-    
+
+    const utterance = new SpeechSynthesisUtterance(chunk);
+    utterance.rate = playbackRate;
+    utterance.lang = queue.lang;
     if (preferredVoice) {
       utterance.voice = preferredVoice;
     }
-    
+
     utterance.onend = () => {
-      setIsPlayingFallback(false);
+      queue.index++;
+      playNextSentenceChunk();
     };
+
     utterance.onerror = (e) => {
-      console.warn("TTS fallback speech failed:", e);
-      setIsPlayingFallback(false);
+      console.warn("TTS chunk playback notice:", e);
+      queue.index++;
+      playNextSentenceChunk();
     };
-    
+
     synthUtteranceRef.current = utterance;
-    setIsPlayingFallback(true);
     window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.resume();
   };
 
   const pauseSpeechFallback = () => {
@@ -653,11 +692,13 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   const stopSpeechFallback = () => {
     triggerVibration(10);
     window.speechSynthesis.cancel();
+    speechQueueRef.current = { sentences: [], index: 0, lang: 'en-US' };
     setIsPlayingFallback(false);
   };
 
   const resetState = () => {
     window.speechSynthesis.cancel();
+    speechQueueRef.current = { sentences: [], index: 0, lang: 'en-US' };
     setIsSpeechFallback(false);
     setIsPlayingFallback(false);
     setFile(null);

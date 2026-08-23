@@ -10,8 +10,6 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  signInWithCredential,
-  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -19,7 +17,6 @@ import {
   User
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
-import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import appLogo from '../assets/logo.svg';
 
 // React Native web-compatibility components & helpers
@@ -312,39 +309,18 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     }, 15000);
 
     try {
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
       let loggedUser: User | null = null;
-
-      // 1. Native Android / iOS: Use native Google Play Services (Zero browser redirects, Zero white screens!)
-      if (Capacitor.isNativePlatform()) {
-        try {
-          const res = await FirebaseAuthentication.signInWithGoogle();
-          const idToken = res.credential?.idToken;
-          if (idToken) {
-            const cred = GoogleAuthProvider.credential(idToken);
-            const userCred = await signInWithCredential(auth, cred);
-            loggedUser = userCred.user;
-          } else if (res.user) {
-            loggedUser = auth.currentUser;
-          }
-        } catch (nativeErr: any) {
-          console.warn('[Native Google Sign-In notice, falling back to web flow]:', nativeErr);
+      try {
+        const userCredential = await signInWithPopup(auth, googleProvider);
+        loggedUser = userCredential.user;
+      } catch (popupErr: any) {
+        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
+          console.log('[Google Auth] Popup blocked/cancelled, attempting signInWithRedirect');
+          await signInWithRedirect(auth, googleProvider);
+          return;
         }
-      }
-
-      // 2. Web Browser Fallback
-      if (!loggedUser) {
-        googleProvider.setCustomParameters({ prompt: 'select_account' });
-        try {
-          const userCredential = await signInWithPopup(auth, googleProvider);
-          loggedUser = userCredential.user;
-        } catch (popupErr: any) {
-          if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
-            console.log('[Google Auth] Popup blocked/cancelled, attempting signInWithRedirect');
-            await signInWithRedirect(auth, googleProvider);
-            return;
-          }
-          throw popupErr;
-        }
+        throw popupErr;
       }
 
       if (!loggedUser) {

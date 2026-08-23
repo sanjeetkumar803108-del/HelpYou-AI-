@@ -10,6 +10,8 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signInWithCredential,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -17,6 +19,7 @@ import {
   User
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import appLogo from '../assets/logo.svg';
 
 // React Native web-compatibility components & helpers
@@ -309,18 +312,39 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     }, 15000);
 
     try {
-      googleProvider.setCustomParameters({ prompt: 'select_account' });
       let loggedUser: User | null = null;
-      try {
-        const userCredential = await signInWithPopup(auth, googleProvider);
-        loggedUser = userCredential.user;
-      } catch (popupErr: any) {
-        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
-          console.log('[Google Auth] Popup blocked/cancelled, attempting signInWithRedirect');
-          await signInWithRedirect(auth, googleProvider);
-          return;
+
+      // NATIVE PATH (Android/iOS): Uses Google Play Services natively
+      // This completely bypasses the browser popup/redirect that causes white screen
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const result = await FirebaseAuthentication.signInWithGoogle();
+          if (result.credential?.idToken) {
+            const credential = GoogleAuthProvider.credential(result.credential.idToken);
+            const userCred = await signInWithCredential(auth, credential);
+            loggedUser = userCred.user;
+          } else {
+            // Token already set via native plugin, grab from auth.currentUser
+            loggedUser = auth.currentUser;
+          }
+        } catch (nativeErr: any) {
+          console.warn('[Native Google Sign-In failed, using web fallback]:', nativeErr?.message);
         }
-        throw popupErr;
+      }
+
+      // WEB FALLBACK: Used if native path failed or we're on web
+      if (!loggedUser) {
+        googleProvider.setCustomParameters({ prompt: 'select_account' });
+        try {
+          const userCredential = await signInWithPopup(auth, googleProvider);
+          loggedUser = userCredential.user;
+        } catch (popupErr: any) {
+          if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
+            await signInWithRedirect(auth, googleProvider);
+            return;
+          }
+          throw popupErr;
+        }
       }
 
       if (!loggedUser) {

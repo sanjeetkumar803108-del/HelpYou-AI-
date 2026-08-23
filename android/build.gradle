@@ -36,25 +36,12 @@ allprojects {
 }
 
 subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            project.android {
-                compileOptions {
-                    sourceCompatibility JavaVersion.VERSION_17
-                    targetCompatibility JavaVersion.VERSION_17
-                }
-            }
-        }
-        // Force all Kotlin tasks to compile with JVM 17 target to match Java compile target
-        project.tasks.matching { it.class.name.contains("KotlinCompile") }.configureEach {
-            try {
-                kotlinOptions {
-                    jvmTarget = "17"
-                }
-            } catch (Exception e) {
-                // Ignore if kotlinOptions property is missing dynamically
-            }
-        }
+    // Expose compileSdkVersion and other ext properties for plugin build.gradle files
+    ext {
+        compileSdkVersion = 36
+        targetSdkVersion = 34
+        minSdkVersion = 24
+        rgcfaIncludeGoogle = true
     }
 }
 

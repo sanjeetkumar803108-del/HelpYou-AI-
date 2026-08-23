@@ -30,6 +30,15 @@ import { useSettings } from '../hooks/useSettings';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { billingService } from '../services/BillingService';
 import { REGIONAL_TRACKS } from './AcademicSetup';
+import { 
+  getStudyXP, 
+  getStudyLevel, 
+  getWeeklyQuests, 
+  claimQuestReward, 
+  getBadgesStatus, 
+  Quest, 
+  AchievementBadge 
+} from '../utils/gamification';
 
 interface ProfileProps {
   user: FirebaseUser | null;
@@ -270,6 +279,25 @@ export default function Profile({
 
   // Interactive Toast
   const [toast, setToast] = useState<string | null>(null);
+
+  // Gamification: XP, Levels, Quests and Badges
+  const [studyXP, setStudyXP] = useState<number>(getStudyXP);
+  const [weeklyQuests, setWeeklyQuests] = useState<Quest[]>(getWeeklyQuests);
+  const [achievementBadges, setAchievementBadges] = useState<AchievementBadge[]>(getBadgesStatus);
+
+  useEffect(() => {
+    const handleXpUpdate = () => {
+      setStudyXP(getStudyXP());
+      setWeeklyQuests(getWeeklyQuests());
+      setAchievementBadges(getBadgesStatus());
+    };
+    window.addEventListener('study-xp-updated', handleXpUpdate);
+    window.addEventListener('study-quests-updated', handleXpUpdate);
+    return () => {
+      window.removeEventListener('study-xp-updated', handleXpUpdate);
+      window.removeEventListener('study-quests-updated', handleXpUpdate);
+    };
+  }, []);
 
   // 7-Day Passive App Usage Tracker State
   const [chartData, setChartData] = useState<PassiveUsageItem[]>(() => {
@@ -1004,9 +1032,48 @@ export default function Profile({
             )}
 
             {/* Email Address */}
-            <p className="text-zinc-400 text-xs font-bold mb-4">
+            <p className="text-zinc-400 text-xs font-bold mb-3">
               {user ? user.email : "Guest Account"}
             </p>
+
+            {/* Student Level & XP Progress Card */}
+            {(() => {
+              const levelData = getStudyLevel(studyXP);
+              return (
+                <div className="w-full bg-zinc-50 border border-purple-100 rounded-2xl p-3.5 mb-2 mt-1 space-y-2 text-left">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{levelData.currentLevel.badge}</span>
+                      <div>
+                        <span className="text-[11px] font-black text-zinc-900 leading-tight block">
+                          Level {levelData.currentLevel.level}: {levelData.currentLevel.title}
+                        </span>
+                        <span className="text-[9px] font-bold text-purple-600">
+                          {studyXP} Total Study XP
+                        </span>
+                      </div>
+                    </div>
+                    {levelData.nextLevel && (
+                      <span className="text-[9px] font-bold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200 shadow-xs">
+                        Next: {levelData.nextLevel.minXP} XP
+                      </span>
+                    )}
+                  </div>
+
+                  {/* XP Progress Bar */}
+                  <div className="w-full bg-zinc-200/80 h-2 rounded-full overflow-hidden relative">
+                    <div 
+                      className={`h-full bg-gradient-to-r ${levelData.currentLevel.color} transition-all duration-500 rounded-full`}
+                      style={{ width: `${levelData.progressPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[8.5px] font-bold text-zinc-400">
+                    <span>{levelData.xpInLevel} XP in Level</span>
+                    <span>{levelData.xpToNextLevel} XP to Level {(levelData.nextLevel?.level || levelData.currentLevel.level + 1)}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Login CTA for Guest Account */}
             {!user && onOpenLogin && (
@@ -1510,6 +1577,126 @@ export default function Profile({
               </div>
             </div>
           </div>
+          )}
+
+          {/* Weekly Quests & Missions */}
+          {!deepFocus && (
+            <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <Target className="w-4 h-4 text-purple-600" /> Weekly Study Quests
+                </h3>
+                <span className="text-[9.5px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-150">
+                  Earn XP & Coins
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {weeklyQuests.map((quest) => (
+                  <div 
+                    key={quest.id} 
+                    className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                      quest.isClaimed 
+                        ? 'bg-zinc-50/60 border-zinc-200/60 opacity-60'
+                        : quest.isCompleted 
+                          ? 'bg-gradient-to-r from-purple-50/80 to-indigo-50/80 border-purple-200 shadow-xs'
+                          : 'bg-zinc-50/40 border-zinc-200/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-xl shrink-0">{quest.icon}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-zinc-900 truncate">{quest.title}</span>
+                          <span className="text-[9px] font-black text-purple-700 bg-purple-100/70 px-1.5 py-0.5 rounded">
+                            +{quest.xpReward} XP
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 font-medium truncate">{quest.desc}</p>
+                        
+                        {/* Quest Progress Micro Bar */}
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <div className="w-24 bg-zinc-200 h-1.5 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-purple-600 h-full rounded-full transition-all"
+                              style={{ width: `${Math.min(100, (quest.currentCount / quest.targetCount) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-[8.5px] font-bold text-zinc-400">
+                            {quest.currentCount}/{quest.targetCount}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
+                      {quest.isClaimed ? (
+                        <span className="text-[9.5px] font-black text-zinc-400 flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5 text-zinc-400" /> Done
+                        </span>
+                      ) : quest.isCompleted ? (
+                        <button
+                          onClick={() => {
+                            claimQuestReward(quest.id);
+                            if (!isVip) {
+                              addCoins(quest.coinReward, `Completed ${quest.title}! 🎯`);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-[10px] rounded-xl shadow-sm hover:from-purple-700 hover:to-indigo-700 transition-all active:scale-95 cursor-pointer border-none"
+                        >
+                          Claim 🏆
+                        </button>
+                      ) : (
+                        <span className="text-[9px] font-extrabold text-zinc-400 bg-zinc-100 px-2 py-1 rounded-lg">
+                          In Progress
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Achievement Badges Shelf */}
+          {!deepFocus && (
+            <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm space-y-4">
+              <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-500" /> Study Mastery Badges
+              </h3>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                {achievementBadges.map((badge) => (
+                  <div
+                    key={badge.id}
+                    className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all ${
+                      badge.unlocked
+                        ? 'bg-amber-50/50 border-amber-200 shadow-xs'
+                        : 'bg-zinc-50/30 border-zinc-200/40 opacity-50'
+                    }`}
+                  >
+                    <span className="text-2xl">{badge.icon}</span>
+                    <div>
+                      <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                        {badge.title}
+                      </span>
+                      <span className="text-[8px] font-bold text-zinc-400 block">
+                        {badge.requiredXP} XP
+                      </span>
+                    </div>
+                    {badge.unlocked ? (
+                      <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                        Unlocked
+                      </span>
+                    ) : (
+                      <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-0.5">
+                        <Lock className="w-2.5 h-2.5" /> Locked
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Quick Info Box */}

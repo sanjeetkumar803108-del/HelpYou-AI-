@@ -8,6 +8,8 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -135,6 +137,18 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   };
 
   useEffect(() => {
+    // 1. Check for pending redirect sign-in result from Google OAuth
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          routeUserAfterAuth(result.user);
+        }
+      })
+      .catch((redirectErr) => {
+        console.warn('[Google Redirect Auth Notice]', redirectErr);
+      });
+
+    // 2. Listen for active auth state changes
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -295,8 +309,18 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
     try {
       googleProvider.setCustomParameters({ prompt: 'select_account' });
-      const userCredential = await signInWithPopup(auth, googleProvider);
-      const loggedUser = userCredential.user;
+      let userCredential: any = null;
+      try {
+        userCredential = await signInWithPopup(auth, googleProvider);
+      } catch (popupErr: any) {
+        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
+          console.log('[Google Auth] Popup blocked/cancelled, attempting signInWithRedirect');
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        }
+        throw popupErr;
+      }
+      const loggedUser = userCredential?.user;
 
       if (!loggedUser) {
         throw new Error('Google Sign-In did not return a valid user.');

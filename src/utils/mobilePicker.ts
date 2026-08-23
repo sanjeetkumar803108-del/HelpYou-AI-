@@ -49,9 +49,9 @@ export async function pickNativeFiles(options: {
         // 1. Try FilePicker.pickImages for multi-image gallery selection without limits
         try {
           const result = await FilePicker.pickImages({
-            multiple: true,
+            limit: 0,
             readData: true,
-          });
+          } as any);
           if (result && result.files && result.files.length > 0) {
             const output: MobilePickedFile[] = [];
             for (const file of result.files) {
@@ -74,9 +74,9 @@ export async function pickNativeFiles(options: {
         try {
           const result = await FilePicker.pickFiles({
             types: ['image/*'],
-            multiple: true,
+            limit: 0,
             readData: true,
-          });
+          } as any);
           if (result && result.files && result.files.length > 0) {
             const output: MobilePickedFile[] = [];
             for (const file of result.files) {

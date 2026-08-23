@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Headphones, Play, Pause, Volume2, Search, Book, Trash2, Smartphone } from 'lucide-react';
+import { ArrowLeft, Headphones, Play, Pause, Volume2, Search, Book, Trash2, Smartphone, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';

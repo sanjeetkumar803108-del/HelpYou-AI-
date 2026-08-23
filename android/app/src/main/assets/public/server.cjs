@@ -41,6 +41,7 @@ var import_crypto = __toESM(require("crypto"), 1);
 var import_youtube_transcript = require("youtube-transcript");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_xss = __toESM(require("xss"), 1);
+var import_pdf_parse = __toESM(require("pdf-parse"), 1);
 var import_fs = __toESM(require("fs"), 1);
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -1977,7 +1978,7 @@ app.post("/api/extract-file-text", upload.single("file"), async (req, res) => {
     let extractedText = "";
     if (req.file.mimetype === "application/pdf" || req.file.originalname.toLowerCase().endsWith(".pdf")) {
       try {
-        const pdfData = await pdf(req.file.buffer, { max: 60 });
+        const pdfData = await (0, import_pdf_parse.default)(req.file.buffer, { max: 60 });
         if (pdfData.numpages > 60) {
           return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
         }
@@ -2300,7 +2301,7 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
     let extractedText = "";
     let numPages = 0;
     try {
-      const pdfData = await pdf(req.file.buffer, { max: 51 });
+      const pdfData = await (0, import_pdf_parse.default)(req.file.buffer, { max: 51 });
       numPages = pdfData.numpages;
       extractedText = pdfData.text || "";
       console.log(`[PDF Quiz API] PDF parse complete. Pages: ${numPages}, Extracted text length: ${extractedText.trim().length}`);

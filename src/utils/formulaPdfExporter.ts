@@ -207,7 +207,13 @@ export async function exportFormulaSheetPDF(
   const saved = await savePDFMobile(pdfBlob, filename);
 
   if (saved) {
-    savePdfToHistory(filename, pdfBlob.size, 1);
+    savePdfToHistory({
+      title: filename,
+      fileUri: URL.createObjectURL(pdfBlob),
+      featureTag: 'Formula Sheet',
+      fileSize: `${(pdfBlob.size / 1024).toFixed(1)} KB`,
+      pageCount: pageIndex
+    });
     addStudyXP(40, 'Exported Formula Sheet PDF');
     trackQuestProgress('calculator', 1);
   }

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar, Camera, X, Download, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar, Camera, X } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -9,7 +9,6 @@ import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { compressImage } from '../utils/imageCompressor';
-import { isItemOffline, toggleOfflineItem, getOfflineItems } from '../utils/offlineVault';
 
 interface GrammarEnhancerProps {
   onBack: () => void;
@@ -124,25 +123,15 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   }, [loading, result]);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [, setOfflineTrigger] = useState(0);
-
-  useEffect(() => {
-    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
-    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
-    return () => window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
-  }, []);
 
   const fetchHistory = async () => {
-    const offline = getOfflineItems('grammar');
-    if (!auth.currentUser) {
-      if (offline.length > 0) setHistoryItems(offline);
-      return;
-    }
+    if (!auth.currentUser) return;
     setLoadingHistory(true);
     try {
       const q = query(
         collection(db, 'pocket_items'),
-        where('userId', '==', auth.currentUser.uid)
+        where('userId', '==', auth.currentUser.uid),
+        orderBy('createdAt', 'desc')
       );
       const querySnapshot = await getDocs(q);
       const items: any[] = [];
@@ -154,41 +143,29 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
           items.push({
             id: doc.id,
             ...data,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date())
+            createdAt: data.createdAt?.toDate() || new Date()
           });
         }
       });
 
-      const merged = [...items];
-      for (const off of offline) {
-        if (!merged.some(m => m.id === off.id)) {
-          merged.push(off);
-        }
-      }
-
-      merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-      // Keep only last 20 records
-      if (merged.length > 20) {
-        const toKeep = merged.slice(0, 20);
-        const toDelete = merged.slice(20);
+      // Keep only last 10 records, delete older ones
+      if (items.length > 10) {
+        const toKeep = items.slice(0, 10);
+        const toDelete = items.slice(10);
         
         for (const item of toDelete) {
-          if (!item.id.startsWith('local_')) {
-            try {
-              await deleteDoc(doc(db, 'pocket_items', item.id));
-            } catch (err) {
-              console.error("Failed to delete old grammar item:", err);
-            }
+          try {
+            await deleteDoc(doc(db, 'pocket_items', item.id));
+          } catch (err) {
+            console.error("Failed to delete old grammar item:", err);
           }
         }
         setHistoryItems(toKeep);
       } else {
-        setHistoryItems(merged);
+        setHistoryItems(items);
       }
     } catch (e) {
       console.error("Failed to load Grammar history:", e);
-      if (offline.length > 0) setHistoryItems(offline);
     } finally {
       setLoadingHistory(false);
     }
@@ -377,50 +354,21 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                     <h4 className="font-black text-zinc-900 group-hover:text-purple-600 transition-colors truncate">
                       {item.title || 'Grammar Polish'}
                     </h4>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[11px] text-zinc-400 font-bold flex items-center gap-1.5">
-                        <Calendar className="w-3 h-3 text-zinc-400" />
-                        {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                      {isItemOffline('grammar', item.id) && (
-                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
-                          <span>💾</span> Offline Ready
-                        </span>
-                      )}
-                    </div>
+                    <p className="text-[11px] text-zinc-400 font-bold flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3 text-zinc-400" />
+                      {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
                     <div className="text-xs text-zinc-600 line-clamp-2 mt-1.5 font-medium">
                       {item.text ? item.text.substring(0, 120).replace(/[#*`]/g, '') + '...' : ''}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleOfflineItem('grammar', item.id, item);
-                        setOfflineTrigger(prev => prev + 1);
-                      }}
-                      className={`p-2 rounded-xl transition-all active:scale-95 cursor-pointer ${
-                        isItemOffline('grammar', item.id)
-                          ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-                          : 'text-zinc-400 hover:text-purple-600 hover:bg-purple-50'
-                      }`}
-                      title={isItemOffline('grammar', item.id) ? "Saved in app offline (Tap to remove)" : "Save inside app for offline access"}
-                    >
-                      {isItemOffline('grammar', item.id) ? (
-                        <CheckCircle2 className="w-4 h-4" />
-                      ) : (
-                        <Download className="w-4 h-4" />
-                      )}
-                    </button>
-                    <button
-                      onClick={(e) => deleteHistoryItem(item.id, e)}
-                      className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95 cursor-pointer"
-                      title="Delete Polish"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => deleteHistoryItem(item.id, e)}
+                    className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>

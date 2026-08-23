@@ -8,8 +8,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Sparkles, Send, Mic, MicOff, Loader2, RefreshCw, Compass, Brain, 
   ArrowRight, Copy, Check, Share2, ThumbsUp, ThumbsDown, Pause, Play,
-  Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock, Square,
-  Download, CheckCircle2
+  Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock, Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parsePartialJSON } from '../utils/partialJson';
@@ -23,7 +22,6 @@ import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
-import { isItemOffline, toggleOfflineItem, getOfflineItems } from '../utils/offlineVault';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -675,13 +673,6 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
   const [isCameraLoading, setIsCameraLoading] = useState(false);
 
   const [viewportBottomOffset, setViewportBottomOffset] = useState(0);
-  const [, setOfflineTrigger] = useState(0);
-
-  useEffect(() => {
-    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
-    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
-    return () => window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
-  }, []);
 
   useEffect(() => { setViewportBottomOffset(0); }, []);
 
@@ -1837,61 +1828,33 @@ Please evaluate this answer strictly according to your system rubric.`;
                                 : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50'
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-3 pr-16">
+                            <div className="flex items-start justify-between gap-3 pr-8">
                               <div className="flex-1 min-w-0">
                                 <h4 className="text-xs font-bold text-zinc-800 leading-snug group-hover:text-purple-600 transition-colors line-clamp-2">
                                   {chat.title}
                                 </h4>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[9px] text-zinc-500 font-medium">
-                                    {chat.createdAt?.seconds 
-                                      ? new Date(chat.createdAt.seconds * 1000).toLocaleDateString(undefined, {
-                                          month: 'short',
-                                          day: 'numeric',
-                                          year: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        })
-                                      : 'Just now'}
-                                  </span>
-                                  {isItemOffline('ai_tutor', chat.id) && (
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
-                                      <span>💾</span> Offline
-                                    </span>
-                                  )}
-                                </div>
+                                <span className="text-[9px] text-zinc-500 mt-1 block font-medium">
+                                  {chat.createdAt?.seconds 
+                                    ? new Date(chat.createdAt.seconds * 1000).toLocaleDateString(undefined, {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })
+                                    : 'Just now'}
+                                </span>
                               </div>
                             </div>
 
-                            {/* Action Buttons: Download / Offline Save + Delete */}
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleOfflineItem('ai_tutor', chat.id, chat);
-                                  setOfflineTrigger(prev => prev + 1);
-                                }}
-                                className={`p-1.5 rounded-xl transition-all active:scale-90 cursor-pointer ${
-                                  isItemOffline('ai_tutor', chat.id)
-                                    ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-                                    : 'text-zinc-400 hover:text-purple-600 hover:bg-purple-50'
-                                }`}
-                                title={isItemOffline('ai_tutor', chat.id) ? "Saved in app offline (Tap to remove)" : "Save inside app for offline access"}
-                              >
-                                {isItemOffline('ai_tutor', chat.id) ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                ) : (
-                                  <Download className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                              <button 
-                                onClick={(e) => handleDeleteChat(chat.id, e)}
-                                className="p-1.5 rounded-xl bg-transparent hover:bg-rose-50 text-zinc-400 hover:text-rose-600 transition-all active:scale-90 cursor-pointer"
-                                title="Delete Session"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                            {/* Delete Button */}
+                            <button 
+                              onClick={(e) => handleDeleteChat(chat.id, e)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-transparent hover:bg-rose-50 text-zinc-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all active:scale-90"
+                              title="Delete Session"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         ))}
                       </div>

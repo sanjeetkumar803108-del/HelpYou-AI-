@@ -12,7 +12,6 @@ import { triggerVibration } from '../utils/vibrate';
 import { Capacitor } from '@capacitor/core';
 import { pickNativeFiles } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
-import { isItemOffline, toggleOfflineItem, getOfflineItems } from '../utils/offlineVault';
 
 const AUDIO_STEPS = [
   { title: "Analyzing summary contents... 🧠", desc: "Reading and structuring major topics" },
@@ -57,13 +56,6 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   // History State
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [, setOfflineTrigger] = useState(0);
-
-  useEffect(() => {
-    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
-    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
-    return () => window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
-  }, []);
 
   // Reset and Cancel handler
   const resetState = () => {
@@ -230,7 +222,8 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       if (auth.currentUser) {
         const q = query(
           collection(db, 'pocket_items'),
-          where('userId', '==', auth.currentUser.uid)
+          where('userId', '==', auth.currentUser.uid),
+          orderBy('createdAt', 'desc')
         );
         const querySnapshot = await getDocs(q);
         querySnapshot.forEach((doc) => {
@@ -240,19 +233,18 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
             items.push({
               id: doc.id,
               ...data,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date()),
+              createdAt: data.createdAt?.toDate() || new Date(),
             });
           }
         });
       }
 
-      // Merge local storage items and offline vault items
+      // Merge local storage items for guests or hybrid persistence
       const localItems = getLocalItems();
-      const offlineItems = getOfflineItems('notemaker');
       const mergedItems = [...items];
 
-      for (const local of [...localItems, ...offlineItems]) {
-        if (!mergedItems.some(i => i.id === local.id || (i.title && i.title === local.title))) {
+      for (const local of localItems) {
+        if (!mergedItems.some(i => i.text === local.text || i.id === local.id)) {
           mergedItems.push(local);
         }
       }
@@ -260,8 +252,8 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       // Sort by newest first
       mergedItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      // Limit to 25 items to prevent bloat
-      const finalItems = mergedItems.slice(0, 25);
+      // Limit to 20 items to prevent bloat
+      const finalItems = mergedItems.slice(0, 20);
       setHistoryItems(finalItems);
     } catch (e) {
       console.error("Failed to load history, falling back to local:", e);
@@ -817,42 +809,15 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wide flex items-center gap-0.5">
                           <span>🎙️</span> Briefing
                         </span>
-                        {isItemOffline('notemaker', item.id) && (
-                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
-                            <span>💾</span> Offline Ready
-                          </span>
-                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleOfflineItem('notemaker', item.id, item);
-                          setOfflineTrigger(prev => prev + 1);
-                        }}
-                        className={`p-2 rounded-xl transition-all active:scale-95 cursor-pointer ${
-                          isItemOffline('notemaker', item.id)
-                            ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-                            : 'text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50'
-                        }`}
-                        title={isItemOffline('notemaker', item.id) ? "Saved in app offline (Tap to remove)" : "Save inside app for offline access"}
-                      >
-                        {isItemOffline('notemaker', item.id) ? (
-                          <CheckCircle2 className="w-4 h-4" />
-                        ) : (
-                          <Download className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={(e) => deleteHistoryItem(item.id, e)}
-                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95 cursor-pointer"
-                        title="Delete Briefing"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={(e) => deleteHistoryItem(item.id, e)}
+                      className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
               </div>

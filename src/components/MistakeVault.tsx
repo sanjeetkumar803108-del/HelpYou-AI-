@@ -3,14 +3,13 @@ import confetti from 'canvas-confetti';
 import { 
   ArrowLeft, Brain, Trash2, Sparkles, Loader2, BookOpen, 
   CheckCircle2, XCircle, RefreshCw, AlertCircle, Bookmark, HelpCircle,
-  ChevronDown, ChevronUp, Download
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
-import { isItemOffline, toggleOfflineItem, getOfflineItems } from '../utils/offlineVault';
 
 interface MistakeVaultProps {
   onBack: () => void;
@@ -74,12 +73,9 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
     return () => window.removeEventListener('appBackButton', handleBackButton);
   }, [practicingId]);
 
-  const [, setOfflineTrigger] = useState(0);
-
   const fetchMistakes = async () => {
     setLoading(true);
     const user = auth.currentUser;
-    const offlineItems = getOfflineItems<MistakeItem>('mistake_vault');
     try {
       if (user) {
         // Fetch from Firestore
@@ -97,35 +93,21 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
           } as MistakeItem);
         });
         
-        const merged = [...fetched];
-        for (const off of offlineItems) {
-          if (!merged.some(m => m.id === off.id)) {
-            merged.push(off);
-          }
-        }
-
         // Sort by date (descending)
-        merged.sort((a, b) => {
+        fetched.sort((a, b) => {
           const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
           const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
           return dateB.getTime() - dateA.getTime();
         });
         
-        setMistakes(merged);
+        setMistakes(fetched);
       } else {
         // Fetch from localStorage fallback
         const local = JSON.parse(localStorage.getItem('study_temp_mistakes') || '[]');
-        const merged = [...local];
-        for (const off of offlineItems) {
-          if (!merged.some(m => m.id === off.id)) {
-            merged.push(off);
-          }
-        }
-        setMistakes(merged.reverse());
+        setMistakes(local.reverse());
       }
     } catch (err) {
       console.error('Error fetching mistakes:', err);
-      if (offlineItems.length > 0) setMistakes(offlineItems);
     } finally {
       setLoading(false);
     }
@@ -138,14 +120,8 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
     const handleUpdate = () => {
       fetchMistakes();
     };
-    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
-
     window.addEventListener('study-mistake-vault-updated', handleUpdate);
-    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
-    return () => {
-      window.removeEventListener('study-mistake-vault-updated', handleUpdate);
-      window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
-    };
+    return () => window.removeEventListener('study-mistake-vault-updated', handleUpdate);
   }, []);
 
   const handleDeleteMistake = async (id: string, e: React.MouseEvent) => {
@@ -360,52 +336,16 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                     {/* Top Header Card */}
                     <div className="p-5 border-b border-zinc-100 bg-white">
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-50 text-red-600 uppercase tracking-wider">
-                              {item.sourceFeature}
-                            </span>
-                            <span className="text-[10px] text-zinc-400 font-medium">
-                              {item.createdAt?.toDate 
-                                ? item.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-                                : new Date(item.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-                              }
-                            </span>
-                            {isItemOffline('mistake_vault', item.id) && (
-                              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
-                                <span>💾</span> Offline Ready
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleOfflineItem('mistake_vault', item.id, item);
-                                setOfflineTrigger(prev => prev + 1);
-                              }}
-                              className={`p-1.5 rounded-lg transition-all active:scale-95 cursor-pointer ${
-                                isItemOffline('mistake_vault', item.id)
-                                  ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-                                  : 'text-zinc-400 hover:text-red-600 hover:bg-red-50'
-                              }`}
-                              title={isItemOffline('mistake_vault', item.id) ? "Saved offline (Tap to remove)" : "Save inside app for offline access"}
-                            >
-                              {isItemOffline('mistake_vault', item.id) ? (
-                                <CheckCircle2 className="w-4 h-4" />
-                              ) : (
-                                <Download className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button
-                              onClick={(e) => handleDeleteMistake(item.id, e)}
-                              className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-95 cursor-pointer"
-                              title="Delete from Vault"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-50 text-red-600 uppercase tracking-wider">
+                            {item.sourceFeature}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 font-medium">
+                            {item.createdAt?.toDate 
+                              ? item.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                              : new Date(item.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                            }
+                          </span>
                         </div>
                         <h4 className="text-sm font-bold text-zinc-900 leading-snug">
                           {item.question}

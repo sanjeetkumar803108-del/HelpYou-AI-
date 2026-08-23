@@ -3,7 +3,7 @@ import {
   ArrowLeft, HelpCircle, Loader2, Copy, Check, Share2, 
   Sparkles, BookOpen, GraduationCap, Clock, FileText, 
   ChevronRight, Save, History, Trash2, Send, PenTool, CheckCircle2,
-  RefreshCw, ExternalLink, Camera, Plus, Image, X, Download
+  RefreshCw, ExternalLink, Camera, Plus, Image, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -18,7 +18,6 @@ import SafePdfViewer from './SafePdfViewer';
 import AdvancedLoader from './AdvancedLoader';
 import GlobalMarkdown from './GlobalMarkdown';
 import { getApiUrl } from '../utils/api';
-import { isItemOffline, toggleOfflineItem, getOfflineItems } from '../utils/offlineVault';
 
 interface QuestionGeneratorProps {
   onBack: () => void;
@@ -122,14 +121,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [isPro, setIsPro] = useState(() => isProUser());
 
   const isMountedRef = useRef(true);
-  const [, setOfflineTrigger] = useState(0);
-
-  useEffect(() => {
-    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
-    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
-    return () => window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
-  }, []);
-
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -279,7 +270,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       try {
         const q = query(
           collection(db, 'generated_questions'),
-          where('userId', '==', uid)
+          where('userId', '==', uid),
+          orderBy('createdAt', 'desc')
         );
         const querySnapshot = await getDocs(q);
         const items: SavedSet[] = [];
@@ -293,42 +285,26 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
             stream: data.stream,
             questions: data.questions,
             userAnswers: data.userAnswers || {},
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date()),
+            createdAt: data.createdAt?.toDate() || new Date(),
             isPdf: !!data.isPdf
           });
         });
 
-        // Merge offline items
-        const offlineItems = getOfflineItems<SavedSet>('question_generator');
-        const merged = [...items];
-        for (const off of offlineItems) {
-          if (!merged.some(m => m.id === off.id)) {
-            merged.push({
-              ...off,
-              createdAt: new Date(off.createdAt)
-            });
-          }
-        }
-
-        merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-        // Keep only last 20 records
-        if (merged.length > 20) {
-          const toKeep = merged.slice(0, 20);
-          const toDelete = merged.slice(20);
+        // Keep only last 10 records, delete older ones
+        if (items.length > 10) {
+          const toKeep = items.slice(0, 10);
+          const toDelete = items.slice(10);
           
           for (const item of toDelete) {
-            if (!item.id.startsWith('local_')) {
-              try {
-                await deleteDoc(doc(db, 'generated_questions', item.id));
-              } catch (err) {
-                console.error("Failed to delete old generated questions:", err);
-              }
+            try {
+              await deleteDoc(doc(db, 'generated_questions', item.id));
+            } catch (err) {
+              console.error("Failed to delete old generated questions:", err);
             }
           }
           setHistoryItems(toKeep);
         } else {
-          setHistoryItems(merged);
+          setHistoryItems(items);
         }
       } catch (e) {
         console.error("Failed to load subjective question history from Firestore:", e);
@@ -1085,37 +1061,13 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                 <span>📝</span> Standard
                               </span>
                             )}
-                            {isItemOffline('question_generator', item.id) && (
-                              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
-                                <span>💾</span> Offline Ready
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleOfflineItem('question_generator', item.id, item);
-                            setOfflineTrigger(prev => prev + 1);
-                          }}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer ${
-                            isItemOffline('question_generator', item.id)
-                              ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                              : 'bg-zinc-50 text-zinc-400 hover:text-purple-600 hover:bg-purple-50'
-                          }`}
-                          title={isItemOffline('question_generator', item.id) ? "Saved in app offline (Tap to remove)" : "Save inside app for offline access"}
-                        >
-                          {isItemOffline('question_generator', item.id) ? (
-                            <CheckCircle2 className="w-4 h-4" />
-                          ) : (
-                            <Download className="w-4 h-4" />
-                          )}
-                        </button>
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={(e) => deleteHistoryItem(item.id, e)}
-                          className="w-8 h-8 rounded-full bg-zinc-50 hover:bg-red-50 text-zinc-400 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer"
+                          className="w-8 h-8 rounded-full bg-zinc-50 hover:bg-red-50 text-zinc-400 hover:text-red-500 flex items-center justify-center transition-colors"
                           title="Delete practice set"
                         >
                           <Trash2 className="w-4 h-4" />

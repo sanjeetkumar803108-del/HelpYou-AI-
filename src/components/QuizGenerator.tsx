@@ -4,7 +4,7 @@ import {
   RotateCcw, HelpCircle, Coins, ChevronDown, ChevronUp,
   TrendingUp, Timer, Percent, Clipboard, Target, ListChecks, Calendar,
   UploadCloud, FileText, Mic, MicOff, Camera, Image, Sparkles,
-  Share2, Download, Copy, Check, X, Trash2
+  Share2, Download, Copy, Check, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -20,7 +20,6 @@ import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
 import AdvancedLoader from './AdvancedLoader';
-import { isItemOffline, toggleOfflineItem, getOfflineItems } from '../utils/offlineVault';
 import {
   ResponsiveContainer, 
   ComposedChart, 
@@ -918,37 +917,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const [, setOfflineTrigger] = useState(0);
-
-  useEffect(() => {
-    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
-    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
-    return () => window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
-  }, []);
-
-  const deleteQuizHistoryItem = async (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    triggerVibration(15);
-    try {
-      if (id && !id.startsWith('local_')) {
-        await deleteDoc(doc(db, 'quiz_results', id));
-      }
-      try {
-        const local = JSON.parse(safeGetItem('local_quiz_results') || '[]');
-        const filtered = local.filter((item: any) => item.id !== id);
-        safeSetItem('local_quiz_results', JSON.stringify(filtered));
-      } catch (err) {}
-      setHistory(prev => prev.filter(item => item.id !== id));
-      if (selectedHistoryItem?.id === id) {
-        setSelectedHistoryItem(null);
-      }
-    } catch (err) {
-      console.error("Failed to delete quiz history item:", err);
-    }
-  };
-
   const fetchHistory = async () => {
-    const offlineItems = getOfflineItems<any>('quiz');
     if (!auth.currentUser) {
       // If not logged in, load local storage items
       try {
@@ -957,17 +926,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
           ...item,
           createdAt: item.createdAt ? new Date(item.createdAt) : new Date()
         }));
-
-        for (const off of offlineItems) {
-          if (!parsed.some((p: any) => p.id === off.id)) {
-            parsed.push({ ...off, createdAt: new Date(off.createdAt) });
-          }
-        }
         
-        // Keep only last 20 records
-        if (parsed.length > 20) {
+        // Keep only last 10 records
+        if (parsed.length > 10) {
           parsed.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime()); // newest first
-          parsed = parsed.slice(0, 20);
+          parsed = parsed.slice(0, 10);
           safeSetItem('local_quiz_results', JSON.stringify(parsed));
           parsed.reverse(); // oldest first for display
         }
@@ -986,7 +949,8 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
     try {
       const q = query(
         collection(db, 'quiz_results'),
-        where('userId', '==', auth.currentUser.uid)
+        where('userId', '==', auth.currentUser.uid),
+        orderBy('createdAt', 'asc')
       );
       const querySnapshot = await getDocs(q);
       const items: any[] = [];
@@ -996,7 +960,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
           id: doc.id,
           ...data,
           // Convert firestore timestamp to Date
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date())
+          createdAt: data.createdAt?.toDate() || new Date()
         });
       });
       
@@ -1009,46 +973,58 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
         }));
       } catch (_) {}
 
-      let combined = [...localItems, ...items];
-      for (const off of offlineItems) {
-        if (!combined.some(c => c.id === off.id)) {
-          combined.push({ ...off, createdAt: new Date(off.createdAt) });
-        }
-      }
-
-      combined.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      let combined = [...localItems, ...items].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
       
-      // Keep only last 20 records
-      if (combined.length > 20) {
+      // Keep only last 10 records
+      if (combined.length > 10) {
         // Sort newest first
         combined.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        const toKeep = combined.slice(0, 20);
-        const toDelete = combined.slice(20);
+        const toKeep = combined.slice(0, 10);
+        const toDelete = combined.slice(10);
 
+        const remainingLocal: any[] = [];
         for (const item of toDelete) {
           if (item.id && !item.id.startsWith('local_')) {
             try {
               await deleteDoc(doc(db, 'quiz_results', item.id));
             } catch (err) {
-              console.error("Failed to prune old quiz result:", err);
+              console.error("Failed to delete old Firestore quiz:", err);
             }
           }
         }
 
-        const reSorted = toKeep.reverse();
-        setHistory(reSorted);
-        if (reSorted.length > 0 && !selectedHistoryItem) {
-          setSelectedHistoryItem(reSorted[reSorted.length - 1]);
+        for (const item of toKeep) {
+          if (item.id && item.id.startsWith('local_')) {
+            remainingLocal.push(item);
+          }
         }
-      } else {
-        setHistory(combined);
-        if (combined.length > 0 && !selectedHistoryItem) {
-          setSelectedHistoryItem(combined[combined.length - 1]);
-        }
+        safeSetItem('local_quiz_results', JSON.stringify(remainingLocal));
+        combined = toKeep.reverse(); // reverse to keep original ascending order for UI list
       }
-    } catch (err) {
-      console.error("Failed to fetch history from firestore, falling back to local:", err);
-      if (offlineItems.length > 0) setHistory(offlineItems);
+
+      setHistory(combined);
+      if (combined.length > 0) {
+        setSelectedHistoryItem(combined[combined.length - 1]);
+      }
+    } catch (err: any) {
+      console.error("Error fetching Firestore history: ", err);
+      try {
+        const localItems = JSON.parse(safeGetItem('local_quiz_results') || '[]');
+        let parsed = localItems.map((item: any) => ({
+          ...item,
+          createdAt: item.createdAt ? new Date(item.createdAt) : new Date()
+        }));
+        if (parsed.length > 10) {
+          parsed.sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
+          parsed = parsed.slice(0, 10);
+          safeSetItem('local_quiz_results', JSON.stringify(parsed));
+          parsed.reverse();
+        }
+        setHistory(parsed);
+        if (parsed.length > 0) {
+          setSelectedHistoryItem(parsed[parsed.length - 1]);
+        }
+      } catch (_) {}
     } finally {
       setLoadingHistory(false);
     }
@@ -2490,51 +2466,9 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                           </div>
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-zinc-500 font-bold">Status</span>
-                            <div className="flex items-center gap-1.5">
-                              {isItemOffline('quiz', activeQuiz.id) && (
-                                <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
-                                  <span>💾</span> Offline
-                                </span>
-                              )}
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                                activeQuiz.accuracy >= 80 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'
-                              }`}>{activeQuiz.accuracy >= 80 ? 'Mastered' : 'Reviewed'}</span>
-                            </div>
-                          </div>
-
-                          {/* ACTION BUTTONS FOR ATTEMPT */}
-                          <div className="flex items-center gap-2 pt-2">
-                            <button
-                              onClick={() => {
-                                toggleOfflineItem('quiz', activeQuiz.id, activeQuiz);
-                                setOfflineTrigger(prev => prev + 1);
-                              }}
-                              className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                                isItemOffline('quiz', activeQuiz.id)
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                                  : 'bg-zinc-50 text-zinc-700 border border-zinc-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'
-                              }`}
-                              title={isItemOffline('quiz', activeQuiz.id) ? "Saved in app offline (Tap to remove)" : "Save inside app for offline access"}
-                            >
-                              {isItemOffline('quiz', activeQuiz.id) ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Offline Saved</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Save Offline</span>
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => deleteQuizHistoryItem(activeQuiz.id)}
-                              className="p-2 rounded-xl bg-zinc-50 text-zinc-400 hover:text-red-500 hover:bg-red-50 border border-zinc-200 hover:border-red-200 transition-all active:scale-95 cursor-pointer"
-                              title="Delete Attempt"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                              activeQuiz.accuracy >= 80 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'
+                            }`}>{activeQuiz.accuracy >= 80 ? 'Mastered' : 'Reviewed'}</span>
                           </div>
                         </div>
                       </div>

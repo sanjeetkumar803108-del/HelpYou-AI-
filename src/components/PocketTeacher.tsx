@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Headphones, Play, Pause, Download, Lock, Volume2, Search, Book, Trash2, Smartphone } from 'lucide-react';
+import { ArrowLeft, Headphones, Play, Pause, Volume2, Search, Book, Trash2, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -457,16 +457,6 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
                 </h3>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                {downloadedAudios[item.id] ? (
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-full">Offline</span>
-                ) : (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); handleDownload(item); }}
-                    className="w-[42px] h-[42px] flex items-center justify-center text-zinc-700 hover:text-zinc-900 bg-zinc-100/80 hover:bg-zinc-200 rounded-full transition-colors border border-zinc-200/50"
-                  >
-                    {isVip ? <Download className="w-5 h-5" strokeWidth={1.5} /> : <Lock className="w-5 h-5 text-orange-500" />}
-                  </button>
-                )}
                 <button 
                   onClick={(e) => { 
                     e.stopPropagation(); 

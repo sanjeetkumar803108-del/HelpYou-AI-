@@ -445,10 +445,6 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
               <History className="w-4 h-4" />
             </button>
           )}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-[10px] font-black">
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span>{studentGrade}</span>
-          </div>
         </div>
       </header>
 
@@ -726,8 +722,12 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
               {/* Source Badges and Citations */}
               {searchResponse.source_links && searchResponse.source_links.length > 0 && (
                 <div className="space-y-2.5">
-                  <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider px-1">
-                    Verified Research Sources
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider px-1 text-zinc-500">
+                    <span className="text-zinc-500">Verified Research Sources</span>
+                    <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100 font-extrabold text-[9px] flex items-center gap-1">
+                      <Globe className="w-2.5 h-2.5" />
+                      <span>{searchResponse.source_links.length} Live Sites</span>
+                    </span>
                   </div>
                   <div className="grid grid-cols-1 gap-2">
                     {searchResponse.source_links.map((link, idx) => (

@@ -1688,12 +1688,11 @@ export default function Profile({
                         // Re-enable: reschedule notifications
                         const { setupDailyLocalNotifications } = await import('../utils/notifications');
                         await setupDailyLocalNotifications(false);
-                        showToast('🔔 Daily reminders turned ON');
+                        showToast('🔔 Daily study & homework reminders turned ON');
                       } else {
                         // Disable: cancel all scheduled notifications
-                        const { LocalNotifications } = await import('@capacitor/local-notifications');
-                        const cancelIds = Array.from({ length: 10 }, (_, i) => ({ id: 17001 + i }));
-                        await LocalNotifications.cancel({ notifications: cancelIds }).catch(() => {});
+                        const { cancelAllDailyNotifications } = await import('../utils/notifications');
+                        await cancelAllDailyNotifications();
                         showToast('🔕 Daily reminders turned OFF');
                       }
                     }}
@@ -1703,7 +1702,7 @@ export default function Profile({
                       <Bell className="w-3.5 h-3.5 text-zinc-400" />
                       <div>
                         <span className="text-xs font-bold text-zinc-700 block">Daily Reminders</span>
-                        <span className="text-[10px] text-zinc-400 font-semibold">Study notification at 4:00 PM</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">After-school & evening study alerts (5:00 PM & 7:30 PM)</span>
                       </div>
                     </div>
                     <div className={`w-9 h-5 ${notifEnabled ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>

@@ -12,6 +12,59 @@ import { triggerVibration } from '../utils/vibrate';
 import { Capacitor } from '@capacitor/core';
 import { pickNativeFiles } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
+
+// Persistent IndexedDB Audio Cache Helpers
+const computeTextHash = (text: string) => {
+  let hash = 0;
+  for (let i = 0; i < Math.min(text.length, 500); i++) {
+    hash = (hash << 5) - hash + text.charCodeAt(i);
+    hash |= 0;
+  }
+  return `${hash}_${text.length}`;
+};
+
+const saveAudioCache = async (id?: string | null, text?: string | null, audioDataUrl?: string | null) => {
+  if (!audioDataUrl) return;
+  try {
+    if (id) await idbSet(`audio_summary_${id}`, audioDataUrl);
+    if (text) {
+      const hash = computeTextHash(text);
+      await idbSet(`audio_summary_hash_${hash}`, audioDataUrl);
+    }
+  } catch (err) {
+    console.warn("Failed to cache audio in IndexedDB:", err);
+  }
+};
+
+const getAudioCache = async (id?: string | null, text?: string | null): Promise<string | null> => {
+  try {
+    if (id) {
+      const cached = await idbGet<string>(`audio_summary_${id}`);
+      if (cached) return cached;
+    }
+    if (text) {
+      const hash = computeTextHash(text);
+      const cached = await idbGet<string>(`audio_summary_hash_${hash}`);
+      if (cached) return cached;
+    }
+  } catch (err) {
+    console.warn("Failed to retrieve audio from IndexedDB:", err);
+  }
+  return null;
+};
+
+const deleteAudioCache = async (id: string, text?: string) => {
+  try {
+    if (id) await idbDel(`audio_summary_${id}`);
+    if (text) {
+      const hash = computeTextHash(text);
+      await idbDel(`audio_summary_hash_${hash}`);
+    }
+  } catch (err) {
+    console.warn("Failed to delete audio from IndexedDB:", err);
+  }
+};
 
 const AUDIO_STEPS = [
   { title: "Analyzing summary contents... 🧠", desc: "Reading and structuring major topics" },
@@ -220,20 +273,19 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     try {
       let items: any[] = [];
       if (auth.currentUser) {
+        // Query without composite index requirement
         const q = query(
           collection(db, 'pocket_items'),
-          where('userId', '==', auth.currentUser.uid),
-          orderBy('createdAt', 'desc')
+          where('userId', '==', auth.currentUser.uid)
         );
         const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          // Include note type where subType is 'audio'
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
           if (data.type === 'note' && data.subType === 'audio') {
             items.push({
-              id: doc.id,
+              id: docSnap.id,
               ...data,
-              createdAt: data.createdAt?.toDate() || new Date(),
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
             });
           }
         });
@@ -254,7 +306,21 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
 
       // Limit to 20 items to prevent bloat
       const finalItems = mergedItems.slice(0, 20);
-      setHistoryItems(finalItems);
+
+      // Pre-hydrate audioData from IndexedDB cache
+      const hydratedItems = await Promise.all(
+        finalItems.map(async (item) => {
+          if (!item.audioData) {
+            const cached = await getAudioCache(item.id, item.text);
+            if (cached) {
+              return { ...item, audioData: cached };
+            }
+          }
+          return item;
+        })
+      );
+
+      setHistoryItems(hydratedItems);
     } catch (e) {
       console.error("Failed to load history, falling back to local:", e);
       setHistoryItems(getLocalItems());
@@ -267,6 +333,9 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     e.stopPropagation();
     triggerVibration(15);
     try {
+      const targetItem = historyItems.find(item => item.id === id);
+      await deleteAudioCache(id, targetItem?.text);
+
       if (id.startsWith('local_')) {
         const raw = localStorage.getItem('notemaker_local_history');
         if (raw) {
@@ -457,32 +526,39 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
             });
             if (!ttsResponse.ok) throw new Error("TTS failed with status " + ttsResponse.status);
             const ttsData = await ttsResponse.json();
-            if (ttsData.audio) {
-              const fetchedAudio = ttsData.audio.startsWith('data:')
-                ? ttsData.audio
-                : `data:audio/wav;base64,${ttsData.audio}`;
-              setAudioData(fetchedAudio);
+              if (ttsData.audio) {
+                const fetchedAudio = ttsData.audio.startsWith('data:')
+                  ? ttsData.audio
+                  : `data:audio/wav;base64,${ttsData.audio}`;
+                setAudioData(fetchedAudio);
+                setIsSpeechFallback(false);
 
-              // Update local storage
-              try {
-                const raw = localStorage.getItem('notemaker_local_history');
-                if (raw) {
-                  const parsed = JSON.parse(raw);
-                  localStorage.setItem('notemaker_local_history', JSON.stringify(
-                    parsed.map((item: any) => item.id === localId ? { ...item, audioData: fetchedAudio } : item)
-                  ));
+                // Save to persistent IndexedDB audio cache immediately
+                await saveAudioCache(localId, data.text, fetchedAudio);
+                if (firebaseDocId) {
+                  await saveAudioCache(firebaseDocId, data.text, fetchedAudio);
                 }
-              } catch (_) {}
 
-              // Update Firebase
-              if (firebaseDocId) {
+                // Update local storage
                 try {
-                  await updateDoc(doc(db, 'pocket_items', firebaseDocId), { audioData: fetchedAudio });
+                  const raw = localStorage.getItem('notemaker_local_history');
+                  if (raw) {
+                    const parsed = JSON.parse(raw);
+                    localStorage.setItem('notemaker_local_history', JSON.stringify(
+                      parsed.map((item: any) => item.id === localId ? { ...item, audioData: fetchedAudio } : item)
+                    ));
+                  }
                 } catch (_) {}
+
+                // Update Firebase
+                if (firebaseDocId) {
+                  try {
+                    await updateDoc(doc(db, 'pocket_items', firebaseDocId), { audioData: fetchedAudio });
+                  } catch (_) {}
+                }
+              } else {
+                setIsSpeechFallback(true);
               }
-            } else {
-              setIsSpeechFallback(true);
-            }
           } catch (ttsErr) {
             console.warn("Background TTS generation notice:", ttsErr);
             setIsSpeechFallback(true);
@@ -583,8 +659,23 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     if (!result) return;
     triggerVibration(10);
 
-    // On native Android/iOS, speechSynthesis is NOT supported in WebView.
-    // Instead, re-call the /api/tts endpoint and play audio via HTML audio element.
+    // 1. Check if audio is already cached in persistent IndexedDB!
+    const cached = await getAudioCache(currentSavedId, result);
+    if (cached) {
+      setAudioData(cached);
+      setIsSpeechFallback(false);
+      setIsGeneratingAudio(false);
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.play()
+            .then(() => setIsPlaying(true))
+            .catch(e => console.error('Audio play error:', e));
+        }
+      }, 150);
+      return;
+    }
+
+    // 2. On native Android/iOS, if not cached yet, generate via TTS and cache it
     if (Capacitor.isNativePlatform()) {
       setIsGeneratingAudio(true);
       try {
@@ -609,6 +700,10 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
             : `data:audio/wav;base64,${ttsData.audio}`;
           setAudioData(audioDataUrl);
           setIsSpeechFallback(false);
+
+          // Save to IndexedDB so it never needs to generate again!
+          await saveAudioCache(currentSavedId, result, audioDataUrl);
+
           // Auto-play once audioRef updates
           setTimeout(() => {
             if (audioRef.current) {
@@ -616,7 +711,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                 .then(() => setIsPlaying(true))
                 .catch(e => console.error('Audio play error:', e));
             }
-          }, 600);
+          }, 300);
         } else {
           throw new Error('No audio field in TTS response');
         }
@@ -785,15 +880,24 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                 {historyItems.map((item) => (
                   <div
                     key={item.id}
-                    onClick={() => {
+                    onClick={async () => {
                       triggerVibration(15);
                       setResult(item.text);
-                      setAudioData(item.audioData || null);
-                      setIsSpeechFallback(!item.audioData);
                       setCurrentSavedId(item.id);
                       setSaved(true);
                       setStep('result');
                       setShowHistory(false);
+
+                      // Check persistent IndexedDB cache for instant direct playback!
+                      const cachedAudio = (await getAudioCache(item.id, item.text)) || item.audioData || null;
+                      if (cachedAudio) {
+                        setAudioData(cachedAudio);
+                        setIsSpeechFallback(false);
+                        setIsGeneratingAudio(false);
+                      } else {
+                        setAudioData(null);
+                        setIsSpeechFallback(true);
+                      }
                     }}
                     className="bg-white border border-zinc-200/80 hover:border-indigo-300 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer flex justify-between items-start group"
                   >

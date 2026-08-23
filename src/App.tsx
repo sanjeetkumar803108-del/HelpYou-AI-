@@ -779,6 +779,15 @@ export default function App() {
     };
   }, [activeTool, activeTab, showLoginModal, showProfileModal, showVipModal, showPaywallModal, showIapModal, showAcademicSetup]);
 
+  useEffect(() => {
+    const handleNavToHome = () => {
+      setActiveTab('notes');
+      setActiveTool(null);
+    };
+    window.addEventListener('navigate-to-home', handleNavToHome);
+    return () => window.removeEventListener('navigate-to-home', handleNavToHome);
+  }, []);
+
   const handleOpenVipFromDashboard = useCallback(() => {
     setShowVipModal(true);
   }, []);

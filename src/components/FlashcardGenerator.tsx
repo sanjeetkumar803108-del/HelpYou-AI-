@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Layers, Loader2, ArrowLeft, Save, ChevronRight, ChevronLeft, Copy, Check, Shuffle, History, Trash2, Calendar } from 'lucide-react';
+import { Layers, Loader2, ArrowLeft, Save, ChevronRight, ChevronLeft, Copy, Check, Shuffle, History, Trash2, Calendar, Download, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { deductCoins, getCoins } from '../utils/coins';
+import { isItemOffline, toggleOfflineItem, getOfflineItems } from '../utils/offlineVault';
 
 interface Flashcard {
   question: string;
@@ -109,15 +110,25 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   }, [loading, flashcards]);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [, setOfflineTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
+    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
+    return () => window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
+  }, []);
 
   const fetchHistory = async () => {
-    if (!auth.currentUser) return;
+    const offline = getOfflineItems('flashcards');
+    if (!auth.currentUser) {
+      if (offline.length > 0) setHistoryItems(offline);
+      return;
+    }
     setLoadingHistory(true);
     try {
       const q = query(
         collection(db, 'pocket_items'),
-        where('userId', '==', auth.currentUser.uid),
-        orderBy('createdAt', 'desc')
+        where('userId', '==', auth.currentUser.uid)
       );
       const querySnapshot = await getDocs(q);
       const items: any[] = [];
@@ -130,29 +141,41 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
           items.push({
             id: doc.id,
             ...data,
-            createdAt: data.createdAt?.toDate() || new Date()
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date())
           });
         }
       });
 
-      // Keep only last 10 records, delete older ones
-      if (items.length > 10) {
-        const toKeep = items.slice(0, 10);
-        const toDelete = items.slice(10);
+      const merged = [...items];
+      for (const off of offline) {
+        if (!merged.some(m => m.id === off.id)) {
+          merged.push(off);
+        }
+      }
+
+      merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Keep only last 20 records
+      if (merged.length > 20) {
+        const toKeep = merged.slice(0, 20);
+        const toDelete = merged.slice(20);
         
         for (const item of toDelete) {
-          try {
-            await deleteDoc(doc(db, 'pocket_items', item.id));
-          } catch (err) {
-            console.error("Failed to delete old flashcard item:", err);
+          if (!item.id.startsWith('local_')) {
+            try {
+              await deleteDoc(doc(db, 'pocket_items', item.id));
+            } catch (err) {
+              console.error("Failed to delete old flashcard item:", err);
+            }
           }
         }
         setHistoryItems(toKeep);
       } else {
-        setHistoryItems(items);
+        setHistoryItems(merged);
       }
     } catch (e) {
       console.error("Failed to load history:", e);
+      if (offline.length > 0) setHistoryItems(offline);
     } finally {
       setLoadingHistory(false);
     }
@@ -536,19 +559,46 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                         <Calendar className="w-3 h-3 text-zinc-400" />
                         {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
                         <span className="text-[10px] bg-pink-50 text-pink-700 border border-pink-100 font-black px-2.5 py-0.5 rounded-full">
                           {deck.length} Cards
                         </span>
+                        {isItemOffline('flashcards', item.id) && (
+                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
+                            <span>💾</span> Offline Ready
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <button
-                      onClick={(e) => deleteHistoryItem(item.id, e)}
-                      className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleOfflineItem('flashcards', item.id, item);
+                          setOfflineTrigger(prev => prev + 1);
+                        }}
+                        className={`p-2 rounded-xl transition-all active:scale-95 cursor-pointer ${
+                          isItemOffline('flashcards', item.id)
+                            ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+                            : 'text-zinc-400 hover:text-pink-600 hover:bg-pink-50'
+                        }`}
+                        title={isItemOffline('flashcards', item.id) ? "Saved in app offline (Tap to remove)" : "Save inside app for offline access"}
+                      >
+                        {isItemOffline('flashcards', item.id) ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => deleteHistoryItem(item.id, e)}
+                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95 cursor-pointer"
+                        title="Delete Flashcard Deck"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

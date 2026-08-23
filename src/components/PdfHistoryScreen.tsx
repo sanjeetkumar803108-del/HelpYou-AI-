@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, FileText, Trash2, Download, Eye, Calendar, Sparkles, 
-  Search, HardDrive, RefreshCw, X, Share2, Layers
+  Search, HardDrive, RefreshCw, X, Share2, Layers, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -16,6 +16,7 @@ import { Capacitor } from '@capacitor/core';
 import SafePdfViewer from './SafePdfViewer';
 import { auth, db } from '../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { isItemOffline, toggleOfflineItem } from '../utils/offlineVault';
 
 interface PdfHistoryScreenProps {
   onBack: () => void;
@@ -31,6 +32,13 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
   // Custom dialog state for safe delete/clear on mobile WebViews & iframes
   const [pdfToDelete, setPdfToDelete] = useState<PdfHistoryItem | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [, setOfflineTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleOfflineUpdate = () => setOfflineTrigger(prev => prev + 1);
+    window.addEventListener('offline-vault-updated', handleOfflineUpdate);
+    return () => window.removeEventListener('offline-vault-updated', handleOfflineUpdate);
+  }, []);
 
   useEffect(() => {
     const handleBackButton = (e: Event) => {
@@ -405,12 +413,36 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
                           })}
                         </span>
                         {item.fileSize && <span>• {item.fileSize}</span>}
+                        {isItemOffline('pdf_history', item.id) && (
+                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wide flex items-center gap-0.5">
+                            <span>💾</span> Offline Ready
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {/* ACTIONS */}
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleOfflineItem('pdf_history', item.id, item);
+                        setOfflineTrigger(prev => prev + 1);
+                      }}
+                      title={isItemOffline('pdf_history', item.id) ? "Saved in app offline (Tap to remove)" : "Save inside app for offline access"}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
+                        isItemOffline('pdf_history', item.id)
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                          : 'bg-zinc-50 hover:bg-rose-50 text-zinc-500 hover:text-rose-600 border border-zinc-200/80'
+                      }`}
+                    >
+                      {isItemOffline('pdf_history', item.id) ? (
+                        <CheckCircle2 className="w-4 h-4" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                    </button>
                     <button
                       onClick={(e) => handleSharePdf(item, e)}
                       title="Share PDF"

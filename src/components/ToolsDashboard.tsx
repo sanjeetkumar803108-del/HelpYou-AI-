@@ -468,17 +468,6 @@ function ToolsDashboard({
 
         {/* Top-Right Area */}
         <div className="flex items-center gap-2">
-          <button 
-            onClick={() => {
-              triggerVibration(12);
-              window.dispatchEvent(new CustomEvent('open-app-visual-guide'));
-            }}
-            className="w-10 h-10 rounded-full flex items-center justify-center bg-white hover:bg-zinc-50 transition-all border border-zinc-200 shadow-sm active:scale-95 text-amber-500 cursor-pointer"
-            title="App Visual Guide Tour"
-          >
-            <Sparkles className="w-4 h-4 fill-amber-400 text-amber-500" />
-          </button>
-
           {!isVip && (
             <button 
               onClick={() => {

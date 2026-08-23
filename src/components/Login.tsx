@@ -73,8 +73,11 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMessage, setForgotMessage] = useState<string | null>(null);
   const [forgotError, setForgotError] = useState<string | null>(null);
+  const isRoutingRef = React.useRef(false);
 
   const routeUserAfterAuth = async (currentUser: User) => {
+    if (isRoutingRef.current) return;
+    isRoutingRef.current = true;
     try {
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
@@ -83,7 +86,9 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         const isComplete = userData?.isOnboardingComplete === true || 
                            userData?.isOnboardingCompleted === true ||
                            Boolean(userData?.grade && userData?.stream && userData?.country) ||
-                           Boolean(userData?.academic_grade && userData?.academic_stream && userData?.academic_country);
+                           Boolean(userData?.academic_grade && userData?.academic_stream && userData?.academic_country) ||
+                           safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true' ||
+                           safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
 
         if (isComplete) {
           // Returning user: Skip onboarding and route directly to MainApp / HomeTabs
@@ -107,8 +112,17 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     } catch (err) {
       console.warn('[Login Route Check] Error checking user onboarding doc:', err);
     }
-    // New user or incomplete onboarding
-    onLoginSuccess('onboarding');
+
+    // Fallback: Check local storage
+    const userOnboardingCompleted = safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true';
+    const userSetupCompleted = safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true';
+    if (userSetupCompleted) {
+      onLoginSuccess('main');
+    } else if (userOnboardingCompleted) {
+      onLoginSuccess('setup');
+    } else {
+      onLoginSuccess('onboarding');
+    }
     onClose();
   };
 
@@ -278,40 +292,46 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     const googleLoadingTimer = setTimeout(() => {
       setLoading(false);
     }, 15000);
+
     try {
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
       const userCredential = await signInWithPopup(auth, googleProvider);
       const loggedUser = userCredential.user;
+
+      if (!loggedUser) {
+        throw new Error('Google Sign-In did not return a valid user.');
+      }
       
-      // Check if user document already exists in Firestore
-      const userDocRef = doc(db, 'users', loggedUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      
-      if (!userDocSnap.exists()) {
-        // This is a completely new user signing up via Google! Check lifetime free coins limit first
-        const emailKey = (loggedUser.email || '').toLowerCase();
-        let initialCoins = 20;
-        if (emailKey) {
-          const emailDocRef = doc(db, 'allocated_emails', emailKey);
-          const emailDocSnap = await getDoc(emailDocRef);
-          if (emailDocSnap.exists()) {
-            initialCoins = 0;
-            console.log(`[Google Signup Check] Email ${loggedUser.email} already has allocated coins. Setting initial to 0.`);
-          } else {
-            await setDoc(emailDocRef, {
-              allocated: true,
-              allocatedAt: new Date().toISOString(),
-              userId: loggedUser.uid
-            });
-            console.log(`[Google Signup Check] Email ${loggedUser.email} allocated lifetime 20 coins.`);
+      // Check if user document already exists in Firestore non-blockingly
+      try {
+        const userDocRef = doc(db, 'users', loggedUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (!userDocSnap.exists()) {
+          const emailKey = (loggedUser.email || '').toLowerCase();
+          let initialCoins = 20;
+          if (emailKey) {
+            try {
+              const emailDocRef = doc(db, 'allocated_emails', emailKey);
+              const emailDocSnap = await getDoc(emailDocRef);
+              if (emailDocSnap.exists()) {
+                initialCoins = 0;
+              } else {
+                await setDoc(emailDocRef, {
+                  allocated: true,
+                  allocatedAt: new Date().toISOString(),
+                  userId: loggedUser.uid
+                });
+              }
+            } catch (allocErr) {
+              console.warn('[Google Auth] Allocated email check notice:', allocErr);
+            }
           }
-        }
 
-        const userKey = `study_daily_limit_${loggedUser.uid}`;
-        safeSetItem(userKey, String(initialCoins));
-        // Dispatch global update event to keep the UI in sync
-        window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
+          const userKey = `study_daily_limit_${loggedUser.uid}`;
+          safeSetItem(userKey, String(initialCoins));
+          window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
 
-        try {
           await setDoc(userDocRef, {
             userId: loggedUser.uid,
             email: loggedUser.email || '',
@@ -319,28 +339,29 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
             isPro: false,
             createdAt: new Date().toISOString()
           });
-          console.log(`[Google Signup] Default user object initialized with ${initialCoins} coins in Firestore for ${loggedUser.uid}`);
-        } catch (dbErr) {
-          console.error("Failed to write initial Google user profile to Firestore:", dbErr);
+        } else {
+          const data = userDocSnap.data();
+          if (data && typeof data.coins === 'number') {
+            const userKey = `study_daily_limit_${loggedUser.uid}`;
+            safeSetItem(userKey, String(data.coins));
+            window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: data.coins }));
+          }
         }
-      } else {
-        // Sync local coins state with whatever is stored in the user profile if it exists
-        const data = userDocSnap.data();
-        if (data && typeof data.coins === 'number') {
-          const userKey = `study_daily_limit_${loggedUser.uid}`;
-          safeSetItem(userKey, String(data.coins));
-          window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: data.coins }));
-        }
+      } catch (dbErr) {
+        console.warn('[Google Auth] Firestore user profile sync notice:', dbErr);
       }
+
       await routeUserAfterAuth(loggedUser);
     } catch (err: any) {
       console.warn('[Google Auth Error]', err?.code, err?.message);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setError('Google Sign-In was cancelled.');
       } else if (err.code === 'auth/popup-blocked') {
-        setError('Popup blocked by browser. Please allow popups or use Email sign in.');
+        setError('Popup blocked by browser. Please allow popups or use Email Sign In.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('Domain not authorized. Please use Email Sign In or check Firebase authorized domains.');
       } else {
-        setError(err.message || 'Google Sign-In failed. Please try again.');
+        setError(err.message || 'Google Sign-In failed. Please try again or use Email Sign In.');
       }
     } finally {
       clearTimeout(googleLoadingTimer);

@@ -22,7 +22,7 @@ interface AuthGuardProps {
 /**
  * Isolated Auth & Onboarding Stack Guard.
  * Renders Welcome (Onboarding), Sign-In (Login), and Country/Grade/Stream (AcademicSetup)
- * in an isolated full-screen view (headerShown: false), completely preventing header peeking.
+ * in an isolated full-screen view (headerShown: false), completely preventing white screens and header peeking.
  */
 export default function AuthGuard({
   user,
@@ -36,10 +36,12 @@ export default function AuthGuard({
   children,
   fallbackSkeleton,
 }: AuthGuardProps) {
+  const containerClass = `w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-[#FAF9F6] text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`;
+
   // 1. Splash Screen
   if (showSplash) {
     return (
-      <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-white text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`}>
+      <div className={containerClass}>
         <SplashScreen />
       </div>
     );
@@ -48,7 +50,7 @@ export default function AuthGuard({
   // 2. Auth Loading Skeleton
   if (authLoading) {
     return (
-      <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-white text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`}>
+      <div className={containerClass}>
         {fallbackSkeleton}
       </div>
     );
@@ -57,14 +59,16 @@ export default function AuthGuard({
   // 3. Isolated Onboarding Stack (Welcome Screen) - Full-screen, no header
   if (showOnboarding) {
     return (
-      <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-white text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`}>
+      <div className={containerClass}>
         <ErrorBoundary>
-          <Onboarding 
-            onComplete={() => {
-              setShowOnboarding(false);
-              setShowAcademicSetup(true);
-            }} 
-          />
+          <Suspense fallback={fallbackSkeleton}>
+            <Onboarding 
+              onComplete={() => {
+                setShowOnboarding(false);
+                setShowAcademicSetup(true);
+              }} 
+            />
+          </Suspense>
         </ErrorBoundary>
       </div>
     );
@@ -73,7 +77,7 @@ export default function AuthGuard({
   // 4. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
   if (!user) {
     return (
-      <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-white text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`}>
+      <div className={containerClass}>
         <ErrorBoundary>
           <Suspense fallback={fallbackSkeleton}>
             <Login 
@@ -101,15 +105,17 @@ export default function AuthGuard({
   // 5. Isolated Onboarding Academic Setup Stack (Country, Grade, Stream Screens) - Full-screen, no header
   if (showAcademicSetup) {
     return (
-      <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-white text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`}>
+      <div className={containerClass}>
         <ErrorBoundary>
-          <AcademicSetup 
-            userId={user.uid}
-            onComplete={() => {
-              setShowAcademicSetup(false);
-              setShowOnboarding(false);
-            }} 
-          />
+          <Suspense fallback={fallbackSkeleton}>
+            <AcademicSetup 
+              userId={user?.uid || ''}
+              onComplete={() => {
+                setShowAcademicSetup(false);
+                setShowOnboarding(false);
+              }} 
+            />
+          </Suspense>
         </ErrorBoundary>
       </div>
     );
@@ -118,3 +124,4 @@ export default function AuthGuard({
   // 6. Main App Stack (Home Tabs)
   return <ErrorBoundary>{children}</ErrorBoundary>;
 }
+

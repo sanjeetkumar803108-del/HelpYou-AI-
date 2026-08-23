@@ -74,6 +74,7 @@ const PaywallModal = lazyWithRetry(() => import('./components/PaywallModal'));
 // const IAPModal = lazyWithRetry(() => import('./components/IAPModal'));
 const Onboarding = lazyWithRetry(() => import('./components/Onboarding'));
 import SplashScreen from './components/SplashScreen';
+import AppVisualGuide from './components/AppVisualGuide';
 import AuthGuard from './components/AuthGuard';
 import ErrorBoundary from './components/ErrorBoundary';
 import ToastProvider from './components/ToastProvider';
@@ -248,6 +249,7 @@ export default function App() {
   const [showAcademicSetup, setShowAcademicSetup] = useState(false);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [showIapModal, setShowIapModal] = useState(false);
+  const [showVisualGuide, setShowVisualGuide] = useState(false);
   const [iapCycle, setIapCycle] = useState<'monthly' | 'yearly'>('yearly');
   const [iapHasTrial, setIapHasTrial] = useState(true);
   const [paywallFeature, setPaywallFeature] = useState<string | undefined>(undefined);
@@ -294,6 +296,10 @@ export default function App() {
       console.log('Received open-profile-modal event');
       setActiveTab('profile');
     };
+    const handleOpenVisualGuide = () => {
+      console.log('Received open-app-visual-guide event');
+      setShowVisualGuide(true);
+    };
     const handleShowMobileToast = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail && customEvent.detail.message) {
@@ -325,6 +331,7 @@ export default function App() {
     window.addEventListener('open-vip-modal', handleOpenVip);
     window.addEventListener('open-login-modal', handleOpenLogin);
     window.addEventListener('open-profile-modal', handleOpenProfile);
+    window.addEventListener('open-app-visual-guide', handleOpenVisualGuide);
     window.addEventListener('show-mobile-toast', handleShowMobileToast);
     window.addEventListener('open-paywall-modal', handleOpenPaywall);
     window.addEventListener('open-iap-modal', handleOpenIap);
@@ -333,12 +340,26 @@ export default function App() {
       window.removeEventListener('open-vip-modal', handleOpenVip);
       window.removeEventListener('open-login-modal', handleOpenLogin);
       window.removeEventListener('open-profile-modal', handleOpenProfile);
+      window.removeEventListener('open-app-visual-guide', handleOpenVisualGuide);
       window.removeEventListener('show-mobile-toast', handleShowMobileToast);
       window.removeEventListener('open-paywall-modal', handleOpenPaywall);
       window.removeEventListener('open-iap-modal', handleOpenIap);
       window.removeEventListener('study-vip-updated', handleVipUpdated);
     };
   }, []);
+
+  // Automatic first-time user tour trigger
+  useEffect(() => {
+    if (!showSplash && !showOnboarding && !showAcademicSetup && !showLoginModal) {
+      const hasCompletedTour = safeGetItem('app_visual_guide_completed_v1') === 'true';
+      if (!hasCompletedTour) {
+        const timer = setTimeout(() => {
+          setShowVisualGuide(true);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [showSplash, showOnboarding, showAcademicSetup, showLoginModal]);
 
   useEffect(() => {
     if (mobileToast) {
@@ -1241,6 +1262,16 @@ export default function App() {
           }}
         />
       </Suspense>
+
+      <AppVisualGuide 
+        isOpen={showVisualGuide} 
+        onClose={() => setShowVisualGuide(false)} 
+        onNavigateTab={(tab) => {
+          setActiveTab(tab);
+          setActiveTool(null);
+        }}
+        onSelectTool={(tool) => setActiveTool(tool)}
+      />
       </div>
       </AuthGuard>
     </>

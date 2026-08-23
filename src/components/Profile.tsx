@@ -1733,6 +1733,28 @@ export default function Profile({
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${hapticEnabled ? 'right-0.5' : 'left-0.5'}`} />
                     </div>
                   </div>
+
+                  {/* App Visual Guide Walkthrough */}
+                  <div
+                    onClick={() => {
+                      triggerVibration(15);
+                      setShowSettings(false);
+                      onClose();
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('open-app-visual-guide'));
+                      }, 250);
+                    }}
+                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <div>
+                        <span className="text-xs font-bold text-zinc-700 block">App Visual Guide</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Interactive feature tour with spotlight</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-zinc-400" />
+                  </div>
                 </div>
 
 

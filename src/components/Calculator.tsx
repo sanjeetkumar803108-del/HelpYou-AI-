@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, ArrowLeft, Mic, BookOpen, Calculator as CalcIcon, X, ChevronDown, ChevronRight, Download, FileText, Check } from 'lucide-react';
+import { Sparkles, ArrowLeft, Mic, BookOpen, Calculator as CalcIcon, X, ChevronDown, ChevronRight, Download, FileText, Check, History, Clock, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import katex from 'katex';
 import { triggerVibration } from '../utils/vibrate';
@@ -504,6 +504,15 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
   const [trigMode, setTrigMode] = useState<'deg' | 'rad'>('deg');
   const [showUnitCircle, setShowUnitCircle] = useState(false);
   const [showFormulas, setShowFormulas] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [calcHistory, setCalcHistory] = useState<{ id: string; expr: string; res: string; timestamp: number }[]>(() => {
+    try {
+      const stored = localStorage.getItem('calc_history_tape_v1');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [expandedFormulaCategory, setExpandedFormulaCategory] = useState<string | null>('Algebra & Polynomials');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
@@ -762,6 +771,19 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                 : String(Number(evalResult.toFixed(6)));
               localCalculatedResult = formattedResult;
               setResult(localCalculatedResult);
+
+              // Record in persistent history tape
+              const newEntry = {
+                id: Date.now().toString(),
+                expr: expression,
+                res: formattedResult,
+                timestamp: Date.now()
+              };
+              setCalcHistory(prev => {
+                const updated = [newEntry, ...prev.filter(h => h.expr !== expression)].slice(0, 20);
+                try { localStorage.setItem('calc_history_tape_v1', JSON.stringify(updated)); } catch {}
+                return updated;
+              });
             }
           }
         } catch (err) {
@@ -822,16 +844,34 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
         <h1 className="text-lg font-black tracking-tight text-zinc-800 flex items-center gap-1.5">
           <CalcIcon className="w-5 h-5 text-indigo-600 animate-pulse" /> AI Math Solver
         </h1>
-        <button
-          onClick={() => {
-            triggerVibration(15);
-            setShowFormulas(true);
-          }}
-          className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-950 transition-colors"
-          title="Quick Formulas"
-        >
-          <BookOpen className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* History Tape Button */}
+          <button
+            onClick={() => {
+              triggerVibration(15);
+              setShowHistory(true);
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-950 transition-colors relative cursor-pointer"
+            title="Calculation History"
+          >
+            <History className="w-5 h-5" />
+            {calcHistory.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-600 ring-2 ring-white" />
+            )}
+          </button>
+
+          {/* Quick Formulas Button */}
+          <button
+            onClick={() => {
+              triggerVibration(15);
+              setShowFormulas(true);
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-950 transition-colors cursor-pointer"
+            title="Quick Formulas"
+          >
+            <BookOpen className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 p-6 flex flex-col gap-6 max-w-md mx-auto w-full">
@@ -1204,6 +1244,100 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Calculation History Slide-over Drawer */}
+      <AnimatePresence>
+        {showHistory && (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+            <div className="absolute inset-0 bg-transparent" onClick={() => setShowHistory(false)} />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-sm h-full bg-[#FAF9F6] border-l border-zinc-200 flex flex-col shadow-2xl z-10 overflow-hidden"
+            >
+              <header className="px-6 py-5 bg-white border-b border-zinc-200/60 flex justify-between items-center shrink-0">
+                <h3 className="text-sm font-black text-zinc-800 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-indigo-600" /> Calculation History
+                </h3>
+                <div className="flex items-center gap-2">
+                  {calcHistory.length > 0 && (
+                    <button
+                      onClick={() => {
+                        triggerVibration(15);
+                        setCalcHistory([]);
+                        try { localStorage.removeItem('calc_history_tape_v1'); } catch {}
+                      }}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      title="Clear History"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowHistory(false)}
+                    className="p-1 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </header>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                {calcHistory.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-400">
+                    <Clock className="w-12 h-12 text-zinc-300 stroke-1 mb-2" />
+                    <p className="text-xs font-bold text-zinc-500">No calculations yet</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Your solved equations will appear here</p>
+                  </div>
+                ) : (
+                  calcHistory.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-2xl p-3.5 border border-zinc-200 shadow-xs hover:border-indigo-300 transition-all flex flex-col gap-1.5 group"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold truncate">
+                        <span className="truncate pr-2">{item.expr}</span>
+                        <span className="text-[9px] text-zinc-400 font-normal shrink-0">
+                          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-base font-black text-indigo-600 tracking-tight truncate">
+                          = {item.res}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => {
+                              triggerVibration(10);
+                              setExpression(item.expr);
+                              setShowHistory(false);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-indigo-50 text-[9px] font-extrabold text-zinc-600 hover:text-indigo-600 transition-colors cursor-pointer"
+                          >
+                            Reuse
+                          </button>
+                          <button
+                            onClick={() => {
+                              triggerVibration(10);
+                              setExpression(prev => prev + item.res);
+                              setShowHistory(false);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-[9px] font-extrabold text-indigo-600 transition-colors cursor-pointer"
+                          >
+                            Use Ans
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

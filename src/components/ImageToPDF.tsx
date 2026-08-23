@@ -624,29 +624,42 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
 
           {/* Quality Compression Toggle */}
           <div className="w-full">
-            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">PDF Output Quality</label>
-            <div className="grid grid-cols-2 bg-zinc-100 p-1 rounded-xl border border-zinc-200/50">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">PDF File Size & Quality</label>
+              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                Est. ~{(images.length * (quality === 'standard' ? 0.35 : 1.2)).toFixed(1)} MB
+              </span>
+            </div>
+            <div className="grid grid-cols-2 bg-zinc-100 p-1 rounded-2xl border border-zinc-200/60 gap-1">
               <button
                 type="button"
-                onClick={() => setQuality('standard')}
-                className={`py-2 text-xs font-extrabold rounded-lg transition-all cursor-pointer ${
+                onClick={() => {
+                  triggerVibration(10);
+                  setQuality('standard');
+                }}
+                className={`py-2 px-3 text-xs font-black rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center ${
                   quality === 'standard'
-                    ? 'bg-white text-blue-600 shadow-sm border border-zinc-200/30'
+                    ? 'bg-white text-blue-600 shadow-sm border border-zinc-200/50'
                     : 'text-zinc-500 hover:text-zinc-800'
                 }`}
               >
-                Standard (Fast Upload)
+                <span>⚡ Compact Size</span>
+                <span className="text-[8px] font-bold text-zinc-400">Fast WhatsApp Share</span>
               </button>
               <button
                 type="button"
-                onClick={() => setQuality('high')}
-                className={`py-2 text-xs font-extrabold rounded-lg transition-all cursor-pointer ${
+                onClick={() => {
+                  triggerVibration(10);
+                  setQuality('high');
+                }}
+                className={`py-2 px-3 text-xs font-black rounded-xl transition-all cursor-pointer flex flex-col items-center justify-center ${
                   quality === 'high'
-                    ? 'bg-white text-blue-600 shadow-sm border border-zinc-200/30'
+                    ? 'bg-white text-blue-600 shadow-sm border border-zinc-200/50'
                     : 'text-zinc-500 hover:text-zinc-800'
                 }`}
               >
-                High (Print)
+                <span>💎 High Quality</span>
+                <span className="text-[8px] font-bold text-zinc-400">Crystal Print</span>
               </button>
             </div>
           </div>

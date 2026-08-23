@@ -298,9 +298,14 @@ function ToolsDashboard({
   const handleEndPress = (e: any, onClick: () => void) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (touchStartPos.current && !isLongPressActive.current) {
+      if (e.cancelable && e.type === 'touchend') {
+        e.preventDefault();
+      }
       onClick();
     } else if (isLongPressActive.current) {
-      e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
       e.stopPropagation();
     }
     touchStartPos.current = null;

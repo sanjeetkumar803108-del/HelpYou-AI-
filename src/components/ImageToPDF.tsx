@@ -32,6 +32,11 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   const [pdfFileName, setPdfFileName] = useState<string>('');
   const [showPreviewPage, setShowPreviewPage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mountTimeRef = useRef<number>(Date.now());
+
+  React.useEffect(() => {
+    mountTimeRef.current = Date.now();
+  }, []);
 
   React.useEffect(() => {
     const handleBackButton = (e: Event) => {
@@ -72,7 +77,14 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   const [touchDraggingIndex, setTouchDraggingIndex] = useState<number | null>(null);
   const longPressTimeout = useRef<any>(null);
 
-  const handlePickImages = async () => {
+  const handlePickImages = async (e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    // Prevent synthetic ghost click from previous screen tap
+    if (Date.now() - mountTimeRef.current < 450) {
+      return;
+    }
     triggerVibration(10);
     if (Capacitor.isNativePlatform()) {
       const picked = await pickNativeFiles({ types: 'image', multiple: true });
@@ -493,19 +505,23 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-6 z-10 relative">
         {images.length === 0 ? (
           <div 
-            onClick={handlePickImages}
-            className="flex flex-col items-center justify-center min-h-[260px] p-6 bg-white border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-[2rem] hover:bg-blue-50/20 transition-all cursor-pointer shadow-sm text-center group"
+            className="flex flex-col items-center justify-center min-h-[300px] p-6 bg-white border-2 border-dashed border-blue-200 rounded-[2rem] shadow-sm text-center"
           >
-            <div className="w-16 h-16 bg-blue-50 group-hover:bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4 border border-blue-100 shadow-xs transition-all">
-              <Upload className="w-8 h-8 group-hover:scale-110 transition-transform" />
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 border border-blue-100 shadow-xs">
+              <Upload className="w-8 h-8" />
             </div>
-            <p className="text-zinc-900 font-extrabold text-base mb-1">Select Unlimited Photos</p>
-            <p className="text-zinc-400 text-xs font-semibold max-w-xs mb-3">
-              Choose as many photos as you want from your gallery to create a multi-page PDF document
+            <p className="text-zinc-900 font-extrabold text-base mb-1">Convert Photos to PDF</p>
+            <p className="text-zinc-400 text-xs font-semibold max-w-xs mb-5">
+              Choose photos from your mobile gallery to compile a clean, high-quality multi-page PDF document
             </p>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[11px] font-bold border border-blue-100">
-              <span>⚡ Unlimited Multi-Selection</span>
-            </span>
+            <button
+              type="button"
+              onClick={(e) => handlePickImages(e)}
+              className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Select Photos (Unlimited)</span>
+            </button>
           </div>
         ) : (
           <div className="flex flex-col">

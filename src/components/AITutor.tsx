@@ -15,6 +15,7 @@ import { parsePartialJSON } from '../utils/partialJson';
 import GlobalMarkdown from './GlobalMarkdown';
 import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Capacitor } from '@capacitor/core';
@@ -1267,35 +1268,81 @@ Please evaluate this answer strictly according to your system rubric.`;
       // Clear contextual doubt state now that it has been sent
       setContextualDoubt(null);
 
-      // Save messages and chat state to Firestore
+      // Save messages and chat state (Instant local state + LocalStorage + Firestore)
+      const textTitle = (isEvaluation && evaluationDetails) ? evaluationDetails.userAnswer : (textToSend || chatInput);
+      const sessionTitle = textTitle.length > 40 ? textTitle.substring(0, 40) + '...' : textTitle;
+
+      const currentUid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || 'guest_user';
+      const storageKey = `stale_tutor_chats_${currentUid}`;
+
+      const dbImageUrl = persistentImageUrl || localImageUrl;
+      const dbImageTimestamp = persistentImageTimestamp || (localImageUrl ? Date.now() : undefined);
+
+      const finalMessages = [...updatedMessages, { 
+        role: 'model' as const, 
+        text: finalAIResponseText,
+        isTyping: false,
+        displayedText: finalAIResponseText.trim().startsWith('{') || finalAIResponseText.trim().includes('"solution_steps"') ? finalAIResponseText : ''
+      }].map(m => {
+        if (m.role === 'user' && m.imageUrl === localImageUrl && dbImageUrl) {
+          return { ...m, imageUrl: dbImageUrl, imageTimestamp: dbImageTimestamp };
+        }
+        return m;
+      });
+
+      const messagesPayload = finalMessages.map(m => ({
+        role: m.role,
+        text: m.text,
+        ...(m.imageUrl ? { imageUrl: m.imageUrl, imageTimestamp: m.imageTimestamp } : {})
+      }));
+
+      const existingChatId = tutorChatId || `local_${Date.now()}`;
+      if (!tutorChatId) {
+        setTutorChatId(existingChatId);
+      }
+
+      // 1. Instantly update local savedChats state & LocalStorage for zero-lag UI
+      const nowObj = { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 };
+      setSavedChats(prevChats => {
+        const safePrev = Array.isArray(prevChats) ? prevChats : [];
+        const existingIdx = safePrev.findIndex(c => c.id === existingChatId || (tutorChatId && c.id === tutorChatId));
+        let updatedList: SavedChat[];
+        if (existingIdx >= 0) {
+          updatedList = [...safePrev];
+          updatedList[existingIdx] = {
+            ...updatedList[existingIdx],
+            title: updatedList[existingIdx].title || sessionTitle,
+            messages: finalMessages,
+            updatedAt: nowObj
+          };
+        } else {
+          const newChat: SavedChat = {
+            id: existingChatId,
+            title: sessionTitle,
+            messages: finalMessages,
+            createdAt: nowObj,
+            updatedAt: nowObj
+          };
+          updatedList = [newChat, ...safePrev].slice(0, 15);
+        }
+        safeSetItem(storageKey, JSON.stringify(updatedList));
+        return updatedList;
+      });
+
+      // 2. Sync to Firestore (Pocket Items + ai_tutor_chats)
       if (auth.currentUser) {
         try {
-          // Wait up to 2 seconds for background upload to complete if it is still running
+          // Wait up to 2 seconds for background upload to complete if still in flight
           await Promise.race([
             backgroundUploadPromise,
             new Promise(resolve => setTimeout(resolve, 2000))
           ]);
 
-          const dbImageUrl = persistentImageUrl || localImageUrl;
-          const dbImageTimestamp = persistentImageTimestamp || (localImageUrl ? Date.now() : undefined);
-
-          const finalMessages = [...updatedMessages, { 
-            role: 'model' as const, 
-            text: finalAIResponseText,
-            isTyping: false,
-            displayedText: finalAIResponseText.trim().startsWith('{') || finalAIResponseText.trim().includes('"solution_steps"') ? finalAIResponseText : ''
-          }].map(m => {
-            if (m.role === 'user' && m.imageUrl === localImageUrl && dbImageUrl) {
-              return { ...m, imageUrl: dbImageUrl, imageTimestamp: dbImageTimestamp };
-            }
-            return m;
-          });
-
           if (!chatDocId) {
             const docRef = await addDoc(collection(db, 'pocket_items'), {
               userId: auth.currentUser.uid,
               type: 'scan_chat',
-              title: textToShow.length > 30 ? textToShow.substring(0, 30) + '...' : textToShow,
+              title: textTitle.length > 30 ? textTitle.substring(0, 30) + '...' : textTitle,
               text: `**You**: ${userMsgText}\n\n**AI**: ${finalAIResponseText}`,
               createdAt: serverTimestamp()
             });
@@ -1309,22 +1356,23 @@ Please evaluate this answer strictly according to your system rubric.`;
             });
           }
 
-          // Structured chat history saving for loading/restoring
-          const messagesPayload = finalMessages.map(m => ({
-            role: m.role,
-            text: m.text,
-            ...(m.imageUrl ? { imageUrl: m.imageUrl, imageTimestamp: m.imageTimestamp } : {})
-          }));
-
-          if (!tutorChatId) {
+          if (!tutorChatId || tutorChatId.startsWith('local_')) {
             const tutorChatRef = await addDoc(collection(db, 'ai_tutor_chats'), {
               userId: auth.currentUser.uid,
-              title: textToShow.length > 40 ? textToShow.substring(0, 40) + '...' : textToShow,
+              title: sessionTitle,
               messages: messagesPayload,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
             });
-            setTutorChatId(tutorChatRef.id);
+            const newFirestoreId = tutorChatRef.id;
+            setTutorChatId(newFirestoreId);
+            setSavedChats(prev => {
+              const updated = (Array.isArray(prev) ? prev : []).map(c => 
+                c.id === existingChatId ? { ...c, id: newFirestoreId } : c
+              );
+              safeSetItem(storageKey, JSON.stringify(updated));
+              return updated;
+            });
           } else {
             await updateDoc(doc(db, 'ai_tutor_chats', tutorChatId), {
               messages: messagesPayload,
@@ -1332,7 +1380,7 @@ Please evaluate this answer strictly according to your system rubric.`;
             });
           }
         } catch (e) {
-          console.error("Failed to save to firestore", e);
+          console.error("Failed to save to firestore:", e);
         }
       }
 
@@ -1425,19 +1473,31 @@ Please evaluate this answer strictly according to your system rubric.`;
   };
 
   const fetchChatHistory = async () => {
-    if (!auth.currentUser) return;
-    const cached = safeGetItem(`stale_tutor_chats_${auth.currentUser.uid}`);
+    const currentUid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || 'guest_user';
+    const storageKey = `stale_tutor_chats_${currentUid}`;
+    const cached = safeGetItem(storageKey);
     if (cached) {
       try {
-        setSavedChats(JSON.parse(cached));
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSavedChats(parsed);
+        }
       } catch (e) {}
     }
+
+    if (!auth.currentUser) {
+      setLoadingHistory(false);
+      return;
+    }
+
     setLoadingHistory(true);
     try {
+      // NOTE: Do NOT use orderBy('updatedAt') here — Firestore requires a composite index
+      // for where('userId', '==') + orderBy('updatedAt'). Fetching with where('userId', '==')
+      // and sorting in memory avoids index errors and is fast for per-user history.
       const q = query(
         collection(db, 'ai_tutor_chats'),
-        where('userId', '==', auth.currentUser.uid),
-        orderBy('updatedAt', 'desc')
+        where('userId', '==', auth.currentUser.uid)
       );
       const snapshot = await getDocs(q);
       const chats: SavedChat[] = [];
@@ -1452,10 +1512,20 @@ Please evaluate this answer strictly according to your system rubric.`;
         });
       });
 
-      // Keep only last 10 records, delete older ones
-      if (chats.length > 10) {
-        const toKeep = chats.slice(0, 10);
-        const toDelete = chats.slice(10);
+      const getChatTime = (chat: SavedChat) => {
+        const ts = chat.updatedAt || chat.createdAt;
+        if (!ts) return 0;
+        if (typeof ts.seconds === 'number') {
+          return ts.seconds * 1000 + (ts.nanoseconds ? ts.nanoseconds / 1000000 : 0);
+        }
+        const parsed = new Date(ts).getTime();
+        return isNaN(parsed) ? 0 : parsed;
+      };
+      chats.sort((a, b) => getChatTime(b) - getChatTime(a));
+
+      if (chats.length > 15) {
+        const toKeep = chats.slice(0, 15);
+        const toDelete = chats.slice(15);
         for (const item of toDelete) {
           try {
             await deleteDoc(doc(db, 'ai_tutor_chats', item.id));
@@ -1464,26 +1534,41 @@ Please evaluate this answer strictly according to your system rubric.`;
           }
         }
         setSavedChats(toKeep);
-        safeSetItem(`stale_tutor_chats_${auth.currentUser.uid}`, JSON.stringify(toKeep));
+        safeSetItem(storageKey, JSON.stringify(toKeep));
       } else {
         setSavedChats(chats);
-        safeSetItem(`stale_tutor_chats_${auth.currentUser.uid}`, JSON.stringify(chats));
+        safeSetItem(storageKey, JSON.stringify(chats));
       }
     } catch (e) {
-      console.error("Failed to load chat history:", e);
+      console.error("Failed to load chat history from firestore:", e);
+      if (cached) {
+        try {
+          setSavedChats(JSON.parse(cached));
+        } catch (_) {}
+      }
     } finally {
       setLoadingHistory(false);
     }
   };
 
   useEffect(() => {
-    if (historyOpen && auth.currentUser) {
+    fetchChatHistory();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchChatHistory();
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (historyOpen) {
       fetchChatHistory();
     }
   }, [historyOpen]);
 
   const handleLoadChat = (chat: SavedChat) => {
-    const formattedMsgs = chat.messages.map(m => ({
+    const formattedMsgs = (chat.messages || []).map(m => ({
       ...m,
       isTyping: false,
       displayedText: m.text
@@ -1496,8 +1581,15 @@ Please evaluate this answer strictly according to your system rubric.`;
   const handleDeleteChat = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await deleteDoc(doc(db, 'ai_tutor_chats', id));
-      setSavedChats(prev => prev.filter(c => c.id !== id));
+      if (auth.currentUser && !id.startsWith('local_')) {
+        await deleteDoc(doc(db, 'ai_tutor_chats', id));
+      }
+      setSavedChats(prev => {
+        const next = (Array.isArray(prev) ? prev : []).filter(c => c.id !== id);
+        const currentUid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || 'guest_user';
+        safeSetItem(`stale_tutor_chats_${currentUid}`, JSON.stringify(next));
+        return next;
+      });
       if (tutorChatId === id) {
         startNewSession();
       }

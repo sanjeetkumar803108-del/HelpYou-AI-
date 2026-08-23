@@ -98,6 +98,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioGenerationStep, setAudioGenerationStep] = useState(0);
 
+  const isMountedRef = useRef(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const synthUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -110,11 +111,11 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Reset and Cancel handler
+  // Clean unmount and active media reset
   const resetState = () => {
     // 1. Abort in-flight network request
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+      try { abortControllerRef.current.abort(); } catch (_) {}
       abortControllerRef.current = null;
     }
     // 2. Clear progress interval
@@ -122,13 +123,18 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
-    // 3. Stop audio
+    // 3. Stop and detach audio element safely
     if (audioRef.current) {
-      try { audioRef.current.pause(); } catch (_) {}
+      try {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      } catch (_) {}
     }
     try { window.speechSynthesis.cancel(); } catch (_) {}
 
     speechQueueRef.current = { sentences: [], index: 0, lang: 'en-US' };
+    if (!isMountedRef.current) return;
     setIsSpeechFallback(false);
     setIsPlayingFallback(false);
     setFile(null);
@@ -151,12 +157,35 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     triggerVibration(10);
     if (showHistory) {
       setShowHistory(false);
-    } else if (step === 'processing' || step === 'result') {
-      resetState();
     } else {
+      resetState();
       onBack();
     }
   };
+
+  // Comprehensive component lifecycle & unmount safety
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        try { abortControllerRef.current.abort(); } catch (_) {}
+        abortControllerRef.current = null;
+      }
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.removeAttribute('src');
+          audioRef.current.load();
+        } catch (_) {}
+      }
+      try { window.speechSynthesis.cancel(); } catch (_) {}
+    };
+  }, []);
 
   useEffect(() => {
     const handleBackButton = (e: Event) => {
@@ -164,15 +193,14 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
         e.preventDefault();
         triggerVibration(10);
         setShowHistory(false);
-      } else if (step === 'processing' || step === 'result') {
-        e.preventDefault();
-        triggerVibration(10);
+      } else {
         resetState();
+        onBack();
       }
     };
     window.addEventListener('appBackButton', handleBackButton);
     return () => window.removeEventListener('appBackButton', handleBackButton);
-  }, [showHistory, step]);
+  }, [showHistory]);
 
   useEffect(() => {
     if (!audioData) {
@@ -180,6 +208,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       return;
     }
 
+    let createdBlobUrl: string | null = null;
     if (audioData.startsWith('data:')) {
       try {
         const parts = audioData.split(',');
@@ -194,19 +223,35 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: mime });
 
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
-
-        return () => {
-          URL.revokeObjectURL(url);
-        };
+        createdBlobUrl = URL.createObjectURL(blob);
+        if (isMountedRef.current) {
+          setAudioUrl(createdBlobUrl);
+        }
       } catch (e) {
         console.error("Failed to parse base64 audio:", e);
-        setAudioUrl(audioData);
+        if (isMountedRef.current) {
+          setAudioUrl(audioData);
+        }
       }
     } else {
-      setAudioUrl(audioData);
+      if (isMountedRef.current) {
+        setAudioUrl(audioData);
+      }
     }
+
+    return () => {
+      if (createdBlobUrl) {
+        if (audioRef.current && audioRef.current.src === createdBlobUrl) {
+          try {
+            audioRef.current.pause();
+            audioRef.current.removeAttribute('src');
+          } catch (_) {}
+        }
+        try {
+          URL.revokeObjectURL(createdBlobUrl);
+        } catch (_) {}
+      }
+    };
   }, [audioData]);
 
   useEffect(() => {
@@ -214,25 +259,19 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     if (isGeneratingAudio) {
       setAudioGenerationStep(0);
       interval = setInterval(() => {
-        setAudioGenerationStep(prev => (prev < 3 ? prev + 1 : prev));
+        if (isMountedRef.current) {
+          setAudioGenerationStep(prev => (prev < 3 ? prev + 1 : prev));
+        }
       }, 3500);
     } else {
-      setAudioGenerationStep(0);
+      if (isMountedRef.current) {
+        setAudioGenerationStep(0);
+      }
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [isGeneratingAudio]);
-
-  // Clean up speech synthesis and simulated progress interval on unmount
-  useEffect(() => {
-    return () => {
-      window.speechSynthesis.cancel();
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
-  }, []);
 
   // Update playback speed for HTML5 audio
   useEffect(() => {
@@ -749,9 +788,10 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   };
 
   const playNextSentenceChunk = () => {
+    if (!isMountedRef.current) return;
     const queue = speechQueueRef.current;
     if (!queue || queue.index >= queue.sentences.length) {
-      setIsPlayingFallback(false);
+      if (isMountedRef.current) setIsPlayingFallback(false);
       return;
     }
 
@@ -781,19 +821,23 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     }
 
     utterance.onend = () => {
+      if (!isMountedRef.current) return;
       queue.index++;
       playNextSentenceChunk();
     };
 
     utterance.onerror = (e) => {
       console.warn("TTS chunk playback notice:", e);
+      if (!isMountedRef.current) return;
       queue.index++;
       playNextSentenceChunk();
     };
 
     synthUtteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-    window.speechSynthesis.resume();
+    try {
+      window.speechSynthesis.speak(utterance);
+      window.speechSynthesis.resume();
+    } catch (_) {}
   };
 
   const pauseSpeechFallback = () => {

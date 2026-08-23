@@ -889,155 +889,199 @@ export default function App() {
       <main className={`w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 ${(activeTab === 'scanner' || activeTab === 'aitutor' || activeTab === 'teacher' || activeTool !== null) ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto pb-20'} bg-[#FAF9F6]`}>
         {/* Scanner Tab */}
         <div className={activeTab === 'scanner' ? 'h-full flex flex-col' : 'hidden'}>
-          <Suspense fallback={<FullPageSkeleton />}>
-            <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
-              setActiveTab(tab);
-              setActiveTool(null);
-            }} />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<FullPageSkeleton />}>
+              <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
+                setActiveTab(tab);
+                setActiveTool(null);
+              }} />
+            </Suspense>
+          </ErrorBoundary>
         </div>
 
         {/* AI Tutor Tab */}
         <div className={activeTab === 'aitutor' ? 'h-full flex flex-col' : 'hidden'}>
-          <Suspense fallback={<FullPageSkeleton />}>
-            <AITutor isVip={isVip} />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<FullPageSkeleton />}>
+              <AITutor isVip={isVip} />
+            </Suspense>
+          </ErrorBoundary>
         </div>
 
         {/* Home/Notes Tab */}
         <div className={activeTab === 'notes' ? 'h-full flex flex-col' : 'hidden'}>
           <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
-            <Suspense fallback={<FullPageSkeleton />}>
-              <ToolsDashboard 
-                isVip={isVip} 
-                user={user}
-                pocketItems={pocketItems}
-                onOpenVip={handleOpenVipFromDashboard}
-                onOpenProfile={handleOpenProfileFromDashboard}
-                onOpenLogin={handleOpenLoginFromDashboard}
-                onSelectTool={handleSelectToolFromDashboard} 
-                activeTab={activeTab}
-                onForceSync={handleForceSync}
-              />
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={<FullPageSkeleton />}>
+                <ToolsDashboard 
+                  isVip={isVip} 
+                  user={user}
+                  pocketItems={pocketItems}
+                  onOpenVip={handleOpenVipFromDashboard}
+                  onOpenProfile={handleOpenProfileFromDashboard}
+                  onOpenLogin={handleOpenLoginFromDashboard}
+                  onSelectTool={handleSelectToolFromDashboard} 
+                  activeTab={activeTab}
+                  onForceSync={handleForceSync}
+                />
+              </Suspense>
+            </ErrorBoundary>
           </div>
           {/* Active Tool Rendering */}
           <Suspense fallback={<FullPageSkeleton />}>
             {activeTool === 'notemaker' && (
-              <LockedFeature cost={5} featureName="AI Audio Summary" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                <NoteMaker onBack={() => setActiveTool(null)} />
-              </LockedFeature>
+              <ErrorBoundary>
+                <LockedFeature cost={5} featureName="AI Audio Summary" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                  <NoteMaker onBack={() => setActiveTool(null)} />
+                </LockedFeature>
+              </ErrorBoundary>
             )}
             {activeTool === 'essaygrader' && (
-              <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                <EssayGrader onBack={() => setActiveTool(null)} />
-              </LockedFeature>
+              <ErrorBoundary>
+                <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                  <EssayGrader onBack={() => setActiveTool(null)} />
+                </LockedFeature>
+              </ErrorBoundary>
             )}
             {activeTool === 'testprep' && (
-              <LockedFeature cost={2} featureName="Test Prep Hub" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                <TestPrep onBack={() => setActiveTool(null)} />
-              </LockedFeature>
+              <ErrorBoundary>
+                <LockedFeature cost={2} featureName="Test Prep Hub" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                  <TestPrep onBack={() => setActiveTool(null)} />
+                </LockedFeature>
+              </ErrorBoundary>
             )}
             {activeTool === 'image2pdf' && (
-              <ImageToPDF 
-                onBack={() => setActiveTool(null)} 
-                onOpenHistory={() => setActiveTool('pdfhistory')} 
-              />
+              <ErrorBoundary>
+                <ImageToPDF 
+                  onBack={() => setActiveTool(null)} 
+                  onOpenHistory={() => setActiveTool('pdfhistory')} 
+                />
+              </ErrorBoundary>
             )}
             {activeTool === 'pdfhistory' && (
-              <PdfHistoryScreen 
-                onBack={() => setActiveTool('image2pdf')} 
-                onOpenImageToPdf={() => setActiveTool('image2pdf')}
-              />
+              <ErrorBoundary>
+                <PdfHistoryScreen 
+                  onBack={() => setActiveTool('image2pdf')} 
+                  onOpenImageToPdf={() => setActiveTool('image2pdf')}
+                />
+              </ErrorBoundary>
             )}
             {activeTool === 'contentgenerator' && (
-              <LockedFeature cost={1} featureName="AI Study Content Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                <ContentGenerator onBack={() => setActiveTool(null)} />
-              </LockedFeature>
+              <ErrorBoundary>
+                <LockedFeature cost={1} featureName="AI Study Content Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                  <ContentGenerator onBack={() => setActiveTool(null)} />
+                </LockedFeature>
+              </ErrorBoundary>
             )}
             {activeTool === 'grammar' && (
-              <LockedFeature cost={1} featureName="AI Grammar Enhancer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                <GrammarEnhancer onBack={() => setActiveTool(null)} />
-              </LockedFeature>
+              <ErrorBoundary>
+                <LockedFeature cost={1} featureName="AI Grammar Enhancer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                  <GrammarEnhancer onBack={() => setActiveTool(null)} />
+                </LockedFeature>
+              </ErrorBoundary>
             )}
             {activeTool === 'summariser' && (
-              <LockedFeature cost={1} featureName="AI Text Summarizer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                <Summariser onBack={() => setActiveTool(null)} />
-              </LockedFeature>
+              <ErrorBoundary>
+                <LockedFeature cost={1} featureName="AI Text Summarizer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                  <Summariser onBack={() => setActiveTool(null)} />
+                </LockedFeature>
+              </ErrorBoundary>
             )}
 
             {activeTool === 'calculator' && (
-              <Calculator 
-                onBack={() => setActiveTool(null)} 
-                onNavigateToTab={(tab) => {
-                  setActiveTab(tab);
-                  setActiveTool(null);
-                }} 
-              />
-            )}
-            {activeTool === 'questiongenerator' && (
-              <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                <QuestionGenerator 
+              <ErrorBoundary>
+                <Calculator 
                   onBack={() => setActiveTool(null)} 
                   onNavigateToTab={(tab) => {
                     setActiveTab(tab);
                     setActiveTool(null);
-                  }}
+                  }} 
                 />
-              </LockedFeature>
+              </ErrorBoundary>
             )}
-            {activeTool === 'dailytrivia' && <DailyTrivia onBack={() => setActiveTool(null)} />}
-            {activeTool === 'livetutorsearch' && <LiveTutorSearch onBack={() => setActiveTool(null)} />}
-            {activeTool === 'mistakevault' && <MistakeVault onBack={() => setActiveTool(null)} />}
+            {activeTool === 'questiongenerator' && (
+              <ErrorBoundary>
+                <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                  <QuestionGenerator 
+                    onBack={() => setActiveTool(null)} 
+                    onNavigateToTab={(tab) => {
+                      setActiveTab(tab);
+                      setActiveTool(null);
+                    }} 
+                  />
+                </LockedFeature>
+              </ErrorBoundary>
+            )}
+            {activeTool === 'dailytrivia' && (
+              <ErrorBoundary>
+                <DailyTrivia onBack={() => setActiveTool(null)} />
+              </ErrorBoundary>
+            )}
+            {activeTool === 'livetutorsearch' && (
+              <ErrorBoundary>
+                <LiveTutorSearch onBack={() => setActiveTool(null)} />
+              </ErrorBoundary>
+            )}
+            {activeTool === 'mistakevault' && (
+              <ErrorBoundary>
+                <MistakeVault onBack={() => setActiveTool(null)} />
+              </ErrorBoundary>
+            )}
             {activeTool === 'coinpage' && (
-              <CoinPage 
-                isVip={isVip}
-                onClose={() => setActiveTool(null)} 
-                onSelectTool={(tool) => {
-                  if (tool === 'tab:scanner') {
-                    setActiveTab('scanner');
-                    setActiveTool(null);
-                  } else if (tool === 'tab:aitutor') {
-                    setActiveTab('aitutor');
-                    setActiveTool(null);
-                  } else {
-                    setActiveTool(tool);
-                  }
-                }} 
-              />
+              <ErrorBoundary>
+                <CoinPage 
+                  isVip={isVip}
+                  onClose={() => setActiveTool(null)} 
+                  onSelectTool={(tool) => {
+                    if (tool === 'tab:scanner') {
+                      setActiveTab('scanner');
+                      setActiveTool(null);
+                    } else if (tool === 'tab:aitutor') {
+                      setActiveTab('aitutor');
+                      setActiveTool(null);
+                    } else {
+                      setActiveTool(tool);
+                    }
+                  }} 
+                />
+              </ErrorBoundary>
             )}
             {activeTool === 'streakpage' && (
-              <StreakDetailsPage onBack={() => setActiveTool(null)} />
+              <ErrorBoundary>
+                <StreakDetailsPage onBack={() => setActiveTool(null)} />
+              </ErrorBoundary>
             )}
           </Suspense>
         </div>
 
         {/* Profile Tab */}
         <div className={activeTab === 'profile' ? 'h-full flex flex-col' : 'hidden'}>
-          <Suspense fallback={<FullPageSkeleton />}>
-            <Profile 
-              user={user}
-              isVip={isVip}
-              setIsVip={handleSetIsVip}
-              onClose={() => setActiveTab('notes')} 
-              isDarkMode={isDarkMode}
-              onToggleDarkMode={toggleDarkMode}
-              isTabMode={true}
-              onOpenLogin={() => setShowLoginModal(true)}
-              onNavigateToCoinPage={() => {
-                setActiveTab('notes');
-                setActiveTool('coinpage');
-              }}
-              onNavigateToStreakPage={() => {
-                setActiveTab('notes');
-                setActiveTool('streakpage');
-              }}
-              onOpenPdfHistory={() => {
-                setActiveTab('notes');
-                setActiveTool('pdfhistory');
-              }}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<FullPageSkeleton />}>
+              <Profile 
+                user={user}
+                isVip={isVip}
+                setIsVip={handleSetIsVip}
+                onClose={() => setActiveTab('notes')} 
+                isDarkMode={isDarkMode}
+                onToggleDarkMode={toggleDarkMode}
+                isTabMode={true}
+                onOpenLogin={() => setShowLoginModal(true)}
+                onNavigateToCoinPage={() => {
+                  setActiveTab('notes');
+                  setActiveTool('coinpage');
+                }}
+                onNavigateToStreakPage={() => {
+                  setActiveTab('notes');
+                  setActiveTool('streakpage');
+                }}
+                onOpenPdfHistory={() => {
+                  setActiveTab('notes');
+                  setActiveTool('pdfhistory');
+                }}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
 

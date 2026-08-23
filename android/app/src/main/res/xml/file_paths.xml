@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Required by Capacitor Camera plugin on Android 7+ (API 24+).
+  The FileProvider uses this to securely share temp camera image files
+  between the camera app and HelpYou AI without triggering
+  "unable to create photo on disk" errors.
+-->
+<paths>
+    <external-path name="my_images" path="." />
+    <external-files-path name="my_external_files" path="." />
+    <files-path name="my_files" path="." />
+    <cache-path name="my_cache" path="." />
+    <external-cache-path name="my_external_cache" path="." />
+</paths>

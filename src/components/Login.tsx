@@ -139,23 +139,35 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
-      setError('Please enter a valid email address.');
+      setError('Please enter your email address.');
+      showToast('Please enter your email address.', 'error', 3500);
+      return;
+    }
+
+    if (!password) {
+      setError('Please enter your password.');
+      showToast('Please enter your password.', 'error', 3500);
       return;
     }
 
     if (isSignUp) {
       if (!isPasswordValid(password)) {
-        setError('Password must have at least 8 characters, 1 uppercase letter, 1 number, and 1 special character.');
+        setError('Password must contain at least 8 characters, 1 uppercase letter, 1 number, and 1 special symbol.');
+        showToast('Please satisfy all password rules.', 'error', 3500);
         return;
       }
     } else {
       if (password.length < 6) {
         setError('Password must be at least 6 characters long.');
+        showToast('Password must be at least 6 characters.', 'error', 3500);
         return;
       }
     }
 
     setLoading(true);
+    const loadingTimer = setTimeout(() => {
+      setLoading(false);
+    }, 12000);
 
     try {
       if (isSignUp) {
@@ -255,6 +267,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         setError(err.message || 'Authentication failed. Please try again.');
       }
     } finally {
+      clearTimeout(loadingTimer);
       setLoading(false);
     }
   };
@@ -262,6 +275,9 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const handleGoogleSignIn = async () => {
     setError(null);
     setLoading(true);
+    const googleLoadingTimer = setTimeout(() => {
+      setLoading(false);
+    }, 15000);
     try {
       const userCredential = await signInWithPopup(auth, googleProvider);
       const loggedUser = userCredential.user;
@@ -327,6 +343,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         setError(err.message || 'Google Sign-In failed. Please try again.');
       }
     } finally {
+      clearTimeout(googleLoadingTimer);
       setLoading(false);
     }
   };
@@ -504,11 +521,20 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
           <button 
             type="submit"
-            disabled={loading || (isSignUp && !isPasswordValid(password))}
-            className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2 shadow-md shadow-teal-500/10 border border-teal-400/50 active:scale-[0.98] disabled:pointer-events-none"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all mt-2 shadow-md shadow-teal-500/10 border border-teal-400/50 active:scale-[0.98] cursor-pointer disabled:opacity-75"
           >
-            {isSignUp ? 'SIGN UP' : 'SIGN IN'}
-            {isSignUp ? <UserPlus className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>{isSignUp ? 'CREATING ACCOUNT...' : 'SIGNING IN...'}</span>
+              </div>
+            ) : (
+              <>
+                <span>{isSignUp ? 'SIGN UP' : 'SIGN IN'}</span>
+                {isSignUp ? <UserPlus className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
+              </>
+            )}
           </button>
         </form>
 
@@ -522,7 +548,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         <button 
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full max-w-sm bg-white border border-zinc-200 text-zinc-800 font-bold py-4 rounded-2xl mt-8 flex items-center justify-center gap-3 hover:bg-zinc-50 transition-colors shadow-sm active:scale-[0.98]"
+          className="w-full max-w-sm bg-white border border-zinc-200 text-zinc-800 font-bold py-4 rounded-2xl mt-8 flex items-center justify-center gap-3 hover:bg-zinc-50 transition-colors shadow-sm active:scale-[0.98] cursor-pointer disabled:opacity-75"
         >
           <Chrome className="w-5 h-5 text-zinc-650" />
           GOOGLE SIGN-IN
@@ -532,8 +558,11 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
           {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
           <button 
             type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-teal-600 font-bold hover:text-teal-700 ml-1 transition-colors"
+            onClick={() => {
+              setError(null);
+              setIsSignUp(!isSignUp);
+            }}
+            className="text-teal-600 font-bold hover:text-teal-700 ml-1 transition-colors cursor-pointer"
           >
             {isSignUp ? 'Sign In' : 'Sign Up'}
           </button>

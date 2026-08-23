@@ -11,55 +11,55 @@ const FORMULA_CATEGORIES = [
     subtitle: 'US High School / UK GCSE & A-Levels / IB',
     icon: '📐',
     formulas: [
-      { 
-        name: 'Quadratic Formula', 
-        latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}', 
-        insertText: '(-b + √(b^2 - 4*a*c))/(2*a)' 
+      {
+        name: 'Quadratic Formula',
+        latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}',
+        insertText: '(-b + √(b^2 - 4*a*c))/(2*a)'
       },
-      { 
-        name: 'Vertex Form of Parabola', 
-        latex: 'y = a(x - h)^2 + k', 
-        insertText: 'a*(x - h)^2 + k' 
+      {
+        name: 'Vertex Form of Parabola',
+        latex: 'y = a(x - h)^2 + k',
+        insertText: 'a*(x - h)^2 + k'
       },
-      { 
-        name: 'Parabola Axis of Symmetry', 
-        latex: 'h = -\\frac{b}{2a}', 
-        insertText: '-b/(2*a)' 
+      {
+        name: 'Parabola Axis of Symmetry',
+        latex: 'h = -\\frac{b}{2a}',
+        insertText: '-b/(2*a)'
       },
-      { 
-        name: 'Binomial Theorem (General Expansion)', 
-        latex: '(a + b)^n = \\sum_{k=0}^n \\binom{n}{k} a^{n-k} b^k', 
-        insertText: '(a + b)^n' 
+      {
+        name: 'Binomial Theorem (General Expansion)',
+        latex: '(a + b)^n = \\sum_{k=0}^n \\binom{n}{k} a^{n-k} b^k',
+        insertText: '(a + b)^n'
       },
-      { 
-        name: 'Difference of Cubes', 
-        latex: 'a^3 - b^3 = (a - b)(a^2 + ab + b^2)', 
-        insertText: '(a - b)*(a^2 + a*b + b^2)' 
+      {
+        name: 'Difference of Cubes',
+        latex: 'a^3 - b^3 = (a - b)(a^2 + ab + b^2)',
+        insertText: '(a - b)*(a^2 + a*b + b^2)'
       },
-      { 
-        name: 'Sum of Cubes', 
-        latex: 'a^3 + b^3 = (a + b)(a^2 - ab + b^2)', 
-        insertText: '(a + b)*(a^2 - a*b + b^2)' 
+      {
+        name: 'Sum of Cubes',
+        latex: 'a^3 + b^3 = (a + b)(a^2 - ab + b^2)',
+        insertText: '(a + b)*(a^2 - a*b + b^2)'
       },
-      { 
-        name: 'Logarithm Change of Base', 
-        latex: '\\log_b(x) = \\frac{\\ln(x)}{\\ln(b)}', 
-        insertText: 'ln(x)/ln(b)' 
+      {
+        name: 'Logarithm Change of Base',
+        latex: '\\log_b(x) = \\frac{\\ln(x)}{\\ln(b)}',
+        insertText: 'ln(x)/ln(b)'
       },
-      { 
-        name: 'Product of Powers (Exponents)', 
-        latex: 'x^a \\cdot x^b = x^{a+b}', 
-        insertText: 'x^(a+b)' 
+      {
+        name: 'Product of Powers (Exponents)',
+        latex: 'x^a \\cdot x^b = x^{a+b}',
+        insertText: 'x^(a+b)'
       },
-      { 
-        name: 'Quotient of Powers (Exponents)', 
-        latex: '\\frac{x^a}{x^b} = x^{a-b}', 
-        insertText: 'x^(a-b)' 
+      {
+        name: 'Quotient of Powers (Exponents)',
+        latex: '\\frac{x^a}{x^b} = x^{a-b}',
+        insertText: 'x^(a-b)'
       },
-      { 
-        name: 'Arithmetic Series Sum (AP)', 
-        latex: 'S_n = \\frac{n}{2}\\left(2a_1 + (n - 1)d\\right)', 
-        insertText: '(n/2)*(2*a + (n-1)*d)' 
+      {
+        name: 'Arithmetic Series Sum (AP)',
+        latex: 'S_n = \\frac{n}{2}\\left(2a_1 + (n - 1)d\\right)',
+        insertText: '(n/2)*(2*a + (n-1)*d)'
       }
     ]
   },
@@ -68,70 +68,70 @@ const FORMULA_CATEGORIES = [
     subtitle: 'SAT, ACT, Australian HSC, UK Further Maths',
     icon: '📏',
     formulas: [
-      { 
-        name: 'Pythagorean Theorem', 
-        latex: 'c = \\sqrt{a^2 + b^2}', 
-        insertText: '√(a^2 + b^2)' 
+      {
+        name: 'Pythagorean Theorem',
+        latex: 'c = \\sqrt{a^2 + b^2}',
+        insertText: '√(a^2 + b^2)'
       },
-      { 
-        name: '2D Distance Formula', 
-        latex: 'd = \\sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}', 
-        insertText: '√((x2 - x1)^2 + (y2 - y1)^2)' 
+      {
+        name: '2D Distance Formula',
+        latex: 'd = \\sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}',
+        insertText: '√((x2 - x1)^2 + (y2 - y1)^2)'
       },
-      { 
-        name: 'Law of Cosines (Any Triangle)', 
-        latex: 'c^2 = a^2 + b^2 - 2ab \\cos(C)', 
-        insertText: 'a^2 + b^2 - 2*a*b*cos(C)' 
+      {
+        name: 'Law of Cosines (Any Triangle)',
+        latex: 'c^2 = a^2 + b^2 - 2ab \\cos(C)',
+        insertText: 'a^2 + b^2 - 2*a*b*cos(C)'
       },
-      { 
-        name: 'Law of Sines', 
-        latex: '\\frac{a}{\\sin(A)} = \\frac{b}{\\sin(B)} = \\frac{c}{\\sin(C)}', 
-        insertText: '(a*sin(B))/sin(A)' 
+      {
+        name: 'Law of Sines',
+        latex: '\\frac{a}{\\sin(A)} = \\frac{b}{\\sin(B)} = \\frac{c}{\\sin(C)}',
+        insertText: '(a*sin(B))/sin(A)'
       },
-      { 
-        name: 'Pythagorean Sine-Cosine Identity', 
-        latex: '\\sin^2(\\theta) + \\cos^2(\\theta) = 1', 
-        insertText: 'sin(x)^2 + cos(x)^2' 
+      {
+        name: 'Pythagorean Sine-Cosine Identity',
+        latex: '\\sin^2(\\theta) + \\cos^2(\\theta) = 1',
+        insertText: 'sin(x)^2 + cos(x)^2'
       },
-      { 
-        name: 'Tangent-Secant Identity', 
-        latex: '1 + \\tan^2(\\theta) = \\sec^2(\\theta)', 
-        insertText: '1 + tan(x)^2' 
+      {
+        name: 'Tangent-Secant Identity',
+        latex: '1 + \\tan^2(\\theta) = \\sec^2(\\theta)',
+        insertText: '1 + tan(x)^2'
       },
-      { 
-        name: 'Double Angle Sine', 
-        latex: '\\sin(2\\theta) = 2\\sin\\theta\\cos\\theta', 
-        insertText: '2*sin(x)*cos(x)' 
+      {
+        name: 'Double Angle Sine',
+        latex: '\\sin(2\\theta) = 2\\sin\\theta\\cos\\theta',
+        insertText: '2*sin(x)*cos(x)'
       },
-      { 
-        name: 'Double Angle Cosine', 
-        latex: '\\cos(2\\theta) = \\cos^2\\theta - \\sin^2\\theta', 
-        insertText: 'cos(x)^2 - sin(x)^2' 
+      {
+        name: 'Double Angle Cosine',
+        latex: '\\cos(2\\theta) = \\cos^2\\theta - \\sin^2\\theta',
+        insertText: 'cos(x)^2 - sin(x)^2'
       },
-      { 
-        name: 'Heron’s Area Formula (Triangle)', 
-        latex: 'A = \\sqrt{s(s - a)(s - b)(s - c)}', 
-        insertText: '√(s*(s-a)*(s-b)*(s-c))' 
+      {
+        name: 'Heron’s Area Formula (Triangle)',
+        latex: 'A = \\sqrt{s(s - a)(s - b)(s - c)}',
+        insertText: '√(s*(s-a)*(s-b)*(s-c))'
       },
-      { 
-        name: 'Arc Length (Radians)', 
-        latex: 's = r\\theta', 
-        insertText: 'r*θ' 
+      {
+        name: 'Arc Length (Radians)',
+        latex: 's = r\\theta',
+        insertText: 'r*θ'
       },
-      { 
-        name: 'Sector Area (Radians)', 
-        latex: 'A_{\\text{sector}} = \\frac{1}{2} r^2 \\theta', 
-        insertText: '(1/2)*r^2*θ' 
+      {
+        name: 'Sector Area (Radians)',
+        latex: 'A_{\\text{sector}} = \\frac{1}{2} r^2 \\theta',
+        insertText: '(1/2)*r^2*θ'
       },
-      { 
-        name: 'Sphere Volume', 
-        latex: 'V = \\frac{4}{3}\\pi r^3', 
-        insertText: '(4/3)*π*r^3' 
+      {
+        name: 'Sphere Volume',
+        latex: 'V = \\frac{4}{3}\\pi r^3',
+        insertText: '(4/3)*π*r^3'
       },
-      { 
-        name: 'Cylinder Volume', 
-        latex: 'V = \\pi r^2 h', 
-        insertText: 'π*r^2*h' 
+      {
+        name: 'Cylinder Volume',
+        latex: 'V = \\pi r^2 h',
+        insertText: 'π*r^2*h'
       }
     ]
   },
@@ -140,55 +140,55 @@ const FORMULA_CATEGORIES = [
     subtitle: 'AP Calculus AB/BC, UK A-Level, Canada Vectors & Calc',
     icon: '⚡',
     formulas: [
-      { 
-        name: 'Derivative Power Rule', 
-        latex: '\\frac{d}{dx}\\left(x^n\\right) = n x^{n-1}', 
-        insertText: 'n*x^(n-1)' 
+      {
+        name: 'Derivative Power Rule',
+        latex: '\\frac{d}{dx}\\left(x^n\\right) = n x^{n-1}',
+        insertText: 'n*x^(n-1)'
       },
-      { 
-        name: 'Derivative Chain Rule', 
-        latex: '\\frac{d}{dx}[f(g(x))] = f\'(g(x)) \\cdot g\'(x)', 
-        insertText: 'f\'(g(x))*g\'(x)' 
+      {
+        name: 'Derivative Chain Rule',
+        latex: '\\frac{d}{dx}[f(g(x))] = f\'(g(x)) \\cdot g\'(x)',
+        insertText: 'f\'(g(x))*g\'(x)'
       },
-      { 
-        name: 'Derivative Product Rule', 
-        latex: '(uv)\' = u\'v + uv\'', 
-        insertText: 'u\'*v + u*v\'' 
+      {
+        name: 'Derivative Product Rule',
+        latex: '(uv)\' = u\'v + uv\'',
+        insertText: 'u\'*v + u*v\''
       },
-      { 
-        name: 'Derivative Quotient Rule', 
-        latex: '\\left(\\frac{u}{v}\\right)\' = \\frac{u\'v - uv\'}{v^2}', 
-        insertText: '(u\'*v - u*v\')/(v^2)' 
+      {
+        name: 'Derivative Quotient Rule',
+        latex: '\\left(\\frac{u}{v}\\right)\' = \\frac{u\'v - uv\'}{v^2}',
+        insertText: '(u\'*v - u*v\')/(v^2)'
       },
-      { 
-        name: 'Integration by Parts', 
-        latex: '\\int u \\, dv = u v - \\int v \\, du', 
-        insertText: 'u*v - ∫(v du)' 
+      {
+        name: 'Integration by Parts',
+        latex: '\\int u \\, dv = u v - \\int v \\, du',
+        insertText: 'u*v - ∫(v du)'
       },
-      { 
-        name: 'Fundamental Theorem of Calculus', 
-        latex: '\\int_a^b f(x) \\, dx = F(b) - F(a)', 
-        insertText: 'F(b) - F(a)' 
+      {
+        name: 'Fundamental Theorem of Calculus',
+        latex: '\\int_a^b f(x) \\, dx = F(b) - F(a)',
+        insertText: 'F(b) - F(a)'
       },
-      { 
-        name: 'Standard Exponential Integral', 
-        latex: '\\int e^{kx} \\, dx = \\frac{1}{k}e^{kx} + C', 
-        insertText: '(1/k)*e^(k*x)' 
+      {
+        name: 'Standard Exponential Integral',
+        latex: '\\int e^{kx} \\, dx = \\frac{1}{k}e^{kx} + C',
+        insertText: '(1/k)*e^(k*x)'
       },
-      { 
-        name: 'Standard Logarithmic Integral', 
-        latex: '\\int \\frac{1}{x} \\, dx = \\ln|x| + C', 
-        insertText: 'ln(abs(x))' 
+      {
+        name: 'Standard Logarithmic Integral',
+        latex: '\\int \\frac{1}{x} \\, dx = \\ln|x| + C',
+        insertText: 'ln(abs(x))'
       },
-      { 
-        name: 'Exponential Growth & Decay Differential Eq.', 
-        latex: '\\frac{dy}{dt} = ky \\implies y(t) = y_0 e^{kt}', 
-        insertText: 'y0*e^(k*t)' 
+      {
+        name: 'Exponential Growth & Decay Differential Eq.',
+        latex: '\\frac{dy}{dt} = ky \\implies y(t) = y_0 e^{kt}',
+        insertText: 'y0*e^(k*t)'
       },
-      { 
-        name: 'Taylor / Maclaurin Series Expansion', 
-        latex: 'e^x = \\sum_{n=0}^\\infty \\frac{x^n}{n!} = 1 + x + \\frac{x^2}{2!} + \\dots', 
-        insertText: '1 + x + (x^2)/2 + (x^3)/6' 
+      {
+        name: 'Taylor / Maclaurin Series Expansion',
+        latex: 'e^x = \\sum_{n=0}^\\infty \\frac{x^n}{n!} = 1 + x + \\frac{x^2}{2!} + \\dots',
+        insertText: '1 + x + (x^2)/2 + (x^3)/6'
       }
     ]
   },
@@ -197,40 +197,40 @@ const FORMULA_CATEGORIES = [
     subtitle: 'AP Statistics, IB AI, UK Edexcel Maths',
     icon: '📊',
     formulas: [
-      { 
-        name: 'Normal Distribution Z-Score', 
-        latex: 'z = \\frac{x - \\mu}{\\sigma}', 
-        insertText: '(x - μ)/σ' 
+      {
+        name: 'Normal Distribution Z-Score',
+        latex: 'z = \\frac{x - \\mu}{\\sigma}',
+        insertText: '(x - μ)/σ'
       },
-      { 
-        name: 'Sample Standard Deviation', 
-        latex: 's = \\sqrt{\\frac{\\sum (x_i - \\bar{x})^2}{n - 1}}', 
-        insertText: '√(Σ(x - μ)^2 / (n - 1))' 
+      {
+        name: 'Sample Standard Deviation',
+        latex: 's = \\sqrt{\\frac{\\sum (x_i - \\bar{x})^2}{n - 1}}',
+        insertText: '√(Σ(x - μ)^2 / (n - 1))'
       },
-      { 
-        name: 'Sample Variance', 
-        latex: 's^2 = \\frac{\\sum (x_i - \\bar{x})^2}{n - 1}', 
-        insertText: 'Σ(x - μ)^2 / (n - 1)' 
+      {
+        name: 'Sample Variance',
+        latex: 's^2 = \\frac{\\sum (x_i - \\bar{x})^2}{n - 1}',
+        insertText: 'Σ(x - μ)^2 / (n - 1)'
       },
-      { 
-        name: 'Bayes’ Theorem (Conditional Probability)', 
-        latex: 'P(A \\mid B) = \\frac{P(B \\mid A) \\cdot P(A)}{P(B)}', 
-        insertText: '(P(B|A)*P(A))/P(B)' 
+      {
+        name: 'Bayes’ Theorem (Conditional Probability)',
+        latex: 'P(A \\mid B) = \\frac{P(B \\mid A) \\cdot P(A)}{P(B)}',
+        insertText: '(P(B|A)*P(A))/P(B)'
       },
-      { 
-        name: 'Confidence Interval for Population Mean', 
-        latex: '\\text{CI} = \\bar{x} \\pm z^* \\left(\\frac{\\sigma}{\\sqrt{n}}\\right)', 
-        insertText: 'x̄ ± z*(σ/√n)' 
+      {
+        name: 'Confidence Interval for Population Mean',
+        latex: '\\text{CI} = \\bar{x} \\pm z^* \\left(\\frac{\\sigma}{\\sqrt{n}}\\right)',
+        insertText: 'x̄ ± z*(σ/√n)'
       },
-      { 
-        name: 'Combinations Formula (nCr)', 
-        latex: '\\binom{n}{r} = \\frac{n!}{r!(n - r)!}', 
-        insertText: 'n! / (r! * (n - r)!)' 
+      {
+        name: 'Combinations Formula (nCr)',
+        latex: '\\binom{n}{r} = \\frac{n!}{r!(n - r)!}',
+        insertText: 'n! / (r! * (n - r)!)'
       },
-      { 
-        name: 'Permutations Formula (nPr)', 
-        latex: 'P(n, r) = \\frac{n!}{(n - r)!}', 
-        insertText: 'n! / (n - r)!' 
+      {
+        name: 'Permutations Formula (nPr)',
+        latex: 'P(n, r) = \\frac{n!}{(n - r)!}',
+        insertText: 'n! / (n - r)!'
       }
     ]
   },
@@ -239,40 +239,40 @@ const FORMULA_CATEGORIES = [
     subtitle: 'US / UK / Canada / Australia Practical Personal Finance',
     icon: '💰',
     formulas: [
-      { 
-        name: 'Compound Interest (Periodic)', 
-        latex: 'A = P \\left(1 + \\frac{r}{n}\\right)^{nt}', 
-        insertText: 'P * (1 + r/n)^(n*t)' 
+      {
+        name: 'Compound Interest (Periodic)',
+        latex: 'A = P \\left(1 + \\frac{r}{n}\\right)^{nt}',
+        insertText: 'P * (1 + r/n)^(n*t)'
       },
-      { 
-        name: 'Continuous Compounding Interest', 
-        latex: 'A = P e^{rt}', 
-        insertText: 'P * e^(r*t)' 
+      {
+        name: 'Continuous Compounding Interest',
+        latex: 'A = P e^{rt}',
+        insertText: 'P * e^(r*t)'
       },
-      { 
-        name: 'Loan / Mortgage Monthly Payment (Amortization)', 
-        latex: 'M = P \\frac{r(1 + r)^n}{(1 + r)^n - 1}', 
-        insertText: 'P * (r*(1+r)^n)/((1+r)^n - 1)' 
+      {
+        name: 'Loan / Mortgage Monthly Payment (Amortization)',
+        latex: 'M = P \\frac{r(1 + r)^n}{(1 + r)^n - 1}',
+        insertText: 'P * (r*(1+r)^n)/((1+r)^n - 1)'
       },
-      { 
-        name: 'Rule of 72 (Doubling Time for Investment)', 
-        latex: 't_{\\text{years}} \\approx \\frac{72}{r}', 
-        insertText: '72 / r' 
+      {
+        name: 'Rule of 72 (Doubling Time for Investment)',
+        latex: 't_{\\text{years}} \\approx \\frac{72}{r}',
+        insertText: '72 / r'
       },
-      { 
-        name: 'Inflation Adjusted Purchasing Power', 
-        latex: 'V_{\\text{future}} = \\frac{P}{(1 + i)^t}', 
-        insertText: 'P / (1 + i)^t' 
+      {
+        name: 'Inflation Adjusted Purchasing Power',
+        latex: 'V_{\\text{future}} = \\frac{P}{(1 + i)^t}',
+        insertText: 'P / (1 + i)^t'
       },
-      { 
-        name: 'Return on Investment (ROI Percentage)', 
-        latex: '\\text{ROI}\\% = \\left(\\frac{\\text{Gain} - \\text{Cost}}{\\text{Cost}}\\right) \\times 100', 
-        insertText: '((Gain - Cost)/Cost) * 100' 
+      {
+        name: 'Return on Investment (ROI Percentage)',
+        latex: '\\text{ROI}\\% = \\left(\\frac{\\text{Gain} - \\text{Cost}}{\\text{Cost}}\\right) \\times 100',
+        insertText: '((Gain - Cost)/Cost) * 100'
       },
-      { 
-        name: 'Profit Margin Percentage', 
-        latex: '\\text{Margin}\\% = \\left(\\frac{\\text{Revenue} - \\text{Cost}}{\\text{Revenue}}\\right) \\times 100', 
-        insertText: '((Revenue - Cost)/Revenue) * 100' 
+      {
+        name: 'Profit Margin Percentage',
+        latex: '\\text{Margin}\\% = \\left(\\frac{\\text{Revenue} - \\text{Cost}}{\\text{Revenue}}\\right) \\times 100',
+        insertText: '((Revenue - Cost)/Revenue) * 100'
       }
     ]
   },
@@ -281,60 +281,60 @@ const FORMULA_CATEGORIES = [
     subtitle: 'AP Physics 1 & C, UK A-Level Mechanics, IB Physics',
     icon: '🚀',
     formulas: [
-      { 
-        name: 'Kinematics Final Velocity (v = u + at)', 
-        latex: 'v = u + at', 
-        insertText: 'u + a*t' 
+      {
+        name: 'Kinematics Final Velocity (v = u + at)',
+        latex: 'v = u + at',
+        insertText: 'u + a*t'
       },
-      { 
-        name: 'Kinematics Displacement (s = ut + 1/2at²)', 
-        latex: 's = ut + \\frac{1}{2}at^2', 
-        insertText: 'u*t + (1/2)*a*t^2' 
+      {
+        name: 'Kinematics Displacement (s = ut + 1/2at²)',
+        latex: 's = ut + \\frac{1}{2}at^2',
+        insertText: 'u*t + (1/2)*a*t^2'
       },
-      { 
-        name: 'Kinematics Velocity-Displacement (v² = u² + 2as)', 
-        latex: 'v^2 = u^2 + 2as', 
-        insertText: 'u^2 + 2*a*s' 
+      {
+        name: 'Kinematics Velocity-Displacement (v² = u² + 2as)',
+        latex: 'v^2 = u^2 + 2as',
+        insertText: 'u^2 + 2*a*s'
       },
-      { 
-        name: 'Work Done Formula', 
-        latex: 'W = F d \\cos\\theta', 
-        insertText: 'F * d * cos(θ)' 
+      {
+        name: 'Work Done Formula',
+        latex: 'W = F d \\cos\\theta',
+        insertText: 'F * d * cos(θ)'
       },
-      { 
-        name: 'Kinetic Energy (Ek)', 
-        latex: 'E_k = \\frac{1}{2}m v^2', 
-        insertText: '(1/2)*m*v^2' 
+      {
+        name: 'Kinetic Energy (Ek)',
+        latex: 'E_k = \\frac{1}{2}m v^2',
+        insertText: '(1/2)*m*v^2'
       },
-      { 
-        name: 'Gravitational Potential Energy (Ep)', 
-        latex: 'E_p = m g h', 
-        insertText: 'm * g * h' 
+      {
+        name: 'Gravitational Potential Energy (Ep)',
+        latex: 'E_p = m g h',
+        insertText: 'm * g * h'
       },
-      { 
-        name: 'Newton’s Law of Universal Gravitation', 
-        latex: 'F_g = G \\frac{m_1 m_2}{r^2}', 
-        insertText: 'G*(m1*m2)/(r^2)' 
+      {
+        name: 'Newton’s Law of Universal Gravitation',
+        latex: 'F_g = G \\frac{m_1 m_2}{r^2}',
+        insertText: 'G*(m1*m2)/(r^2)'
       },
-      { 
-        name: 'Centripetal Force', 
-        latex: 'F_c = \\frac{m v^2}{r} = m \\omega^2 r', 
-        insertText: '(m*v^2)/r' 
+      {
+        name: 'Centripetal Force',
+        latex: 'F_c = \\frac{m v^2}{r} = m \\omega^2 r',
+        insertText: '(m*v^2)/r'
       },
-      { 
-        name: 'Wave Speed Formula', 
-        latex: 'v = f \\lambda', 
-        insertText: 'f * λ' 
+      {
+        name: 'Wave Speed Formula',
+        latex: 'v = f \\lambda',
+        insertText: 'f * λ'
       },
-      { 
-        name: 'Ohm’s Law', 
-        latex: 'V = I R', 
-        insertText: 'I * R' 
+      {
+        name: 'Ohm’s Law',
+        latex: 'V = I R',
+        insertText: 'I * R'
       },
-      { 
-        name: 'Electrical Power', 
-        latex: 'P = I V = I^2 R = \\frac{V^2}{R}', 
-        insertText: 'I^2 * R' 
+      {
+        name: 'Electrical Power',
+        latex: 'P = I V = I^2 R = \\frac{V^2}{R}',
+        insertText: 'I^2 * R'
       }
     ]
   },
@@ -343,40 +343,40 @@ const FORMULA_CATEGORIES = [
     subtitle: 'College Linear Algebra, Australian Specialist Math, IB AA HL',
     icon: '🔢',
     formulas: [
-      { 
-        name: '2x2 Matrix Determinant', 
-        latex: '\\det(A) = ad - bc', 
-        insertText: 'a*d - b*c' 
+      {
+        name: '2x2 Matrix Determinant',
+        latex: '\\det(A) = ad - bc',
+        insertText: 'a*d - b*c'
       },
-      { 
-        name: '2x2 Matrix Inverse', 
-        latex: 'A^{-1} = \\frac{1}{ad - bc}\\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}', 
-        insertText: '(1/(a*d - b*c))' 
+      {
+        name: '2x2 Matrix Inverse',
+        latex: 'A^{-1} = \\frac{1}{ad - bc}\\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}',
+        insertText: '(1/(a*d - b*c))'
       },
-      { 
-        name: '3D Vector Magnitude', 
-        latex: '|\\vec{v}| = \\sqrt{x^2 + y^2 + z^2}', 
-        insertText: '√(x^2 + y^2 + z^2)' 
+      {
+        name: '3D Vector Magnitude',
+        latex: '|\\vec{v}| = \\sqrt{x^2 + y^2 + z^2}',
+        insertText: '√(x^2 + y^2 + z^2)'
       },
-      { 
-        name: 'Vector Dot Product (Scalar)', 
-        latex: '\\vec{u} \\cdot \\vec{v} = |\\vec{u}||\\vec{v}|\\cos\\theta', 
-        insertText: '|u|*|v|*cos(θ)' 
+      {
+        name: 'Vector Dot Product (Scalar)',
+        latex: '\\vec{u} \\cdot \\vec{v} = |\\vec{u}||\\vec{v}|\\cos\\theta',
+        insertText: '|u|*|v|*cos(θ)'
       },
-      { 
-        name: 'Vector Cross Product Magnitude', 
-        latex: '|\\vec{u} \\times \\vec{v}| = |\\vec{u}| |\\vec{v}| \\sin(\\theta)', 
-        insertText: '|u| * |v| * sin(θ)' 
+      {
+        name: 'Vector Cross Product Magnitude',
+        latex: '|\\vec{u} \\times \\vec{v}| = |\\vec{u}| |\\vec{v}| \\sin(\\theta)',
+        insertText: '|u| * |v| * sin(θ)'
       },
-      { 
-        name: 'Euler’s Identity', 
-        latex: 'e^{i\\pi} + 1 = 0', 
-        insertText: 'e^(i*π) + 1 = 0' 
+      {
+        name: 'Euler’s Identity',
+        latex: 'e^{i\\pi} + 1 = 0',
+        insertText: 'e^(i*π) + 1 = 0'
       },
-      { 
-        name: 'Complex Number Polar Form', 
-        latex: 'z = r(\\cos\\theta + i\\sin\\theta) = r e^{i\\theta}', 
-        insertText: 'r*(cos(θ) + i*sin(θ))' 
+      {
+        name: 'Complex Number Polar Form',
+        latex: 'z = r(\\cos\\theta + i\\sin\\theta) = r e^{i\\theta}',
+        insertText: 'r*(cos(θ) + i*sin(θ))'
       }
     ]
   }
@@ -425,7 +425,7 @@ const exprToLaTeX = (expr: string): string => {
   latex = latex.replace(/÷/g, '\\div');
   latex = latex.replace(/\//g, '\\div');
   latex = latex.replace(/−/g, '-');
-  
+
   // Trigonometry operators
   latex = latex.replace(/\bsin\b/g, '\\sin');
   latex = latex.replace(/\bcos\b/g, '\\cos');
@@ -508,7 +508,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
   // Intelligent word to mathematical symbol converter for students
   const spokenToMath = (text: string): string => {
     let cleaned = text.toLowerCase();
-    
+
     const replacements: { [key: string]: string } = {
       // English & Hindi spoken operators
       'plus': '+',
@@ -535,7 +535,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
       'decimal': '.',
       ' dash ': '.',
       'dot': '.',
-      
+
       // Variable support (Standard US high school algebra)
       ' x ': ' x ',
       ' y ': ' y ',
@@ -545,7 +545,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
       'एक्स': 'x',
       'वाई': 'y',
       'वाइ': 'y',
-      
+
       // Advanced operations
       'square root': '√',
       'under root': '√',
@@ -562,7 +562,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
       'cosine': 'cos(',
       'tangent of': 'tan(',
       'tangent': 'tan(',
-      
+
       // Brackets
       'open bracket': '(',
       'bracket open': '(',
@@ -612,7 +612,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
 
   const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
+
     if (!SpeechRecognition) {
       setSpeechError("Mic listening not supported in this browser. Please use Chrome/Safari.");
       return;
@@ -625,7 +625,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
       const rec = new SpeechRecognition();
       rec.continuous = false;
       // 'en-IN' is brilliant because it captures both English and Hindi accents & digits with superb accuracy
-      rec.lang = 'en-IN'; 
+      rec.lang = 'en-IN';
       rec.interimResults = false;
       rec.maxAlternatives = 1;
 
@@ -689,10 +689,10 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
       setExpression(prev => prev.slice(0, -1));
     } else if (value === '=') {
       if (!expression.trim()) return;
-      
+
       let localCalculatedResult = '';
       let isAlgebra = expression.includes('x') || expression.includes('y') || expression.includes('=');
-      
+
       if (!isAlgebra) {
         try {
           let sanitized = expression
@@ -719,7 +719,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
           }
 
           const allowedChars = sanitized.replace(/[^0-9+\-*/().\s|Math\.PI|Math\.sqrt|**|sin|cos|tan|asin|acos|atan]/g, '');
-          
+
           if (allowedChars.trim()) {
             const isDeg = trigMode === 'deg';
             const degToRad = (val: number) => (val * Math.PI) / 180;
@@ -753,7 +753,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
           }
         } catch (err) {
           console.error("Evaluation error:", err);
-          
+
           // Check if parenthesis are unbalanced
           const origOpen = (expression.match(/\(/g) || []).length;
           const origClose = (expression.match(/\)/g) || []).length;
@@ -776,7 +776,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
       const lastChar = expression.slice(-1);
       const isOperator = ['+', '−', '×', '÷'].includes(value);
       const isLastOperator = ['+', '−', '×', '÷'].includes(lastChar);
-      
+
       if (isOperator && isLastOperator) {
         setExpression(prev => prev.slice(0, -1) + value);
       } else {
@@ -797,7 +797,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
     <div className="flex flex-col h-full bg-[#faf9f6] text-zinc-900 overflow-y-auto">
       {/* Header */}
       <header className="px-6 py-5 bg-white border-b border-zinc-100 flex justify-between items-center sticky top-0 z-10">
-        <button 
+        <button
           onClick={() => {
             triggerVibration(15);
             onBack();
@@ -826,17 +826,16 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
         <div className="flex-1 flex flex-col bg-white rounded-[2rem] border border-zinc-200/60 p-6 shadow-sm">
           {/* Display screen */}
           <div className="bg-zinc-50 rounded-2xl p-5 mb-4 border border-zinc-100 flex flex-col gap-3 min-h-[140px] w-full focus-within:border-amber-500/30 focus-within:ring-1 focus-within:ring-amber-500/20 transition-all relative">
-            
+
             {/* Top row with Mic button & Input field */}
             <div className="flex items-center justify-between w-full gap-3 border-b border-zinc-200/50 pb-2">
               {/* Mic Icon Button */}
               <button
                 onClick={isListening ? stopListening : startListening}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all border shrink-0 ${
-                  isListening 
-                    ? 'bg-rose-500 border-rose-600 text-white shadow-md shadow-rose-500/25 animate-pulse' 
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all border shrink-0 ${isListening
+                    ? 'bg-rose-500 border-rose-600 text-white shadow-md shadow-rose-500/25 animate-pulse'
                     : 'bg-white hover:bg-zinc-100 border-zinc-200/80 text-zinc-500 hover:text-zinc-950 shadow-sm'
-                }`}
+                  }`}
                 title="Speak Equation"
               >
                 {isListening ? (
@@ -927,11 +926,10 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                   triggerVibration(10);
                   setShowUnitCircle(!showUnitCircle);
                 }}
-                className={`rainbow-glow-btn flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full font-black text-[11px] sm:text-xs text-white tracking-tight transition-all active:scale-95 shadow-md shrink-0 max-w-full overflow-hidden whitespace-nowrap cursor-pointer ${
-                  showUnitCircle
+                className={`rainbow-glow-btn flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full font-black text-[11px] sm:text-xs text-white tracking-tight transition-all active:scale-95 shadow-md shrink-0 max-w-full overflow-hidden whitespace-nowrap cursor-pointer ${showUnitCircle
                     ? 'ring-2 ring-white/90 brightness-110 scale-[1.03]'
                     : 'hover:brightness-105 opacity-95'
-                }`}
+                  }`}
                 title="Interactive Unit Circle Explorer"
               >
                 <span className="text-xs">🪐</span>
@@ -1014,20 +1012,19 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                   const isOperator = ['÷', '×', '−', '+', '='].includes(btn);
                   const isClear = ['C', '⌫'].includes(btn);
                   const isEquals = btn === '=';
-                  
+
                   return (
                     <button
                       key={btn}
                       onClick={() => handleKeyPress(btn)}
-                      className={`h-14 rounded-2xl font-bold text-lg flex items-center justify-center transition-all ${
-                        isEquals 
-                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-orange-500/10' 
-                          : isOperator 
-                            ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border border-amber-500/15' 
-                            : isClear 
+                      className={`h-14 rounded-2xl font-bold text-lg flex items-center justify-center transition-all ${isEquals
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-orange-500/10'
+                          : isOperator
+                            ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 border border-amber-500/15'
+                            : isClear
                               ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 border border-rose-500/15'
                               : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200/40'
-                      }`}
+                        }`}
                     >
                       {btn}
                     </button>
@@ -1048,11 +1045,10 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
               onNavigateToTab?.('aitutor');
             }}
             disabled={!expression}
-            className={`mt-5 w-full py-4 px-5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
-              expression 
-                ? 'bg-zinc-950 text-white hover:bg-zinc-900 shadow-md shadow-zinc-950/10 cursor-pointer' 
+            className={`mt-5 w-full py-4 px-5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${expression
+                ? 'bg-zinc-950 text-white hover:bg-zinc-900 shadow-md shadow-zinc-950/10 cursor-pointer'
                 : 'bg-zinc-100 text-zinc-400 border border-zinc-200/40 cursor-not-allowed'
-            }`}
+              }`}
           >
             <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
             <span>Explain Step-by-Step with AI</span>
@@ -1097,7 +1093,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                
+
                 <div className="p-6 space-y-4">
                   {FORMULA_CATEGORIES.map((category) => (
                     <div key={category.name} className="space-y-2">
@@ -1106,11 +1102,10 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                           triggerVibration(10);
                           setExpandedFormulaCategory(expandedFormulaCategory === category.name ? null : category.name);
                         }}
-                        className={`w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                          expandedFormulaCategory === category.name
+                        className={`w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all ${expandedFormulaCategory === category.name
                             ? 'bg-amber-50/70 border-amber-300 shadow-xs'
                             : 'bg-zinc-50 border-zinc-150 hover:border-zinc-300'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <span className="text-base shrink-0">{category.icon}</span>
@@ -1125,7 +1120,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                           <ChevronRight className="w-4 h-4 text-zinc-400 shrink-0" />
                         )}
                       </button>
-                      
+
                       <AnimatePresence>
                         {expandedFormulaCategory === category.name && (
                           <motion.div

@@ -2077,10 +2077,11 @@ Please evaluate this answer strictly according to your system rubric.`;
                         7000
                       );
                     } else {
+                      const realMsg = String(err?.message || err?.toString?.() || 'Unknown error');
                       showToast(
-                        '❌ Camera Error. Try again or use Gallery instead.',
+                        `❌ Camera Error: ${realMsg}`,
                         'error',
-                        5000
+                        8000
                       );
                       console.warn('[AITutor] Camera error:', err);
                     }

@@ -386,19 +386,13 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
   );
 
   let requestedModel = params.model;
-  if (requestedModel === "gemini-flash-latest") {
-    requestedModel = "gemini-3.7-flash";
-  }
-
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-2.0-flash",
+    requestedModel || "gemini-2.5-flash",
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
-    "gemini-2.5-flash"
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
   ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -616,7 +610,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
       config: {
         responseMimeType: "application/json",
         temperature: 0.2,          // ⚡ Low temp = focused, faster JSON output
-        maxOutputTokens: 2048,     // ⚡ Cap tokens — prevents unbounded slow generation
+        maxOutputTokens: 8192,     // ⚡ Large token capacity so full multi-step solutions never truncate
         candidateCount: 1          // ⚡ Only generate 1 candidate, not multiple
       }
     });
@@ -896,12 +890,11 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-3.7-flash",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite",
-        "gemini-flash-latest",
-        "gemini-2.5-flash"
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro"
       ];
 
       const now = Date.now();
@@ -933,6 +926,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             config: { 
               systemInstruction: { parts: [{ text: systemInstruction }] },
               responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
+              maxOutputTokens: 8192,
               ...(shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {})
             }
           });
@@ -987,13 +981,13 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       }
     } else {
       const response = await safeGenerateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents,
         config: { 
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
           temperature: 0.7,        // ⚡ Balanced temp for conversational AI
-          maxOutputTokens: 1500,   // ⚡ Cap output for fast chat responses
+          maxOutputTokens: 8192,   // ⚡ High output token ceiling to prevent incomplete generation
           candidateCount: 1,       // ⚡ Single candidate only
           ...(shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {})
         }
@@ -1377,14 +1371,13 @@ GRAMMAR AND POLISH:
 OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
 
-    const originalModel = "gemini-3.7-flash";
+    const originalModel = "gemini-2.5-flash";
     let modelsToTry = [
-      "gemini-3.7-flash",
-      "gemini-3.6-flash",
-      "gemini-3.5-flash",
-      "gemini-3.1-flash-lite",
-      "gemini-flash-latest",
-      "gemini-2.5-flash"
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro"
     ];
     
     const now = Date.now();
@@ -1436,7 +1429,7 @@ OVERALL VERDICT:
           config: { 
             systemInstruction: systemInstruction,
             temperature: 0.15,
-            maxOutputTokens: 1500
+            maxOutputTokens: 8192
           }
         });
         break; // Successfully got the stream

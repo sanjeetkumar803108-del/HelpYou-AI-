@@ -653,11 +653,16 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                   triggerVibration(10);
                   setShowUnitCircle(!showUnitCircle);
                 }}
-                className={`flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full font-black text-[11px] sm:text-xs tracking-tight transition-all active:scale-95 border shadow-xs shrink-0 max-w-full overflow-hidden whitespace-nowrap ${
-                  showUnitCircle ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 border-zinc-200/40'
+                className={`rainbow-glow-btn flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full font-black text-[11px] sm:text-xs text-white tracking-tight transition-all active:scale-95 shadow-md shrink-0 max-w-full overflow-hidden whitespace-nowrap cursor-pointer ${
+                  showUnitCircle
+                    ? 'ring-2 ring-white/90 brightness-110 scale-[1.03]'
+                    : 'hover:brightness-105 opacity-95'
                 }`}
+                title="Interactive Unit Circle Explorer"
               >
-                <span className="truncate">Unit Circle</span>
+                <span className="text-xs">🪐</span>
+                <span className="truncate font-black drop-shadow-xs">Unit Circle</span>
+                <span className="text-[10px] animate-pulse">✨</span>
               </button>
             </div>
           </div>

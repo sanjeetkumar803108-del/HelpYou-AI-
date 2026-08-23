@@ -669,6 +669,7 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
   
   // Hold & Typist States
   const [isHolding, setIsHolding] = useState(false);
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
 
   const [viewportBottomOffset, setViewportBottomOffset] = useState(0);
 
@@ -2050,10 +2051,12 @@ Please evaluate this answer strictly according to your system rubric.`;
                 onClick={async () => {
                   setShowPlusMenu(false);
                   triggerVibration(10);
+                  setIsCameraLoading(true);
 
                   if (!Capacitor.isNativePlatform()) {
                     // Web fallback — use hidden file input
                     cameraInputRef.current?.click();
+                    setIsCameraLoading(false);
                     return;
                   }
 
@@ -2062,26 +2065,47 @@ Please evaluate this answer strictly according to your system rubric.`;
                     const picked = await takeNativePhoto();
                     if (picked) {
                       handleNativeImagePicked(picked);
+                      showToast('✅ Photo captured! Sending to AI...', 'success', 2000);
                     }
-                    // If null → user cancelled, do nothing
+                    // If null → user cancelled, do nothing (silently)
                   } catch (err: any) {
                     const code = (err as any)?.code;
                     if (code === 'denied') {
                       showToast(
-                        '📷 Camera access denied. Go to phone Settings → Apps → HelpYou AI → Permissions → Enable Camera.',
+                        '📷 Camera Blocked: Go to Phone Settings → Apps → HelpYou AI → Permissions → Camera → Allow',
                         'warning',
-                        6000
+                        7000
                       );
                     } else {
-                      showToast('Could not open camera. Please try again.', 'error');
+                      showToast(
+                        '❌ Camera Error. Try again or use Gallery instead.',
+                        'error',
+                        5000
+                      );
                       console.warn('[AITutor] Camera error:', err);
                     }
+                  } finally {
+                    setIsCameraLoading(false);
                   }
                 }}
-                className="w-full text-left p-2 hover:bg-zinc-50 rounded-xl text-xs font-bold text-zinc-700 flex items-center gap-2.5 transition-colors mb-1 cursor-pointer"
+                disabled={isCameraLoading}
+                className={`w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2.5 transition-colors mb-1 cursor-pointer ${
+                  isCameraLoading
+                    ? 'bg-emerald-100 text-emerald-700 opacity-60'
+                    : 'hover:bg-zinc-50 text-zinc-700'
+                }`}
               >
-                <Camera className="w-4 h-4 text-emerald-600" />
-                <span>Camera</span>
+                {isCameraLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                    <span>Opening Camera...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4 text-emerald-600" />
+                    <span>Camera</span>
+                  </>
+                )}
               </button>
               <button 
                 onClick={async () => {

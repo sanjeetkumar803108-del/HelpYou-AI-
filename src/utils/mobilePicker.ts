@@ -45,6 +45,86 @@ export async function pickNativeFiles(options: {
 
   try {
     if (types === 'image') {
+      if (multiple) {
+        // 1. Try FilePicker.pickImages for multi-image gallery selection without limits
+        try {
+          const result = await FilePicker.pickImages({
+            multiple: true,
+            readData: true,
+          });
+          if (result && result.files && result.files.length > 0) {
+            const output: MobilePickedFile[] = [];
+            for (const file of result.files) {
+              if (!file.data) continue;
+              const mimeType = file.mimeType || 'image/jpeg';
+              const name = file.name || `gallery_${Date.now()}_${output.length}.jpg`;
+              const base64 = file.data;
+              const dataUrl = `data:${mimeType};base64,${base64}`;
+              const blob = base64ToBlob(base64, mimeType);
+              const fileObj = blobToFile(blob, name);
+              output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
+            }
+            if (output.length > 0) return output;
+          }
+        } catch (e1) {
+          console.warn('[mobilePicker] FilePicker.pickImages error, trying pickFiles:', e1);
+        }
+
+        // 2. Try FilePicker.pickFiles with image mime types
+        try {
+          const result = await FilePicker.pickFiles({
+            types: ['image/*'],
+            multiple: true,
+            readData: true,
+          });
+          if (result && result.files && result.files.length > 0) {
+            const output: MobilePickedFile[] = [];
+            for (const file of result.files) {
+              if (!file.data) continue;
+              const mimeType = file.mimeType || 'image/jpeg';
+              const name = file.name || `gallery_${Date.now()}_${output.length}.jpg`;
+              const base64 = file.data;
+              const dataUrl = `data:${mimeType};base64,${base64}`;
+              const blob = base64ToBlob(base64, mimeType);
+              const fileObj = blobToFile(blob, name);
+              output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
+            }
+            if (output.length > 0) return output;
+          }
+        } catch (e2) {
+          console.warn('[mobilePicker] FilePicker.pickFiles error, trying Camera.pickImages:', e2);
+        }
+
+        // 3. Try Camera.pickImages
+        try {
+          const res = await Camera.pickImages({ quality: 90 });
+          if (res && res.photos && res.photos.length > 0) {
+            const output: MobilePickedFile[] = [];
+            for (const p of res.photos) {
+              if (!p.webPath) continue;
+              try {
+                const fetched = await fetch(p.webPath);
+                const blob = await fetched.blob();
+                const mimeType = p.format ? `image/${p.format}` : (blob.type || 'image/jpeg');
+                const name = `gallery_${Date.now()}_${output.length}.${p.format || 'jpg'}`;
+                const fileObj = blobToFile(blob, name);
+                const dataUrl = await new Promise<string>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.readAsDataURL(blob);
+                });
+                const base64 = dataUrl.split(',')[1] || '';
+                output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
+              } catch (_) {}
+            }
+            if (output.length > 0) return output;
+          }
+        } catch (e3) {
+          console.warn('[mobilePicker] Camera.pickImages error:', e3);
+        }
+      }
+
+      // Single image fallback (Camera.getPhoto)
       const photo = await Camera.getPhoto({
         quality: 90,
         allowEditing: false,

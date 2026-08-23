@@ -72,10 +72,24 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   const [touchDraggingIndex, setTouchDraggingIndex] = useState<number | null>(null);
   const longPressTimeout = useRef<any>(null);
 
+  const handlePickImages = async () => {
+    triggerVibration(10);
+    if (Capacitor.isNativePlatform()) {
+      const picked = await pickNativeFiles({ types: 'image', multiple: true });
+      if (picked && picked.length > 0) {
+        const newImages = picked.map(p => p.dataUrl);
+        setImages(prev => [...prev, ...newImages]);
+      }
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newImages = Array.from(e.target.files).map(file => URL.createObjectURL(file));
       setImages(prev => [...prev, ...newImages]);
+      e.target.value = '';
     }
   };
 
@@ -420,12 +434,22 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         )}
       </AnimatePresence>
 
+      {/* Hidden Multi-File Input */}
+      <input 
+        type="file" 
+        multiple 
+        accept="image/*" 
+        className="hidden" 
+        ref={fileInputRef}
+        onChange={handleImageUpload} 
+      />
+
       {/* FIXED/STICKY HEADER BAR */}
       <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <button 
             onClick={handleHeaderBack}
-            className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0"
+            className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0 cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -434,57 +458,69 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
               <FileImage className="w-5 h-5 text-blue-600 mr-2 shrink-0" />
               <span>Image to PDF</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Combine multiple photos into one PDF</p>
+            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">
+              {images.length > 0 ? `${images.length} photos selected • Unlimited` : 'Select unlimited gallery photos into one PDF'}
+            </p>
           </div>
         </div>
 
-        {onOpenHistory && (
-          <button
-            onClick={onOpenHistory}
-            className="w-9 h-9 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center border border-rose-200/80 shadow-xs transition-all cursor-pointer shrink-0"
-            title="View PDF History"
-          >
-            <History className="w-4.5 h-4.5" />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {images.length > 0 && (
+            <button
+              onClick={() => {
+                triggerVibration(10);
+                setImages([]);
+              }}
+              className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
+
+          {onOpenHistory && (
+            <button
+              onClick={onOpenHistory}
+              className="w-9 h-9 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center border border-rose-200/80 shadow-xs transition-all cursor-pointer shrink-0"
+              title="View PDF History"
+            >
+              <History className="w-4.5 h-4.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* SCROLLABLE BODY */}
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-6 z-10 relative">
         {images.length === 0 ? (
           <div 
-            onClick={async () => {
-              if (Capacitor.isNativePlatform()) {
-                const picked = await pickNativeFiles({ types: 'image', multiple: true });
-                if (picked && picked.length > 0) {
-                  const newImages = picked.map(p => p.dataUrl);
-                  setImages(prev => [...prev, ...newImages]);
-                }
-              } else {
-                fileInputRef.current?.click();
-              }
-            }}
-            className="flex flex-col items-center justify-center h-48 bg-white border border-dashed border-zinc-300 rounded-[2rem] hover:bg-zinc-50 transition-colors cursor-pointer shadow-sm"
+            onClick={handlePickImages}
+            className="flex flex-col items-center justify-center min-h-[260px] p-6 bg-white border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-[2rem] hover:bg-blue-50/20 transition-all cursor-pointer shadow-sm text-center group"
           >
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 border border-blue-100">
-              <Upload className="w-8 h-8" />
+            <div className="w-16 h-16 bg-blue-50 group-hover:bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4 border border-blue-100 shadow-xs transition-all">
+              <Upload className="w-8 h-8 group-hover:scale-110 transition-transform" />
             </div>
-            <p className="text-zinc-500 font-bold">Select images to convert</p>
-            <input 
-              type="file" 
-              multiple 
-              accept="image/*" 
-              className="hidden" 
-              ref={fileInputRef}
-              onChange={handleImageUpload} 
-            />
+            <p className="text-zinc-900 font-extrabold text-base mb-1">Select Unlimited Photos</p>
+            <p className="text-zinc-400 text-xs font-semibold max-w-xs mb-3">
+              Choose as many photos as you want from your gallery to create a multi-page PDF document
+            </p>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[11px] font-bold border border-blue-100">
+              <span>⚡ Unlimited Multi-Selection</span>
+            </span>
           </div>
         ) : (
           <div className="flex flex-col">
-            {/* Interactive Drag & Drop Reordering Indicator */}
-            <div className="flex items-center gap-2 bg-blue-50/75 border border-blue-100/50 rounded-2xl p-3 mb-4 text-[11px] font-semibold text-blue-700 animate-fade-in">
-              <span className="text-xs">💡</span>
-              <span>Long-press and drag any image to rearrange. Index badges will auto-recalculate.</span>
+            {/* Interactive Drag & Drop Reordering Indicator & Add More Banner */}
+            <div className="flex items-center justify-between gap-2 bg-blue-50/75 border border-blue-100/50 rounded-2xl p-3 mb-4 text-[11px] font-semibold text-blue-700 animate-fade-in">
+              <div className="flex items-center gap-2">
+                <span className="text-xs">💡</span>
+                <span>Drag images to reorder pages ({images.length} pages)</span>
+              </div>
+              <button
+                onClick={handlePickImages}
+                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-extrabold shadow-xs transition-all cursor-pointer shrink-0"
+              >
+                + Add More
+              </button>
             </div>
 
             {/* Grid display with Drag events */}
@@ -518,7 +554,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
                     
                     {/* Index Badge */}
                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-blue-500 shadow-sm">
-                      {idx + 1}
+                      Page {idx + 1}
                     </div>
 
                     <button 
@@ -526,7 +562,8 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
                         e.stopPropagation();
                         removeImage(idx);
                       }}
-                      className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600 transition-colors z-30"
+                      className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-600 transition-colors z-30 cursor-pointer"
+                      title="Remove image"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                     </button>
@@ -540,29 +577,14 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
 
               {/* Add Images Card */}
               <div 
-                onClick={async () => {
-                  if (Capacitor.isNativePlatform()) {
-                    const picked = await pickNativeFiles({ types: 'image', multiple: true });
-                    if (picked && picked.length > 0) {
-                      const newImages = picked.map(p => p.dataUrl);
-                      setImages(prev => [...prev, ...newImages]);
-                    }
-                  } else {
-                    fileInputRef.current?.click();
-                  }
-                }}
-                className="relative aspect-[3/4] bg-white border border-dashed border-zinc-300 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 transition-colors shadow-sm"
+                onClick={handlePickImages}
+                className="relative aspect-[3/4] bg-white border-2 border-dashed border-zinc-300 hover:border-blue-400 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50/20 transition-all shadow-sm group text-center p-3"
               >
-                <Upload className="w-6 h-6 text-blue-600 mb-2" />
-                <span className="text-xs text-zinc-500 font-bold">Add Images</span>
-                <input 
-                  type="file" 
-                  multiple 
-                  accept="image/*" 
-                  className="hidden" 
-                  ref={fileInputRef}
-                  onChange={handleImageUpload} 
-                />
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <span className="text-xs text-zinc-900 font-extrabold block">Add More</span>
+                <span className="text-[10px] text-zinc-400 font-semibold block">Unlimited</span>
               </div>
             </div>
           </div>

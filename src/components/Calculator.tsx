@@ -18,8 +18,13 @@ const FORMULA_CATEGORIES = [
       },
       { 
         name: 'Vertex Form of Parabola', 
-        latex: 'y = a(x - h)^2 + k, \\quad h = -\\frac{b}{2a}', 
+        latex: 'y = a(x - h)^2 + k', 
         insertText: 'a*(x - h)^2 + k' 
+      },
+      { 
+        name: 'Parabola Axis of Symmetry', 
+        latex: 'h = -\\frac{b}{2a}', 
+        insertText: '-b/(2*a)' 
       },
       { 
         name: 'Binomial Theorem (General Expansion)', 
@@ -27,29 +32,34 @@ const FORMULA_CATEGORIES = [
         insertText: '(a + b)^n' 
       },
       { 
-        name: 'Difference & Sum of Cubes', 
-        latex: 'a^3 \\pm b^3 = (a \\pm b)(a^2 \\mp ab + b^2)', 
+        name: 'Difference of Cubes', 
+        latex: 'a^3 - b^3 = (a - b)(a^2 + ab + b^2)', 
         insertText: '(a - b)*(a^2 + a*b + b^2)' 
       },
       { 
+        name: 'Sum of Cubes', 
+        latex: 'a^3 + b^3 = (a + b)(a^2 - ab + b^2)', 
+        insertText: '(a + b)*(a^2 - a*b + b^2)' 
+      },
+      { 
         name: 'Logarithm Change of Base', 
-        latex: '\\log_b(x) = \\frac{\\ln(x)}{\\ln(b)} = \\frac{\\log_{10}(x)}{\\log_{10}(b)}', 
+        latex: '\\log_b(x) = \\frac{\\ln(x)}{\\ln(b)}', 
         insertText: 'ln(x)/ln(b)' 
       },
       { 
-        name: 'Exponent Multiplication & Division', 
-        latex: 'x^a \\cdot x^b = x^{a+b}, \\quad \\frac{x^a}{x^b} = x^{a-b}', 
+        name: 'Product of Powers (Exponents)', 
+        latex: 'x^a \\cdot x^b = x^{a+b}', 
         insertText: 'x^(a+b)' 
+      },
+      { 
+        name: 'Quotient of Powers (Exponents)', 
+        latex: '\\frac{x^a}{x^b} = x^{a-b}', 
+        insertText: 'x^(a-b)' 
       },
       { 
         name: 'Arithmetic Series Sum (AP)', 
         latex: 'S_n = \\frac{n}{2}\\left(2a_1 + (n - 1)d\\right)', 
         insertText: '(n/2)*(2*a + (n-1)*d)' 
-      },
-      { 
-        name: 'Infinite Geometric Series Sum', 
-        latex: 'S_\\infty = \\frac{a_1}{1 - r} \\quad (|r| < 1)', 
-        insertText: 'a/(1 - r)' 
       }
     ]
   },
@@ -59,9 +69,14 @@ const FORMULA_CATEGORIES = [
     icon: '📏',
     formulas: [
       { 
-        name: 'Pythagorean Theorem & Distance', 
-        latex: 'c = \\sqrt{a^2 + b^2}, \\quad d = \\sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}', 
+        name: 'Pythagorean Theorem', 
+        latex: 'c = \\sqrt{a^2 + b^2}', 
         insertText: '√(a^2 + b^2)' 
+      },
+      { 
+        name: '2D Distance Formula', 
+        latex: 'd = \\sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}', 
+        insertText: '√((x2 - x1)^2 + (y2 - y1)^2)' 
       },
       { 
         name: 'Law of Cosines (Any Triangle)', 
@@ -74,29 +89,49 @@ const FORMULA_CATEGORIES = [
         insertText: '(a*sin(B))/sin(A)' 
       },
       { 
-        name: 'Fundamental Pythagorean Trig Identities', 
-        latex: '\\sin^2(\\theta) + \\cos^2(\\theta) = 1, \\quad 1 + \\tan^2(\\theta) = \\sec^2(\\theta)', 
+        name: 'Pythagorean Sine-Cosine Identity', 
+        latex: '\\sin^2(\\theta) + \\cos^2(\\theta) = 1', 
         insertText: 'sin(x)^2 + cos(x)^2' 
       },
       { 
-        name: 'Double Angle Formulas', 
-        latex: '\\sin(2\\theta) = 2\\sin\\theta\\cos\\theta, \\quad \\cos(2\\theta) = \\cos^2\\theta - \\sin^2\\theta', 
+        name: 'Tangent-Secant Identity', 
+        latex: '1 + \\tan^2(\\theta) = \\sec^2(\\theta)', 
+        insertText: '1 + tan(x)^2' 
+      },
+      { 
+        name: 'Double Angle Sine', 
+        latex: '\\sin(2\\theta) = 2\\sin\\theta\\cos\\theta', 
         insertText: '2*sin(x)*cos(x)' 
       },
       { 
+        name: 'Double Angle Cosine', 
+        latex: '\\cos(2\\theta) = \\cos^2\\theta - \\sin^2\\theta', 
+        insertText: 'cos(x)^2 - sin(x)^2' 
+      },
+      { 
         name: 'Heron’s Area Formula (Triangle)', 
-        latex: 'A = \\sqrt{s(s - a)(s - b)(s - c)}, \\quad s = \\frac{a + b + c}{2}', 
+        latex: 'A = \\sqrt{s(s - a)(s - b)(s - c)}', 
         insertText: '√(s*(s-a)*(s-b)*(s-c))' 
       },
       { 
-        name: 'Arc Length & Sector Area (Radians)', 
-        latex: 's = r\\theta, \\quad A_{\\text{sector}} = \\frac{1}{2} r^2 \\theta', 
+        name: 'Arc Length (Radians)', 
+        latex: 's = r\\theta', 
+        insertText: 'r*θ' 
+      },
+      { 
+        name: 'Sector Area (Radians)', 
+        latex: 'A_{\\text{sector}} = \\frac{1}{2} r^2 \\theta', 
         insertText: '(1/2)*r^2*θ' 
       },
       { 
-        name: 'Sphere & Cylinder Volume & Surface Area', 
-        latex: 'V_{\\text{sphere}} = \\frac{4}{3}\\pi r^3, \\quad V_{\\text{cylinder}} = \\pi r^2 h', 
+        name: 'Sphere Volume', 
+        latex: 'V = \\frac{4}{3}\\pi r^3', 
         insertText: '(4/3)*π*r^3' 
+      },
+      { 
+        name: 'Cylinder Volume', 
+        latex: 'V = \\pi r^2 h', 
+        insertText: 'π*r^2*h' 
       }
     ]
   },
@@ -106,13 +141,23 @@ const FORMULA_CATEGORIES = [
     icon: '⚡',
     formulas: [
       { 
-        name: 'Power & Chain Derivative Rules', 
-        latex: '\\frac{d}{dx}\\left(x^n\\right) = n x^{n-1}, \\quad \\frac{d}{dx}[f(g(x))] = f\'(g(x)) \\cdot g\'(x)', 
+        name: 'Derivative Power Rule', 
+        latex: '\\frac{d}{dx}\\left(x^n\\right) = n x^{n-1}', 
         insertText: 'n*x^(n-1)' 
       },
       { 
-        name: 'Product & Quotient Rules', 
-        latex: '(uv)\' = u\'v + uv\', \\quad \\left(\\frac{u}{v}\\right)\' = \\frac{u\'v - uv\'}{v^2}', 
+        name: 'Derivative Chain Rule', 
+        latex: '\\frac{d}{dx}[f(g(x))] = f\'(g(x)) \\cdot g\'(x)', 
+        insertText: 'f\'(g(x))*g\'(x)' 
+      },
+      { 
+        name: 'Derivative Product Rule', 
+        latex: '(uv)\' = u\'v + uv\'', 
+        insertText: 'u\'*v + u*v\'' 
+      },
+      { 
+        name: 'Derivative Quotient Rule', 
+        latex: '\\left(\\frac{u}{v}\\right)\' = \\frac{u\'v - uv\'}{v^2}', 
         insertText: '(u\'*v - u*v\')/(v^2)' 
       },
       { 
@@ -126,18 +171,23 @@ const FORMULA_CATEGORIES = [
         insertText: 'F(b) - F(a)' 
       },
       { 
-        name: 'Standard Exponential & Logarithmic Integrals', 
-        latex: '\\int e^{kx} \\, dx = \\frac{1}{k}e^{kx} + C, \\quad \\int \\frac{1}{x} \\, dx = \\ln|x| + C', 
+        name: 'Standard Exponential Integral', 
+        latex: '\\int e^{kx} \\, dx = \\frac{1}{k}e^{kx} + C', 
         insertText: '(1/k)*e^(k*x)' 
       },
       { 
-        name: 'Exponential Growth / Decay Differential Eq.', 
+        name: 'Standard Logarithmic Integral', 
+        latex: '\\int \\frac{1}{x} \\, dx = \\ln|x| + C', 
+        insertText: 'ln(abs(x))' 
+      },
+      { 
+        name: 'Exponential Growth & Decay Differential Eq.', 
         latex: '\\frac{dy}{dt} = ky \\implies y(t) = y_0 e^{kt}', 
         insertText: 'y0*e^(k*t)' 
       },
       { 
         name: 'Taylor / Maclaurin Series Expansion', 
-        latex: 'e^x = \\sum_{n=0}^\\infty \\frac{x^n}{n!} = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\dots', 
+        latex: 'e^x = \\sum_{n=0}^\\infty \\frac{x^n}{n!} = 1 + x + \\frac{x^2}{2!} + \\dots', 
         insertText: '1 + x + (x^2)/2 + (x^3)/6' 
       }
     ]
@@ -149,13 +199,18 @@ const FORMULA_CATEGORIES = [
     formulas: [
       { 
         name: 'Normal Distribution Z-Score', 
-        latex: 'z = \\frac{x - \\mu}{\\sigma}, \\quad x = \\mu + z\\sigma', 
+        latex: 'z = \\frac{x - \\mu}{\\sigma}', 
         insertText: '(x - μ)/σ' 
       },
       { 
-        name: 'Sample Standard Deviation & Variance', 
-        latex: 's = \\sqrt{\\frac{\\sum (x_i - \\bar{x})^2}{n - 1}}, \\quad s^2 = \\text{Variance}', 
+        name: 'Sample Standard Deviation', 
+        latex: 's = \\sqrt{\\frac{\\sum (x_i - \\bar{x})^2}{n - 1}}', 
         insertText: '√(Σ(x - μ)^2 / (n - 1))' 
+      },
+      { 
+        name: 'Sample Variance', 
+        latex: 's^2 = \\frac{\\sum (x_i - \\bar{x})^2}{n - 1}', 
+        insertText: 'Σ(x - μ)^2 / (n - 1)' 
       },
       { 
         name: 'Bayes’ Theorem (Conditional Probability)', 
@@ -163,19 +218,19 @@ const FORMULA_CATEGORIES = [
         insertText: '(P(B|A)*P(A))/P(B)' 
       },
       { 
-        name: 'Binomial Probability Distribution', 
-        latex: 'P(X = k) = \\binom{n}{k} p^k (1 - p)^{n - k}', 
-        insertText: 'nCr(n, k) * p^k * (1-p)^(n-k)' 
-      },
-      { 
         name: 'Confidence Interval for Population Mean', 
         latex: '\\text{CI} = \\bar{x} \\pm z^* \\left(\\frac{\\sigma}{\\sqrt{n}}\\right)', 
         insertText: 'x̄ ± z*(σ/√n)' 
       },
       { 
-        name: 'Combinations & Permutations', 
-        latex: 'nCr = \\frac{n!}{r!(n - r)!}, \\quad nPr = \\frac{n!}{(n - r)!}', 
+        name: 'Combinations Formula (nCr)', 
+        latex: '\\binom{n}{r} = \\frac{n!}{r!(n - r)!}', 
         insertText: 'n! / (r! * (n - r)!)' 
+      },
+      { 
+        name: 'Permutations Formula (nPr)', 
+        latex: 'P(n, r) = \\frac{n!}{(n - r)!}', 
+        insertText: 'n! / (n - r)!' 
       }
     ]
   },
@@ -186,7 +241,7 @@ const FORMULA_CATEGORIES = [
     formulas: [
       { 
         name: 'Compound Interest (Periodic)', 
-        latex: 'A = P \\left(1 + \\frac{r}{n}\\right)^{nt}, \\quad \\text{Interest} = A - P', 
+        latex: 'A = P \\left(1 + \\frac{r}{n}\\right)^{nt}', 
         insertText: 'P * (1 + r/n)^(n*t)' 
       },
       { 
@@ -201,17 +256,17 @@ const FORMULA_CATEGORIES = [
       },
       { 
         name: 'Rule of 72 (Doubling Time for Investment)', 
-        latex: 't_{\\text{years}} \\approx \\frac{72}{\\text{Annual Rate } (r\\%)}', 
+        latex: 't_{\\text{years}} \\approx \\frac{72}{r}', 
         insertText: '72 / r' 
       },
       { 
         name: 'Inflation Adjusted Purchasing Power', 
-        latex: 'V_{\\text{future}} = \\frac{P}{(1 + i)^t}, \\quad i = \\text{Inflation Rate}', 
+        latex: 'V_{\\text{future}} = \\frac{P}{(1 + i)^t}', 
         insertText: 'P / (1 + i)^t' 
       },
       { 
         name: 'Return on Investment (ROI Percentage)', 
-        latex: '\\text{ROI}\\% = \\left(\\frac{\\text{Final Value} - \\text{Initial Cost}}{\\text{Initial Cost}}\\right) \\times 100', 
+        latex: '\\text{ROI}\\% = \\left(\\frac{\\text{Gain} - \\text{Cost}}{\\text{Cost}}\\right) \\times 100', 
         insertText: '((Gain - Cost)/Cost) * 100' 
       },
       { 
@@ -227,34 +282,59 @@ const FORMULA_CATEGORIES = [
     icon: '🚀',
     formulas: [
       { 
-        name: 'Kinematic SUVAT Equations', 
-        latex: 'v = u + at, \\quad s = ut + \\frac{1}{2}at^2, \\quad v^2 = u^2 + 2as', 
+        name: 'Kinematics Final Velocity (v = u + at)', 
+        latex: 'v = u + at', 
+        insertText: 'u + a*t' 
+      },
+      { 
+        name: 'Kinematics Displacement (s = ut + 1/2at²)', 
+        latex: 's = ut + \\frac{1}{2}at^2', 
         insertText: 'u*t + (1/2)*a*t^2' 
       },
       { 
-        name: 'Work, Kinetic & Gravitational Potential Energy', 
-        latex: 'W = F d \\cos\\theta, \\quad E_k = \\frac{1}{2}m v^2, \\quad E_p = m g h', 
+        name: 'Kinematics Velocity-Displacement (v² = u² + 2as)', 
+        latex: 'v^2 = u^2 + 2as', 
+        insertText: 'u^2 + 2*a*s' 
+      },
+      { 
+        name: 'Work Done Formula', 
+        latex: 'W = F d \\cos\\theta', 
+        insertText: 'F * d * cos(θ)' 
+      },
+      { 
+        name: 'Kinetic Energy (Ek)', 
+        latex: 'E_k = \\frac{1}{2}m v^2', 
         insertText: '(1/2)*m*v^2' 
       },
       { 
+        name: 'Gravitational Potential Energy (Ep)', 
+        latex: 'E_p = m g h', 
+        insertText: 'm * g * h' 
+      },
+      { 
         name: 'Newton’s Law of Universal Gravitation', 
-        latex: 'F_g = G \\frac{m_1 m_2}{r^2}, \\quad G = 6.674 \\times 10^{-11}', 
+        latex: 'F_g = G \\frac{m_1 m_2}{r^2}', 
         insertText: 'G*(m1*m2)/(r^2)' 
       },
       { 
-        name: 'Centripetal Force & Acceleration', 
-        latex: 'F_c = \\frac{m v^2}{r} = m \\omega^2 r, \\quad a_c = \\frac{v^2}{r}', 
+        name: 'Centripetal Force', 
+        latex: 'F_c = \\frac{m v^2}{r} = m \\omega^2 r', 
         insertText: '(m*v^2)/r' 
       },
       { 
-        name: 'Wave Speed, Frequency & Period', 
-        latex: 'v = f \\lambda, \\quad T = \\frac{1}{f}', 
+        name: 'Wave Speed Formula', 
+        latex: 'v = f \\lambda', 
         insertText: 'f * λ' 
       },
       { 
-        name: 'Ohm’s Law & Electrical Power', 
-        latex: 'V = I R, \\quad P = I V = I^2 R = \\frac{V^2}{R}', 
+        name: 'Ohm’s Law', 
+        latex: 'V = I R', 
         insertText: 'I * R' 
+      },
+      { 
+        name: 'Electrical Power', 
+        latex: 'P = I V = I^2 R = \\frac{V^2}{R}', 
+        insertText: 'I^2 * R' 
       }
     ]
   },
@@ -264,14 +344,24 @@ const FORMULA_CATEGORIES = [
     icon: '🔢',
     formulas: [
       { 
-        name: '2x2 Matrix Determinant & Inverse', 
-        latex: '\\det(A) = ad - bc, \\quad A^{-1} = \\frac{1}{ad - bc}\\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}', 
+        name: '2x2 Matrix Determinant', 
+        latex: '\\det(A) = ad - bc', 
         insertText: 'a*d - b*c' 
       },
       { 
-        name: '3D Vector Magnitude & Dot Product', 
-        latex: '|\\vec{v}| = \\sqrt{x^2 + y^2 + z^2}, \\quad \\vec{u} \\cdot \\vec{v} = |\\vec{u}||\\vec{v}|\\cos\\theta', 
+        name: '2x2 Matrix Inverse', 
+        latex: 'A^{-1} = \\frac{1}{ad - bc}\\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}', 
+        insertText: '(1/(a*d - b*c))' 
+      },
+      { 
+        name: '3D Vector Magnitude', 
+        latex: '|\\vec{v}| = \\sqrt{x^2 + y^2 + z^2}', 
         insertText: '√(x^2 + y^2 + z^2)' 
+      },
+      { 
+        name: 'Vector Dot Product (Scalar)', 
+        latex: '\\vec{u} \\cdot \\vec{v} = |\\vec{u}||\\vec{v}|\\cos\\theta', 
+        insertText: '|u|*|v|*cos(θ)' 
       },
       { 
         name: 'Vector Cross Product Magnitude', 
@@ -279,8 +369,13 @@ const FORMULA_CATEGORIES = [
         insertText: '|u| * |v| * sin(θ)' 
       },
       { 
-        name: 'Euler’s Identity & Complex Polar Form', 
-        latex: 'e^{i\\theta} = \\cos\\theta + i\\sin\\theta, \\quad e^{i\\pi} + 1 = 0', 
+        name: 'Euler’s Identity', 
+        latex: 'e^{i\\pi} + 1 = 0', 
+        insertText: 'e^(i*π) + 1 = 0' 
+      },
+      { 
+        name: 'Complex Number Polar Form', 
+        latex: 'z = r(\\cos\\theta + i\\sin\\theta) = r e^{i\\theta}', 
         insertText: 'r*(cos(θ) + i*sin(θ))' 
       }
     ]

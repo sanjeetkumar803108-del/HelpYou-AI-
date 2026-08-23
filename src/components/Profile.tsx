@@ -39,6 +39,7 @@ import {
   Quest, 
   AchievementBadge 
 } from '../utils/gamification';
+import LevelReactorRing from './LevelReactorRing';
 
 interface ProfileProps {
   user: FirebaseUser | null;
@@ -983,14 +984,13 @@ export default function Profile({
               </div>
             )}
 
-            {/* Large Interactive Avatar */}
-            <div className="relative mb-4 mt-2">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-purple-500 via-indigo-500 to-blue-500 flex items-center justify-center text-white font-black text-3xl shadow-lg border-4 border-white">
-                {studentName ? studentName[0].toUpperCase() : 'S'}
-              </div>
-              <div className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white border border-zinc-200 shadow-md flex items-center justify-center text-zinc-500">
-                <GraduationCap className="w-4 h-4 text-purple-600" />
-              </div>
+            {/* Level Reactor Ring Avatar with Dynamic Level Badge */}
+            <div className="relative mb-3 mt-2 flex justify-center">
+              <LevelReactorRing levelData={getStudyLevel(studyXP)}>
+                <div className="w-full h-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 flex items-center justify-center text-white font-black text-3xl select-none">
+                  {studentName ? studentName[0].toUpperCase() : 'S'}
+                </div>
+              </LevelReactorRing>
             </div>
 
             {/* Editable Name Segment */}
@@ -1096,17 +1096,17 @@ export default function Profile({
             </h3>
 
             {/* Occupation: Strictly Student */}
-            <div className="flex items-center justify-between py-3 border-b border-zinc-100">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between py-3 border-b border-zinc-100 gap-2">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 border border-purple-100 shrink-0">
                   <GraduationCap className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="text-[10px] uppercase font-black tracking-wider text-zinc-400">Occupation</span>
                   <p className="text-xs font-black text-zinc-800 leading-tight">Student</p>
                 </div>
               </div>
-              <span className="bg-purple-50 text-purple-700 text-[10px] font-black px-2.5 py-1 rounded-full border border-purple-150">
+              <span className="bg-purple-50 text-purple-700 text-[9px] font-black px-2.5 py-1 rounded-full border border-purple-150 shrink-0 whitespace-nowrap">
                 Default Strictly Verified
               </span>
             </div>

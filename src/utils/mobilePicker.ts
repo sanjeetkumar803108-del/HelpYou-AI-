@@ -1,4 +1,4 @@
-import { FilePicker } from '@capawesome/capacitor-file-picker';
+ import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 
@@ -188,6 +188,9 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
       return null;
     }
     console.warn('[mobilePicker] Native camera error:', err);
-    return null;
+    // TEMP DEBUG: rethrow instead of silently returning null, so the
+    // real native error surfaces in AITutor.tsx's catch block/toast.
+    // Once root cause is confirmed & fixed, you can revert to `return null;`
+    throw Object.assign(new Error(msg || 'Unknown camera error'), { code: 'unknown', original: err });
   }
 }

@@ -2070,12 +2070,21 @@ Please evaluate this answer strictly according to your system rubric.`;
                     // If null → user cancelled, do nothing (silently)
                   } catch (err: any) {
                     const code = (err as any)?.code;
+                    const msg = String(err?.message || '').toLowerCase();
                     if (code === 'denied') {
                       showToast(
                         '📷 Camera Blocked: Go to Phone Settings → Apps → HelpYou AI → Permissions → Camera → Allow',
                         'warning',
                         7000
                       );
+                    } else if (msg.includes('disk') || msg.includes('file') || msg.includes('storage') || msg.includes('create')) {
+                      // "unable to create photo on disk" — storage issue on Android
+                      showToast(
+                        '📂 Storage Error. Please clear HelpYou AI app cache: Settings → Apps → HelpYou AI → Storage → Clear Cache, then retry.',
+                        'warning',
+                        8000
+                      );
+                      console.warn('[AITutor] Camera disk error:', err);
                     } else {
                       const realMsg = String(err?.message || err?.toString?.() || 'Unknown error');
                       showToast(

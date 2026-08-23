@@ -158,12 +158,17 @@ export async function takeNativePhoto(): Promise<MobilePickedFile | null> {
     }
 
     // Step 3: Launch native camera
+    // NOTE: correctOrientation:false prevents Capacitor from writing a temp
+    //       rotated copy to disk — which causes "unable to create photo on disk"
+    //       on Android 10+ devices with strict file-access policies.
+    //       saveToGallery must be omitted (defaults false) — explicitly passing
+    //       false still triggers a disk-write path on some OEMs.
     const photo = await Camera.getPhoto({
       quality: 85,
       allowEditing: false,
       resultType: CameraResultType.Base64,
       source: CameraSource.Camera,
-      saveToGallery: false,
+      correctOrientation: false,
     });
 
     if (!photo || !photo.base64String) return null;

@@ -160,10 +160,16 @@ export async function requestNotificationPermissions(forcePrompt = false): Promi
 export async function cancelAllDailyNotifications() {
   if (!Capacitor.isNativePlatform()) return;
   try {
-    const afternoonIds = Array.from({ length: TOTAL_SLOTS }, (_, i) => ({ id: BASE_ID_AFTERNOON + i }));
-    const eveningIds = Array.from({ length: TOTAL_SLOTS }, (_, i) => ({ id: BASE_ID_EVENING + i }));
-    const legacyIds = Array.from({ length: 20 }, (_, i) => ({ id: 17001 + i }));
-    await LocalNotifications.cancel({ notifications: [...afternoonIds, ...eveningIds, ...legacyIds] }).catch(() => {});
+    // 1. Fetch and cancel all pending notifications from Capacitor AlarmManager
+    const pending = await LocalNotifications.getPending();
+    if (pending.notifications && pending.notifications.length > 0) {
+      await LocalNotifications.cancel({ notifications: pending.notifications }).catch(() => {});
+    }
+
+    // 2. Also cancel all legacy / possible notification IDs
+    const legacyIds = Array.from({ length: 60 }, (_, i) => ({ id: 17000 + i }));
+    await LocalNotifications.cancel({ notifications: legacyIds }).catch(() => {});
+
     localStorage.removeItem(STORAGE_KEY_SCHEDULED);
     console.log('[NotificationService] 🔕 All daily study notifications cancelled.');
   } catch (err) {
@@ -172,9 +178,9 @@ export async function cancelAllDailyNotifications() {
 }
 
 /**
- * Schedule 2 daily after-school notification slots:
- * Slot 1: 5:00 PM (17:00) — Afternoon Homework & Instant Problem Solving
- * Slot 2: 7:30 PM (19:30) — Evening Study, Streaks & Podcast Revision
+ * Schedule strictly 2 daily after-school notification slots (in user's local device time):
+ * Slot 1: 5:00 PM (17:00) — Afternoon Homework & Instant Problem Solving (1 notification)
+ * Slot 2: 7:30 PM (19:30) — Evening Study, Streaks & Revision (1 notification)
  */
 export async function scheduleDailyNotification() {
   if (!Capacitor.isNativePlatform()) {
@@ -199,53 +205,55 @@ export async function scheduleDailyNotification() {
       console.warn('[NotificationService] Channel creation notice:', chanErr);
     }
 
-    // Cancel previous notifications to prevent duplicates
+    // 1. Purge all existing/pending notifications to prevent any duplicate spam
     await cancelAllDailyNotifications();
 
-    const notifications: any[] = [];
+    // 2. Select 1 dynamic message for Afternoon & 1 for Evening based on day of year
+    const today = new Date();
+    const startOfYear = new Date(today.getFullYear(), 0, 0);
+    const dayOfYear = Math.floor((today.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
 
-    // 1. Afternoon Slot: 5:00 PM (17:00)
-    AFTERNOON_HOMEWORK_MESSAGES.forEach((msg, index) => {
-      notifications.push({
-        id: BASE_ID_AFTERNOON + index,
-        title: msg.title,
-        body: msg.body,
+    const afternoonMsg = AFTERNOON_HOMEWORK_MESSAGES[dayOfYear % AFTERNOON_HOMEWORK_MESSAGES.length];
+    const eveningMsg = EVENING_STUDY_MESSAGES[dayOfYear % EVENING_STUDY_MESSAGES.length];
+
+    // 3. Schedule EXACTLY TWO (2) notifications total per day
+    const notifications = [
+      {
+        id: 17001,
+        title: afternoonMsg.title,
+        body: afternoonMsg.body,
         channelId: 'study-reminders',
         schedule: {
           every: 'day' as const,
           on: {
-            hour: 17,   // 5:00 PM — right after school / tuition
+            hour: 17, // 5:00 PM in user's local device timezone
             minute: 0
           }
         },
         sound: 'default',
-        extra: { type: 'homework', slot: index }
-      });
-    });
-
-    // 2. Evening Slot: 7:30 PM (19:30)
-    EVENING_STUDY_MESSAGES.forEach((msg, index) => {
-      notifications.push({
-        id: BASE_ID_EVENING + index,
-        title: msg.title,
-        body: msg.body,
+        extra: { type: 'homework' }
+      },
+      {
+        id: 18001,
+        title: eveningMsg.title,
+        body: eveningMsg.body,
         channelId: 'study-reminders',
         schedule: {
           every: 'day' as const,
           on: {
-            hour: 19,   // 7:30 PM — peak evening study & streak time
+            hour: 19, // 7:30 PM in user's local device timezone
             minute: 30
           }
         },
         sound: 'default',
-        extra: { type: 'streak_revision', slot: index }
-      });
-    });
+        extra: { type: 'streak_revision' }
+      }
+    ];
 
     await LocalNotifications.schedule({ notifications });
 
     localStorage.setItem(STORAGE_KEY_SCHEDULED, 'true');
-    console.log(`[NotificationService] ✅ Successfully scheduled 2 daily study slots (5:00 PM & 7:30 PM) across ${notifications.length} rotating notifications.`);
+    console.log(`[NotificationService] ✅ Successfully scheduled EXACTLY 2 daily notifications: 5:00 PM (Homework) and 7:30 PM (Evening Revision).`);
   } catch (error) {
     console.error('[NotificationService] Failed to schedule daily notifications:', error);
   }

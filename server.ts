@@ -35,13 +35,15 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Auth Specific Rate Limiting
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 failed login/auth attempts
-  message: { error: "Too many login attempts, please try again after 15 minutes." },
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+    geminiKeyPrefix: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.slice(0, 6) + "..." : "MISSING",
+    isVercel: process.env.VERCEL === "1"
+  });
 });
-app.use('/api/auth/', authLimiter); // Assuming if there's any backend auth
 
 // 2. Global Input Sanitization Middleware (Injection Prevention)
 const sanitizeInput = (obj: any): any => {

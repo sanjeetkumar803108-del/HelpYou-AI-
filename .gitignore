@@ -8,4 +8,13 @@ coverage/
 !.env.example
 *.hprof
 *.apk
+*.aab
+
+# Gradle & Android Build Artifacts
+.gradle/
 android/.gradle/
+android/app/build/
+android/build/
+android/.idea/
+android/captures/
+

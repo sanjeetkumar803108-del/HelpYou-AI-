@@ -102,15 +102,100 @@ export function getStudyLevel(xp: number): {
   };
 }
 
+export const MAX_DAILY_XP = 150;
+
+function getTodayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /**
- * Award XP to student with animations and level-up detection
+ * Get current daily XP status and remaining cap
  */
-export function addStudyXP(amount: number, reason: string): { newXP: number; leveledUp: boolean; newLevel: StudyLevel } {
+export function getDailyXPStatus(): {
+  earnedToday: number;
+  dailyLimit: number;
+  remainingToday: number;
+  isCapped: boolean;
+} {
+  const today = getTodayKey();
+  const storedDate = safeGetItem('study_daily_xp_date');
+  let earnedToday = parseInt(safeGetItem('study_daily_xp_earned') || '0', 10);
+
+  if (storedDate !== today) {
+    earnedToday = 0;
+    safeSetItem('study_daily_xp_date', today);
+    safeSetItem('study_daily_xp_earned', '0');
+  }
+
+  const remainingToday = Math.max(0, MAX_DAILY_XP - earnedToday);
+  const isCapped = earnedToday >= MAX_DAILY_XP;
+
+  return {
+    earnedToday,
+    dailyLimit: MAX_DAILY_XP,
+    remainingToday,
+    isCapped
+  };
+}
+
+/**
+ * Award XP to student with animations, level-up detection, and daily 150 XP cap
+ */
+export function addStudyXP(
+  amount: number, 
+  reason: string,
+  forceBypassCap: boolean = false
+): { 
+  newXP: number; 
+  leveledUp: boolean; 
+  newLevel: StudyLevel;
+  awardedAmount: number;
+  dailyLimitReached: boolean;
+} {
+  const dailyStatus = getDailyXPStatus();
   const currentXP = getStudyXP();
   const oldLevel = getStudyLevel(currentXP).currentLevel;
-  const newXP = currentXP + amount;
-  
+
+  if (amount <= 0) {
+    return {
+      newXP: currentXP,
+      leveledUp: false,
+      newLevel: oldLevel,
+      awardedAmount: 0,
+      dailyLimitReached: dailyStatus.isCapped
+    };
+  }
+
+  let effectiveAmount = amount;
+
+  if (!forceBypassCap) {
+    if (dailyStatus.remainingToday <= 0) {
+      // Daily Cap already reached
+      triggerVibration(10);
+      window.dispatchEvent(new CustomEvent('show-mobile-toast', {
+        detail: { message: `⚡ Daily XP Cap reached (150/150 XP today). Great work! 🌟` }
+      }));
+      return {
+        newXP: currentXP,
+        leveledUp: false,
+        newLevel: oldLevel,
+        awardedAmount: 0,
+        dailyLimitReached: true
+      };
+    }
+
+    // Cap amount if it exceeds remaining daily XP
+    effectiveAmount = Math.min(amount, dailyStatus.remainingToday);
+  }
+
+  const newDailyEarned = dailyStatus.earnedToday + effectiveAmount;
+  safeSetItem('study_daily_xp_earned', String(newDailyEarned));
+  safeSetItem('study_daily_xp_date', getTodayKey());
+
+  const newXP = currentXP + effectiveAmount;
   safeSetItem('study_total_xp', String(newXP));
+  
   const newLevelDetails = getStudyLevel(newXP);
   const leveledUp = newLevelDetails.currentLevel.level > oldLevel.level;
 
@@ -126,21 +211,25 @@ export function addStudyXP(amount: number, reason: string): { newXP: number; lev
     } catch (_) {}
 
     window.dispatchEvent(new CustomEvent('show-mobile-toast', {
-      detail: { message: `🎉 LEVEL UP! You reached ${newLevelDetails.currentLevel.title} ${newLevelDetails.currentLevel.badge} (+${amount} XP)` }
+      detail: { message: `🎉 LEVEL UP! You reached ${newLevelDetails.currentLevel.title} ${newLevelDetails.currentLevel.badge} (+${effectiveAmount} XP)` }
     }));
   } else {
     triggerVibration(10);
+    const capNotice = (newDailyEarned >= MAX_DAILY_XP) ? ' (Max 150 daily XP reached! 🌟)' : '';
     window.dispatchEvent(new CustomEvent('show-mobile-toast', {
-      detail: { message: `⚡ +${amount} XP Earned! (${reason})` }
+      detail: { message: `⚡ +${effectiveAmount} XP Earned! (${reason})${capNotice}` }
     }));
   }
 
   window.dispatchEvent(new CustomEvent('study-xp-updated', { detail: { xp: newXP, level: newLevelDetails.currentLevel } }));
+  window.dispatchEvent(new CustomEvent('study-daily-xp-updated', { detail: { earnedToday: newDailyEarned, dailyLimit: MAX_DAILY_XP } }));
 
   return {
     newXP,
     leveledUp,
-    newLevel: newLevelDetails.currentLevel
+    newLevel: newLevelDetails.currentLevel,
+    awardedAmount: effectiveAmount,
+    dailyLimitReached: newDailyEarned >= MAX_DAILY_XP
   };
 }
 

@@ -1,7 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HelpYou-AI</string>
     <string name="title_activity_main">HelpYou-AI</string>
     <string name="package_name">com.helpyou.ai</string>
     <string name="custom_url_scheme">com.helpyou.ai</string>
+    <string name="default_web_client_id">702005695603-6klm5rcidns30dqcl75701ura7klk4j3.apps.googleusercontent.com</string>
 </resources>

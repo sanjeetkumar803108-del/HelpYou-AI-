@@ -53,8 +53,8 @@ async function getBlob(data: Blob | ArrayBuffer | string): Promise<Blob> {
  * Supports Capacitor, Cordova, React Native WebViews, and native Web File System Access API.
  */
 export async function savePDFMobile(pdfData: Blob | ArrayBuffer | string, filename: string): Promise<boolean> {
-  // 1. Ensure filename ends with .pdf
-  let cleanFilename = filename.trim();
+  // 1. Ensure filename ends with .pdf and sanitize characters
+  let cleanFilename = filename.trim().replace(/[\\/:"*?<>|]/g, '_');
   if (!cleanFilename.toLowerCase().endsWith('.pdf')) {
     cleanFilename += '.pdf';
   }
@@ -63,36 +63,33 @@ export async function savePDFMobile(pdfData: Blob | ArrayBuffer | string, filena
     try {
       console.log(`[MobileSaver] Native saving starting for: ${cleanFilename}`);
 
-      // Request storage permission first
-      try {
-        const perm = await Filesystem.checkPermissions();
-        if (perm.publicStorage !== 'granted') {
-          const req = await Filesystem.requestPermissions();
-          if (req.publicStorage !== 'granted') {
-            alert('Storage Permission Needed\n\nHelpYou needs storage permission to download and save your PDF worksheets directly to your device. Please enable storage access in your device settings.');
-            return false;
-          }
-        }
-      } catch (permErr) {
-        console.warn('[MobileSaver] Filesystem permission check/request failed:', permErr);
-      }
-
       const b64Data = await getBase64(pdfData);
 
-      // Write file to native Documents directory via Scoped Storage (Directory.Documents)
+      // Write file to native Cache directory (safe from Scoped Storage EACCES restrictions on Android 10+)
       const savedFile = await Filesystem.writeFile({
         path: cleanFilename,
         data: b64Data,
-        directory: Directory.Documents,
+        directory: Directory.Cache,
+        recursive: true,
       });
 
       console.log('[MobileSaver] File successfully written to:', savedFile.uri);
 
-      // Open saved PDF immediately with FileOpener for previewing/printing
-      await FileOpener.open({
-        filePath: savedFile.uri,
-        contentType: 'application/pdf',
-      });
+      // Open saved PDF immediately with FileOpener for previewing/printing, with fallback to Share
+      try {
+        await FileOpener.open({
+          filePath: savedFile.uri,
+          contentType: 'application/pdf',
+        });
+      } catch (openErr) {
+        console.warn('[MobileSaver] FileOpener failed, falling back to Share sheet:', openErr);
+        await Share.share({
+          title: cleanFilename,
+          text: `Access your saved PDF: ${cleanFilename}`,
+          url: savedFile.uri,
+          dialogTitle: 'Save or View PDF Document',
+        });
+      }
 
       triggerVibration(40);
       showInAppToast('✅ PDF Saved & Opened successfully!');

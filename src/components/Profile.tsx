@@ -35,7 +35,8 @@ import {
   getStudyLevel, 
   getWeeklyQuests, 
   claimQuestReward, 
-  getBadgesStatus, 
+  getBadgesStatus,
+  getDailyXPStatus, 
   Quest, 
   AchievementBadge 
 } from '../utils/gamification';
@@ -285,17 +286,21 @@ export default function Profile({
   const [studyXP, setStudyXP] = useState<number>(getStudyXP);
   const [weeklyQuests, setWeeklyQuests] = useState<Quest[]>(getWeeklyQuests);
   const [achievementBadges, setAchievementBadges] = useState<AchievementBadge[]>(getBadgesStatus);
+  const [dailyXP, setDailyXP] = useState(getDailyXPStatus);
 
   useEffect(() => {
     const handleXpUpdate = () => {
       setStudyXP(getStudyXP());
       setWeeklyQuests(getWeeklyQuests());
       setAchievementBadges(getBadgesStatus());
+      setDailyXP(getDailyXPStatus());
     };
     window.addEventListener('study-xp-updated', handleXpUpdate);
+    window.addEventListener('study-daily-xp-updated', handleXpUpdate);
     window.addEventListener('study-quests-updated', handleXpUpdate);
     return () => {
       window.removeEventListener('study-xp-updated', handleXpUpdate);
+      window.removeEventListener('study-daily-xp-updated', handleXpUpdate);
       window.removeEventListener('study-quests-updated', handleXpUpdate);
     };
   }, []);
@@ -1584,10 +1589,36 @@ export default function Profile({
             <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                  <Target className="w-4 h-4 text-purple-600" /> Weekly Study Quests
+                  <Target className="w-4 h-4 text-purple-600" /> Daily & Weekly Quests
                 </h3>
                 <span className="text-[9.5px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-150">
                   Earn XP & Coins
+                </span>
+              </div>
+
+              {/* Daily Task XP Cap Meter */}
+              <div className="bg-gradient-to-r from-purple-50/90 via-indigo-50/80 to-blue-50/90 border border-purple-200/70 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600/10 text-purple-700 flex items-center justify-center font-black text-sm shrink-0 shadow-inner">
+                    ⚡
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-black text-zinc-900">Daily Task XP Limit</span>
+                      <span className="text-[9px] font-black text-purple-700 bg-purple-100/90 px-1.5 py-0.2 rounded-full">
+                        {dailyXP.earnedToday} / {dailyXP.dailyLimit} XP
+                      </span>
+                    </div>
+                    <div className="w-32 bg-purple-200/60 h-1.5 rounded-full overflow-hidden mt-1.5">
+                      <div 
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(100, (dailyXP.earnedToday / dailyXP.dailyLimit) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-[9px] font-extrabold px-2.5 py-1 rounded-xl shrink-0 ${dailyXP.isCapped ? 'bg-amber-100 text-amber-900 border border-amber-200' : 'bg-white text-purple-700 border border-purple-200 shadow-2xs'}`}>
+                  {dailyXP.isCapped ? '🌟 Capped (150/150)' : `+${dailyXP.remainingToday} XP Left`}
                 </span>
               </div>
 

@@ -3,6 +3,7 @@ import { savePDFMobile } from './mobileSaver';
 import { savePdfToHistory } from './pdfHistory';
 import { addStudyXP, trackQuestProgress } from './gamification';
 import { triggerVibration } from './vibrate';
+import { safeGetItem, safeSetItem } from './storage';
 
 export interface FormulaItem {
   name: string;
@@ -214,8 +215,17 @@ export async function exportFormulaSheetPDF(
       fileSize: `${(pdfBlob.size / 1024).toFixed(1)} KB`,
       pageCount: pageIndex
     });
-    addStudyXP(40, 'Exported Formula Sheet PDF');
-    trackQuestProgress('calculator', 1);
+
+    // Check if formula sheet XP already claimed today for this cheat sheet to prevent repeat farming
+    const todayStr = new Date().toISOString().split('T')[0];
+    const claimKey = `study_claimed_formula_xp_${filename}_${todayStr}`;
+    const alreadyClaimed = safeGetItem(claimKey);
+
+    if (!alreadyClaimed) {
+      safeSetItem(claimKey, 'true');
+      addStudyXP(25, 'Exported Formula Cheat Sheet');
+      trackQuestProgress('calculator', 1);
+    }
   }
 
   return saved;

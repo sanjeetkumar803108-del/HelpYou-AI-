@@ -315,25 +315,36 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       let loggedUser: User | null = null;
 
       // NATIVE PATH (Android/iOS): Uses Google Play Services natively
-      // This completely bypasses the browser popup/redirect that causes white screen
       if (Capacitor.isNativePlatform()) {
         try {
-          const result = await FirebaseAuthentication.signInWithGoogle();
+          let result;
+          try {
+            result = await FirebaseAuthentication.signInWithGoogle();
+          } catch (credMgrErr: any) {
+            console.warn('[Native Google Sign-In] Credential Manager fallback to standard Google Sign-In:', credMgrErr?.message);
+            result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
+          }
+
           if (result.credential?.idToken) {
             const credential = GoogleAuthProvider.credential(result.credential.idToken);
             const userCred = await signInWithCredential(auth, credential);
             loggedUser = userCred.user;
-          } else {
-            // Token already set via native plugin, grab from auth.currentUser
+          } else if (result.user) {
             loggedUser = auth.currentUser;
           }
         } catch (nativeErr: any) {
-          console.warn('[Native Google Sign-In failed, using web fallback]:', nativeErr?.message);
+          console.error('[Native Google Sign-In failed]:', nativeErr);
+          const errMsg = nativeErr?.message || '';
+          if (errMsg.includes('cancel') || errMsg.includes('12501') || errMsg.includes('16') || errMsg.includes('10')) {
+            // User dismissed the Google account picker dialog
+            clearTimeout(googleLoadingTimer);
+            setLoading(false);
+            return;
+          }
+          throw new Error(errMsg || 'Google Sign-In failed on this device. Please check Google Play Services.');
         }
-      }
-
-      // WEB FALLBACK: Used if native path failed or we're on web
-      if (!loggedUser) {
+      } else {
+        // WEB BROWSER PATH ONLY
         googleProvider.setCustomParameters({ prompt: 'select_account' });
         try {
           const userCredential = await signInWithPopup(auth, googleProvider);

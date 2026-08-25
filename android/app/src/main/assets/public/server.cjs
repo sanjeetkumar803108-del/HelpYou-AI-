@@ -346,8 +346,7 @@ ${text}`.trim() },
   const isSpecialtyModel = params.model && (params.model.includes("tts") || params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
   let requestedModel = params.model;
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-2.5-flash",
-    "gemini-2.5-flash",
+    requestedModel || "gemini-2.0-flash",
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
     "gemini-1.5-flash",
@@ -793,7 +792,6 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     const shouldStream = stream === "true" || stream === true;
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-2.5-flash",
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
         "gemini-1.5-flash",
@@ -825,6 +823,9 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
               systemInstruction: { parts: [{ text: systemInstruction }] },
               responseMimeType: isEvaluation === "true" || isEvaluation === true ? "text/plain" : "application/json",
               maxOutputTokens: 8192,
+              temperature: 0.2,
+              candidateCount: 1,
+              thinkingConfig: { thinkingBudget: 0 },
               ...shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {}
             }
           });
@@ -1210,9 +1211,8 @@ GRAMMAR AND POLISH:
 
 OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
-    const originalModel = "gemini-2.5-flash";
+    const originalModel = "gemini-2.0-flash";
     let modelsToTry = [
-      "gemini-2.5-flash",
       "gemini-2.0-flash",
       "gemini-2.0-flash-lite",
       "gemini-1.5-flash",

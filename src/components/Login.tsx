@@ -317,6 +317,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       // NATIVE PATH (Android/iOS): Uses Google Play Services natively
       if (Capacitor.isNativePlatform()) {
         try {
+          console.log('[Google Auth] Starting native Google Sign-In...');
           let result;
           try {
             result = await FirebaseAuthentication.signInWithGoogle();
@@ -325,22 +326,45 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
             result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
           }
 
-          if (result.credential?.idToken) {
-            const credential = GoogleAuthProvider.credential(result.credential.idToken);
+          console.log('[Google Auth] Native result received:', JSON.stringify(result));
+
+          let idToken = result?.credential?.idToken;
+
+          // If idToken is not in credential object, fetch it explicitly via getIdToken
+          if (!idToken) {
+            try {
+              const tokenRes = await FirebaseAuthentication.getIdToken({ forceRefresh: true });
+              idToken = tokenRes.token;
+              console.log('[Google Auth] Retrieved idToken via getIdToken()');
+            } catch (tErr) {
+              console.warn('[Google Auth] getIdToken fallback notice:', tErr);
+            }
+          }
+
+          if (idToken) {
+            console.log('[Google Auth] Bridging native credential to Firebase JS SDK...');
+            const credential = GoogleAuthProvider.credential(idToken);
             const userCred = await signInWithCredential(auth, credential);
             loggedUser = userCred.user;
-          } else if (result.user) {
+          } else if (result?.user) {
             loggedUser = auth.currentUser;
           }
         } catch (nativeErr: any) {
           console.error('[Native Google Sign-In failed]:', nativeErr);
-          const errMsg = nativeErr?.message || '';
-          if (errMsg.includes('cancel') || errMsg.includes('12501') || errMsg.includes('16') || errMsg.includes('10')) {
-            // User dismissed the Google account picker dialog
+          const errMsg = nativeErr?.message || String(nativeErr);
+          
+          // User genuinely clicked outside/cancelled the dialog
+          if (errMsg.includes('12501') || errMsg.toLowerCase().includes('cancel')) {
             clearTimeout(googleLoadingTimer);
             setLoading(false);
             return;
           }
+
+          // Code 10 Developer Error: SHA-1 mismatch or Google sign-in not enabled in Firebase Console
+          if (errMsg.includes('10') || errMsg.toLowerCase().includes('developer_error')) {
+            throw new Error('Google Sign-In Error (Code 10): SHA-1 Fingerprint missing in Firebase Console or Google provider is disabled.');
+          }
+
           throw new Error(errMsg || 'Google Sign-In failed on this device. Please check Google Play Services.');
         }
       } else {
@@ -359,7 +383,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       }
 
       if (!loggedUser) {
-        throw new Error('Google Sign-In did not return a valid user.');
+        throw new Error('Google Sign-In did not return a valid user session. Please try again.');
       }
       
       // Check if user document already exists in Firestore non-blockingly

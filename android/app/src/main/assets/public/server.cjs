@@ -42,7 +42,6 @@ var import_crypto = __toESM(require("crypto"), 1);
 var import_youtube_transcript = require("youtube-transcript");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_xss = __toESM(require("xss"), 1);
-var import_pdf_parse = __toESM(require("pdf-parse/lib/pdf-parse.js"), 1);
 var import_fs = __toESM(require("fs"), 1);
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -64,13 +63,19 @@ var apiLimiter = (0, import_express_rate_limit.default)({
   legacyHeaders: false
 });
 app.use("/api/", apiLimiter);
-app.get("/api/health", (req, res) => {
+app.use((req, res, next) => {
+  if (!req.url.startsWith("/api") && !req.url.startsWith("/src")) {
+    req.url = "/api" + (req.url.startsWith("/") ? req.url : "/" + req.url);
+  }
+  next();
+});
+app.get(["/api/health", "/health", "/api", "/"], (req, res) => {
   res.json({
     status: "ok",
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
     geminiKeyPrefix: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.slice(0, 6) + "..." : "MISSING",
-    isVercel: process.env.VERCEL === "1"
+    isVercel: Boolean(process.env.VERCEL)
   });
 });
 var sanitizeInput = (obj) => {
@@ -1980,7 +1985,9 @@ app.post("/api/extract-file-text", upload.single("file"), async (req, res) => {
     let extractedText = "";
     if (req.file.mimetype === "application/pdf" || req.file.originalname.toLowerCase().endsWith(".pdf")) {
       try {
-        const pdfData = await (0, import_pdf_parse.default)(req.file.buffer, { max: 60 });
+        const pdfModule = await import("pdf-parse/lib/pdf-parse.js");
+        const parsePdf = pdfModule.default || pdfModule;
+        const pdfData = await parsePdf(req.file.buffer, { max: 60 });
         if (pdfData.numpages > 60) {
           return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
         }
@@ -2303,7 +2310,7 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
     let extractedText = "";
     let numPages = 0;
     try {
-      const pdfData = await (0, import_pdf_parse.default)(req.file.buffer, { max: 51 });
+      const pdfData = await pdf(req.file.buffer, { max: 51 });
       numPages = pdfData.numpages;
       extractedText = pdfData.text || "";
       console.log(`[PDF Quiz API] PDF parse complete. Pages: ${numPages}, Extracted text length: ${extractedText.trim().length}`);

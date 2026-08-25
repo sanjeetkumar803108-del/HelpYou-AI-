@@ -8,8 +8,7 @@ import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
-// @ts-ignore
-import pdf from "pdf-parse/lib/pdf-parse.js";
+
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -2280,7 +2279,9 @@ app.post("/api/extract-file-text", upload.single("file"), async (req, res) => {
     let extractedText = "";
     if (req.file.mimetype === "application/pdf" || req.file.originalname.toLowerCase().endsWith(".pdf")) {
       try {
-        const pdfData = await pdf(req.file.buffer, { max: 60 });
+        const pdfModule: any = await import("pdf-parse/lib/pdf-parse.js");
+        const parsePdf = pdfModule.default || pdfModule;
+        const pdfData = await parsePdf(req.file.buffer, { max: 60 });
         if (pdfData.numpages > 60) {
           return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
         }

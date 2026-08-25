@@ -3423,7 +3423,5 @@ if (!isServerless) {
   startServer();
 }
 
-export default (req: any, res: any) => {
-  return app(req, res);
-};
+export default app;
 

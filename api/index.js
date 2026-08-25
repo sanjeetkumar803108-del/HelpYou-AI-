@@ -2961,9 +2961,7 @@ var isServerless = Boolean(
 if (!isServerless) {
   startServer();
 }
-var server_default = (req, res) => {
-  return app(req, res);
-};
+var server_default = app;
 export {
   server_default as default
 };

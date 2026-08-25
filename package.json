@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_OPTIONS='--max-old-space-size=1024' tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild server.ts --bundle --platform=node --format=esm --target=node20 --external:pdf-parse --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\" --outfile=api/index.js && esbuild server.ts --bundle --platform=node --format=esm --target=node20 --external:pdf-parse --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\" --outfile=\"api/[...all].js\"",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "NODE_OPTIONS='--max-old-space-size=1024' node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -66,6 +66,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^22.14.0",
     "@types/pdf-parse": "^1.1.5",
+    "@vercel/node": "^5.1.8",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "puppeteer": "^25.4.0",

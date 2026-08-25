@@ -31,13 +31,19 @@ var apiLimiter = rateLimit({
   legacyHeaders: false
 });
 app.use("/api/", apiLimiter);
-app.get("/api/health", (req, res) => {
+app.use((req, res, next) => {
+  if (!req.url.startsWith("/api") && !req.url.startsWith("/src")) {
+    req.url = "/api" + (req.url.startsWith("/") ? req.url : "/" + req.url);
+  }
+  next();
+});
+app.get(["/api/health", "/health", "/api", "/"], (req, res) => {
   res.json({
     status: "ok",
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
     geminiKeyPrefix: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.slice(0, 6) + "..." : "MISSING",
-    isVercel: process.env.VERCEL === "1"
+    isVercel: Boolean(process.env.VERCEL)
   });
 });
 var sanitizeInput = (obj) => {

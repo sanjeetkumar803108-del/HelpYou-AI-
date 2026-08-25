@@ -79857,6 +79857,8 @@ var app = (0, import_express.default)();
 app.set("trust proxy", 1);
 var PORT = 3e3;
 app.use((0, import_cors.default)());
+app.use(import_express.default.json({ limit: "50mb" }));
+app.use(import_express.default.urlencoded({ extended: true, limit: "50mb" }));
 var apiLimiter = rate_limit_default({
   windowMs: 15 * 60 * 1e3,
   // 15 minutes
@@ -79868,12 +79870,17 @@ var apiLimiter = rate_limit_default({
 });
 app.use("/api/", apiLimiter);
 app.use((req, res, next) => {
-  if (!req.url.startsWith("/api") && !req.url.startsWith("/src")) {
+  const matched = req.headers["x-matched-path"] || req.headers["x-now-route-matches"];
+  if (matched && matched.startsWith("/api")) {
+    req.url = matched;
+  } else if (req.query && req.query.__path) {
+    req.url = "/api/" + req.query.__path;
+  } else if (!req.url.startsWith("/api") && !req.url.startsWith("/src")) {
     req.url = "/api" + (req.url.startsWith("/") ? req.url : "/" + req.url);
   }
   next();
 });
-app.get(["/api/health", "/health", "/api", "/"], (req, res) => {
+app.all(["/api/health", "/health", "/api", "/api/index.js", "/api/index"], (req, res) => {
   res.json({
     status: "ok",
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),

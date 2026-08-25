@@ -23,6 +23,8 @@ app.set('trust proxy', 1);
 const PORT = 3000;
 
 app.use(cors());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // 1. Strict Rate Limiting (Brute Force Protection)
 const apiLimiter = rateLimit({
@@ -34,15 +36,20 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Normalize URL for Vercel Serverless Function rewrites
+// Universal URL restoration for Vercel Serverless Function rewrites
 app.use((req, res, next) => {
-  if (!req.url.startsWith('/api') && !req.url.startsWith('/src')) {
+  const matched = (req.headers['x-matched-path'] || req.headers['x-now-route-matches']) as string;
+  if (matched && matched.startsWith('/api')) {
+    req.url = matched;
+  } else if (req.query && req.query.__path) {
+    req.url = '/api/' + req.query.__path;
+  } else if (!req.url.startsWith('/api') && !req.url.startsWith('/src')) {
     req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
   }
   next();
 });
 
-app.get(["/api/health", "/health", "/api", "/"], (req, res) => {
+app.all(["/api/health", "/health", "/api", "/api/index.js", "/api/index"], (req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),

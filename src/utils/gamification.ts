@@ -1,4 +1,4 @@
-import { safeGetItem, safeSetItem } from './storage';
+import { safeGetItem, safeSetItem, safeJsonParse } from './storage';
 import { triggerVibration } from './vibrate';
 import confetti from 'canvas-confetti';
 
@@ -243,7 +243,7 @@ export function getWeeklyQuests(): Quest[] {
   const tutorCount = parseInt(safeGetItem('study_quest_tutor_count') || '0', 10);
   const streakCount = parseInt(safeGetItem('study_punches') || '0', 10);
 
-  const claimedQuests = JSON.parse(safeGetItem('study_claimed_quests') || '{}');
+  const claimedQuests = safeJsonParse<Record<string, boolean>>(safeGetItem('study_claimed_quests'), {});
 
   const quests: Quest[] = [
     {
@@ -334,7 +334,7 @@ export function claimQuestReward(questId: string): boolean {
   const quest = quests.find(q => q.id === questId);
   if (!quest || !quest.isCompleted || quest.isClaimed) return false;
 
-  const claimedQuests = JSON.parse(safeGetItem('study_claimed_quests') || '{}');
+  const claimedQuests = safeJsonParse<Record<string, boolean>>(safeGetItem('study_claimed_quests'), {});
   claimedQuests[questId] = true;
   safeSetItem('study_claimed_quests', JSON.stringify(claimedQuests));
 
@@ -358,7 +358,7 @@ export function claimQuestReward(questId: string): boolean {
  */
 export function getBadgesStatus(): AchievementBadge[] {
   const currentXP = getStudyXP();
-  const claimedBadges = JSON.parse(safeGetItem('study_claimed_badges') || '{}');
+  const claimedBadges = safeJsonParse<Record<string, boolean>>(safeGetItem('study_claimed_badges'), {});
 
   return ALL_BADGES.map(badge => ({
     ...badge,

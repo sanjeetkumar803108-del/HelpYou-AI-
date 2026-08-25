@@ -30,4 +30,14 @@ export const safeClearAll = (): void => {
   }
 };
 
+export const safeJsonParse = <T>(jsonStr: string | null | undefined, fallback: T): T => {
+  if (!jsonStr) return fallback;
+  try {
+    return JSON.parse(jsonStr) as T;
+  } catch (e) {
+    console.warn('[SafeJsonParse] Corrupted JSON recovered with fallback:', e);
+    return fallback;
+  }
+};
+
 const memoryStorage: Record<string, string> = {};

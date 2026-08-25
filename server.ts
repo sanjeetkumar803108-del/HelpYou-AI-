@@ -3411,9 +3411,19 @@ async function startServer() {
   server.timeout = 300000;
 }
 
-export default app;
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.NOW_REGION ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT
+);
 
-if (process.env.VERCEL !== "1") {
+if (!isServerless) {
   startServer();
 }
+
+export default (req: any, res: any) => {
+  return app(req, res);
+};
 

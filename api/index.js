@@ -2955,10 +2955,15 @@ async function startServer() {
   });
   server.timeout = 3e5;
 }
-var server_default = app;
-if (process.env.VERCEL !== "1") {
+var isServerless = Boolean(
+  process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT
+);
+if (!isServerless) {
   startServer();
 }
+var server_default = (req, res) => {
+  return app(req, res);
+};
 export {
   server_default as default
 };

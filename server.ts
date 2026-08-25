@@ -3354,47 +3354,21 @@ app.get("/api/time", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+  if (process.env.NODE_ENV !== "production" && !isServerless) {
+    try {
+      const viteModule = "vite";
+      const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn("Vite dev server not loaded:", e);
+    }
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-
-    // Serve original source files for source maps/debugging to prevent 404 network errors
-    app.get("/src/*", (req, res) => {
-      let relativePath = req.params[0] || "";
-      if (!relativePath && req.path.startsWith("/src/")) {
-        relativePath = req.path.substring(5);
-      }
-      try {
-        relativePath = decodeURIComponent(relativePath);
-      } catch (e) {
-        // Fallback to original
-      }
-      const filePath = path.join(process.cwd(), "src", relativePath);
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        try {
-          const content = fs.readFileSync(filePath, "utf-8");
-          if (filePath.endsWith(".js") || filePath.endsWith(".jsx")) {
-            res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-          } else if (filePath.endsWith(".ts") || filePath.endsWith(".tsx")) {
-            // Serve TypeScript source files as text/plain so the browser doesn't try to parse them as executable JS scripts
-            res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          } else {
-            res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          }
-          return res.send(content);
-        } catch (err) {
-          return res.status(500).send("Error reading file");
-        }
-      }
-      return res.status(404).send("Not Found");
-    });
 
     app.get("*", (req, res) => {
       const ext = path.extname(req.path);

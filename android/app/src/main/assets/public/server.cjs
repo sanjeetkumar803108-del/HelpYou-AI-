@@ -32,6 +32,7 @@ __export(server_exports, {
   default: () => server_default
 });
 module.exports = __toCommonJS(server_exports);
+var import_config = require("dotenv/config");
 var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_multer = __toESM(require("multer"), 1);
@@ -41,7 +42,7 @@ var import_crypto = __toESM(require("crypto"), 1);
 var import_youtube_transcript = require("youtube-transcript");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_xss = __toESM(require("xss"), 1);
-var import_pdf_parse = __toESM(require("pdf-parse"), 1);
+var import_pdf_parse = __toESM(require("pdf-parse/lib/pdf-parse.js"), 1);
 var import_fs = __toESM(require("fs"), 1);
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -63,14 +64,15 @@ var apiLimiter = (0, import_express_rate_limit.default)({
   legacyHeaders: false
 });
 app.use("/api/", apiLimiter);
-var authLimiter = (0, import_express_rate_limit.default)({
-  windowMs: 15 * 60 * 1e3,
-  // 15 minutes
-  max: 5,
-  // Limit each IP to 5 failed login/auth attempts
-  message: { error: "Too many login attempts, please try again after 15 minutes." }
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+    geminiKeyPrefix: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.slice(0, 6) + "..." : "MISSING",
+    isVercel: process.env.VERCEL === "1"
+  });
 });
-app.use("/api/auth/", authLimiter);
 var sanitizeInput = (obj) => {
   if (typeof obj === "string") {
     return (0, import_xss.default)(obj);
@@ -2936,43 +2938,24 @@ app.get("/api/time", (req, res) => {
   res.json({ timestamp: Date.now() });
 });
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa"
-    });
-    app.use(vite.middlewares);
+  if (process.env.NODE_ENV !== "production" && !isServerless) {
+    try {
+      const viteModule = "vite";
+      const { createServer: createViteServer } = await import(
+        /* @vite-ignore */
+        viteModule
+      );
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa"
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn("Vite dev server not loaded:", e);
+    }
   } else {
     const distPath = import_path.default.join(process.cwd(), "dist");
     app.use(import_express.default.static(distPath));
-    app.get("/src/*", (req, res) => {
-      let relativePath = req.params[0] || "";
-      if (!relativePath && req.path.startsWith("/src/")) {
-        relativePath = req.path.substring(5);
-      }
-      try {
-        relativePath = decodeURIComponent(relativePath);
-      } catch (e) {
-      }
-      const filePath = import_path.default.join(process.cwd(), "src", relativePath);
-      if (import_fs.default.existsSync(filePath) && import_fs.default.statSync(filePath).isFile()) {
-        try {
-          const content = import_fs.default.readFileSync(filePath, "utf-8");
-          if (filePath.endsWith(".js") || filePath.endsWith(".jsx")) {
-            res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-          } else if (filePath.endsWith(".ts") || filePath.endsWith(".tsx")) {
-            res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          } else {
-            res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          }
-          return res.send(content);
-        } catch (err) {
-          return res.status(500).send("Error reading file");
-        }
-      }
-      return res.status(404).send("Not Found");
-    });
     app.get("*", (req, res) => {
       const ext = import_path.default.extname(req.path);
       if (ext || req.path.startsWith("/src") || req.path.startsWith("/api")) {
@@ -2986,8 +2969,11 @@ async function startServer() {
   });
   server.timeout = 3e5;
 }
-var server_default = app;
-if (process.env.VERCEL !== "1") {
+var isServerless = Boolean(
+  process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT
+);
+if (!isServerless) {
   startServer();
 }
+var server_default = app;
 //# sourceMappingURL=server.cjs.map

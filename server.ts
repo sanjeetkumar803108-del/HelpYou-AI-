@@ -9,7 +9,7 @@ import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
 // @ts-ignore
-import pdf from "pdf-parse";
+import pdf from "pdf-parse/lib/pdf-parse.js";
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);

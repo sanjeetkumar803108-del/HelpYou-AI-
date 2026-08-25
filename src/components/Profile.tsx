@@ -189,10 +189,7 @@ export default function Profile({
   const [hapticEnabled, setHapticEnabled] = useState<boolean>(() => {
     return safeGetItem('pref_haptic_enabled') !== 'false';
   });
-  // Notification Reminder Toggle
-  const [notifEnabled, setNotifEnabled] = useState<boolean>(() => {
-    return safeGetItem('pref_notif_enabled') !== 'false';
-  });
+
 
   // Settings Slideover Panel
   const [showSettings, setShowSettings] = useState(false);
@@ -1895,38 +1892,7 @@ export default function Profile({
                     </div>
                   </div>
 
-                  {/* Notification Reminders Toggle */}
-                  <div
-                    onClick={async () => {
-                      const newVal = !notifEnabled;
-                      setNotifEnabled(newVal);
-                      safeSetItem('pref_notif_enabled', String(newVal));
-                      if (hapticEnabled) triggerVibration(10);
-                      if (newVal) {
-                        // Re-enable: reschedule notifications
-                        const { setupDailyLocalNotifications } = await import('../utils/notifications');
-                        await setupDailyLocalNotifications(false);
-                        showToast('🔔 Daily study & homework reminders turned ON');
-                      } else {
-                        // Disable: cancel all scheduled notifications
-                        const { cancelAllDailyNotifications } = await import('../utils/notifications');
-                        await cancelAllDailyNotifications();
-                        showToast('🔕 Daily reminders turned OFF');
-                      }
-                    }}
-                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Bell className="w-3.5 h-3.5 text-zinc-400" />
-                      <div>
-                        <span className="text-xs font-bold text-zinc-700 block">Daily Reminders</span>
-                        <span className="text-[10px] text-zinc-400 font-semibold">After-school & evening study alerts (5:00 PM & 7:30 PM)</span>
-                      </div>
-                    </div>
-                    <div className={`w-9 h-5 ${notifEnabled ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
-                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${notifEnabled ? 'right-0.5' : 'left-0.5'}`} />
-                    </div>
-                  </div>
+
 
                   {/* Haptic Vibration Toggle */}
                   <div

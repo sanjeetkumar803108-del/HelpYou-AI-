@@ -1,0 +1,14 @@
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+aptPkgs = []
+
+[phases.install]
+cmds = ["npm install --include=dev"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node --max-old-space-size=1024 dist/server.cjs"

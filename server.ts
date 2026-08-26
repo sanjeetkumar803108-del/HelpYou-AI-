@@ -369,12 +369,6 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
       ];
     }
 
-    // ⚡ SPEED OPTIMIZATION: Disable internal "thinking" mode on Gemini flash models.
-    // thinkingBudget=0 skips the extended reasoning phase which adds 5-15s of latency.
-    // This is safe for EdTech Q&A — fast direct answers are better for students.
-    if (!clonedParams.config.thinkingConfig) {
-      clonedParams.config.thinkingConfig = { thinkingBudget: 0 };
-    }
   }
 
   const query = extractUserQuery(clonedParams);
@@ -933,7 +927,6 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
               maxOutputTokens: 8192,
               temperature: 0.2,
               candidateCount: 1,
-              thinkingConfig: { thinkingBudget: 0 },
               ...(shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {})
             }
           });

@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -3356,7 +3357,22 @@ app.get("/api/time", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production" && !isServerless) {
+  const distPath = path.join(process.cwd(), "dist");
+  const hasDist = fs.existsSync(path.join(distPath, "index.html"));
+  const isProd = (process.env.NODE_ENV || "").toLowerCase() === "production" || hasDist;
+
+  if (isProd && hasDist) {
+    console.log("[Server] Serving static frontend from:", distPath);
+    app.use(express.static(distPath));
+
+    app.get("*", (req, res) => {
+      const ext = path.extname(req.path);
+      if (ext || req.path.startsWith('/src') || req.path.startsWith('/api')) {
+        return res.status(404).send('Not Found');
+      }
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  } else {
     try {
       const viteModule = "vite";
       const { createServer: createViteServer } = await import(/* @vite-ignore */ viteModule);
@@ -3368,17 +3384,6 @@ async function startServer() {
     } catch (e) {
       console.warn("Vite dev server not loaded:", e);
     }
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-
-    app.get("*", (req, res) => {
-      const ext = path.extname(req.path);
-      if (ext || req.path.startsWith('/src') || req.path.startsWith('/api')) {
-        return res.status(404).send('Not Found');
-      }
-      res.sendFile(path.join(distPath, "index.html"));
-    });
   }
 
   const server = app.listen(PORT, "0.0.0.0", () => {

@@ -35,20 +35,7 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Universal URL restoration for Vercel Serverless Function rewrites
-app.use((req, res, next) => {
-  const matched = (req.headers['x-matched-path'] || req.headers['x-now-route-matches']) as string;
-  if (matched && matched.startsWith('/api')) {
-    req.url = matched;
-  } else if (req.query && req.query.__path) {
-    req.url = '/api/' + req.query.__path;
-  } else if (!req.url.startsWith('/api') && !req.url.startsWith('/src')) {
-    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
-  }
-  next();
-});
-
-app.all(["/api/health", "/health", "/api", "/api/index.js", "/api/index"], (req, res) => {
+app.all(["/api/health", "/health", "/api/status"], (req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),

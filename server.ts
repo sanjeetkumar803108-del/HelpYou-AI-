@@ -397,7 +397,7 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
     "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    "gemini-1.5-flash-latest"
   ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {

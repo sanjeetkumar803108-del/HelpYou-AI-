@@ -34,6 +34,7 @@ __export(server_exports, {
 module.exports = __toCommonJS(server_exports);
 var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
+var import_fs = __toESM(require("fs"), 1);
 var import_multer = __toESM(require("multer"), 1);
 var import_cors = __toESM(require("cors"), 1);
 var import_genai = require("@google/genai");
@@ -41,7 +42,6 @@ var import_crypto = __toESM(require("crypto"), 1);
 var import_youtube_transcript = require("youtube-transcript");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_xss = __toESM(require("xss"), 1);
-var import_fs = __toESM(require("fs"), 1);
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
@@ -64,18 +64,7 @@ var apiLimiter = (0, import_express_rate_limit.default)({
   legacyHeaders: false
 });
 app.use("/api/", apiLimiter);
-app.use((req, res, next) => {
-  const matched = req.headers["x-matched-path"] || req.headers["x-now-route-matches"];
-  if (matched && matched.startsWith("/api")) {
-    req.url = matched;
-  } else if (req.query && req.query.__path) {
-    req.url = "/api/" + req.query.__path;
-  } else if (!req.url.startsWith("/api") && !req.url.startsWith("/src")) {
-    req.url = "/api" + (req.url.startsWith("/") ? req.url : "/" + req.url);
-  }
-  next();
-});
-app.all(["/api/health", "/health", "/api", "/api/index.js", "/api/index"], (req, res) => {
+app.all(["/api/health", "/health", "/api/status"], (req, res) => {
   res.json({
     status: "ok",
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -349,9 +338,6 @@ ${text}`.trim() },
         ...parts.slice(1)
       ];
     }
-    if (!clonedParams.config.thinkingConfig) {
-      clonedParams.config.thinkingConfig = { thinkingBudget: 0 };
-    }
   }
   const query = extractUserQuery(clonedParams);
   const sysInstr = clonedParams?.config?.systemInstruction?.parts?.[0]?.text || "";
@@ -359,11 +345,11 @@ ${text}`.trim() },
   const isSpecialtyModel = params.model && (params.model.includes("tts") || params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
   let requestedModel = params.model;
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-2.0-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    requestedModel || "gemini-3.6-flash",
+    "gemini-3.6-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-flash-latest"
   ].filter((value, index, self) => self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -498,6 +484,11 @@ Before generating your response, you MUST analyze the extracted academic problem
       "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
       "is_final_answer": false
     }
+  ],
+  "suggestions": [
+    "Explain this simpler with a real-life analogy",
+    "Test me with 2 practice problems on this",
+    "What are common exam mistakes to avoid?"
   ]
 }
 
@@ -514,7 +505,12 @@ Before generating your response, you MUST analyze the extracted academic problem
 
 | Parameter | Category A | Category B |
 |---|---|---|
-| Detail 1 | Description | Description |"
+| Detail 1 | Description | Description |",
+  "suggestions": [
+    "Give me 2 practice MCQs on this comparison",
+    "Explain the biggest difference in 1 sentence",
+    "Why is this distinction important in exams?"
+  ]
 }
 
 3. RULE 3 (General Theory/Biology/History):
@@ -531,16 +527,17 @@ Your detailed overview here...
 
 ### Key Concepts
 - Bullet point 1
-- Bullet point 2"
+- Bullet point 2",
+  "suggestions": [
+    "Explain this with a real-life example",
+    "Give me a quick 3-question quiz on this",
+    "What are the key points to remember for exams?"
+  ]
 }
 
 --- STRICT CONSTRAINTS & FORMATTING RULES ---
 - The entire output MUST be a valid JSON object. No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
-- Always append exactly 3 plain text follow-up suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines AFTER the JSON object.
-- Example suffix:
-[SUGGESTION: Plain text suggestion 1]
-[SUGGESTION: Plain text suggestion 2]
-[SUGGESTION: Plain text suggestion 3]
+- Always populate the "suggestions" array with exactly 3 context-aware study follow-up ideas.
 - Do NOT use LaTeX inside the suggestions.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:
@@ -550,7 +547,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
     };
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
         responseMimeType: "application/json",
@@ -631,6 +628,11 @@ Before generating your response, you MUST analyze the user's query and categoriz
       "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
       "is_final_answer": false
     }
+  ],
+  "suggestions": [
+    "Explain this simpler with a real-life analogy",
+    "Test me with 2 practice problems on this",
+    "What are common exam traps to avoid?"
   ]
 }
 
@@ -647,7 +649,12 @@ Before generating your response, you MUST analyze the user's query and categoriz
 
 | Parameter | Category A | Category B |
 |---|---|---|
-| Detail 1 | Description | Description |"
+| Detail 1 | Description | Description |",
+  "suggestions": [
+    "Give me 2 practice MCQs on this comparison",
+    "Explain the biggest difference in 1 sentence",
+    "Why is this distinction important in exams?"
+  ]
 }
 
 3. RULE 3 (General Theory/Biology/History):
@@ -664,16 +671,17 @@ Your detailed overview here...
 
 ### Key Concepts
 - Bullet point 1
-- Bullet point 2"
+- Bullet point 2",
+  "suggestions": [
+    "Explain this with a real-life example",
+    "Give me a quick 3-question quiz on this",
+    "What are the key points to remember for exams?"
+  ]
 }
 
 --- STRICT CONSTRAINTS & FORMATTING RULES ---
 - The entire output MUST be a valid JSON object. No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
-- Always append exactly 3 plain text follow-up suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines AFTER the JSON object.
-- Example suffix:
-[SUGGESTION: Plain text suggestion 1]
-[SUGGESTION: Plain text suggestion 2]
-[SUGGESTION: Plain text suggestion 3]
+- Always populate the "suggestions" array with exactly 3 context-aware study follow-up ideas.
 - Do NOT use LaTeX inside the suggestions.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:
@@ -805,10 +813,10 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     const shouldStream = stream === "true" || stream === true;
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro"
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest"
       ];
       const now = Date.now();
       const activeModels = [];
@@ -838,7 +846,6 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
               maxOutputTokens: 8192,
               temperature: 0.2,
               candidateCount: 1,
-              thinkingConfig: { thinkingBudget: 0 },
               ...shouldEnableSearch ? { tools: [{ googleSearch: {} }] } : {}
             }
           });
@@ -884,7 +891,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       }
     } else {
       const response = await safeGenerateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
         contents,
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -939,8 +946,8 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     let useRawFile = false;
     if (req.file) {
       try {
-        const { default: pdf2 } = await import("pdf-parse/lib/pdf-parse.js");
-        const pdfData = await pdf2(req.file.buffer, { max: 60 });
+        const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
+        const pdfData = await pdf(req.file.buffer, { max: 60 });
         if (pdfData.numpages > 60) {
           return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
         }
@@ -1077,7 +1084,7 @@ ${extractedText}` };
       return res.status(400).json({ error: "Text content is too short to process." });
     }
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: contentsPayload,
       config: {
         responseMimeType
@@ -1224,12 +1231,12 @@ GRAMMAR AND POLISH:
 
 OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
-    const originalModel = "gemini-2.0-flash";
+    const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro"
+      "gemini-3.6-flash",
+      "gemini-3.1-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-3.6-flash"
     ];
     const now = Date.now();
     const activeModels = [];
@@ -1343,7 +1350,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
       }
     };
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [
         {
           parts: [
@@ -1373,7 +1380,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
       }
     }));
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [
         {
           parts: [
@@ -1422,7 +1429,7 @@ Format exactly like this:
   }
 ]`;
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: `Generate exactly ${requestedCount} flashcards from this text: ${text}` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1737,7 +1744,7 @@ ${previousSummary}
 Student's Request: "${followUp}"`;
       const response2 = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: { parts: [{ text: promptText }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] }
@@ -1796,7 +1803,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 \`[SUGGESTION: Deep dive into the first half]\``;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: transcriptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -1887,7 +1894,7 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 - Standard: Standard introduction, body, and conclusion.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone. Topic: ${topic}` }] },
       config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
     });
@@ -1954,7 +1961,7 @@ You must return your output strictly in JSON format matching the following schem
     contentParts.push({ text: targetText });
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: contentParts },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2108,7 +2115,7 @@ IF FORMAT IS "Explain Like I'm 5":
 4. Use short paragraphs and emojis to make it visually friendly for beginners.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text }] },
       config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
     });
@@ -2220,7 +2227,7 @@ app.post("/api/evaluate-answer", async (req, res) => {
 [Explain mistakes and provide the perfect 10/10 mathematical solution]`;
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: `Evaluate the student's answer for: "${questionText}". Student's Answer is: "${userAnswer}".` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -2271,7 +2278,7 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: { parts: [{ text: `Topic: ${topic}. Generate the ${requestedCount}-question JSON quiz now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2316,7 +2323,9 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
     let extractedText = "";
     let numPages = 0;
     try {
-      const pdfData = await pdf(req.file.buffer, { max: 51 });
+      const pdfModule = await import("pdf-parse/lib/pdf-parse.js");
+      const pdfParser = pdfModule.default || pdfModule;
+      const pdfData = await pdfParser(req.file.buffer, { max: 51 });
       numPages = pdfData.numpages;
       extractedText = pdfData.text || "";
       console.log(`[PDF Quiz API] PDF parse complete. Pages: ${numPages}, Extracted text length: ${extractedText.trim().length}`);
@@ -2350,7 +2359,7 @@ Use this exact JSON structure:
       const slicedText = extractedText.length > 15e4 ? extractedText.slice(0, 15e4) : extractedText;
       response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: [{
           parts: [{ text: `DOCUMENT CONTENT:
 ${slicedText}
@@ -2372,7 +2381,7 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
       };
       response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: [{
           parts: [
             pdfPart,
@@ -2442,7 +2451,7 @@ Use this exact JSON structure:
 ]`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2538,7 +2547,7 @@ Correct Concept/Answer: ${correctConcept}
 Please analyze this mistake and output the correction in the strict JSON format specified.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: prompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2611,7 +2620,7 @@ Please generate exactly 3 similar practice questions to help the student test an
 Return the response in the strict JSON array format specified.`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: prompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2701,7 +2710,7 @@ ${studentNotes ? `LOCAL STUDY NOTES / STUDY FILE CONTENT: ${studentNotes}` : ""}
 Please perform a comprehensive live Google Search across 5 to 10+ authoritative websites, cross-verify the facts, and return the response strictly in JSON format according to our schema (NO markdown bolding '**').`;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: contentPrompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2840,7 +2849,7 @@ Required JSON Structure:
 }`;
       const response = await safeGenerateContent({
         gradeLevel: gradeLevel || "11th Grade (Junior)",
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2951,7 +2960,20 @@ app.get("/api/time", (req, res) => {
   res.json({ timestamp: Date.now() });
 });
 async function startServer() {
-  if (process.env.NODE_ENV !== "production" && !isServerless) {
+  const distPath = import_path.default.join(process.cwd(), "dist");
+  const hasDist = import_fs.default.existsSync(import_path.default.join(distPath, "index.html"));
+  const isProd = (process.env.NODE_ENV || "").toLowerCase() === "production" || hasDist;
+  if (isProd && hasDist) {
+    console.log("[Server] Serving static frontend from:", distPath);
+    app.use(import_express.default.static(distPath));
+    app.get("*", (req, res) => {
+      const ext = import_path.default.extname(req.path);
+      if (ext || req.path.startsWith("/src") || req.path.startsWith("/api")) {
+        return res.status(404).send("Not Found");
+      }
+      res.sendFile(import_path.default.join(distPath, "index.html"));
+    });
+  } else {
     try {
       const viteModule = "vite";
       const { createServer: createViteServer } = await import(
@@ -2966,18 +2988,8 @@ async function startServer() {
     } catch (e) {
       console.warn("Vite dev server not loaded:", e);
     }
-  } else {
-    const distPath = import_path.default.join(process.cwd(), "dist");
-    app.use(import_express.default.static(distPath));
-    app.get("*", (req, res) => {
-      const ext = import_path.default.extname(req.path);
-      if (ext || req.path.startsWith("/src") || req.path.startsWith("/api")) {
-        return res.status(404).send("Not Found");
-      }
-      res.sendFile(import_path.default.join(distPath, "index.html"));
-    });
   }
-  const server = app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(Number(PORT) || 3e3, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
   server.timeout = 3e5;

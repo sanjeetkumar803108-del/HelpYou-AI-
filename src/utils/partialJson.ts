@@ -1,8 +1,34 @@
 /**
  * A robust, self-healing partial JSON parser for streaming JSON responses.
  * It uses a bracket-and-brace matching stack to complete partial JSON structures,
+ * sanitizes unescaped LaTeX backslashes so math/chemistry formulas are not corrupted by JSON.parse,
  * and recursively heals itself if standard parsing fails due to incomplete keys/values.
  */
+
+export function sanitizeLaTeXInJSON(raw: string): string {
+  if (!raw) return raw;
+  
+  // Replace backslashes in JSON strings that are not standard JSON escapes
+  // Standard JSON escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+  // If \ is followed by a LaTeX command (e.g. \rightarrow, \frac, \text, \theta) or symbol (\{, \[, \_, \%, \$),
+  // escape it to \\ so JSON.parse receives the literal backslash.
+  return raw.replace(/\\(?:([a-zA-Z]+)|([^"\\/bfnrtu]))/g, (match, word, symbol) => {
+    if (word) {
+      if (word === 'b' || word === 'f' || word === 'n' || word === 'r' || word === 't') {
+        return match; // standard 1-letter JSON escape
+      }
+      if (/^u[0-9a-fA-F]{4}$/.test(word)) {
+        return match; // standard unicode escape
+      }
+      return '\\\\' + word;
+    }
+    if (symbol) {
+      return '\\\\' + symbol;
+    }
+    return match;
+  });
+}
+
 export function parsePartialJSON(jsonStr: string): any {
   if (!jsonStr) return null;
   
@@ -84,7 +110,8 @@ export function parsePartialJSON(jsonStr: string): any {
   }
 
   try {
-    return JSON.parse(closedStr);
+    const sanitizedJSON = sanitizeLaTeXInJSON(closedStr);
+    return JSON.parse(sanitizedJSON);
   } catch (e) {
     // Self-healing recursive fallback: if parsing fails, strip the last item
     // and try again. This gracefully handles incomplete key-value pairs (e.g. "title": "Inco )

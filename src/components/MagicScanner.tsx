@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Image as ImageIcon, Zap, Calculator, X, Loader2, Send, Mic, MicOff, Check, Languages, HelpCircle, GraduationCap, BookOpen, PenLine, Type, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import GlobalMarkdown from './GlobalMarkdown';
+import { parsePartialJSON } from '../utils/partialJson';
 import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -729,24 +730,38 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                     {(() => {
                       const cleanText = msg.text.replace(/\[SUGGESTION:\s*([^\]]+)\]/g, '').trim();
                       let parsed = null;
-                      if (msg.role === 'model' && (cleanText.startsWith('{') || cleanText.includes('solution_steps'))) {
-                        try {
-                          parsed = JSON.parse(cleanText);
-                        } catch (e) {
-                          let cleaned = cleanText;
-                          if (cleaned.includes('```')) {
-                            cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-                            try { parsed = JSON.parse(cleaned); } catch (err) {}
-                          }
-                          if (!parsed) {
-                            const start = cleaned.indexOf('{');
-                            const end = cleaned.lastIndexOf('}');
-                            if (start !== -1 && end !== -1 && end > start) {
-                              try { parsed = JSON.parse(cleaned.slice(start, end + 1)); } catch (err) {}
-                            }
-                          }
-                        }
+                      if (msg.role === 'model' && (cleanText.startsWith('{') || cleanText.includes('solution_steps') || cleanText.includes('markdown_content'))) {
+                        parsed = parsePartialJSON(cleanText);
                       }
+
+                      const suggestions: string[] = (() => {
+                        if (msg.role !== 'model' || msg.isError) return [];
+                        if (parsed?.suggestions && Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+                          return parsed.suggestions
+                            .map((s: any) => String(s).replace(/^\[?SUGGESTION:\s*/i, '').replace(/\]$/, '').trim())
+                            .filter((s: string) => s.length > 0);
+                        }
+                        const matches = [...msg.text.matchAll(/\[SUGGESTION:\s*([^\]]+)\]/g)];
+                        if (matches.length > 0) {
+                          return matches.map(m => m[1].trim()).filter(Boolean);
+                        }
+                        if (cleanText.length > 20 || parsed) {
+                          const topic = parsed?.topic_title || '';
+                          if (topic && topic.length > 2) {
+                            return [
+                              `Explain ${topic} with a real-life analogy 💡`,
+                              `Give me 2 practice questions on ${topic} 📝`,
+                              `What are the key points for exams? ⚠️`
+                            ];
+                          }
+                          return [
+                            "Explain this simpler with a fun analogy 💡",
+                            "Test me with 2 quick practice questions 📝",
+                            "What are common exam traps on this? ⚠️"
+                          ];
+                        }
+                        return [];
+                      })();
 
                       if (parsed) {
                         return (
@@ -761,40 +776,85 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                                 </h3>
                               </div>
                             )}
-                            <div className="space-y-3">
-                              {Array.isArray(parsed?.solution_steps) && parsed.solution_steps.map((step: any, sIdx: number) => (
-                                <div 
-                                  key={sIdx} 
-                                  className={`p-4 rounded-2xl border transition-all duration-200 bg-white shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)] ${
-                                    step.is_final_answer 
-                                      ? 'border-emerald-200 bg-emerald-50/20' 
-                                      : 'border-zinc-150 bg-white'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-dashed border-zinc-100">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
+                            {parsed.format_type === 'markdown' || !parsed.solution_steps ? (
+                              <div className="text-sm text-zinc-850 leading-relaxed overflow-x-auto">
+                                <GlobalMarkdown>{parsed.markdown_content || parsed.content || cleanText}</GlobalMarkdown>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {Array.isArray(parsed?.solution_steps) && parsed.solution_steps.map((step: any, sIdx: number) => (
+                                  <div 
+                                    key={sIdx} 
+                                    className={`p-4 rounded-2xl border transition-all duration-200 bg-white shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)] ${
                                       step.is_final_answer 
-                                        ? 'bg-emerald-100 text-emerald-800' 
-                                        : 'bg-zinc-100 text-zinc-700'
-                                    }`}>
-                                      Step {step.step_id || (sIdx + 1)}
-                                    </span>
-                                    {step.title && (
-                                      <span className="text-xs font-bold text-zinc-800 shrink-0">
-                                        {step.title}
+                                        ? 'border-emerald-200 bg-emerald-50/20' 
+                                        : 'border-zinc-150 bg-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-dashed border-zinc-100">
+                                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
+                                        step.is_final_answer 
+                                          ? 'bg-emerald-100 text-emerald-800' 
+                                          : 'bg-zinc-100 text-zinc-700'
+                                      }`}>
+                                        Step {step.step_id || (sIdx + 1)}
                                       </span>
-                                    )}
+                                      {step.title && (
+                                        <span className="text-xs font-bold text-zinc-800 shrink-0">
+                                          {step.title}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-sm text-zinc-850 leading-relaxed overflow-x-auto">
+                                      <GlobalMarkdown>{step.content}</GlobalMarkdown>
+                                    </div>
                                   </div>
-                                  <div className="text-sm text-zinc-850 leading-relaxed overflow-x-auto">
-                                    <GlobalMarkdown>{step.content}</GlobalMarkdown>
-                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {suggestions.length > 0 && (
+                              <div className="mt-4 pt-3 border-t border-zinc-150 flex flex-col gap-1.5">
+                                <span className="text-[10px] text-purple-650 font-bold tracking-wider uppercase">What to do next:</span>
+                                <div className="flex flex-wrap gap-2">
+                                  {suggestions.map((sug, sIdx) => (
+                                    <button
+                                      key={sIdx}
+                                      onClick={() => handleSendMessage(sug)}
+                                      className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-all duration-200 active:scale-95 text-left flex items-center gap-1.5 font-bold"
+                                    >
+                                      <span>✨</span>
+                                      <span>{sug}</span>
+                                    </button>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         );
                       }
-                      return <GlobalMarkdown>{cleanText}</GlobalMarkdown>;
+                      return (
+                        <div>
+                          <GlobalMarkdown>{cleanText}</GlobalMarkdown>
+                          {suggestions.length > 0 && (
+                            <div className="mt-4 pt-3 border-t border-zinc-150 flex flex-col gap-1.5">
+                              <span className="text-[10px] text-purple-650 font-bold tracking-wider uppercase">What to do next:</span>
+                              <div className="flex flex-wrap gap-2">
+                                {suggestions.map((sug, sIdx) => (
+                                  <button
+                                    key={sIdx}
+                                    onClick={() => handleSendMessage(sug)}
+                                    className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-all duration-200 active:scale-95 text-left flex items-center gap-1.5 font-bold"
+                                  >
+                                    <span>✨</span>
+                                    <span>{sug}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
                     })()}
                   </div>
                 )}

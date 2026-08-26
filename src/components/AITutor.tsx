@@ -93,7 +93,7 @@ RULES:
 - For step-by-step math, science, derivations, calculations, or explanations, map each logical phase of the solution to an object in the "solution_steps" array.
 - The "step_id" should be incremental integers (e.g. 1, 2, 3).
 - The "title" should be a short, clear heading of what is accomplished in that step.
-- The "content" must be rich, clear, and explain the step's logic simply, using standard LaTeX formulas.
+- The "content" must be rich, clear, and explain the step's logic simply. Whenever using LaTeX for formulas, equations, or chemical reactions, use valid KaTeX math syntax wrapped in $$ or $ (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$ or $\\text{ATP}$). Always double-escape backslashes in JSON (\\\\rightarrow, \\\\frac, \\\\text) so all formulas render with 100% crystal-clear beauty for students.
 - Set "is_final_answer" to true ONLY on the final step that reveals the final solution.
 - For non-academic questions, small talk, or conversational responses, simply output a single step with step_id=1, is_final_answer=true, and the response text inside "content".
 - Always include the "suggestions" array with exactly 3 context-aware follow-up study suggestions.

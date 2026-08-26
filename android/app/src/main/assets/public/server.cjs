@@ -481,7 +481,7 @@ Before generating your response, you MUST analyze the extracted academic problem
     {
       "step_id": 1,
       "title": "Clear concise step title",
-      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
+      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations/chemical reactions, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$). Always double-escape backslashes in JSON (e.g. \\\\rightarrow, \\\\frac, \\\\text) so that equations render beautifully for students.",
       "is_final_answer": false
     }
   ],
@@ -625,7 +625,7 @@ Before generating your response, you MUST analyze the user's query and categoriz
     {
       "step_id": 1,
       "title": "Clear concise step title",
-      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
+      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations/chemical reactions, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$). Always double-escape backslashes in JSON (e.g. \\\\rightarrow, \\\\frac, \\\\text) so that equations render beautifully for students.",
       "is_final_answer": false
     }
   ],

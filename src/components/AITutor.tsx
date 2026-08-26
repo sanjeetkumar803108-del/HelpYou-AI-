@@ -67,7 +67,7 @@ You are analyzing a full-screen, uncropped photo. Scan the image to locate the p
 DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimiters.
 
 CRITICAL SYSTEM INSTRUCTION (MANDATORY):
-You MUST output your response strictly in the following JSON format, followed by 3 context-aware follow-up suggestions.
+You MUST output your response strictly in the following JSON format.
 No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
 
 FORMAT:
@@ -80,11 +80,13 @@ FORMAT:
       "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
       "is_final_answer": false
     }
+  ],
+  "suggestions": [
+    "Plain text suggestion 1",
+    "Plain text suggestion 2",
+    "Plain text suggestion 3"
   ]
 }
-[SUGGESTION: Plain text suggestion 1]
-[SUGGESTION: Plain text suggestion 2]
-[SUGGESTION: Plain text suggestion 3]
 
 RULES:
 - The JSON object must be valid raw JSON.
@@ -94,7 +96,7 @@ RULES:
 - The "content" must be rich, clear, and explain the step's logic simply, using standard LaTeX formulas.
 - Set "is_final_answer" to true ONLY on the final step that reveals the final solution.
 - For non-academic questions, small talk, or conversational responses, simply output a single step with step_id=1, is_final_answer=true, and the response text inside "content".
-- Always append exactly 3 plain text suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines.
+- Always include the "suggestions" array with exactly 3 context-aware follow-up study suggestions.
 - Do NOT use LaTeX inside the suggestions.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:
@@ -141,9 +143,35 @@ function AITutorMessageItem({
     if (msg.isError || msg.text.includes("hiccup") || msg.text.includes("network")) {
       return [];
     }
+    // 1. Check if parsed from JSON object (e.g. parsedSolution.suggestions)
+    if (parsedSolution?.suggestions && Array.isArray(parsedSolution.suggestions) && parsedSolution.suggestions.length > 0) {
+      return parsedSolution.suggestions
+        .map((s: any) => String(s).replace(/^\[?SUGGESTION:\s*/i, '').replace(/\]$/, '').trim())
+        .filter((s: string) => s.length > 0);
+    }
+    // 2. Check regex in raw text (e.g. [SUGGESTION: ...])
     const matches = [...msg.text.matchAll(/\[SUGGESTION:\s*([^\]]+)\]/g)];
-    return matches.map(m => m[1].trim());
-  }, [msg.text, msg.isError]);
+    if (matches.length > 0) {
+      return matches.map(m => m[1].trim()).filter(Boolean);
+    }
+    // 3. Fallback smart contextual suggestions so suggestions ALWAYS appear on every AI answer
+    if (msg.role === 'model' && (cleanText.length > 20 || parsedSolution)) {
+      const topic = parsedSolution?.topic_title || '';
+      if (topic && topic.length > 2) {
+        return [
+          `Explain ${topic} with a real-life analogy 💡`,
+          `Test me with 2 practice questions on ${topic} 📝`,
+          `What are common exam mistakes in ${topic}? ⚠️`
+        ];
+      }
+      return [
+        "Explain this simpler with a fun analogy 💡",
+        "Test me with 2 quick practice questions 📝",
+        "What are common exam traps on this? ⚠️"
+      ];
+    }
+    return [];
+  }, [msg.text, msg.isError, parsedSolution, cleanText, msg.role]);
 
   const [displayedText, setDisplayedText] = useState(msg.displayedText || (msg.isTyping ? '' : cleanText));
   const [currentWordIndex, setCurrentWordIndex] = useState(0);

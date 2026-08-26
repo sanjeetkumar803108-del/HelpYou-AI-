@@ -560,6 +560,11 @@ Before generating your response, you MUST analyze the extracted academic problem
       "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
       "is_final_answer": false
     }
+  ],
+  "suggestions": [
+    "Explain this simpler with a real-life analogy",
+    "Test me with 2 practice problems on this",
+    "What are common exam mistakes to avoid?"
   ]
 }
 
@@ -572,7 +577,12 @@ Before generating your response, you MUST analyze the extracted academic problem
 {
   "topic_title": "Comparison: [Topic Title]",
   "format_type": "markdown",
-  "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |"
+  "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |",
+  "suggestions": [
+    "Give me 2 practice MCQs on this comparison",
+    "Explain the biggest difference in 1 sentence",
+    "Why is this distinction important in exams?"
+  ]
 }
 
 3. RULE 3 (General Theory/Biology/History):
@@ -584,16 +594,17 @@ Before generating your response, you MUST analyze the extracted academic problem
 {
   "topic_title": "Concept: [Topic Title]",
   "format_type": "markdown",
-  "markdown_content": "### Overview\nYour detailed overview here...\n\n### Key Concepts\n- Bullet point 1\n- Bullet point 2"
+  "markdown_content": "### Overview\nYour detailed overview here...\n\n### Key Concepts\n- Bullet point 1\n- Bullet point 2",
+  "suggestions": [
+    "Explain this with a real-life example",
+    "Give me a quick 3-question quiz on this",
+    "What are the key points to remember for exams?"
+  ]
 }
 
 --- STRICT CONSTRAINTS & FORMATTING RULES ---
 - The entire output MUST be a valid JSON object. No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
-- Always append exactly 3 plain text follow-up suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines AFTER the JSON object.
-- Example suffix:
-[SUGGESTION: Plain text suggestion 1]
-[SUGGESTION: Plain text suggestion 2]
-[SUGGESTION: Plain text suggestion 3]
+- Always populate the "suggestions" array with exactly 3 context-aware study follow-up ideas.
 - Do NOT use LaTeX inside the suggestions.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:
@@ -686,6 +697,11 @@ Before generating your response, you MUST analyze the user's query and categoriz
       "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
       "is_final_answer": false
     }
+  ],
+  "suggestions": [
+    "Explain this simpler with a real-life analogy",
+    "Test me with 2 practice problems on this",
+    "What are common exam traps to avoid?"
   ]
 }
 
@@ -698,7 +714,12 @@ Before generating your response, you MUST analyze the user's query and categoriz
 {
   "topic_title": "Comparison: [Topic Title]",
   "format_type": "markdown",
-  "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |"
+  "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |",
+  "suggestions": [
+    "Give me 2 practice MCQs on this comparison",
+    "Explain the biggest difference in 1 sentence",
+    "Why is this distinction important in exams?"
+  ]
 }
 
 3. RULE 3 (General Theory/Biology/History):
@@ -710,16 +731,17 @@ Before generating your response, you MUST analyze the user's query and categoriz
 {
   "topic_title": "Concept: [Topic Title]",
   "format_type": "markdown",
-  "markdown_content": "### Overview\nYour detailed overview here...\n\n### Key Concepts\n- Bullet point 1\n- Bullet point 2"
+  "markdown_content": "### Overview\nYour detailed overview here...\n\n### Key Concepts\n- Bullet point 1\n- Bullet point 2",
+  "suggestions": [
+    "Explain this with a real-life example",
+    "Give me a quick 3-question quiz on this",
+    "What are the key points to remember for exams?"
+  ]
 }
 
 --- STRICT CONSTRAINTS & FORMATTING RULES ---
 - The entire output MUST be a valid JSON object. No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
-- Always append exactly 3 plain text follow-up suggestions at the absolute end, formatted strictly as [SUGGESTION: text] on new lines AFTER the JSON object.
-- Example suffix:
-[SUGGESTION: Plain text suggestion 1]
-[SUGGESTION: Plain text suggestion 2]
-[SUGGESTION: Plain text suggestion 3]
+- Always populate the "suggestions" array with exactly 3 context-aware study follow-up ideas.
 - Do NOT use LaTeX inside the suggestions.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:

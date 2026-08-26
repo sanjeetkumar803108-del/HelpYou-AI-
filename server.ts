@@ -2637,7 +2637,9 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
     let extractedText = "";
     let numPages = 0;
     try {
-      const pdfData = await pdf(req.file.buffer, { max: 51 });
+      const pdfModule: any = await import("pdf-parse/lib/pdf-parse.js");
+      const pdfParser = pdfModule.default || pdfModule;
+      const pdfData = await pdfParser(req.file.buffer, { max: 51 });
       numPages = pdfData.numpages;
       extractedText = pdfData.text || "";
       console.log(`[PDF Quiz API] PDF parse complete. Pages: ${numPages}, Extracted text length: ${extractedText.trim().length}`);
@@ -3296,8 +3298,6 @@ Required JSON Structure:
   }
 });
 
-import fs from "fs";
-
 // Premium Subscriptions State Storage (File-backed database fallback)
 const SUBS_FILE_PATH = path.join(process.cwd(), "subscriptions.json");
 
@@ -3379,7 +3379,7 @@ async function startServer() {
     }
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(Number(PORT) || 3000, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
   server.timeout = 300000;

@@ -22,6 +22,7 @@ import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
+import { compressImageToFile } from '../utils/imageCompressor';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -929,12 +930,13 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setAttachedFile(file);
+      const optimized = await compressImageToFile(file, 1200, 0.8);
+      setAttachedFile(optimized);
       setAttachedFileType('image');
-      setAttachedFilePreview(URL.createObjectURL(file));
+      setAttachedFilePreview(URL.createObjectURL(optimized));
       setShowPlusMenu(false);
     }
   };
@@ -960,10 +962,11 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     }
   };
 
-  const handleNativeImagePicked = (picked: any) => {
-    setAttachedFile(picked.fileObj);
+  const handleNativeImagePicked = async (picked: any) => {
+    const optimized = await compressImageToFile(picked.fileObj, 1200, 0.8);
+    setAttachedFile(optimized);
     setAttachedFileType('image');
-    setAttachedFilePreview(picked.dataUrl);
+    setAttachedFilePreview(picked.dataUrl || URL.createObjectURL(optimized));
     setShowPlusMenu(false);
   };
 
@@ -1011,9 +1014,12 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
       userAnswer: string;
     }
   ) => {
-    let queryText = textToSend || chatInput;
-    const activeAttachedFile = overrideFile || attachedFile;
+    let activeAttachedFile = overrideFile || attachedFile;
     const activeAttachedType = overrideFileType || attachedFileType;
+
+    if (activeAttachedFile && activeAttachedType === 'image' && activeAttachedFile.size > 350 * 1024) {
+      activeAttachedFile = await compressImageToFile(activeAttachedFile, 1200, 0.8);
+    }
 
     if (isEvaluation && evaluationDetails) {
       queryText = `Subject Topic: ${evaluationDetails.subjectTopic}
@@ -2123,7 +2129,7 @@ Please evaluate this answer strictly according to your system rubric.`;
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 10 }}
             onClick={scrollToBottom}
-            className="absolute bottom-36 right-6 z-30 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center shadow-lg transition-colors active:scale-95 border border-purple-400"
+            className="absolute bottom-40 right-5 z-30 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center shadow-lg transition-colors active:scale-95 border border-purple-400"
             title="Scroll to bottom"
           >
             <ChevronDown className="w-5 h-5" />

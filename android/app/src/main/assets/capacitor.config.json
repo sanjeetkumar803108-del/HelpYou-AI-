@@ -1,6 +1,6 @@
 {
 	"appId": "com.helpyou.ai",
-	"appName": "HelpYou-AI",
+	"appName": "HelpYou AI",
 	"webDir": "dist",
 	"server": {
 		"androidScheme": "https",

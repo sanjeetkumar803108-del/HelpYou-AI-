@@ -16,6 +16,7 @@ import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { showToast } from '../utils/toast';
 import { takeNativePhoto } from '../utils/mobilePicker';
+import { compressImageToFile } from '../utils/imageCompressor';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -469,6 +470,9 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       }
     }
 
+    // Pre-compress image client-side to ~200KB for lightning-fast scan delivery
+    const optimizedFile = await compressImageToFile(file, 1200, 0.8);
+
     // 2. Map mode to elegant educational prompt text
     let promptMessage = `Please solve this ${activeMode} problem step-by-step with clear explanations.`;
     if (activeMode === 'Summary') {
@@ -490,12 +494,12 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       onNavigateToTab('aitutor');
     }
 
-    // 4. Dispatch the scanned image file & prompt message to the AI Tutor tab
+    // 4. Dispatch the optimized scanned image file & prompt message to the AI Tutor tab
     setTimeout(() => {
       const event = new CustomEvent('study-scanner-send-to-tutor', {
         detail: {
           text: promptMessage,
-          imageFile: file,
+          imageFile: optimizedFile,
           subject: activeMode,
           handwritten: inputType === 'Handwritten'
         }

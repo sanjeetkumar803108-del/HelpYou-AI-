@@ -2,7 +2,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.helpyou.ai',
-  appName: 'HelpYou-AI',
+  appName: 'HelpYou AI',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

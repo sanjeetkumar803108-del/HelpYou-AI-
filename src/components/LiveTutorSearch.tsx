@@ -125,6 +125,20 @@ const parseSavedSearch = (text: string, title: string, rawData?: string): Search
   };
 };
 
+function getFriendlyErrorMessage(err: any): string {
+  const msg = String(err?.message || err || "").toLowerCase();
+  if (msg.includes("quota") || msg.includes("429") || msg.includes("resource_exhausted") || msg.includes("limit")) {
+    return "Our study research engine is experiencing high student activity right now. Please wait 10-20 seconds and tap Search Again.";
+  }
+  if (msg.includes("network") || msg.includes("fetch") || msg.includes("timeout") || msg.includes("failed to fetch") || msg.includes("connection")) {
+    return "Unable to connect to the research server. Please check your internet connection and try again.";
+  }
+  if (msg.includes("invalid argument") || msg.includes("400") || msg.includes("500") || msg.includes("error") || msg.includes("json")) {
+    return "We could not complete this research query at the moment. Please tap Search Again to get fresh verified data.";
+  }
+  return "Unable to load live research right now. Please tap Search Again to retry.";
+}
+
 export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const isVip = isProUser();
 
@@ -778,26 +792,31 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                 </motion.div>
               )}
 
-              {/* Error State */}
+              {/* Student-Friendly Reassuring Error State */}
               {error && !loading && (
                 <motion.div 
                   key="search-error"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="p-5 rounded-3xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-start gap-3 shadow-xs"
+                  className="p-6 rounded-3xl bg-gradient-to-br from-indigo-50/60 via-white to-blue-50/40 border border-blue-200/80 shadow-xs text-center space-y-3.5"
                 >
-                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="space-y-1 flex-1">
-                    <h4 className="font-black text-rose-900 text-sm">Research Notice</h4>
-                    <p className="text-xs leading-relaxed opacity-95">{error}</p>
-                    <button
-                      onClick={() => handleSearch()}
-                      className="mt-2 text-[11px] font-black text-white bg-rose-600 hover:bg-rose-700 px-3.5 py-1.5 rounded-xl transition-all active:scale-95 cursor-pointer"
-                    >
-                      Retry Research Search
-                    </button>
+                  <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto text-lg shadow-2xs font-bold">
+                    ⚡
                   </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-zinc-900 text-sm">Let's Try That Again</h4>
+                    <p className="text-xs font-medium text-zinc-600 max-w-xs mx-auto leading-relaxed">
+                      {getFriendlyErrorMessage(error)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleSearch()}
+                    className="inline-flex items-center justify-center gap-2 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-5 py-2.5 rounded-2xl transition-all active:scale-95 shadow-sm shadow-blue-500/20 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Search Again</span>
+                  </button>
                 </motion.div>
               )}
 
@@ -812,29 +831,28 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                   className="space-y-6"
                 >
                   {/* Topic Title & Executive Relevance Card */}
-                  <div className="bg-white rounded-3xl p-6 border-l-4 border-l-blue-600 border border-zinc-200/80 shadow-sm space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-black tracking-wider text-blue-600 uppercase flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
-                          Academic Grounded Report
-                        </span>
-                        <h3 className="text-xl font-black text-zinc-900 tracking-tight leading-snug">
-                          {searchResponse.topic_title}
-                        </h3>
-                      </div>
+                  <div className="bg-white rounded-3xl p-5 sm:p-6 border-l-4 border-l-blue-600 border border-zinc-200/80 shadow-sm space-y-3.5">
+                    {/* Top Row: Category tag and Match Score Badge */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[11px] font-black tracking-wider text-blue-600 uppercase flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                        Academic Grounded Report
+                      </span>
 
                       {searchResponse.match_score && (
-                        <div className="shrink-0 flex flex-col items-end">
-                          <div className="px-3.5 py-1.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-1.5 shadow-xs">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-xs font-black text-emerald-700">
-                              {searchResponse.match_score} Match
-                            </span>
-                          </div>
+                        <div className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 flex items-center gap-1.5 shadow-2xs shrink-0">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-[11px] font-black text-emerald-700">
+                            {searchResponse.match_score} Match
+                          </span>
                         </div>
                       )}
                     </div>
+
+                    {/* Full-width Title: 2-3 clean readable lines */}
+                    <h3 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight leading-snug break-words">
+                      {searchResponse.topic_title}
+                    </h3>
 
                     {/* Metadata Summary Pill Bar */}
                     <div className="flex flex-wrap items-center gap-2 pt-1">

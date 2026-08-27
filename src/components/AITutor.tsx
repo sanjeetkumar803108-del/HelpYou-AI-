@@ -1021,6 +1021,8 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
       activeAttachedFile = await compressImageToFile(activeAttachedFile, 1200, 0.8);
     }
 
+    let queryText = textToSend !== undefined ? textToSend : chatInput;
+
     if (isEvaluation && evaluationDetails) {
       queryText = `Subject Topic: ${evaluationDetails.subjectTopic}
 Grade: ${evaluationDetails.userGrade}

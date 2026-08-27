@@ -3160,10 +3160,12 @@ CRITICAL OPERATIONAL RULES:
 4. ZERO FAKE URLS:
    - In "source_links", ONLY use the exact verified URLs provided in the Verified Web Search Context. NEVER fabricate URLs or invent broken paths.
    - If no external URLs match, use verified official root domains (e.g. "https://en.wikipedia.org", "https://news.google.com").
+5. CRISP CONCISE HEADLINE:
+   - "topic_title" MUST be a clean, elegant, concise headline of 3 to 6 words max (e.g. "Jeju Island Case Investigation", "JEE Main 2026 Registration Guide"). Avoid long multi-clause sentence titles.
 
 STRICT JSON OUTPUT FORMAT:
 {
-  "topic_title": "Authoritative & Crisp Subject Title",
+  "topic_title": "Concise Subject Headline (3-6 words)",
   "match_score": "98%",
   "live_updates": [
     "Paragraph 1: Foundational overview, context, and core definitions with verified background facts.",

@@ -63,25 +63,49 @@ const remarkPluginsList = [remarkMath, remarkGfm];
 const rehypePluginsList: any[] = [rehypeRaw, [rehypeKatex, { strict: false, throwOnError: false }]];
 
 const defaultComponents = {
+  h1: ({ node, ...props }: any) => (
+    <h1 className="text-base sm:text-lg font-bold text-zinc-900 mt-4 mb-2 tracking-tight leading-snug break-words" {...props} />
+  ),
+  h2: ({ node, ...props }: any) => (
+    <h2 className="text-sm sm:text-base font-bold text-zinc-900 mt-3.5 mb-1.5 tracking-tight leading-snug break-words" {...props} />
+  ),
+  h3: ({ node, ...props }: any) => (
+    <h3 className="text-xs sm:text-sm font-bold text-zinc-800 mt-3 mb-1 tracking-tight leading-snug break-words" {...props} />
+  ),
+  h4: ({ node, ...props }: any) => (
+    <h4 className="text-xs font-bold text-zinc-700 mt-2 mb-1 tracking-tight leading-snug break-words" {...props} />
+  ),
+  p: ({ node, ...props }: any) => (
+    <p className="text-xs sm:text-[13px] text-zinc-800 font-normal leading-relaxed my-2 break-words" {...props} />
+  ),
+  ul: ({ node, ...props }: any) => (
+    <ul className="list-disc pl-4 space-y-1 my-2 text-xs sm:text-[13px] text-zinc-800 leading-relaxed" {...props} />
+  ),
+  ol: ({ node, ...props }: any) => (
+    <ol className="list-decimal pl-4 space-y-1 my-2 text-xs sm:text-[13px] text-zinc-800 leading-relaxed" {...props} />
+  ),
+  li: ({ node, ...props }: any) => (
+    <li className="leading-relaxed" {...props} />
+  ),
   table: ({ node, ...props }: any) => (
-    <div className="overflow-x-auto my-6 rounded-lg border border-zinc-200 shadow-sm">
-      <table className="w-full text-left border-collapse text-sm" {...props} />
+    <div className="overflow-x-auto my-4 rounded-xl border border-zinc-200 shadow-2xs">
+      <table className="w-full text-left border-collapse text-xs sm:text-sm" {...props} />
     </div>
   ),
   thead: ({ node, ...props }: any) => (
-    <thead className="bg-zinc-50/80 border-b border-zinc-200" {...props} />
+    <thead className="bg-zinc-50/90 border-b border-zinc-200" {...props} />
   ),
   th: ({ node, ...props }: any) => (
-    <th className="px-4 py-3 font-semibold text-zinc-700 border-b border-zinc-200 whitespace-nowrap" {...props} />
+    <th className="px-3.5 py-2.5 font-bold text-zinc-800 border-b border-zinc-200 whitespace-nowrap text-xs" {...props} />
   ),
   td: ({ node, ...props }: any) => (
-    <td className="px-4 py-3 border-b border-zinc-100 text-zinc-600" {...props} />
+    <td className="px-3.5 py-2.5 border-b border-zinc-100 text-zinc-700 text-xs" {...props} />
   ),
   tr: ({ node, ...props }: any) => (
     <tr className="hover:bg-zinc-50/50 transition-colors" {...props} />
   ),
   stepbox: ({ node, ...props }: any) => (
-    <div className="bg-white border border-zinc-200/80 shadow-sm rounded-2xl p-4 my-4 font-sans text-zinc-800" {...props} />
+    <div className="bg-white border border-zinc-200/80 shadow-2xs rounded-2xl p-4 my-3 font-sans text-zinc-800" {...props} />
   ),
 };
 

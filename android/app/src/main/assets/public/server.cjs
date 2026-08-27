@@ -2860,7 +2860,7 @@ ${studentNotes}
 VERIFIED REAL-TIME WEB SEARCH DATA:
 ${verifiedContextString || "No external search feeds returned. Synthesize using accurate, verified ground truth."}
 
-Conduct a deep, rigorous, long-form academic research analysis and return strictly the JSON structure above.`;
+Conduct a deep, point-wise, structured academic research analysis with small markdown subheadings (### ...) and bullet points under each section, returning strictly the JSON structure above.`;
     const response = await safeGenerateContent({
       gradeLevel,
       model: "gemini-3.5-flash-lite",

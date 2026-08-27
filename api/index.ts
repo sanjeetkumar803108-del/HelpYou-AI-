@@ -405,11 +405,9 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
 
   let requestedModel = params.model;
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-2.0-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    requestedModel || "gemini-3.6-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite"
   ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -622,7 +620,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
     
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
         responseMimeType: "application/json",
@@ -907,10 +905,8 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro"
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite"
       ];
 
       const now = Date.now();
@@ -1000,7 +996,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       }
     } else {
       const response = await safeGenerateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
         contents,
         config: { 
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1226,7 +1222,7 @@ IF FORMAT IS "Explain Like I'm 5":
     }
     
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: contentsPayload,
       config: {
         responseMimeType: responseMimeType
@@ -1390,12 +1386,10 @@ GRAMMAR AND POLISH:
 OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
 
-    const originalModel = "gemini-2.0-flash";
+    const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro"
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite"
     ];
     
     const now = Date.now();
@@ -1535,7 +1529,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
     };
     
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [
         {
           parts: [
@@ -1569,7 +1563,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
     }));
 
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [
         {
           parts: [
@@ -1626,7 +1620,7 @@ Format exactly like this:
 ]`;
 
     const response = await safeGenerateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: `Generate exactly ${requestedCount} flashcards from this text: ${text}` }] },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1993,7 +1987,7 @@ Student's Request: "${followUp}"`;
 
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: { parts: [{ text: promptText }] },
         config: { 
           systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -2064,7 +2058,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: transcriptText }] },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -2166,7 +2160,7 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone. Topic: ${topic}` }] },
       config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
     });
@@ -2243,7 +2237,7 @@ You must return your output strictly in JSON format matching the following schem
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: contentParts },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2421,7 +2415,7 @@ IF FORMAT IS "Explain Like I'm 5":
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text }] },
       config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
     });
@@ -2547,7 +2541,7 @@ app.post("/api/evaluate-answer", async (req, res) => {
 
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: `Evaluate the student's answer for: "${questionText}". Student's Answer is: "${userAnswer}".` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -2604,7 +2598,7 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: { parts: [{ text: `Topic: ${topic}. Generate the ${requestedCount}-question JSON quiz now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2694,7 +2688,7 @@ Use this exact JSON structure:
       const slicedText = extractedText.length > 150000 ? extractedText.slice(0, 150000) : extractedText;
       response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: [{
           parts: [{ text: `DOCUMENT CONTENT:\n${slicedText}\n\nGenerate the ${requestedCount}-question JSON quiz now based strictly on the content above.` }]
         }],
@@ -2714,7 +2708,7 @@ Use this exact JSON structure:
 
       response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: [{ 
           parts: [
             pdfPart,
@@ -2789,7 +2783,7 @@ Use this exact JSON structure:
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3001,7 +2995,7 @@ Please analyze this mistake and output the correction in the strict JSON format 
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: prompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3080,7 +3074,7 @@ Return the response in the strict JSON array format specified.`;
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       contents: { parts: [{ text: prompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3377,7 +3371,7 @@ Required JSON Structure:
 
       const response = await safeGenerateContent({
         gradeLevel: gradeLevel || "11th Grade (Junior)",
-        model: "gemini-2.0-flash",
+        model: "gemini-3.6-flash",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

@@ -389,9 +389,7 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
     requestedModel || "gemini-3.6-flash",
     "gemini-3.6-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-flash-latest"
+    "gemini-3.5-flash-lite"
   ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -945,9 +943,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     if (shouldStream) {
       let modelsToTry = [
         "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite",
-        "gemini-flash-latest"
+        "gemini-3.5-flash-lite"
       ];
 
       const now = Date.now();
@@ -1430,9 +1426,7 @@ OVERALL VERDICT:
     const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
       "gemini-3.6-flash",
-      "gemini-3.1-flash-lite",
-      "gemini-3.5-flash",
-      "gemini-3.6-flash"
+      "gemini-3.5-flash-lite"
     ];
     
     const now = Date.now();

@@ -876,10 +876,10 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                         <span>Verified Real-Time Analysis</span>
                       </div>
 
-                      <div className="text-zinc-800 text-xs font-semibold leading-relaxed bg-zinc-50/70 p-5 rounded-2xl border border-zinc-200/70 space-y-3.5 select-text">
+                      <div className="text-zinc-850 text-xs sm:text-[13px] leading-relaxed bg-zinc-50/60 p-4 sm:p-5 rounded-2xl border border-zinc-200/70 space-y-4 select-text">
                         {Array.isArray(searchResponse.live_updates) ? (
                           searchResponse.live_updates.map((update, idx) => (
-                            <div key={idx} className="space-y-1">
+                            <div key={idx} className="space-y-1.5 border-b border-zinc-200/40 pb-3 last:border-b-0 last:pb-0">
                               <GlobalMarkdown>{update}</GlobalMarkdown>
                             </div>
                           ))

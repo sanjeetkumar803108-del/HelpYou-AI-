@@ -122,8 +122,21 @@ function extractWithRegex(cleaned: string): any {
       }
     }
 
+    // Extract key_formula & exam_trap if present
+    let key_formula: string | undefined;
+    const formulaMatch = cleaned.match(/"key_formula"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+    if (formulaMatch) {
+      try { key_formula = JSON.parse(`"${formulaMatch[1]}"`); } catch { key_formula = formulaMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'); }
+    }
+
+    let exam_trap: string | undefined;
+    const trapMatch = cleaned.match(/"exam_trap"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+    if (trapMatch) {
+      try { exam_trap = JSON.parse(`"${trapMatch[1]}"`); } catch { exam_trap = trapMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'); }
+    }
+
     if (steps.length > 0) {
-      return { topic_title, format_type, solution_steps: steps, suggestions };
+      return { topic_title, format_type, key_formula, exam_trap, solution_steps: steps, suggestions };
     }
   } catch (err) {
     console.warn("Regex extraction failed:", err);

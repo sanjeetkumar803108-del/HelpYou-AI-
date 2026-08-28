@@ -8,7 +8,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Sparkles, Send, Mic, MicOff, Loader2, RefreshCw, Compass, Brain, 
   ArrowRight, Copy, Check, Share2, ThumbsUp, ThumbsDown, Pause, Play,
-  Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock, Square
+  Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock, Square,
+  Volume2, VolumeX, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parsePartialJSON } from '../utils/partialJson';
@@ -281,6 +282,109 @@ function AITutorMessageItem({
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  // Clean LaTeX and math markdown for natural audio speech synthesis
+  const cleanMathForSpeech = (text: string): string => {
+    if (!text) return '';
+    let speech = text;
+    speech = speech.replace(/\\frac\{((?:[^{}]+|\{[^{}]*\})+)\}\{((?:[^{}]+|\{[^{}]*\})+)\}/g, '$1 over $2');
+    speech = speech.replace(/\\sqrt\{([^}]+)\}/g, 'square root of $1');
+    speech = speech.replace(/\\sqrt\s*([0-9a-zA-Z]+)/g, 'square root of $1');
+    speech = speech.replace(/\^\{\\circ\}/g, ' degrees');
+    speech = speech.replace(/\^\\circ/g, ' degrees');
+    speech = speech.replace(/\\sin\^\{-1\}/g, 'inverse sine of ');
+    speech = speech.replace(/\\cos\^\{-1\}/g, 'inverse cosine of ');
+    speech = speech.replace(/\\tan\^\{-1\}/g, 'inverse tangent of ');
+    speech = speech.replace(/\\sin/g, 'sine');
+    speech = speech.replace(/\\cos/g, 'cosine');
+    speech = speech.replace(/\\tan/g, 'tangent');
+    speech = speech.replace(/\\times/g, ' times ');
+    speech = speech.replace(/\\cdot/g, ' times ');
+    speech = speech.replace(/\\div/g, ' divided by ');
+    speech = speech.replace(/\\approx/g, ' approximately ');
+    speech = speech.replace(/\\neq/g, ' is not equal to ');
+    speech = speech.replace(/\\pm/g, ' plus or minus ');
+    speech = speech.replace(/\^2/g, ' squared');
+    speech = speech.replace(/\^3/g, ' cubed');
+    speech = speech.replace(/\\pi/g, ' pi ');
+    speech = speech.replace(/\\theta/g, ' theta ');
+    speech = speech.replace(/\\lambda/g, ' lambda ');
+    speech = speech.replace(/\\int/g, ' integral of ');
+    speech = speech.replace(/\\begin\{pmatrix\}[\s\S]*?\\end\{pmatrix\}/g, ' matrix ');
+    speech = speech.replace(/\$\$/g, ' ');
+    speech = speech.replace(/\$/g, ' ');
+    speech = speech.replace(/\\left|\\right/g, '');
+    speech = speech.replace(/\\[a-zA-Z]+/g, ' ');
+    speech = speech.replace(/[{}]/g, '');
+    speech = speech.replace(/[*_#`]/g, '');
+    return speech.replace(/\s+/g, ' ').trim();
+  };
+
+  // Toggle voice walkthrough with persona-tuned acoustics
+  const handleToggleSpeech = () => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      showToast("Text-to-speech not supported on this device");
+      return;
+    }
+    if (isPlayingAudio) {
+      window.speechSynthesis.cancel();
+      setIsPlayingAudio(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    
+    let fullExplanation = '';
+    if (parsedSolution && Array.isArray(parsedSolution.solution_steps) && parsedSolution.solution_steps.length > 0) {
+      if (parsedSolution.topic_title) {
+        fullExplanation += `Topic: ${parsedSolution.topic_title}. `;
+      }
+      if (parsedSolution.key_formula) {
+        fullExplanation += `Key formula: ${cleanMathForSpeech(parsedSolution.key_formula)}. `;
+      }
+      parsedSolution.solution_steps.forEach((step: any, idx: number) => {
+        fullExplanation += `Step ${step.step_id || idx + 1}: ${step.title || ''}. ${cleanMathForSpeech(step.content)}. `;
+      });
+      if (parsedSolution.exam_trap) {
+        fullExplanation += `Common exam trap to avoid: ${cleanMathForSpeech(parsedSolution.exam_trap)}. `;
+      }
+    } else {
+      fullExplanation = cleanMathForSpeech(cleanText);
+    }
+
+    const utterance = new SpeechSynthesisUtterance(fullExplanation);
+    
+    // Set persona voice pitch & rate
+    if (activePersona === 'cosmo') {
+      utterance.pitch = 1.1;
+      utterance.rate = 1.05;
+    } else if (activePersona === 'wizard') {
+      utterance.pitch = 1.0;
+      utterance.rate = 0.92;
+    } else if (activePersona === 'dino') {
+      utterance.pitch = 1.15;
+      utterance.rate = 1.0;
+    } else {
+      // owl (Professor Owl)
+      utterance.pitch = 0.95;
+      utterance.rate = 0.95;
+    }
+
+    utterance.onend = () => setIsPlayingAudio(false);
+    utterance.onerror = () => setIsPlayingAudio(false);
+    
+    setIsPlayingAudio(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const onTypingCompleteRef = useRef(onTypingComplete);
   useEffect(() => {
@@ -448,6 +552,43 @@ function AITutorMessageItem({
                       </motion.div>
                     );
                   })}
+                  {/* Key Formula / Identity Cheat-Box */}
+                  {parsedSolution?.key_formula && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/5 to-purple-500/10 border border-amber-400/30 shadow-sm"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="text-xs font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1">
+                          <span>🧮</span>
+                          <span>Core Formula / Identity</span>
+                        </span>
+                      </div>
+                      <div className="text-sm font-semibold text-zinc-900 overflow-x-auto py-0.5">
+                        <GlobalMarkdown>{parsedSolution.key_formula}</GlobalMarkdown>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Exam Trap Alert Banner */}
+                  {parsedSolution?.exam_trap && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 text-amber-950 shadow-sm"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="text-xs font-extrabold text-amber-800 uppercase tracking-wide">
+                          Exam Trap to Avoid
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-900 font-medium leading-relaxed m-0">
+                        {parsedSolution.exam_trap}
+                      </p>
+                    </motion.div>
+                  )}
                 </div>
               )}
             </div>
@@ -485,6 +626,28 @@ function AITutorMessageItem({
         {/* Premium, fully functional action icons */}
         {msg.role === 'model' && (
           <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-zinc-150 text-zinc-400">
+            <button 
+              onClick={handleToggleSpeech}
+              className={`p-1.5 rounded-lg transition-all active:scale-95 flex items-center gap-1.5 text-[11px] font-bold ${
+                isPlayingAudio 
+                  ? 'bg-purple-100 text-purple-700 border border-purple-200 shadow-sm' 
+                  : 'hover:bg-zinc-100 hover:text-zinc-700 text-zinc-500'
+              }`}
+              title={isPlayingAudio ? "Stop Audio" : "Listen to audio explanation"}
+            >
+              {isPlayingAudio ? (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 text-purple-600 animate-pulse" />
+                  <span>Stop Voice</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Listen</span>
+                </>
+              )}
+            </button>
+
             <button 
               onClick={handleCopy}
               className="p-1.5 rounded-lg hover:bg-zinc-100 hover:text-zinc-700 transition-all active:scale-95 flex items-center gap-1 text-[11px] font-bold"
@@ -568,8 +731,8 @@ const PERSONAS = {
     borderColor: 'border-purple-500/30',
     bgLight: 'bg-purple-500/10',
     textColor: 'text-purple-300',
-    description: 'Analytical, Concise, and Encouraging. Perfect for school lessons.',
-    promptSuffix: `\n\nYour persona: You are Professor Owl. Your tone is Analytical, Concise, and Encouraging. Simplify academic concepts with clear, direct explanations and high intellectual standards. Avoid childish vocabulary or patronizing language.`
+    description: 'Elite academic rigor. Formal proofs, first principles, and exam-mastery insights.',
+    promptSuffix: `\n\nYour persona: You are Professor Owl, an elite academic master educator with 20+ years of teaching experience. Your tone is Analytical, Rigorous, and Inspiring. You explain first principles, standard definitions, and formal mathematical proofs with absolute precision. You highlight high-yield insights and ensure zero misconceptions.`
   },
   cosmo: {
     id: 'cosmo' as const,
@@ -580,8 +743,8 @@ const PERSONAS = {
     borderColor: 'border-blue-500/30',
     bgLight: 'bg-blue-500/10',
     textColor: 'text-blue-300',
-    description: 'Sci-fi space explorer! Explains concepts through space adventures and planetary physics.',
-    promptSuffix: `\n\nYour persona: You are Captain Cosmo, an energetic sci-fi space explorer. Your goal is to explain all concepts through thrilling space adventures, planetary physics, rocket science, and cosmic discoveries. Keep the energy high and adventurous. Avoid infantilizing language.`
+    description: 'Dynamic STEM explorer! Explains concepts through astrophysics, orbital mechanics, and real-world forces.',
+    promptSuffix: `\n\nYour persona: You are Captain Cosmo, a brilliant aerospace physicist and energetic STEM explorer. Your teaching methodology anchors every concept in thrilling real-world physics, space mechanics, planetary forces, and cutting-edge engineering. Connect abstract formulas to dynamic physical phenomena with high intellectual excitement.`
   },
   wizard: {
     id: 'wizard' as const,
@@ -592,8 +755,8 @@ const PERSONAS = {
     borderColor: 'border-amber-500/30',
     bgLight: 'bg-amber-500/10',
     textColor: 'text-amber-300',
-    description: 'Methodical, Clear, and Step-by-Step. Explains math and analytical logic with rigorous clarity.',
-    promptSuffix: `\n\nYour persona: You are Dr. Sage (Math Expert). Your tone is Methodical, Clear, and Step-by-Step. Break down complex equations and analytical problems with meticulous logical sequence. You MUST format ALL mathematical expressions, formulas, variables, and step-by-step calculations strictly using LaTeX ($ for inline math and $$ for block math equations).`
+    description: 'Speed-math & Olympiad grandmaster. Algebraic shortcuts, symmetries, and intuitive visual tricks.',
+    promptSuffix: `\n\nYour persona: You are Dr. Sage, a legendary speed-math and Olympiad problem-solving grandmaster. Your specialty is revealing mental calculation shortcuts, algebraic symmetries, identity simplifications, and intuitive visual tricks. Teach students how to spot patterns instantly and solve problems with effortless elegance. Format ALL equations strictly using LaTeX.`
   },
   dino: {
     id: 'dino' as const,
@@ -604,8 +767,8 @@ const PERSONAS = {
     borderColor: 'border-emerald-500/30',
     bgLight: 'bg-emerald-500/10',
     textColor: 'text-emerald-300',
-    description: 'Evidence-based, Logical, and Detailed. Explains science with empirical rigor and deep details.',
-    promptSuffix: `\n\nYour persona: You are Investigator Max (Science Expert). Your tone is Evidence-based, Logical, and Detailed. Explain scientific concepts, hypotheses, and empirical evidence with deep technical detail, absolute clarity, and rigorous reasoning, avoiding childish analogies.`
+    description: 'Empirical scientific investigator. Molecular mechanisms, lab observations, and cause-and-effect reasoning.',
+    promptSuffix: `\n\nYour persona: You are Investigator Max, a senior empirical researcher and scientific investigator. Your methodology is grounded in the scientific method, experimental observation, molecular-level mechanics, and data-driven cause-and-effect reasoning. Explain the 'Why' behind every chemical reaction, biological mechanism, and physical law with vivid laboratory clarity.`
   }
 };
 

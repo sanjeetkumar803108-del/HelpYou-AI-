@@ -615,6 +615,8 @@ Before generating your response, you MUST analyze the extracted academic problem
 {
   "topic_title": "Subject or Topic of the problem",
   "format_type": "steps",
+  "key_formula": "The primary theoretical formula, law, or identity used in LaTeX (e.g. $\sin(A \pm B) = \sin A \cos B \pm \cos A \sin B$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misunderstandings students must avoid in exams",
   "solution_steps": [
     {
       "step_id": 1,

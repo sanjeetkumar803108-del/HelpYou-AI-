@@ -599,11 +599,11 @@ Before generating your response, you MUST analyze the extracted academic problem
 
 1. RULE 1 (Math & Physics Calculations):
 - Use this if the query is a mathematical equation, calculation, arithmetic, trigonometry, calculus, physics numerical, derivation, or problem requiring step-by-step sequential solving.
-- CRITICAL MATHEMATICAL PRECISION & ORDER OF OPERATIONS PROTOCOL (0-ERROR GUARANTEE):
-  * PEMDAS / BODMAS RIGOR: Always evaluate innermost parentheses and brackets first. In nested expressions (e.g. sin(90 * cos(90 / 6))), solve the innermost operation (90 / 6 = 15) before computing the trigonometric function (cos(15°)), then multiply, and finally evaluate the outer function. NEVER drop sub-operations (like divisions or constants).
-  * ANGLE MODES: In standard trigonometry and algebra calculations (unless explicitly stated in radians or containing π), evaluate angles in Degrees (°) with explicit ° symbols, while also showing the alternative Radian answer if relevant.
-  * BOTH EXACT & DECIMAL ANSWERS: Provide both the exact analytical form (radicals, fractions, surds) AND the rounded decimal value (to 4 decimal places).
-  * VERIFICATION BEFORE OUTPUT: Verify every single arithmetic step and calculation silently to ensure 100% mathematical accuracy.
+- MANDATORY 3-PASS INTERNAL VERIFICATION PROTOCOL (0% HALLUCINATION & ZERO-ERROR GUARANTEE):
+  Before generating your final response, you MUST execute a strict 3-pass internal verification:
+  * PASS 1 (Expression & Question Anatomy): Deconstruct every term, sign (+/-), parenthesis, exponent, radical, fraction, constant, and boundary condition without dropping or modifying ANY symbol. In nested expressions (e.g. sin(90 * cos(90 / 6))), isolate innermost operations first. Default to Degrees (°) for standard numericals unless explicitly in Radians or containing π.
+  * PASS 2 (Forward Step-by-Step PEMDAS Execution): Apply strict Order of Operations (PEMDAS/BODMAS): Parentheses -> Exponents/Roots -> Multiplication/Division -> Addition/Subtraction. Show standard theoretical formulas, substitute exact values, and calculate intermediate values with dual representation (exact radical/fraction and 4-decimal precision).
+  * PASS 3 (Reverse Sanity Check & Boundary Validation): Verify every arithmetic step (e.g. 90/6 = 15, cos(15°) = (sqrt(6)+sqrt(2))/4 ≈ 0.9659, 90 * 0.9659 = 86.9333°, sin(86.9333°) ≈ 0.9985). Check mathematical ranges (e.g. |sin|, |cos| <= 1, probabilities in [0,1], non-negative square roots). Ensure 100% mathematical accuracy before outputting.
 - Set "format_type" to "steps".
 - Populate the "solution_steps" array with each logical phase of the sequential solution.
 - Output strictly in this format:

@@ -186,11 +186,18 @@ function AITutorMessageItem({
     const result = parsePartialJSON(textToParse);
     // Safety: if parsing succeeded but content fields are undefined/null, sanitize them
     if (result && Array.isArray(result.solution_steps)) {
-      result.solution_steps = result.solution_steps.map((step: any) => ({
-        ...step,
-        content: step.content != null && step.content !== 'undefined' ? step.content : '(Processing...)',
-        title: step.title != null && step.title !== 'undefined' ? step.title : `Step ${step.step_id || 1}`,
-      }));
+      result.solution_steps = result.solution_steps.map((step: any, sIdx: number) => {
+        let content = step.content;
+        if (!content || content === 'undefined') {
+          content = msg.isTyping ? 'Generating step solution... ⚡' : (step.title || 'Step completed.');
+        }
+        return {
+          ...step,
+          step_id: step.step_id || (sIdx + 1),
+          title: step.title != null && step.title !== 'undefined' ? step.title : `Step ${step.step_id || (sIdx + 1)}`,
+          content
+        };
+      });
     }
     return result;
   }, [cleanText, msg.role]);
@@ -339,9 +346,9 @@ function AITutorMessageItem({
                 </div>
               )}
               
-              {parsedSolution.format_type === 'markdown' || !parsedSolution.solution_steps ? (
+              {parsedSolution.format_type === 'markdown' || !parsedSolution.solution_steps || parsedSolution.solution_steps.length === 0 ? (
                 <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-0.5 text-zinc-800">
-                  <GlobalMarkdown>{parsedSolution.markdown_content || parsedSolution.content || cleanText}</GlobalMarkdown>
+                  <GlobalMarkdown>{parsedSolution.markdown_content || parsedSolution.content || parsedSolution.explanation || parsedSolution.response || cleanText}</GlobalMarkdown>
                 </div>
               ) : (
                 <div className="space-y-3 max-w-full overflow-hidden">
@@ -408,7 +415,7 @@ function AITutorMessageItem({
               {/* Safety: never render raw JSON strings to the student */}
               <GlobalMarkdown>
                 {(displayedText.trim().startsWith('{') && displayedText.includes('solution_steps'))
-                  ? '✨ Loading your answer...'
+                  ? (msg.isTyping ? '✨ Solving and preparing step-by-step solution...' : cleanText)
                   : displayedText}
               </GlobalMarkdown>
             </div>
@@ -920,7 +927,7 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
       if (customEvent.detail) {
         const text = customEvent.detail.text || customEvent.detail.expression;
         if (text && handleSendMessageRef.current) {
-          handleSendMessageRef.current(`Please solve and explain step-by-step: ${text}`);
+          handleSendMessageRef.current(`Please solve and explain this math calculation step-by-step with clear formulas and working: ${text}`);
         }
       }
     };

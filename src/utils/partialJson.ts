@@ -1,32 +1,134 @@
 /**
- * A robust, self-healing partial JSON parser for streaming JSON responses.
- * It uses a bracket-and-brace matching stack to complete partial JSON structures,
- * sanitizes unescaped LaTeX backslashes so math/chemistry formulas are not corrupted by JSON.parse,
- * and recursively heals itself if standard parsing fails due to incomplete keys/values.
+ * A robust, self-healing partial JSON parser for streaming & complete JSON responses.
+ * 1. Properly escapes unescaped control characters (literal newlines, carriage returns, tabs) inside strings.
+ * 2. Sanitizes single-escaped LaTeX backslashes (\frac, \sqrt, \times, \pm, \int, \theta, etc.) so JSON.parse succeeds.
+ * 3. Balances open strings, brackets, and braces for smooth real-time streaming preview.
+ * 4. Includes an intelligent regex fallback that extracts all steps and content if strict JSON.parse fails.
  */
 
 export function sanitizeLaTeXInJSON(raw: string): string {
   if (!raw) return raw;
-  
-  // Replace backslashes in JSON strings that are not standard JSON escapes
-  // Standard JSON escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
-  // If \ is followed by a LaTeX command (e.g. \rightarrow, \frac, \text, \theta) or symbol (\{, \[, \_, \%, \$),
-  // escape it to \\ so JSON.parse receives the literal backslash.
-  return raw.replace(/\\(?:([a-zA-Z]+)|([^"\\/bfnrtu]))/g, (match, word, symbol) => {
-    if (word) {
-      if (word === 'b' || word === 'f' || word === 'n' || word === 'r' || word === 't') {
-        return match; // standard 1-letter JSON escape
+
+  let inString = false;
+  let isEscaped = false;
+  let out = '';
+
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i];
+
+    if (inString) {
+      if (isEscaped) {
+        // We are right after a backslash
+        isEscaped = false;
+        
+        // Standard JSON escape characters: ", \, /, b, f, n, r, t, u
+        if (char === '"' || char === '\\' || char === '/' || char === 'b' || char === 'f' || char === 'n' || char === 'r' || char === 't') {
+          out += '\\' + char;
+        } else if (char === 'u') {
+          // Check if followed by 4 hex digits
+          const next4 = raw.slice(i + 1, i + 5);
+          if (/^[0-9a-fA-F]{4}$/.test(next4)) {
+            out += '\\u';
+          } else {
+            // Not a valid unicode escape, escape the backslash: \\u
+            out += '\\\\u';
+          }
+        } else {
+          // It was a LaTeX command or symbol (e.g. \frac, \sqrt, \alpha, \pm, \{, etc.)
+          // Double-escape the backslash so JSON.parse sees literal \char
+          out += '\\\\' + char;
+        }
+      } else if (char === '\\') {
+        isEscaped = true;
+      } else if (char === '"') {
+        inString = false;
+        out += '"';
+      } else if (char === '\n') {
+        // Raw literal newline inside a JSON string -> escape to \n
+        out += '\\n';
+      } else if (char === '\r') {
+        // Raw carriage return -> escape to \r
+        out += '\\r';
+      } else if (char === '\t') {
+        // Raw tab -> escape to \t
+        out += '\\t';
+      } else {
+        out += char;
       }
-      if (/^u[0-9a-fA-F]{4}$/.test(word)) {
-        return match; // standard unicode escape
+    } else {
+      if (char === '"') {
+        inString = true;
+        out += '"';
+      } else {
+        out += char;
       }
-      return '\\\\' + word;
     }
-    if (symbol) {
-      return '\\\\' + symbol;
+  }
+
+  if (isEscaped) {
+    out += '\\';
+  }
+
+  return out;
+}
+
+/**
+ * Fallback regex extractor to rescue data if JSON.parse fails on malformed input.
+ */
+function extractWithRegex(cleaned: string): any {
+  try {
+    const topicMatch = cleaned.match(/"topic_title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+    const topic_title = topicMatch ? JSON.parse(`"${topicMatch[1]}"`) : "Math & Science Solution";
+
+    const formatMatch = cleaned.match(/"format_type"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+    const format_type = formatMatch ? formatMatch[1] : "steps";
+
+    // Extract solution steps
+    const steps: any[] = [];
+    const stepRegex = /\{\s*"step_id"\s*:\s*(\d+)[^}]*?"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"[^}]*?"content"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"(?:[^}]*?"is_final_answer"\s*:\s*(true|false))?/gis;
+    
+    let match;
+    while ((match = stepRegex.exec(cleaned)) !== null) {
+      try {
+        const step_id = parseInt(match[1], 10);
+        const title = JSON.parse(`"${match[2]}"`);
+        const content = JSON.parse(`"${match[3]}"`);
+        const is_final_answer = match[4] === 'true';
+        steps.push({ step_id, title, content, is_final_answer });
+      } catch (e) {
+        // If inner JSON.parse for string fails, use raw string unescaped
+        steps.push({
+          step_id: parseInt(match[1], 10) || steps.length + 1,
+          title: match[2].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+          content: match[3].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+          is_final_answer: match[4] === 'true'
+        });
+      }
     }
-    return match;
-  });
+
+    // Extract suggestions
+    const suggestions: string[] = [];
+    const sugMatch = cleaned.match(/"suggestions"\s*:\s*\[([\s\S]*?)\]/i);
+    if (sugMatch) {
+      const items = sugMatch[1].match(/"([^"\\]*(?:\\.[^"\\]*)*)"/g);
+      if (items) {
+        for (const item of items) {
+          try {
+            suggestions.push(JSON.parse(item));
+          } catch {
+            suggestions.push(item.replace(/^"|"$/g, ''));
+          }
+        }
+      }
+    }
+
+    if (steps.length > 0) {
+      return { topic_title, format_type, solution_steps: steps, suggestions };
+    }
+  } catch (err) {
+    console.warn("Regex extraction failed:", err);
+  }
+  return null;
 }
 
 export function parsePartialJSON(jsonStr: string): any {
@@ -46,12 +148,24 @@ export function parsePartialJSON(jsonStr: string): any {
   }
   cleaned = cleaned.slice(startIdx);
 
+  // 1. Sanitize control characters and LaTeX backslashes
+  const sanitized = sanitizeLaTeXInJSON(cleaned);
+
+  // 2. Try direct JSON.parse first
+  try {
+    const directParsed = JSON.parse(sanitized);
+    if (directParsed && typeof directParsed === 'object') {
+      return directParsed;
+    }
+  } catch {}
+
+  // 3. Balance partial streaming JSON
   let state = 'NORMAL'; // NORMAL, IN_STRING, ESCAPE
   const stack: string[] = [];
   let result = '';
 
-  for (let i = 0; i < cleaned.length; i++) {
-    const char = cleaned[i];
+  for (let i = 0; i < sanitized.length; i++) {
+    const char = sanitized[i];
     result += char;
 
     if (state === 'NORMAL') {
@@ -110,17 +224,21 @@ export function parsePartialJSON(jsonStr: string): any {
   }
 
   try {
-    const sanitizedJSON = sanitizeLaTeXInJSON(closedStr);
-    return JSON.parse(sanitizedJSON);
+    const parsed = JSON.parse(closedStr);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
   } catch (e) {
-    // Self-healing recursive fallback: if parsing fails, strip the last item
-    // and try again. This gracefully handles incomplete key-value pairs (e.g. "title": "Inco )
+    // If balancing parse fails, use recursive fallback by trimming incomplete tail
     try {
       const lastComma = closedStr.lastIndexOf(',');
-      if (lastComma !== -1 && lastComma < closedStr.length) {
-        return parsePartialJSON(cleaned.slice(0, lastComma));
+      if (lastComma !== -1 && lastComma < closedStr.length - 2) {
+        const fallback = parsePartialJSON(sanitized.slice(0, lastComma));
+        if (fallback) return fallback;
       }
     } catch (err) {}
-    return null;
   }
+
+  // 4. Ultimate safety fallback: Regex extractor
+  return extractWithRegex(sanitized) || extractWithRegex(cleaned);
 }

@@ -781,9 +781,9 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                                 </h3>
                               </div>
                             )}
-                            {parsed.format_type === 'markdown' || !parsed.solution_steps ? (
+                            {parsed.format_type === 'markdown' || !parsed.solution_steps || parsed.solution_steps.length === 0 ? (
                               <div className="text-sm text-zinc-850 leading-relaxed overflow-x-auto">
-                                <GlobalMarkdown>{parsed.markdown_content || parsed.content || cleanText}</GlobalMarkdown>
+                                <GlobalMarkdown>{parsed.markdown_content || parsed.content || parsed.explanation || cleanText}</GlobalMarkdown>
                               </div>
                             ) : (
                               <div className="space-y-3">

@@ -79,6 +79,7 @@ Before generating your final response, you MUST execute a strict 3-pass internal
   * Deconstruct every term, sign (+/-), parenthesis, exponent, radical, fraction, constant, and boundary condition without dropping or modifying ANY symbol.
   * In nested expressions (e.g. sin(90 * cos(90 / 6))), isolate innermost operations first.
   * Identify angle mode: Default to Degrees (°) for standard numericals unless explicitly in Radians or containing π.
+  * In Advanced Calculus & Definite Integrals (e.g. \\int_0^{\\pi/2} \\frac{x \\sin x}{1 + \\cos^2 x} dx): Check whether King's property \\int_0^a f(x)dx = \\int_0^a f(a-x)dx preserves the denominator. If the denominator transforms (e.g. \\cos^2 x \\to \\sin^2 x), DO NOT force an incorrect substitution. Instead, immediately apply Integration by Parts: let u = x, dv = \\frac{\\sin x}{1+\\cos^2 x}dx \\implies v = -\\arctan(\\cos x), giving boundary term 0 and simplifying to \\int_0^{\\pi/2} \\arctan(\\cos x) dx.
 - PASS 2 (Forward Step-by-Step PEMDAS Execution):
   * Apply strict Order of Operations (PEMDAS/BODMAS): Parentheses -> Exponents/Roots -> Multiplication/Division -> Addition/Subtraction.
   * Show standard theoretical formulas, substitute exact values, and calculate intermediate values with dual representation (exact radical/fraction and 4-decimal precision).
@@ -99,19 +100,22 @@ No raw conversational text is allowed outside of the JSON object. Do NOT wrap th
 
 FORMAT:
 {
-  "topic_title": "Subject or Topic of the problem (3–6 words, e.g. 'Quadratic Equations & Roots')",
+  "topic_title": "Subject or Topic of the problem (3–6 words, e.g. 'Definite Integrals via Integration by Parts')",
+  "format_type": "steps",
+  "key_formula": "The primary theoretical formula, law, or identity used in LaTeX (e.g. $$\\int u \\, dv = uv - \\int v \\, du$$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misunderstandings students must avoid in exams",
   "solution_steps": [
     {
       "step_id": 1,
       "title": "Clear concise step title",
-      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
+      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Every sentence on its own separate line. Formulas on dedicated block lines with $$.",
       "is_final_answer": false
     }
   ],
   "suggestions": [
-    "Plain text suggestion 1",
-    "Plain text suggestion 2",
-    "Plain text suggestion 3"
+    "Relevant follow-up question or calculation 1",
+    "Relevant follow-up question or calculation 2",
+    "Relevant follow-up question or calculation 3"
   ]
 }
 
@@ -123,8 +127,7 @@ RULES:
 - The "content" must be rich, clear, and explain the step's logic simply. Whenever using LaTeX for formulas, equations, or chemical reactions, use valid KaTeX math syntax wrapped in $$ or $ (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$ or $\\text{ATP}$). Always double-escape backslashes in JSON (\\\\rightarrow, \\\\frac, \\\\sqrt, \\\\text) so all formulas render with 100% crystal-clear beauty for students.
 - Set "is_final_answer" to true ONLY on the final step that reveals the final solution.
 - For non-academic questions, small talk, or conversational responses, simply output a single step with step_id=1, is_final_answer=true, and the response text inside "content".
-- Always include the "suggestions" array with exactly 3 context-aware follow-up study suggestions.
-- Do NOT use LaTeX inside the suggestions.
+- Always include the "suggestions" array with exactly 3 context-aware follow-up study suggestions. You can use LaTeX in suggestions as needed.
 
 THE "MASTER EDUCATOR" TEACHING PROTOCOL:
 1. EXTREME SIMPLIFICATION: Teach complex topics simply and clearly. Never assume prior knowledge.
@@ -190,8 +193,41 @@ RULES:
 - The "content" must NEVER be null, undefined, or empty.
 - NEVER invent a math problem if the student only sent a greeting or casual chat.`;
 
-// Separate component for rendering messages with word-by-word typewriter effect and interactive actions
-function AITutorMessageItem({ 
+// ----------------------------------------------------
+// SPACING & SENTENCE FORMATTING HELPER
+// ----------------------------------------------------
+/**
+ * Automatically formats clustered text by separating distinct sentences with double newlines
+ * and ensuring block math equations have generous vertical spacing.
+ */
+function formatSpacedContent(text: string): string {
+  if (!text) return '';
+  
+  // Protect LaTeX block and inline math first so formulas remain intact
+  const mathBlocks: string[] = [];
+  let protectedText = text.replace(/\$\$[\s\S]*?\$\$/g, (match) => {
+    mathBlocks.push(`\n\n${match.trim()}\n\n`);
+    return `\n\n__MATH_BLOCK_${mathBlocks.length - 1}__\n\n`;
+  });
+  
+  protectedText = protectedText.replace(/\$[^$\n]+\$/g, (match) => {
+    mathBlocks.push(match);
+    return `__MATH_BLOCK_${mathBlocks.length - 1}__`;
+  });
+
+  // Split on sentence boundaries: period/question/exclamation followed by space and uppercase letter or math block
+  protectedText = protectedText.replace(/([.!?])\s+([A-Za-z0-9__])/g, '$1\n\n$2');
+
+  // Restore LaTeX blocks
+  let restored = protectedText.replace(/__MATH_BLOCK_(\d+)__/g, (_, idx) => {
+    return mathBlocks[parseInt(idx, 10)];
+  });
+
+  // Clean up excessive blank lines (more than 2 consecutive newlines)
+  return restored.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+const AITutorMessageItem = React.memo(function AITutorMessageItem({ 
   msg, 
   idx, 
   isHolding, 
@@ -535,7 +571,7 @@ function AITutorMessageItem({
                         </div>
 
                         <div className="text-sm text-zinc-850 leading-loose overflow-x-auto max-w-full relative py-1 space-y-3 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_.katex-display]:my-3">
-                          <GlobalMarkdown>{step.content + (isCurrentStep ? " ▌" : "")}</GlobalMarkdown>
+                          <GlobalMarkdown>{formatSpacedContent(step.content) + (isCurrentStep ? " ▌" : "")}</GlobalMarkdown>
                         </div>
 
                         {msg.role === 'model' && !msg.isTyping && onAskDoubt && (
@@ -616,7 +652,9 @@ function AITutorMessageItem({
                   className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-all duration-200 active:scale-95 text-left flex items-center gap-1.5 font-bold"
                 >
                   <Sparkles className="w-3 h-3 text-purple-500 shrink-0" />
-                  <span>{sug}</span>
+                  <span className="[&_.katex]:text-xs [&_.katex-display]:my-0 [&_p]:inline [&_p]:m-0">
+                    <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{sug}</GlobalMarkdown>
+                  </span>
                 </button>
               ))}
             </div>
@@ -690,7 +728,7 @@ function AITutorMessageItem({
       </div>
     </motion.div>
   );
-}
+});
 
 interface SavedChat {
   id: string;

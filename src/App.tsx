@@ -1,3 +1,4 @@
+import { getApiUrl } from './utils/api';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -503,7 +504,7 @@ export default function App() {
 
           // Fallback to REST API
           try {
-            const res = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/verify-subscription', {
+            const res = await fetch(getApiUrl('/api/verify-subscription'), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

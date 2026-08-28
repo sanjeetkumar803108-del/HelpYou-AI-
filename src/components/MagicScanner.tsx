@@ -17,6 +17,7 @@ import { Network } from '@capacitor/network';
 import { showToast } from '../utils/toast';
 import { takeNativePhoto } from '../utils/mobilePicker';
 import { compressImageToFile } from '../utils/imageCompressor';
+import { getApiUrl } from '../utils/api';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -414,7 +415,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         formData.append('image', blob, 'image.jpg');
       }
 
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/chat', {
+      const response = await fetch(getApiUrl('/api/chat'), {
         method: 'POST',
         body: formData,
       });
@@ -646,7 +647,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
         formData.append('image', blob, 'image.jpg');
       }
 
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/chat', {
+      const response = await fetch(getApiUrl('/api/chat'), {
         method: 'POST',
         body: formData,
       });

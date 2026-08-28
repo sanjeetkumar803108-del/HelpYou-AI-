@@ -10,6 +10,7 @@ import { safeGetItem } from '../utils/storage';
 import { generateNotesPDFBlob } from '../lib/pdfExporter';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
 import SafePdfViewer from './SafePdfViewer';
+import { getApiUrl } from '../utils/api';
 
 interface SummariserProps {
   onBack: () => void;
@@ -208,7 +209,7 @@ export default function Summariser({ onBack }: SummariserProps) {
 
     try {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/summarize-text', {
+      const response = await fetch(getApiUrl('/api/summarize-text'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: inputText, format, gradeLevel })
@@ -298,7 +299,7 @@ export default function Summariser({ onBack }: SummariserProps) {
     formData.append('gradeLevel', gradeLevel);
     
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/summarize', {
+      const response = await fetch(getApiUrl('/api/summarize'), {
         method: 'POST',
         body: formData
       });

@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import { getProfileContext } from "../utils/profile";
 import React, { useState, useEffect, useRef } from 'react';
 import { 
@@ -440,14 +441,22 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
   const cleanMessageText = (rawText: string): string => {
     let text = rawText;
     try {
-      const parsed = JSON.parse(rawText);
-      text = parsed.response || parsed.message || rawText;
+      const parsed = typeof rawText === 'string' ? JSON.parse(rawText) : rawText;
+      if (parsed.response) text = parsed.response;
+      else if (parsed.message) text = parsed.message;
+      else if (parsed.text) text = parsed.text;
+      else if (parsed.markdown_content) text = parsed.markdown_content;
+      else if (Array.isArray(parsed.solution_steps)) {
+        text = parsed.solution_steps.map((s: any) => `${s.title ? s.title + ': ' : ''}${s.content || ''}`).join('\n\n');
+      } else {
+        text = rawText;
+      }
     } catch (e) {
-      // If it's already plain text, return it as-is
       text = rawText;
     }
-    // Replace escaped newlines (e.g. \n or \\n) with actual newlines (\n)
-    return text.replace(/\\n/g, '\n');
+    // Remove markdown code blocks and replace escaped newlines
+    text = text.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '');
+    return text.replace(/\\n/g, '\n').trim();
   };
 
   // Process user input and get response from AI Tutor
@@ -522,7 +531,7 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
         formData.append('image', imageFile);
       }
 
-      const res = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/chat', {
+      const res = await fetch(getApiUrl('/api/chat'), {
         method: 'POST',
         body: formData
       });

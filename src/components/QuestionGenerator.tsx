@@ -586,7 +586,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     }
 
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/evaluate-answer', {
+      const response = await fetch(getApiUrl('/api/evaluate-answer'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

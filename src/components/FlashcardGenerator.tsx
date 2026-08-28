@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState, useRef, useEffect } from 'react';
 import { Layers, Loader2, ArrowLeft, Save, ChevronRight, ChevronLeft, Copy, Check, Shuffle, History, Trash2, Calendar } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
@@ -271,7 +272,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       formData.append('action', 'flashcards-json'); // Directly generate flashcards for speed
 
       try {
-        const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/summarize', {
+        const response = await fetch(getApiUrl('/api/summarize'), {
           method: 'POST',
           body: formData
         });
@@ -358,7 +359,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     
     try {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/generate-flashcards', {
+      const response = await fetch(getApiUrl('/api/generate-flashcards'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: sourceText, gradeLevel, count: selectedCount }),

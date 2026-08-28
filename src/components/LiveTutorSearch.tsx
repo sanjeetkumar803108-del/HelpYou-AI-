@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Sparkles, ArrowLeft, Loader2, Globe, CheckCircle2, 
@@ -322,7 +323,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     try {
       const currentNotes = localNotes.trim();
 
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/live-study-tutor', {
+      const response = await fetch(getApiUrl('/api/live-study-tutor'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

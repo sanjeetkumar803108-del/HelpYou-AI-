@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import { triggerVibration } from '../utils/vibrate';
 import { safeSetItem, safeGetItem } from '../utils/storage';
 import { auth, db } from '../lib/firebase';
@@ -84,7 +85,7 @@ class BillingService {
         safeSetItem(`study_is_vip_${currentUser.uid}`, 'true');
 
         // Sync subscription with backend database
-        fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/set-subscription', {
+        fetch(getApiUrl('/api/set-subscription'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -155,7 +156,7 @@ class BillingService {
         }
 
         try {
-          const res = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/verify-subscription', {
+          const res = await fetch(getApiUrl('/api/verify-subscription'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

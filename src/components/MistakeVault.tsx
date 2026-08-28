@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { 
@@ -156,7 +157,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
     
     try {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/fix-mistake', {
+      const response = await fetch(getApiUrl('/api/fix-mistake'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -225,7 +226,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
     setPracticeComplete(false);
 
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/generate-practice', {
+      const response = await fetch(getApiUrl('/api/generate-practice'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

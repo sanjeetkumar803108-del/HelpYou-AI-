@@ -32,6 +32,7 @@ __export(server_exports, {
   default: () => server_default
 });
 module.exports = __toCommonJS(server_exports);
+var import_dotenv = __toESM(require("dotenv"), 1);
 var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
@@ -41,7 +42,7 @@ var import_genai = require("@google/genai");
 var import_crypto = __toESM(require("crypto"), 1);
 var import_youtube_transcript = require("youtube-transcript");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
-var import_xss = __toESM(require("xss"), 1);
+import_dotenv.default.config();
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
@@ -56,10 +57,8 @@ app.use(import_express.default.json({ limit: "50mb" }));
 app.use(import_express.default.urlencoded({ extended: true, limit: "50mb" }));
 var apiLimiter = (0, import_express_rate_limit.default)({
   windowMs: 15 * 60 * 1e3,
-  // 15 minutes
-  max: 100,
-  // Limit each IP to 100 requests per windowMs
-  message: { error: "Too many requests from this IP, please try again after 15 minutes." },
+  max: 5e3,
+  message: { error: "Too many requests from this IP, please try again after a few minutes." },
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -75,7 +74,7 @@ app.all(["/api/health", "/health", "/api/status"], (req, res) => {
 });
 var sanitizeInput = (obj) => {
   if (typeof obj === "string") {
-    return (0, import_xss.default)(obj);
+    return obj.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
   }
   if (Array.isArray(obj)) {
     return obj.map((item) => sanitizeInput(item));
@@ -294,6 +293,33 @@ async function safeGenerateContent(params, retries = 3, delay = 200) {
   } else {
     clonedParams.config = { ...clonedParams.config };
   }
+  let rawContents = clonedParams.contents;
+  let normalizedContents = [];
+  if (typeof rawContents === "string") {
+    normalizedContents = [{ role: "user", parts: [{ text: rawContents }] }];
+  } else if (rawContents && typeof rawContents === "object" && !Array.isArray(rawContents)) {
+    if (rawContents.parts) {
+      normalizedContents = [{ role: rawContents.role || "user", parts: rawContents.parts }];
+    } else {
+      normalizedContents = [{ role: "user", parts: [{ text: JSON.stringify(rawContents) }] }];
+    }
+  } else if (Array.isArray(rawContents)) {
+    normalizedContents = rawContents.map((c) => {
+      if (typeof c === "string") {
+        return { role: "user", parts: [{ text: c }] };
+      }
+      if (c && typeof c === "object") {
+        if (c.parts) {
+          return { role: c.role || "user", parts: c.parts };
+        }
+        if (c.text || c.inlineData) {
+          return { role: "user", parts: [c] };
+        }
+      }
+      return { role: "user", parts: [{ text: String(c) }] };
+    });
+  }
+  clonedParams.contents = normalizedContents;
   const isTtsModel = !!(clonedParams.model && clonedParams.model.includes("tts"));
   if (isTtsModel && clonedParams.config) {
     delete clonedParams.config.systemInstruction;
@@ -345,11 +371,11 @@ ${text}`.trim() },
   const isSpecialtyModel = params.model && (params.model.includes("tts") || params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
   let requestedModel = params.model;
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-3.5-flash-lite",
+    requestedModel || "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite",
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-flash-lite-latest",
-    "gemini-flash-latest",
     "gemini-3.6-flash"
   ].filter((value, index, self) => self.indexOf(value) === index);
   if (!isSpecialtyModel) {
@@ -853,10 +879,10 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     const shouldStream = stream === "true" || stream === true;
     if (shouldStream) {
       let modelsToTry = [
+        "gemini-3.1-flash-lite",
         "gemini-3.5-flash-lite",
         "gemini-3.5-flash",
         "gemini-flash-lite-latest",
-        "gemini-flash-latest",
         "gemini-3.6-flash"
       ];
       const now = Date.now();
@@ -1227,7 +1253,11 @@ app.post("/api/tts", async (req, res) => {
 });
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const { text, curriculum, subject, gradeLevel, images } = req.body;
+    const text = req.body.text || req.body.essay || req.body.content || "";
+    const curriculum = req.body.curriculum;
+    const subject = req.body.subject || req.body.topic;
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const images = req.body.images;
     const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
@@ -1309,10 +1339,10 @@ OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
     const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
+      "gemini-3.1-flash-lite",
       "gemini-3.5-flash-lite",
       "gemini-3.5-flash",
       "gemini-flash-lite-latest",
-      "gemini-flash-latest",
       "gemini-3.6-flash"
     ];
     const now = Date.now();
@@ -1476,8 +1506,9 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
 });
 app.post("/api/generate-flashcards", async (req, res) => {
   try {
-    const { text, gradeLevel, count } = req.body;
-    const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
+    const text = req.body.text || req.body.topic || req.body.content || "";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const count = req.body.count;
     if (!text) {
       return res.status(400).json({ error: "Missing text" });
     }
@@ -1908,9 +1939,12 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 });
 app.post("/api/generate-content", async (req, res) => {
   try {
-    const { topic, type, tone = "Academic", format = "Standard", gradeLevel } = req.body;
-    const wordCount = topic ? topic.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
-    if (!topic || !type) {
+    const topic = req.body.topic || req.body.prompt || req.body.content || "";
+    const type = req.body.type || req.body.contentType || "General";
+    const tone = req.body.tone || "Academic";
+    const format = req.body.format || "Standard";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    if (!topic) {
       return res.status(400).json({ error: "Missing topic or type" });
     }
     const aiClient = getAI();
@@ -1988,8 +2022,10 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 });
 app.post("/api/grammar-enhance", async (req, res) => {
   try {
-    const { text, mode, gradeLevel, images } = req.body;
-    const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
+    const text = req.body.text || req.body.prompt || req.body.content || "";
+    const mode = req.body.mode || "Fix All Errors";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const images = req.body.images;
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
     }
@@ -2251,7 +2287,10 @@ The Gemini API is currently experiencing rate limits. Please wait 60 seconds and
 });
 app.post("/api/generate-questions", async (req, res) => {
   try {
-    const { topic, count, gradeLevel, stream } = req.body;
+    const topic = req.body.topic || req.body.prompt || req.body.text || "";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const count = req.body.count;
+    const stream = req.body.stream;
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
     const topicText = topic && topic.trim() ? topic.trim() : `general concepts in ${stream || "academic subjects"}`;
     const systemInstruction = `You are an Elite Academic Advisor, US High School & AP/College Teacher, and Expert AI Tutor.
@@ -2308,7 +2347,11 @@ The Gemini API is currently experiencing rate limits. Please try again in 60 sec
 });
 app.post("/api/evaluate-answer", async (req, res) => {
   try {
-    const { questionText, userAnswer, userGrade, curriculum, subject } = req.body;
+    const questionText = req.body.questionText || req.body.question || "";
+    const userAnswer = req.body.userAnswer || req.body.answer || "";
+    const userGrade = req.body.userGrade || req.body.gradeLevel;
+    const curriculum = req.body.curriculum;
+    const subject = req.body.subject;
     if (!questionText) {
       return res.status(400).json({ error: "Missing questionText" });
     }
@@ -2355,7 +2398,9 @@ The Gemini API is currently experiencing rate limits. Please try again in 60 sec
 });
 app.post("/api/generate-quiz", async (req, res) => {
   try {
-    const { topic, gradeLevel, count } = req.body;
+    const topic = req.body.topic || req.body.prompt || req.body.text || "";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const count = req.body.count;
     if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
     }
@@ -2710,9 +2755,12 @@ async function performLiveWebSearch(query, searchKeywords = []) {
   return sources;
 }
 app.post("/api/fix-mistake", async (req, res) => {
-  const { question, wrongInput, correctConcept, gradeLevel } = req.body;
   try {
-    if (!question || !wrongInput || !correctConcept) {
+    const question = req.body.question || req.body.mistake || "";
+    const wrongInput = req.body.wrongInput || req.body.userAnswer || req.body.wrongAnswer || "";
+    const correctConcept = req.body.correctConcept || req.body.correctAnswer || req.body.solution || "";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    if (!question) {
       return res.status(400).json({ error: "Missing required mistake fields: question, wrongInput, or correctConcept" });
     }
     const systemInstruction = `You are "Deep Search AI", an elite, highly intelligent educational assistant. Adopt a highly professional, crisp, and direct tone.
@@ -2769,9 +2817,13 @@ Please analyze this mistake and output the correction in the strict JSON format 
   }
 });
 app.post("/api/generate-practice", async (req, res) => {
-  const { question, wrongInput, correctConcept, sourceFeature, gradeLevel } = req.body;
   try {
-    if (!question || !correctConcept) {
+    const question = req.body.question || req.body.topic || req.body.concept || "";
+    const wrongInput = req.body.wrongInput || "";
+    const correctConcept = req.body.correctConcept || req.body.correctAnswer || "";
+    const sourceFeature = req.body.sourceFeature || "Practice";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    if (!question && !correctConcept) {
       return res.status(400).json({ error: "Missing required fields: question or correctConcept" });
     }
     const systemInstruction = `You are "Magic AI Tutor", an elite, highly intelligent educational assistant.
@@ -2850,12 +2902,15 @@ Return the response in the strict JSON array format specified.`;
   }
 });
 app.post("/api/live-study-tutor", async (req, res) => {
-  const { query, profileContext, studentNotes, gradeLevel } = req.body;
+  const rawQueryInput = req.body.query || req.body.prompt || req.body.search || "";
+  const profileContext = req.body.profileContext;
+  const studentNotes = req.body.studentNotes;
+  const gradeLevel = req.body.gradeLevel || req.body.userGrade;
   try {
-    if (!query || !query.trim()) {
+    if (!rawQueryInput || !rawQueryInput.trim()) {
       return res.status(400).json({ error: "Missing search query" });
     }
-    const rawQuery = query.trim();
+    const rawQuery = rawQueryInput.trim();
     const keywords = await extractSearchKeywords(rawQuery);
     const searchResults = await performLiveWebSearch(rawQuery, keywords);
     const verifiedContextString = searchResults.map(
@@ -3032,7 +3087,11 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
 });
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const { gradeLevel, academicStream, topic, excludeQuestions, country } = req.body;
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const academicStream = req.body.academicStream || req.body.stream || "General";
+    const topic = req.body.topic || req.body.category || "";
+    const excludeQuestions = req.body.excludeQuestions || [];
+    const country = req.body.country || "India";
     const aiClient = getAI();
     const normalizeStr = (s) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
     const excludesSet = new Set((excludeQuestions || []).map((q) => normalizeStr(q)));

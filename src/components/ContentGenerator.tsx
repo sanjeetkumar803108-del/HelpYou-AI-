@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState } from 'react';
 import { ArrowLeft, Loader2, Save, PenTool, Type, FileText, Feather, Edit3, Copy, FileDown, Check, History, Trash2, Calendar } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
@@ -182,7 +183,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds timeout
 
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/generate-content', {
+      const response = await fetch(getApiUrl('/api/generate-content'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,

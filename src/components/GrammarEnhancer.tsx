@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState } from 'react';
 import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar, Camera, X } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
@@ -203,7 +204,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
 
     try {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/grammar-enhance', {
+      const response = await fetch(getApiUrl('/api/grammar-enhance'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: inputText, mode, gradeLevel, images: uploadedImages })

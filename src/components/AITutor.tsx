@@ -23,6 +23,7 @@ import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
 import { compressImageToFile } from '../utils/imageCompressor';
+import { getApiUrl } from '../utils/api';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -1229,7 +1230,7 @@ Please evaluate this answer strictly according to your system rubric.`;
 
       formData.append('stream', 'true');
 
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/chat', {
+      const response = await fetch(getApiUrl('/api/chat'), {
         method: 'POST',
         body: formData,
         signal: controller.signal,

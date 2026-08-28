@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   FileText, Loader2, FilePlus, ChevronRight, ArrowLeft, Headphones,
@@ -459,25 +460,11 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     }
 
     try {
-      const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
-      if (!apiBase && Capacitor.isNativePlatform()) {
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
-        setUploadProgress(0);
-        const offlineMsg = "⚠️ Backend server not configured. Please check connection.";
-        setResult(offlineMsg);
-        setError(offlineMsg);
-        setStep('initial');
-        return;
-      }
-
       // Create new AbortController for cancel on back button
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      const response = await fetch(apiBase + '/api/summarize', {
+      const response = await fetch(getApiUrl('/api/summarize'), {
         method: 'POST',
         body: formData,
         signal: abortController.signal,
@@ -558,7 +545,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
         setIsGeneratingAudio(true);
         (async () => {
           try {
-            const ttsResponse = await fetch(apiBase + '/api/tts', {
+            const ttsResponse = await fetch(getApiUrl('/api/tts'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: data.text }),
@@ -718,13 +705,8 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     if (Capacitor.isNativePlatform()) {
       setIsGeneratingAudio(true);
       try {
-        const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
-        if (!apiBase) {
-          showToast('Backend not configured. Audio unavailable.', 'error');
-          return;
-        }
         showToast('Generating audio... please wait', 'info', 4000);
-        const ttsResponse = await fetch(apiBase + '/api/tts', {
+        const ttsResponse = await fetch(getApiUrl('/api/tts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: result }),

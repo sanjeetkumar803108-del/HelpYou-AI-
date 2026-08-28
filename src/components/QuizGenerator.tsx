@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   BookOpen, Loader2, ArrowLeft, Award, CheckCircle2, XCircle, 
@@ -1214,7 +1215,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
       formData.append("gradeLevel", gradeLevel);
 
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/generate-pdf-quiz', {
+      const response = await fetch(getApiUrl('/api/generate-pdf-quiz'), {
         method: 'POST',
         body: formData,
       });
@@ -1281,7 +1282,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
       formData.append("gradeLevel", gradeLevel);
 
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/generate-image-quiz', {
+      const response = await fetch(getApiUrl('/api/generate-image-quiz'), {
         method: 'POST',
         body: formData,
       });
@@ -1344,7 +1345,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
 
     try {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/generate-quiz', {
+      const response = await fetch(getApiUrl('/api/generate-quiz'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: activeTopic, gradeLevel, count: selectedCount }),

@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Share2, Check, Sparkles, HelpCircle, RefreshCw, Settings, Search, GraduationCap, Compass, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -108,7 +109,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     triggerVibration(15);
     try {
       const activeTopic = forcedTopic !== undefined ? forcedTopic : customTopic;
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/generate-trivia', {
+      const response = await fetch(getApiUrl('/api/generate-trivia'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -11,6 +11,7 @@ import { safeGetItem } from '../utils/storage';
 import { Capacitor } from '@capacitor/core';
 import { takeNativePhoto } from '../utils/mobilePicker';
 import { compressImage } from '../utils/imageCompressor';
+import { getApiUrl } from '../utils/api';
 
 const CURRICULUMS = [
   'Standard High School',
@@ -251,7 +252,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
     
     try {
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/grade-essay', {
+      const response = await fetch(getApiUrl('/api/grade-essay'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: essayText, curriculum, subject, gradeLevel, images: uploadedImages }),

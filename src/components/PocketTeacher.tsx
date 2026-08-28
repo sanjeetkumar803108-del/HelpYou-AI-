@@ -1,3 +1,4 @@
+import { getApiUrl } from '../utils/api';
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Headphones, Play, Pause, Volume2, Search, Book, Trash2, Smartphone, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -153,7 +154,7 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
       }
 
       if (!audioContent) {
-        const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/tts', {
+        const response = await fetch(getApiUrl('/api/tts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, voice: 'en-US-Journey-F' }),
@@ -304,7 +305,7 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
     try {
       setLoadingAudio(item.id);
       
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || '') + '/api/tts', {
+      const response = await fetch(getApiUrl('/api/tts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: item.text, voice: 'en-US-Journey-F' }),

@@ -31,9 +31,9 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // 1. Strict Rate Limiting (Brute Force Protection)
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5000,
-  message: { error: "Too many requests from this IP, please try again after a few minutes." },
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: { error: "Too many requests from this IP, please try again after 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -52,8 +52,7 @@ app.all(["/api/health", "/health", "/api/status"], (req, res) => {
 // 2. Global Input Sanitization Middleware (Injection Prevention)
 const sanitizeInput = (obj: any): any => {
   if (typeof obj === 'string') {
-    // Only strip dangerous script tags and executable Javascript URIs; preserve math inequalities and markdown/code
-    return obj.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    return xss(obj); // Strips <script> and dangerous HTML
   }
   if (Array.isArray(obj)) {
     return obj.map(item => sanitizeInput(item));
@@ -86,7 +85,7 @@ const summaryCache = new Map<string, any>();
 function safeParseJSON(text: string, forceType: 'object' | 'array' | 'none' = 'none'): any {
   if (!text) return forceType === 'array' ? [] : (forceType === 'object' ? {} : null);
   const cleaned = text.trim();
-  
+
   const parse = (str: string) => {
     try {
       const parsed = JSON.parse(str);
@@ -113,13 +112,13 @@ function safeParseJSON(text: string, forceType: 'object' | 'array' | 'none' = 'n
     result = parse(extracted);
     if (result) return result;
   }
-  
+
   // 3. Extract using structural patterns (find first { or [ and last } or ])
   const objStart = extracted.indexOf('{');
   const objEnd = extracted.lastIndexOf('}');
   const arrStart = extracted.indexOf('[');
   const arrEnd = extracted.lastIndexOf(']');
-  
+
   const hasObj = objStart !== -1 && objEnd !== -1 && objEnd > objStart;
   const hasArr = arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart;
 
@@ -127,7 +126,7 @@ function safeParseJSON(text: string, forceType: 'object' | 'array' | 'none' = 'n
     result = parse(extracted.slice(objStart, objEnd + 1));
     if (result) return result;
   }
-  
+
   if (hasArr) {
     result = parse(extracted.slice(arrStart, arrEnd + 1));
     if (result) return result;
@@ -193,7 +192,7 @@ app.use((err: any, req: any, res: any, next: any) => {
   next(err);
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 35 * 1024 * 1024 }
 });
@@ -311,7 +310,7 @@ function extractUserQuery(params: any): string {
 async function safeGenerateContent(params: any, retries = 3, delay = 200): Promise<any> {
   // Extract gradeLevel if provided
   const gradeLevel = params.gradeLevel;
-  
+
   // We only clone the top-level structure and config elements to avoid serializing huge base64 strings (which causes CPU freezes and timeouts).
   const clonedParams = { ...params };
   delete clonedParams.gradeLevel;
@@ -322,35 +321,6 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
   } else {
     clonedParams.config = { ...clonedParams.config };
   }
-
-  // Normalize clonedParams.contents so it is guaranteed valid Content[] format
-  let rawContents: any = clonedParams.contents;
-  let normalizedContents: any = [];
-  if (typeof rawContents === 'string') {
-    normalizedContents = [{ role: 'user', parts: [{ text: rawContents }] }];
-  } else if (rawContents && typeof rawContents === 'object' && !Array.isArray(rawContents)) {
-    if (rawContents.parts) {
-      normalizedContents = [{ role: rawContents.role || 'user', parts: rawContents.parts }];
-    } else {
-      normalizedContents = [{ role: 'user', parts: [{ text: JSON.stringify(rawContents) }] }];
-    }
-  } else if (Array.isArray(rawContents)) {
-    normalizedContents = rawContents.map((c: any) => {
-      if (typeof c === 'string') {
-        return { role: 'user', parts: [{ text: c }] };
-      }
-      if (c && typeof c === 'object') {
-        if (c.parts) {
-          return { role: c.role || 'user', parts: c.parts };
-        }
-        if (c.text || c.inlineData) {
-          return { role: 'user', parts: [c] };
-        }
-      }
-      return { role: 'user', parts: [{ text: String(c) }] };
-    });
-  }
-  clonedParams.contents = normalizedContents;
 
   const isTtsModel = !!(clonedParams.model && clonedParams.model.includes("tts"));
 
@@ -393,7 +363,7 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
 
     if (gradeLevel) {
       const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
-      
+
       const parts = clonedParams.config.systemInstruction.parts || [];
       const text = parts[0]?.text || "";
       clonedParams.config.systemInstruction.parts = [
@@ -410,21 +380,21 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
 
   // Set up sequential models to try if the default model hits rate limits or quota issues
   const isSpecialtyModel = params.model && (
-    params.model.includes("tts") || 
-    params.model.includes("image") || 
-    params.model.includes("video") || 
-    params.model.includes("veo") || 
+    params.model.includes("tts") ||
+    params.model.includes("image") ||
+    params.model.includes("video") ||
+    params.model.includes("veo") ||
     params.model.includes("lyria") ||
     params.model.includes("clip")
   );
 
   let requestedModel = params.model;
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-3.1-flash-lite",
-    "gemini-3.1-flash-lite",
+    requestedModel || "gemini-3.5-flash-lite",
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-flash-lite-latest",
+    "gemini-flash-latest",
     "gemini-3.6-flash"
   ].filter((value, index, self) => self.indexOf(value) === index);
 
@@ -469,7 +439,7 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
         }
       }
     }
-    
+
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const aiClient = getAI();
@@ -478,22 +448,22 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
       } catch (error: any) {
         lastError = error;
         const errorStr = String(error.message || error).toLowerCase();
-        
-        const isRateLimitOrOverloaded = errorStr.includes("429") || 
-                                        errorStr.includes("503") ||
-                                        errorStr.includes("quota") || 
-                                        errorStr.includes("limit") ||
-                                        errorStr.includes("resource_exhausted") ||
-                                        errorStr.includes("unavailable") ||
-                                        errorStr.includes("overloaded") ||
-                                        errorStr.includes("demand");
-        
+
+        const isRateLimitOrOverloaded = errorStr.includes("429") ||
+          errorStr.includes("503") ||
+          errorStr.includes("quota") ||
+          errorStr.includes("limit") ||
+          errorStr.includes("resource_exhausted") ||
+          errorStr.includes("unavailable") ||
+          errorStr.includes("overloaded") ||
+          errorStr.includes("demand");
+
         if (isRateLimitOrOverloaded) {
           console.warn(`[ai-client] Model ${model} (attempt ${attempt}/${retries}) hit rate-limit or quota constraint:`, errorStr);
         } else {
           console.error(`[ai-client] Model ${model} (attempt ${attempt}/${retries}) failed:`, errorStr);
         }
-        
+
         if (isRateLimitOrOverloaded) {
           anyQuotaExceeded = true;
           lastQuotaExceededTime = Date.now();
@@ -515,20 +485,20 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
             attempt--;
             continue;
           }
-          
-          const isHardQuotaLimit = errorStr.includes("quota") || 
-                                   errorStr.includes("resource_exhausted") ||
-                                   errorStr.includes("503") ||
-                                   errorStr.includes("unavailable") ||
-                                   errorStr.includes("overloaded") ||
-                                   errorStr.includes("demand") ||
-                                   (errorStr.includes("429") && !errorStr.includes("overloaded"));
-          
+
+          const isHardQuotaLimit = errorStr.includes("quota") ||
+            errorStr.includes("resource_exhausted") ||
+            errorStr.includes("503") ||
+            errorStr.includes("unavailable") ||
+            errorStr.includes("overloaded") ||
+            errorStr.includes("demand") ||
+            (errorStr.includes("429") && !errorStr.includes("overloaded"));
+
           if (isHardQuotaLimit) {
             console.warn(`[ai-client] Model ${model} is unavailable, overloaded, or hit quota. Skipping retries for this model and instantly routing to fallback...`);
             break;
           }
-          
+
           if (attempt < retries) {
             const waitTime = delay * Math.pow(2, attempt - 1);
             console.warn(`[ai-client] Model ${model} overloaded or rate-limited. Retrying in ${waitTime}ms...`);
@@ -538,7 +508,7 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
             console.warn(`[ai-client] Model ${model} failed after all ${retries} attempts. Trying fallback model...`);
           }
         }
-        
+
         break;
       }
     }
@@ -556,14 +526,14 @@ app.post("/api/scan", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "No image provided" });
     }
     const aiClient = getAI();
-    
+
     const imagePart = {
       inlineData: {
         mimeType: req.file.mimetype,
         data: req.file.buffer.toString("base64"),
       },
     };
-    
+
     const profileContext = req.body.profileContext;
     const gradeLevel = req.body.gradeLevel;
     const textPart = {
@@ -653,7 +623,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
 2. THE ANALOGY RULE: Use relatable, real-world analogies where helpful.
 3. HIGH EMPATHY: Be patient and deeply encouraging.`,
     };
-    
+
     const response = await safeGenerateContent({
       gradeLevel,
       model: "gemini-3.5-flash-lite",
@@ -665,12 +635,12 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
         candidateCount: 1          // ⚡ Only generate 1 candidate, not multiple
       }
     });
-    
+
     res.json({ text: response.text });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Scan quota exceeded:", error.message);
-      return res.json({ 
+      return res.json({
         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded
 
 The Gemini API is currently experiencing rate limits or has exceeded its quota.
@@ -750,7 +720,12 @@ DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimite
 --- CATEGORIZATION & ROUTING RULES ---
 
 1. RULE 1 (Math & Physics Numerical Calculations / Step-by-Step STEM):
-- Use this ONLY if the query is a mathematical equation, physics numerical, chemical reaction, derivation, or problem requiring step-by-step sequential solving.
+- Use this if the query is a mathematical equation, calculation, arithmetic, trigonometry, calculus, physics numerical, chemical reaction, derivation, or problem requiring step-by-step sequential solving.
+- CRITICAL MATHEMATICAL PRECISION & ORDER OF OPERATIONS PROTOCOL (0-ERROR GUARANTEE):
+  * PEMDAS / BODMAS RIGOR: Always evaluate innermost parentheses and brackets first. In nested expressions (e.g. sin(90 * cos(90 / 6))), solve the innermost operation (90 / 6 = 15) before computing the trigonometric function (cos(15°)), then multiply, and finally evaluate the outer function. NEVER drop sub-operations (like divisions or constants).
+  * ANGLE MODES: In standard trigonometry and algebra calculations (unless explicitly stated in radians or containing π), evaluate angles in Degrees (°) with explicit ° symbols, while also showing the alternative Radian answer if relevant.
+  * BOTH EXACT & DECIMAL ANSWERS: Provide both the exact analytical form (radicals, fractions, surds) AND the rounded decimal value (to 4 decimal places).
+  * VERIFICATION BEFORE OUTPUT: Verify every single arithmetic step and calculation silently to ensure 100% mathematical accuracy.
 - Set "format_type" to "steps".
 - Populate the "solution_steps" array with each logical phase of the sequential solution.
 - Output strictly in this format:
@@ -761,7 +736,7 @@ DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimite
     {
       "step_id": 1,
       "title": "Clear concise step title",
-      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations/chemical reactions, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$). Always double-escape backslashes in JSON (e.g. \\\\rightarrow, \\\\frac, \\\\text) so that equations render beautifully for students.",
+      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations/chemical reactions, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$). Always double-escape backslashes in JSON (e.g. \\\\rightarrow, \\\\frac, \\\\sqrt, \\\\text) so that equations render beautifully for students.",
       "is_final_answer": false
     }
   ],
@@ -828,13 +803,13 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
   console.log("Received request at /api/chat");
   try {
     const aiClient = getAI();
-    const { 
-      history, 
-      message, 
-      customSystemInstruction, 
-      mode, 
-      targetLanguage, 
-      profileContext, 
+    const {
+      history,
+      message,
+      customSystemInstruction,
+      mode,
+      targetLanguage,
+      profileContext,
       gradeLevel,
       contextualDoubtStepId,
       contextualDoubtContent,
@@ -842,9 +817,9 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
       stream,
       isEvaluation
     } = req.body;
-    
+
     let parsedHistory = history ? (typeof history === 'string' ? JSON.parse(history) : history) : [];
-    
+
     const imagePart = req.file ? {
       inlineData: {
         mimeType: req.file.mimetype,
@@ -860,11 +835,11 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
     const hasImage = !!imagePart || parsedHistory.some((m: any) => m.parts && m.parts.some((p: any) => p.inlineData || p.imageUrl));
     const normalizedMsg = (userMessage || "").toLowerCase();
     const shouldEnableSearch = !hasImage && (
-      normalizedMsg.includes("search") || 
-      normalizedMsg.includes("browse") || 
-      normalizedMsg.includes("live") || 
-      normalizedMsg.includes("current") || 
-      normalizedMsg.includes("weather") || 
+      normalizedMsg.includes("search") ||
+      normalizedMsg.includes("browse") ||
+      normalizedMsg.includes("live") ||
+      normalizedMsg.includes("current") ||
+      normalizedMsg.includes("weather") ||
       normalizedMsg.includes("news") ||
       normalizedMsg.includes("rates") ||
       normalizedMsg.includes("today") ||
@@ -931,16 +906,16 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       // Initial scan
       const parts: any[] = [];
       if (imagePart) parts.push(imagePart);
-      
+
       const defaultMessage = userMessage || "Please solve the problem shown in the image step by step. Write out the steps clearly and logically, ensuring each part of the solution is easy to understand.";
       parts.push({ text: defaultMessage });
-      
+
       contents = [{ role: "user", parts }];
     } else {
       // Follow-up chat
       // Check if the first message in parsedHistory is an empty-parts user placeholder (typical for MagicScanner scans)
-      const isScannerPlaceholder = parsedHistory[0]?.role === 'user' && 
-                                  (!parsedHistory[0].parts || parsedHistory[0].parts.length === 0);
+      const isScannerPlaceholder = parsedHistory[0]?.role === 'user' &&
+        (!parsedHistory[0].parts || parsedHistory[0].parts.length === 0);
 
       if (imagePart && isScannerPlaceholder) {
         parsedHistory[0].parts = [imagePart];
@@ -961,13 +936,13 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         // Double-check: if it's not a scanner placeholder but we have a new image to attach to the current turn
         parts.push(imagePart);
       }
-      
+
       if (userMessage) {
         parts.push({ text: userMessage + "\n\nPlease continue providing step-by-step guidance." });
       } else if (imagePart) {
         parts.push({ text: "Please look at this uploaded homework image and assist me." });
       }
-      
+
       contents = [
         ...parsedHistory,
         { role: "user", parts }
@@ -978,10 +953,10 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-3.1-flash-lite",
         "gemini-3.5-flash-lite",
         "gemini-3.5-flash",
         "gemini-flash-lite-latest",
+        "gemini-flash-latest",
         "gemini-3.6-flash"
       ];
 
@@ -1011,30 +986,30 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
           responseStream = await aiClient.models.generateContentStream({
             model,
             contents,
-            config: { 
+            config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
               responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
               maxOutputTokens: 8192,
               temperature: 0.2,
               candidateCount: 1,
-              
+
             }
           });
           successModel = model;
           break;
         } catch (err: any) {
           const errStr = String(err.message || err).toLowerCase();
-          const isRateLimitOrQuota = errStr.includes("429") || 
-                                     errStr.includes("503") ||
-                                     errStr.includes("502") ||
-                                     errStr.includes("quota") || 
-                                     errStr.includes("resource_exhausted") || 
-                                     errStr.includes("limit") ||
-                                     errStr.includes("unavailable") ||
-                                     errStr.includes("overloaded") ||
-                                     errStr.includes("demand") ||
-                                     errStr.includes("temporary");
-          
+          const isRateLimitOrQuota = errStr.includes("429") ||
+            errStr.includes("503") ||
+            errStr.includes("502") ||
+            errStr.includes("quota") ||
+            errStr.includes("resource_exhausted") ||
+            errStr.includes("limit") ||
+            errStr.includes("unavailable") ||
+            errStr.includes("overloaded") ||
+            errStr.includes("demand") ||
+            errStr.includes("temporary");
+
           if (isRateLimitOrQuota) {
             console.warn(`[chat stream] Model ${model} hit rate-limit, 503, or quota constraint:`, errStr);
             rateLimitedModels[model] = Date.now();
@@ -1074,22 +1049,22 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       const response = await safeGenerateContent({
         model: "gemini-3.5-flash-lite",
         contents,
-        config: { 
+        config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
           temperature: 0.7,        // ⚡ Balanced temp for conversational AI
           maxOutputTokens: 8192,   // ⚡ High output token ceiling to prevent incomplete generation
           candidateCount: 1,       // ⚡ Single candidate only
-          
+
         }
       });
-      
+
       res.json({ text: response.text });
     }
   } catch (error: any) {
     if (error.isRateLimit || error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Chat quota exceeded:", error.message);
-      return res.status(429).json({ 
+      return res.status(429).json({
         isRateLimit: true,
         error: "System is currently busy helping many students! 📚\nWe're processing your request as fast as possible. Please wait for 60 seconds and try again, or take a quick stretch break. Your learning journey is our priority!"
       });
@@ -1105,7 +1080,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     const textInput = req.body.text || "";
     const gradeLevel = req.body.gradeLevel;
     const format = req.body.format || "bullet";
-    
+
     if (!req.file && !textInput) {
       return res.status(400).json({ error: "No PDF file or text content provided" });
     }
@@ -1126,7 +1101,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     }
 
     const aiClient = getAI();
-    
+
     let extractedText = "";
     let useRawFile = false;
 
@@ -1134,7 +1109,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
       try {
         const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
         const pdfData = await pdf(req.file.buffer, { max: 60 });
-        
+
         // Explicitly check page count
         if (pdfData.numpages > 60) {
           return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
@@ -1145,7 +1120,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
         if (extractedText.trim().length < 50) {
           useRawFile = true;
         }
-        
+
         if (extractedText && extractedText.length > 200000) { extractedText = extractedText.slice(0, 200000); }
       } catch (parseError) {
         console.warn("Failed to parse PDF locally with pdf-parse, will fallback to raw bytes:", parseError);
@@ -1272,7 +1247,7 @@ IF FORMAT IS "Explain Like I'm 5":
     }
 
     const textPart = { text: promptText };
-    
+
     let contentsPayload: any;
     if (useRawFile && req.file) {
       // Prioritize raw PDF for better OCR/extraction if text extraction failed or is weak
@@ -1299,7 +1274,7 @@ IF FORMAT IS "Explain Like I'm 5":
     } else {
       return res.status(400).json({ error: "Text content is too short to process." });
     }
-    
+
     // Model fallback chain for summarize — try faster models first, fall back on rate-limit
     const summarizeModels = [
       "gemini-3.5-flash-lite",
@@ -1337,7 +1312,7 @@ IF FORMAT IS "Explain Like I'm 5":
     if (summarizeError && !summaryText) {
       throw summarizeError;
     }
-    
+
     // Handle JSON response for flashcards-json
     if (action === 'flashcards-json') {
       const flashcards = safeParseJSON(summaryText, 'array');
@@ -1349,11 +1324,11 @@ IF FORMAT IS "Explain Like I'm 5":
     res.json({ text: summaryText });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-       return res.status(429).json({ 
-         error: "QUOTA_EXCEEDED",
-         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits or has exceeded its quota. Please try again in 60 seconds.`
-       });
-     }
+      return res.status(429).json({
+        error: "QUOTA_EXCEEDED",
+        text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits or has exceeded its quota. Please try again in 60 seconds.`
+      });
+    }
     console.error("Summarize error:", error);
     res.status(500).json({ error: error.message || "Failed to generate summary" });
   }
@@ -1365,13 +1340,13 @@ app.post("/api/tts", async (req, res) => {
     if (!text) {
       return res.status(400).json({ error: "No text provided" });
     }
-    
+
     // Slice text to maximum 1500 characters to make generation fast, avoid timeouts, and preserve low latency.
     let textToSpeak = text;
     if (textToSpeak.length > 1500) {
       textToSpeak = textToSpeak.substring(0, 1500) + "...";
     }
-    
+
     const response = await safeGenerateContent({
       model: "gemini-3.1-flash-tts-preview",
       contents: [{ parts: [{ text: `Please generate audio for this text: ${textToSpeak}` }] }],
@@ -1382,7 +1357,7 @@ app.post("/api/tts", async (req, res) => {
         },
       },
     });
-    
+
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio) {
       // Wrap raw linear 16-bit PCM inside a browser-playable WAV container
@@ -1405,20 +1380,16 @@ app.post("/api/tts", async (req, res) => {
 
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const text = req.body.text || req.body.essay || req.body.content || "";
-    const curriculum = req.body.curriculum;
-    const subject = req.body.subject || req.body.topic;
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const images = req.body.images;
-    
+    const { text, curriculum, subject, gradeLevel, images } = req.body;
+
     const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
-    
+
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
     }
 
     const aiClient = getAI();
-    
+
     const curr = curriculum || 'AP (Advanced Placement)';
     const subj = subject || 'General Essay';
 
@@ -1499,13 +1470,13 @@ OVERALL VERDICT:
 
     const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
-        "gemini-3.1-flash-lite",
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-flash-lite-latest",
-        "gemini-3.6-flash"
-      ];
-    
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+      "gemini-3.6-flash"
+    ];
+
     const now = Date.now();
     const activeModels: string[] = [];
     const backburnerModels: string[] = [];
@@ -1523,7 +1494,7 @@ OVERALL VERDICT:
     if (activeModels.length > 0) {
       modelsToTry = [...activeModels, ...backburnerModels];
     }
-    
+
     // Build contents payload with optional images
     const contentParts = [];
     if (images && Array.isArray(images) && images.length > 0) {
@@ -1552,7 +1523,7 @@ OVERALL VERDICT:
         streamResponse = await aiClient.models.generateContentStream({
           model,
           contents: { parts: contentParts },
-          config: { 
+          config: {
             systemInstruction: systemInstruction,
             temperature: 0.15,
             maxOutputTokens: 8192
@@ -1562,13 +1533,13 @@ OVERALL VERDICT:
       } catch (err: any) {
         lastError = err;
         const errStr = String(err.message || err);
-        
-        const isRateLimitOrQuota = errStr.includes("429") || 
-                                   errStr.includes("quota") || 
-                                   errStr.includes("RESOURCE_EXHAUSTED") || 
-                                   errStr.includes("resource_exhausted") || 
-                                   errStr.includes("limit");
-        
+
+        const isRateLimitOrQuota = errStr.includes("429") ||
+          errStr.includes("quota") ||
+          errStr.includes("RESOURCE_EXHAUSTED") ||
+          errStr.includes("resource_exhausted") ||
+          errStr.includes("limit");
+
         if (isRateLimitOrQuota) {
           console.warn(`[grade-essay stream] Model ${model} hit rate-limit or quota constraint:`, errStr);
           lastQuotaExceededTime = Date.now();
@@ -1606,17 +1577,17 @@ OVERALL VERDICT:
     res.end();
   } catch (error: any) {
     console.error("Essay Grader error:", error);
-    
+
     const errorStr = String(error.message || error);
-    const isQuotaError = errorStr.includes("429") || 
-                         errorStr.includes("quota") || 
-                         errorStr.includes("RESOURCE_EXHAUSTED");
+    const isQuotaError = errorStr.includes("429") ||
+      errorStr.includes("quota") ||
+      errorStr.includes("RESOURCE_EXHAUSTED");
 
     if (!res.headersSent) {
       if (isQuotaError) {
-        res.status(429).json({ 
+        res.status(429).json({
           error: "GEMINI_QUOTA_EXHAUSTED",
-          message: "The Gemini API is currently experiencing rate limits. Please try again in 60 seconds." 
+          message: "The Gemini API is currently experiencing rate limits. Please try again in 60 seconds."
         });
       } else {
         res.status(500).json({ error: error.message || "Failed to grade essay" });
@@ -1634,14 +1605,14 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "No image provided" });
     }
     const aiClient = getAI();
-    
+
     const imagePart = {
       inlineData: {
         mimeType: req.file.mimetype,
         data: req.file.buffer.toString("base64"),
       },
     };
-    
+
     const response = await safeGenerateContent({
       model: "gemini-3.5-flash-lite",
       contents: [
@@ -1653,7 +1624,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
         }
       ]
     });
-    
+
     const text = response.text || "";
     res.json({ text: text.trim() });
   } catch (error: any) {
@@ -1698,16 +1669,18 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
 
 app.post("/api/generate-flashcards", async (req, res) => {
   try {
-    const text = req.body.text || req.body.topic || req.body.content || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const count = req.body.count;
+    const { text, gradeLevel, count } = req.body;
+
+    const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+
+
     if (!text) {
       return res.status(400).json({ error: "Missing text" });
     }
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const aiClient = getAI();
-    
+
     const systemInstruction = `Act as an expert study coach and cognitive learning specialist. Analyze the provided text. Regardless of the text's length, extract exactly the top ${requestedCount} most critical, high-yield concepts. Generate exactly ${requestedCount} flashcards. Prioritize quality and core concepts.
 
 Rules for Flashcards:
@@ -1734,18 +1707,18 @@ Format exactly like this:
     const response = await safeGenerateContent({
       model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: `Generate exactly ${requestedCount} flashcards from this text: ${text}` }] },
-      config: { 
+      config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
       }
     });
-    
+
     let outputText = response.text || "[]";
     res.json({ flashcards: safeParseJSON(outputText, 'array') });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Flashcards quota exceeded:", error.message);
-      return res.json({ 
+      return res.json({
         flashcards: [
           {
             question: "⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded",
@@ -1761,7 +1734,7 @@ Format exactly like this:
 
 async function robustFetchYoutubeTranscript(videoId: string): Promise<any[]> {
   console.log(`[robustFetchYoutubeTranscript] Fetching transcript for video: ${videoId}`);
-  
+
   const userAgents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -1829,7 +1802,7 @@ async function robustFetchYoutubeTranscript(videoId: string): Promise<any[]> {
     try {
       const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
       console.log(`[robustFetch] Trying InnerTube API (${clientConfig.name} client) for videoId: ${videoId}...`);
-      
+
       const resp = await fetchWithTimeout(INNERTUBE_API_URL, {
         method: 'POST',
         headers: {
@@ -1890,7 +1863,7 @@ async function robustFetchYoutubeTranscript(videoId: string): Promise<any[]> {
         "window.ytInitialPlayerResponse = ",
         "ytInitialPlayerResponse = "
       ];
-      
+
       for (const prefix of prefixes) {
         const startIndex = body.indexOf(prefix);
         if (startIndex !== -1) {
@@ -1904,7 +1877,7 @@ async function robustFetchYoutubeTranscript(videoId: string): Promise<any[]> {
                 try {
                   playerResponse = JSON.parse(body.slice(jsonStart, i + 1));
                   break;
-                } catch (_) {}
+                } catch (_) { }
               }
             }
           }
@@ -1961,7 +1934,7 @@ async function robustFetchYoutubeTranscript(videoId: string): Promise<any[]> {
   }
 
   const xmlText = await transcriptResponse.text();
-  
+
   // Use YoutubeTranscript's internal parser if available, or write/use a robust local parser
   try {
     const results = (YoutubeTranscript as any).parseTranscriptXml(xmlText, selectedTrack.languageCode);
@@ -1976,7 +1949,7 @@ async function robustFetchYoutubeTranscript(videoId: string): Promise<any[]> {
   const results: any[] = [];
   const RE_XML_TRANSCRIPT = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
   const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
-  
+
   let match;
   while ((match = pRegex.exec(xmlText)) !== null) {
     const startMs = parseInt(match[1], 10);
@@ -2069,7 +2042,7 @@ app.post("/api/youtube-summary", async (req, res) => {
 
     const fileHash = crypto.createHash("sha256").update(url).digest("hex");
     if (summaryCache.has(fileHash) && !followUp) {
-      return res.json({ 
+      return res.json({
         text: summaryCache.get(fileHash),
         title: title || "YouTube Video",
         authorName: authorName || "",
@@ -2101,13 +2074,13 @@ Student's Request: "${followUp}"`;
         gradeLevel,
         model: "gemini-3.5-flash-lite",
         contents: { parts: [{ text: promptText }] },
-        config: { 
+        config: {
           systemInstruction: { parts: [{ text: systemInstruction }] }
         }
       });
-      
+
       const outputText = response.text || "No response generated.";
-      return res.json({ 
+      return res.json({
         text: outputText,
         title: title || "YouTube Video",
         authorName: authorName || "",
@@ -2119,7 +2092,7 @@ Student's Request: "${followUp}"`;
     try {
       console.log(`Attempting to fetch transcript for video: ${videoId}`);
       const transcript = await robustFetchYoutubeTranscript(videoId);
-      
+
       if (!transcript || transcript.length === 0) {
         throw new Error("No transcript data returned");
       }
@@ -2133,7 +2106,7 @@ Student's Request: "${followUp}"`;
         const timestampStr = `[${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}]`;
         return `${timestampStr} ${t.text}`;
       }).join(' ');
-      
+
       // Limit to ~250k characters to prevent timeouts on massive videos
       if (transcriptText.length > 250000) {
         transcriptText = transcriptText.substring(0, 250000) + "... [transcript truncated for length]";
@@ -2145,15 +2118,15 @@ Student's Request: "${followUp}"`;
       }
     } catch (e: any) {
       console.warn("YouTube transcript extraction unavailable, returning strict fallback:", e.message || e);
-      return res.status(400).json({ 
-        error: "⚠️ I couldn't read the subtitles for this video. Please try pasting the video's transcript directly into the Text Note-Maker." 
+      return res.status(400).json({
+        error: "⚠️ I couldn't read the subtitles for this video. Please try pasting the video's transcript directly into the Text Note-Maker."
       });
     }
 
     const transcriptWordCount = transcriptText.trim().split(/\s+/).filter(w => w.length > 0).length;
     if (transcriptWordCount < 50) {
-      return res.status(400).json({ 
-        error: "⚠️ I couldn't read the subtitles for this video. Please try pasting the video's transcript directly into the Text Note-Maker." 
+      return res.status(400).json({
+        error: "⚠️ I couldn't read the subtitles for this video. Please try pasting the video's transcript directly into the Text Note-Maker."
       });
     }
 
@@ -2172,14 +2145,14 @@ At the very end of your notes, always include 3 helpful interactive study sugges
       gradeLevel,
       model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: transcriptText }] },
-      config: { 
+      config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
       }
     });
-    
+
     const outputText = response.text || "No summary generated.";
     summaryCache.set(fileHash, outputText);
-    res.json({ 
+    res.json({
       text: outputText,
       title: title || "YouTube Video",
       authorName: authorName || "",
@@ -2188,7 +2161,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
   } catch (error: any) {
     if (error.isRateLimit || error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("YouTube summary quota exceeded:", error.message);
-      return res.status(429).json({ 
+      return res.status(429).json({
         isRateLimit: true,
         error: "System is currently busy helping many students! 📚\nWe're processing your request as fast as possible. Please wait for 60 seconds and try again, or take a quick stretch break. Your learning journey is our priority!"
       });
@@ -2200,18 +2173,18 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 
 app.post("/api/generate-content", async (req, res) => {
   try {
-    const topic = req.body.topic || req.body.prompt || req.body.content || "";
-    const type = req.body.type || req.body.contentType || "General";
-    const tone = req.body.tone || "Academic";
-    const format = req.body.format || "Standard";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const { topic, type, tone = "Academic", format = "Standard", gradeLevel } = req.body;
 
-    if (!topic) {
+    const wordCount = topic ? topic.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+
+
+
+    if (!topic || !type) {
       return res.status(400).json({ error: "Missing topic or type" });
     }
 
     const aiClient = getAI();
-    
+
     let formatSpecificRules = "";
     if (type.toUpperCase() === "ESSAY") {
       formatSpecificRules = `
@@ -2276,7 +2249,7 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
       contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone. Topic: ${topic}` }] },
       config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
     });
-    
+
     const outputText = response.text || "No content generated.";
     res.json({ text: outputText });
   } catch (error: any) {
@@ -2291,17 +2264,17 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 
 app.post("/api/grammar-enhance", async (req, res) => {
   try {
-    const text = req.body.text || req.body.prompt || req.body.content || "";
-    const mode = req.body.mode || "Fix All Errors";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const images = req.body.images;
+    const { text, mode, gradeLevel, images } = req.body;
+
+    const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
     }
 
     const aiClient = getAI();
     const userMode = mode === "academic" ? "academic" : "fix";
-    
+
     let modeInstruction = "";
     if (userMode === "fix") {
       modeInstruction = `MODE: Fix Grammar Only (Preserves user's original voice)
@@ -2313,7 +2286,7 @@ app.post("/api/grammar-enhance", async (req, res) => {
 - Make it read like a well-crafted essay, scientific article, or formal scholarship submission.
 - Ensure professional transitions and academic style. Use high-yield educational adjustments.`;
     }
-    
+
     const systemInstruction = `You are an Elite Academic Writer, Expert English Editor, and Master Study Coach. Your job is to proofread, correct, and enhance the provided text based on the requested mode.
 
 ${modeInstruction}
@@ -2351,12 +2324,12 @@ You must return your output strictly in JSON format matching the following schem
       gradeLevel,
       model: "gemini-3.5-flash-lite",
       contents: { parts: contentParts },
-      config: { 
+      config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
       }
     });
-    
+
     const outputRaw = response.text || "{}";
     let correctedText = "";
     let fixes: string[] = [];
@@ -2439,7 +2412,7 @@ app.post("/api/fetch-url-text", async (req, res) => {
       }
 
       let cleanText = await response.text();
-      
+
       // Validation Gateway
       const blockedPhrases = ["403 forbidden", "access denied", "robot check", "captcha", "cloudflare"];
       const lowercaseText = cleanText.toLowerCase();
@@ -2471,10 +2444,10 @@ app.post("/api/summarize-text", async (req, res) => {
     }
 
     const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
-    
+
     const aiClient = getAI();
     const summaryFormat = format || "bullet";
-    
+
     // Additional Validation for Hallucination Prevention
     const blockedPhrases = ["403 forbidden", "access denied", "robot check", "captcha", "cloudflare"];
     const lowercaseText = text.toLowerCase();
@@ -2571,12 +2544,12 @@ OUTPUT QUALITY RULES:
       }
     }
     if (textSumError && !textSummaryResult) throw textSumError;
-    
+
     res.json({ text: textSummaryResult });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Text summarize quota exceeded:", error.message);
-      return res.json({ 
+      return res.json({
         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please wait 60 seconds and try again.`
       });
     }
@@ -2596,20 +2569,27 @@ app.post("/api/generate-questions", async (req, res) => {
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
     const topicText = topic && topic.trim() ? topic.trim() : `general concepts in ${stream || 'academic subjects'}`;
 
+    const aiClient = getAI();
+    
     const systemInstruction = `You are an Elite Academic Advisor, US High School & AP/College Teacher, and Expert AI Tutor.
 The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions.
 Your ONLY job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
 
 CRITICAL RULES:
 1. NO ANSWERS: Do not include any answers, options, multiple choice letters, hints, solutions, or explanations. You must ONLY output the question prompts themselves.
-2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry.
-3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks.
-4. CRISP & CONCISE: Keep every question clear, direct, and under 40 words.
+2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans. Do not output simple retrieval questions.
+3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
+4. CRISP & CONCISE: Keep every question incredibly clear, direct, and free of redundant words. Avoid wordy, run-on sentences.
+5. WORD LIMIT: Each question must be extremely direct and MUST NOT exceed 30-40 words.
+6. CHUNKING FOR COMPLEXITY: If a question requires a complex scenario or detailed context, DO NOT write a massive paragraph. Instead, break it down using sub-parts (e.g., Part A, Part B) or bullet points.
+7. NO FLUFF: Maintain elite academic rigor and Bloom's Taxonomy cognitive depth, but deliver it in bite-sized, digestible mobile text.
 
 Use this exact JSON structure:
 {
   "questions": [
-    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict consumer response."
+    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict the consumer response.",
+    "Analyze the ethical implications of using advanced AI algorithms for autonomous driving in critical, unavoidable crash scenarios.",
+    "Describe the primary biochemical and molecular steps that occur in a eukaryotic muscle cell during a sliding filament contraction."
   ]
 }`;
 
@@ -2705,20 +2685,16 @@ app.post("/api/evaluate-answer", async (req, res) => {
   }
 });
 
-
-
 app.post("/api/generate-quiz", async (req, res) => {
   try {
-    const topic = req.body.topic || req.body.prompt || req.body.text || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const count = req.body.count;
+    const { topic, gradeLevel, count } = req.body;
     if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
     }
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
-    
+
     const systemInstruction = `You are an Elite US High School Teacher and SAT/AP Exam Expert. The user will provide a subject or specific topic. 
 Your ONLY job is to generate a highly accurate, exam-level Multiple Choice Quiz for that topic.
 
@@ -2764,7 +2740,7 @@ Use this exact JSON structure:
 
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      return res.status(429).json({ 
+      return res.status(429).json({
         error: "QUOTA_EXCEEDED",
         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
       });
@@ -2855,11 +2831,11 @@ Use this exact JSON structure:
       response = await safeGenerateContent({
         gradeLevel,
         model: "gemini-3.5-flash-lite",
-        contents: [{ 
+        contents: [{
           parts: [
             pdfPart,
             { text: `Analyze the attached PDF document and generate the ${requestedCount}-question JSON quiz now based strictly on its content.` }
-          ] 
+          ]
         }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2883,7 +2859,7 @@ Use this exact JSON structure:
     return res.status(400).json({ error: "Failed to generate a valid quiz structure from the PDF. Please ensure it has readable text or images." });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      return res.status(429).json({ 
+      return res.status(429).json({
         error: "QUOTA_EXCEEDED",
         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
       });
@@ -2950,7 +2926,7 @@ Use this exact JSON structure:
     return res.status(500).json({ error: "Failed to generate a valid quiz structure from the image." });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      return res.status(429).json({ 
+      return res.status(429).json({
         error: "QUOTA_EXCEEDED",
         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
       });
@@ -3013,7 +2989,7 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
 
   const searchTasks = queriesToSearch.map(async (kw) => {
     const encoded = encodeURIComponent(kw);
-    
+
     // 1. Google News Real-Time RSS
     try {
       const rssRes = await fetchWithTimeout(`https://news.google.com/rss/search?q=${encoded}&hl=en-IN&gl=IN&ceid=IN:en`, {
@@ -3067,7 +3043,7 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
               const sumData = await sumRes.json();
               if (sumData.extract) extract = sumData.extract;
             }
-          } catch (_) {}
+          } catch (_) { }
 
           sources.push({
             title: pageTitle,
@@ -3108,13 +3084,9 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
 }
 
 app.post("/api/fix-mistake", async (req, res) => {
+  const { question, wrongInput, correctConcept, gradeLevel } = req.body;
   try {
-    const question = req.body.question || req.body.mistake || "";
-    const wrongInput = req.body.wrongInput || req.body.userAnswer || req.body.wrongAnswer || "";
-    const correctConcept = req.body.correctConcept || req.body.correctAnswer || req.body.solution || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-
-    if (!question) {
+    if (!question || !wrongInput || !correctConcept) {
       return res.status(400).json({ error: "Missing required mistake fields: question, wrongInput, or correctConcept" });
     }
 
@@ -3169,22 +3141,17 @@ Please analyze this mistake and output the correction in the strict JSON format 
     res.json(parsedResult);
   } catch (error: any) {
     console.error("Fix mistake endpoint failed:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to generate AI correction for this mistake.",
-      details: error.message 
+      details: error.message
     });
   }
 });
 
 app.post("/api/generate-practice", async (req, res) => {
+  const { question, wrongInput, correctConcept, sourceFeature, gradeLevel } = req.body;
   try {
-    const question = req.body.question || req.body.topic || req.body.concept || "";
-    const wrongInput = req.body.wrongInput || "";
-    const correctConcept = req.body.correctConcept || req.body.correctAnswer || "";
-    const sourceFeature = req.body.sourceFeature || "Practice";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-
-    if (!question && !correctConcept) {
+    if (!question || !correctConcept) {
       return res.status(400).json({ error: "Missing required fields: question or correctConcept" });
     }
 
@@ -3262,24 +3229,21 @@ Return the response in the strict JSON array format specified.`;
     res.json(parsedResult);
   } catch (error: any) {
     console.error("Generate practice endpoint failed:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to generate practice questions.",
-      details: error.message 
+      details: error.message
     });
   }
 });
 
 app.post("/api/live-study-tutor", async (req, res) => {
-  const rawQueryInput = req.body.query || req.body.prompt || req.body.search || "";
-    const profileContext = req.body.profileContext;
-    const studentNotes = req.body.studentNotes;
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    try {
-      if (!rawQueryInput || !rawQueryInput.trim()) {
+  const { query, profileContext, studentNotes, gradeLevel } = req.body;
+  try {
+    if (!query || !query.trim()) {
       return res.status(400).json({ error: "Missing search query" });
     }
 
-    const rawQuery = rawQueryInput.trim();
+    const rawQuery = query.trim();
 
     // 1. Smart Keyword & Entity Extraction
     const keywords = await extractSearchKeywords(rawQuery);
@@ -3287,7 +3251,7 @@ app.post("/api/live-study-tutor", async (req, res) => {
     // 2. Multi-Engine Real-Time Live Web Search (Google News RSS, Wikipedia Deep REST, DuckDuckGo)
     const searchResults = await performLiveWebSearch(rawQuery, keywords);
 
-    const verifiedContextString = searchResults.map((s, idx) => 
+    const verifiedContextString = searchResults.map((s, idx) =>
       `[Verified Source ${idx + 1}] Title: ${s.title}\nURL: ${s.uri}\nPublisher: ${s.sourceName}\nContent Snippet: ${s.snippet}\n`
     ).join('\n---\n');
 
@@ -3473,23 +3437,19 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
 
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const academicStream = req.body.academicStream || req.body.stream || "General";
-    const topic = req.body.topic || req.body.category || "";
-    const excludeQuestions = req.body.excludeQuestions || [];
-    const country = req.body.country || "India";
-    
+    const { gradeLevel, academicStream, topic, excludeQuestions, country } = req.body;
+
     const aiClient = getAI();
     const normalizeStr = (s: string) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
     const excludesSet = new Set((excludeQuestions || []).map((q: string) => normalizeStr(q)));
-    
+
     let attempts = 0;
     let finalTrivia: any = null;
     let extraAvoidInstruction = "";
 
     while (attempts < 3) {
       attempts++;
-      
+
       let promptText = `Generate a single, unique, highly engaging educational trivia question tailored for:
 - Student Academic Grade: ${gradeLevel || "11th Grade (Junior)"}
 - Academic Track/Stream: ${academicStream || "STEM / Engineering"}
@@ -3546,7 +3506,7 @@ Required JSON Structure:
 
       const triviaText = response.text || "";
       const parsed = safeParseJSON(triviaText, 'object');
-      
+
       if (parsed && parsed.question && Array.isArray(parsed.options)) {
         const normQ = normalizeStr(parsed.question);
         if (!excludesSet.has(normQ)) {

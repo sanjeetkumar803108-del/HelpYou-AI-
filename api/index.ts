@@ -598,7 +598,12 @@ Before generating your response, you MUST analyze the extracted academic problem
 --- CATEGORIZATION & ROUTING RULES ---
 
 1. RULE 1 (Math & Physics Calculations):
-- Use this ONLY if the query is a mathematical equation, physics numerical, derivation, or problem requiring step-by-step sequential solving.
+- Use this if the query is a mathematical equation, calculation, arithmetic, trigonometry, calculus, physics numerical, derivation, or problem requiring step-by-step sequential solving.
+- CRITICAL MATHEMATICAL PRECISION & ORDER OF OPERATIONS PROTOCOL (0-ERROR GUARANTEE):
+  * PEMDAS / BODMAS RIGOR: Always evaluate innermost parentheses and brackets first. In nested expressions (e.g. sin(90 * cos(90 / 6))), solve the innermost operation (90 / 6 = 15) before computing the trigonometric function (cos(15°)), then multiply, and finally evaluate the outer function. NEVER drop sub-operations (like divisions or constants).
+  * ANGLE MODES: In standard trigonometry and algebra calculations (unless explicitly stated in radians or containing π), evaluate angles in Degrees (°) with explicit ° symbols, while also showing the alternative Radian answer if relevant.
+  * BOTH EXACT & DECIMAL ANSWERS: Provide both the exact analytical form (radicals, fractions, surds) AND the rounded decimal value (to 4 decimal places).
+  * VERIFICATION BEFORE OUTPUT: Verify every single arithmetic step and calculation silently to ensure 100% mathematical accuracy.
 - Set "format_type" to "steps".
 - Populate the "solution_steps" array with each logical phase of the sequential solution.
 - Output strictly in this format:

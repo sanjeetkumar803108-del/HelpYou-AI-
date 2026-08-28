@@ -1091,8 +1091,17 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
           <button
             onClick={() => {
               triggerVibration(25);
+              let balancedExpr = expression.trim();
+              const openCount = (balancedExpr.match(/\(/g) || []).length;
+              const closeCount = (balancedExpr.match(/\)/g) || []).length;
+              if (openCount > closeCount) {
+                balancedExpr += ')'.repeat(openCount - closeCount);
+              }
               const event = new CustomEvent('study-calculator-send-to-tutor', {
-                detail: { expression }
+                detail: { 
+                  expression: balancedExpr,
+                  trigMode: trigMode === 'deg' ? 'Degrees (°)' : 'Radians (rad)'
+                }
               });
               window.dispatchEvent(event);
               onNavigateToTab?.('aitutor');

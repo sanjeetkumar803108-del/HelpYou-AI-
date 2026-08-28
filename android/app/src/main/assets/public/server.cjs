@@ -42,6 +42,7 @@ var import_genai = require("@google/genai");
 var import_crypto = __toESM(require("crypto"), 1);
 var import_youtube_transcript = require("youtube-transcript");
 var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
+var import_xss = __toESM(require("xss"), 1);
 import_dotenv.default.config();
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -57,8 +58,10 @@ app.use(import_express.default.json({ limit: "50mb" }));
 app.use(import_express.default.urlencoded({ extended: true, limit: "50mb" }));
 var apiLimiter = (0, import_express_rate_limit.default)({
   windowMs: 15 * 60 * 1e3,
-  max: 5e3,
-  message: { error: "Too many requests from this IP, please try again after a few minutes." },
+  // 15 minutes
+  max: 100,
+  // Limit each IP to 100 requests per windowMs
+  message: { error: "Too many requests from this IP, please try again after 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -74,7 +77,7 @@ app.all(["/api/health", "/health", "/api/status"], (req, res) => {
 });
 var sanitizeInput = (obj) => {
   if (typeof obj === "string") {
-    return obj.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+    return (0, import_xss.default)(obj);
   }
   if (Array.isArray(obj)) {
     return obj.map((item) => sanitizeInput(item));
@@ -293,33 +296,6 @@ async function safeGenerateContent(params, retries = 3, delay = 200) {
   } else {
     clonedParams.config = { ...clonedParams.config };
   }
-  let rawContents = clonedParams.contents;
-  let normalizedContents = [];
-  if (typeof rawContents === "string") {
-    normalizedContents = [{ role: "user", parts: [{ text: rawContents }] }];
-  } else if (rawContents && typeof rawContents === "object" && !Array.isArray(rawContents)) {
-    if (rawContents.parts) {
-      normalizedContents = [{ role: rawContents.role || "user", parts: rawContents.parts }];
-    } else {
-      normalizedContents = [{ role: "user", parts: [{ text: JSON.stringify(rawContents) }] }];
-    }
-  } else if (Array.isArray(rawContents)) {
-    normalizedContents = rawContents.map((c) => {
-      if (typeof c === "string") {
-        return { role: "user", parts: [{ text: c }] };
-      }
-      if (c && typeof c === "object") {
-        if (c.parts) {
-          return { role: c.role || "user", parts: c.parts };
-        }
-        if (c.text || c.inlineData) {
-          return { role: "user", parts: [c] };
-        }
-      }
-      return { role: "user", parts: [{ text: String(c) }] };
-    });
-  }
-  clonedParams.contents = normalizedContents;
   const isTtsModel = !!(clonedParams.model && clonedParams.model.includes("tts"));
   if (isTtsModel && clonedParams.config) {
     delete clonedParams.config.systemInstruction;
@@ -371,11 +347,11 @@ ${text}`.trim() },
   const isSpecialtyModel = params.model && (params.model.includes("tts") || params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
   let requestedModel = params.model;
   let modelsToTry = isSpecialtyModel ? [requestedModel] : [
-    requestedModel || "gemini-3.1-flash-lite",
-    "gemini-3.1-flash-lite",
+    requestedModel || "gemini-3.5-flash-lite",
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-flash-lite-latest",
+    "gemini-flash-latest",
     "gemini-3.6-flash"
   ].filter((value, index, self) => self.indexOf(value) === index);
   if (!isSpecialtyModel) {
@@ -677,7 +653,12 @@ DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimite
 --- CATEGORIZATION & ROUTING RULES ---
 
 1. RULE 1 (Math & Physics Numerical Calculations / Step-by-Step STEM):
-- Use this ONLY if the query is a mathematical equation, physics numerical, chemical reaction, derivation, or problem requiring step-by-step sequential solving.
+- Use this if the query is a mathematical equation, calculation, arithmetic, trigonometry, calculus, physics numerical, chemical reaction, derivation, or problem requiring step-by-step sequential solving.
+- CRITICAL MATHEMATICAL PRECISION & ORDER OF OPERATIONS PROTOCOL (0-ERROR GUARANTEE):
+  * PEMDAS / BODMAS RIGOR: Always evaluate innermost parentheses and brackets first. In nested expressions (e.g. sin(90 * cos(90 / 6))), solve the innermost operation (90 / 6 = 15) before computing the trigonometric function (cos(15\xB0)), then multiply, and finally evaluate the outer function. NEVER drop sub-operations (like divisions or constants).
+  * ANGLE MODES: In standard trigonometry and algebra calculations (unless explicitly stated in radians or containing \u03C0), evaluate angles in Degrees (\xB0) with explicit \xB0 symbols, while also showing the alternative Radian answer if relevant.
+  * BOTH EXACT & DECIMAL ANSWERS: Provide both the exact analytical form (radicals, fractions, surds) AND the rounded decimal value (to 4 decimal places).
+  * VERIFICATION BEFORE OUTPUT: Verify every single arithmetic step and calculation silently to ensure 100% mathematical accuracy.
 - Set "format_type" to "steps".
 - Populate the "solution_steps" array with each logical phase of the sequential solution.
 - Output strictly in this format:
@@ -688,7 +669,7 @@ DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimite
     {
       "step_id": 1,
       "title": "Clear concise step title",
-      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations/chemical reactions, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$). Always double-escape backslashes in JSON (e.g. \\\\rightarrow, \\\\frac, \\\\text) so that equations render beautifully for students.",
+      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations/chemical reactions, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$). Always double-escape backslashes in JSON (e.g. \\\\rightarrow, \\\\frac, \\\\sqrt, \\\\text) so that equations render beautifully for students.",
       "is_final_answer": false
     }
   ],
@@ -879,10 +860,10 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     const shouldStream = stream === "true" || stream === true;
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-3.1-flash-lite",
         "gemini-3.5-flash-lite",
         "gemini-3.5-flash",
         "gemini-flash-lite-latest",
+        "gemini-flash-latest",
         "gemini-3.6-flash"
       ];
       const now = Date.now();
@@ -1253,11 +1234,7 @@ app.post("/api/tts", async (req, res) => {
 });
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const text = req.body.text || req.body.essay || req.body.content || "";
-    const curriculum = req.body.curriculum;
-    const subject = req.body.subject || req.body.topic;
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const images = req.body.images;
+    const { text, curriculum, subject, gradeLevel, images } = req.body;
     const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
@@ -1339,10 +1316,10 @@ OVERALL VERDICT:
 [A short 2-sentence encouraging plain text summary].`;
     const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
-      "gemini-3.1-flash-lite",
       "gemini-3.5-flash-lite",
       "gemini-3.5-flash",
       "gemini-flash-lite-latest",
+      "gemini-flash-latest",
       "gemini-3.6-flash"
     ];
     const now = Date.now();
@@ -1506,9 +1483,8 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
 });
 app.post("/api/generate-flashcards", async (req, res) => {
   try {
-    const text = req.body.text || req.body.topic || req.body.content || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const count = req.body.count;
+    const { text, gradeLevel, count } = req.body;
+    const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
     if (!text) {
       return res.status(400).json({ error: "Missing text" });
     }
@@ -1939,12 +1915,9 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 });
 app.post("/api/generate-content", async (req, res) => {
   try {
-    const topic = req.body.topic || req.body.prompt || req.body.content || "";
-    const type = req.body.type || req.body.contentType || "General";
-    const tone = req.body.tone || "Academic";
-    const format = req.body.format || "Standard";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    if (!topic) {
+    const { topic, type, tone = "Academic", format = "Standard", gradeLevel } = req.body;
+    const wordCount = topic ? topic.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
+    if (!topic || !type) {
       return res.status(400).json({ error: "Missing topic or type" });
     }
     const aiClient = getAI();
@@ -2022,10 +1995,8 @@ ACADEMIC FORMATTING COMPLIANCE (If applicable):
 });
 app.post("/api/grammar-enhance", async (req, res) => {
   try {
-    const text = req.body.text || req.body.prompt || req.body.content || "";
-    const mode = req.body.mode || "Fix All Errors";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const images = req.body.images;
+    const { text, mode, gradeLevel, images } = req.body;
+    const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
     }
@@ -2293,20 +2264,26 @@ app.post("/api/generate-questions", async (req, res) => {
     const stream = req.body.stream;
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
     const topicText = topic && topic.trim() ? topic.trim() : `general concepts in ${stream || "academic subjects"}`;
+    const aiClient = getAI();
     const systemInstruction = `You are an Elite Academic Advisor, US High School & AP/College Teacher, and Expert AI Tutor.
 The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions.
 Your ONLY job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
 
 CRITICAL RULES:
 1. NO ANSWERS: Do not include any answers, options, multiple choice letters, hints, solutions, or explanations. You must ONLY output the question prompts themselves.
-2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry.
-3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks.
-4. CRISP & CONCISE: Keep every question clear, direct, and under 40 words.
+2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans. Do not output simple retrieval questions.
+3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
+4. CRISP & CONCISE: Keep every question incredibly clear, direct, and free of redundant words. Avoid wordy, run-on sentences.
+5. WORD LIMIT: Each question must be extremely direct and MUST NOT exceed 30-40 words.
+6. CHUNKING FOR COMPLEXITY: If a question requires a complex scenario or detailed context, DO NOT write a massive paragraph. Instead, break it down using sub-parts (e.g., Part A, Part B) or bullet points.
+7. NO FLUFF: Maintain elite academic rigor and Bloom's Taxonomy cognitive depth, but deliver it in bite-sized, digestible mobile text.
 
 Use this exact JSON structure:
 {
   "questions": [
-    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict consumer response."
+    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict the consumer response.",
+    "Analyze the ethical implications of using advanced AI algorithms for autonomous driving in critical, unavoidable crash scenarios.",
+    "Describe the primary biochemical and molecular steps that occur in a eukaryotic muscle cell during a sliding filament contraction."
   ]
 }`;
     let generatedText = "";
@@ -2398,9 +2375,7 @@ The Gemini API is currently experiencing rate limits. Please try again in 60 sec
 });
 app.post("/api/generate-quiz", async (req, res) => {
   try {
-    const topic = req.body.topic || req.body.prompt || req.body.text || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const count = req.body.count;
+    const { topic, gradeLevel, count } = req.body;
     if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
     }
@@ -2755,12 +2730,9 @@ async function performLiveWebSearch(query, searchKeywords = []) {
   return sources;
 }
 app.post("/api/fix-mistake", async (req, res) => {
+  const { question, wrongInput, correctConcept, gradeLevel } = req.body;
   try {
-    const question = req.body.question || req.body.mistake || "";
-    const wrongInput = req.body.wrongInput || req.body.userAnswer || req.body.wrongAnswer || "";
-    const correctConcept = req.body.correctConcept || req.body.correctAnswer || req.body.solution || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    if (!question) {
+    if (!question || !wrongInput || !correctConcept) {
       return res.status(400).json({ error: "Missing required mistake fields: question, wrongInput, or correctConcept" });
     }
     const systemInstruction = `You are "Deep Search AI", an elite, highly intelligent educational assistant. Adopt a highly professional, crisp, and direct tone.
@@ -2817,13 +2789,9 @@ Please analyze this mistake and output the correction in the strict JSON format 
   }
 });
 app.post("/api/generate-practice", async (req, res) => {
+  const { question, wrongInput, correctConcept, sourceFeature, gradeLevel } = req.body;
   try {
-    const question = req.body.question || req.body.topic || req.body.concept || "";
-    const wrongInput = req.body.wrongInput || "";
-    const correctConcept = req.body.correctConcept || req.body.correctAnswer || "";
-    const sourceFeature = req.body.sourceFeature || "Practice";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    if (!question && !correctConcept) {
+    if (!question || !correctConcept) {
       return res.status(400).json({ error: "Missing required fields: question or correctConcept" });
     }
     const systemInstruction = `You are "Magic AI Tutor", an elite, highly intelligent educational assistant.
@@ -2902,15 +2870,12 @@ Return the response in the strict JSON array format specified.`;
   }
 });
 app.post("/api/live-study-tutor", async (req, res) => {
-  const rawQueryInput = req.body.query || req.body.prompt || req.body.search || "";
-  const profileContext = req.body.profileContext;
-  const studentNotes = req.body.studentNotes;
-  const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+  const { query, profileContext, studentNotes, gradeLevel } = req.body;
   try {
-    if (!rawQueryInput || !rawQueryInput.trim()) {
+    if (!query || !query.trim()) {
       return res.status(400).json({ error: "Missing search query" });
     }
-    const rawQuery = rawQueryInput.trim();
+    const rawQuery = query.trim();
     const keywords = await extractSearchKeywords(rawQuery);
     const searchResults = await performLiveWebSearch(rawQuery, keywords);
     const verifiedContextString = searchResults.map(
@@ -3087,11 +3052,7 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
 });
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const academicStream = req.body.academicStream || req.body.stream || "General";
-    const topic = req.body.topic || req.body.category || "";
-    const excludeQuestions = req.body.excludeQuestions || [];
-    const country = req.body.country || "India";
+    const { gradeLevel, academicStream, topic, excludeQuestions, country } = req.body;
     const aiClient = getAI();
     const normalizeStr = (s) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
     const excludesSet = new Set((excludeQuestions || []).map((q) => normalizeStr(q)));

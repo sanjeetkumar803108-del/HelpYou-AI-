@@ -2659,6 +2659,7 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
     let extractedText = "";
     let numPages = 0;
     try {
+      const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
       const pdfData = await pdf(req.file.buffer, { max: 51 });
       numPages = pdfData.numpages;
       extractedText = pdfData.text || "";

@@ -62,7 +62,10 @@ const ChatImage = ({ src, timestamp }: { src: string; timestamp?: number }) => {
 
 // ----------------------------------------------------
 // SYSTEM INSTRUCTION FOR THE ELITE MATH & SCIENCE MASTER EDUCATOR
+// TWO MODES: IMAGE_SCAN (for photo uploads) and TEXT_CHAT (for typed messages)
 // ----------------------------------------------------
+
+// Used when the student uploads an IMAGE for scanning
 const SYSTEM_INSTRUCTION_NURSERY = `You are an Elite High School Math & Science Tutor, SAT/ACT Expert, and a Master Educator. Adopt an encouraging, patient, precise, and crisp tone. Use clean line breaks and emojis for visual readability.
 You are analyzing a full-screen, uncropped photo. Scan the image to locate the primary mathematical equation, science question, or text problem. Ignore any background noise, hands, or irrelevant objects. Focus solely on extracting and solving the main academic problem visible in the image.
 DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimiters.
@@ -73,7 +76,7 @@ No raw conversational text is allowed outside of the JSON object. Do NOT wrap th
 
 FORMAT:
 {
-  "topic_title": "Subject or Topic of the problem",
+  "topic_title": "Subject or Topic of the problem (3–6 words, e.g. 'Quadratic Equations & Roots')",
   "solution_steps": [
     {
       "step_id": 1,
@@ -105,6 +108,45 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
 2. THE ANALOGY RULE: Use relatable, real-world analogies where helpful.
 3. HIGH EMPATHY: Be patient and deeply encouraging.`;
 
+// Used when the student types a question/message WITHOUT an image
+const SYSTEM_INSTRUCTION_TEXT_CHAT = `You are an Elite High School Math & Science Tutor, SAT/ACT Expert, and a Master Educator. You are here to help students understand concepts, solve problems, and feel confident in their studies.
+
+CRITICAL RESPONSE RULES:
+1. LANGUAGE MIRRORING: Always reply in the SAME language the student used. If they write in Hinglish (Hindi words in English letters), reply in Hinglish. If English, reply in English. If Hindi (Devanagari script), reply in Hindi.
+2. GREETING / SMALL TALK: If the student sends a casual greeting (e.g. "Hi", "Hey bhai", "Kya haal hai", "Hello", "How are you"), respond warmly and casually as a friendly tutor. Do NOT hallucinate a math problem. Just greet back and ask how you can help them study today.
+3. ACADEMIC QUESTION / DOUBT: If the student asks a concept question or doubt (e.g. "What is photosynthesis?", "Explain Newton's 2nd law"), give a clear, engaging explanation with real-world analogies.
+4. MATH / SCIENCE NUMERICAL: If the student types a math or science problem (e.g. "Solve sin(60)", "Find the derivative of x²"), solve it step by step with LaTeX for all formulas.
+
+You MUST output your response strictly in the following JSON format.
+No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks. Only output pure valid raw JSON.
+
+FORMAT:
+{
+  "topic_title": "3–6 word title describing the topic (e.g. 'Friendly Tutor Greeting', 'Quadratic Formula Steps', 'Newton Second Law Explained')",
+  "solution_steps": [
+    {
+      "step_id": 1,
+      "title": "Short heading for this part of the response",
+      "content": "The actual response text here. For math, use LaTeX: $inline$ or $$block$$. Double-escape backslashes in JSON strings (e.g. \\\\frac, \\\\sqrt).",
+      "is_final_answer": false
+    }
+  ],
+  "suggestions": [
+    "Relevant follow-up question or action 1",
+    "Relevant follow-up question or action 2",
+    "Relevant follow-up question or action 3"
+  ]
+}
+
+RULES:
+- For greetings / small talk: use 1 step, topic_title = 'Hello! How can I Help You Today 👋', is_final_answer = true.
+- For concept explanations: break into 2–4 steps.
+- For numericals: break into as many steps as needed for crystal clarity.
+- suggestions must be 3 relevant, encouraging follow-up study actions or questions.
+- Do NOT use LaTeX inside the suggestions array.
+- The "content" must NEVER be null, undefined, or empty. If unsure, write a friendly message.
+- NEVER invent a math problem if the student only sent a greeting or casual chat.`;
+
 // Separate component for rendering messages with word-by-word typewriter effect and interactive actions
 function AITutorMessageItem({ 
   msg, 
@@ -134,10 +176,22 @@ function AITutorMessageItem({
   const parsedSolution = useMemo(() => {
     if (msg.role !== 'model') return null;
     let textToParse = cleanText.trim();
+    // Strip markdown code fences if AI wrapped JSON in ```json ... ```
+    const fenceMatch = textToParse.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (fenceMatch) textToParse = fenceMatch[1].trim();
     if (!textToParse.startsWith('{') && !textToParse.includes('solution_steps')) {
       return null;
     }
-    return parsePartialJSON(textToParse);
+    const result = parsePartialJSON(textToParse);
+    // Safety: if parsing succeeded but content fields are undefined/null, sanitize them
+    if (result && Array.isArray(result.solution_steps)) {
+      result.solution_steps = result.solution_steps.map((step: any) => ({
+        ...step,
+        content: step.content != null && step.content !== 'undefined' ? step.content : '(Processing...)',
+        title: step.title != null && step.title !== 'undefined' ? step.title : `Step ${step.step_id || 1}`,
+      }));
+    }
+    return result;
   }, [cleanText, msg.role]);
 
   const suggestions = useMemo(() => {
@@ -350,7 +404,12 @@ function AITutorMessageItem({
             </div>
           ) : (
             <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-0.5">
-              <GlobalMarkdown>{displayedText}</GlobalMarkdown>
+              {/* Safety: never render raw JSON strings to the student */}
+              <GlobalMarkdown>
+                {(displayedText.trim().startsWith('{') && displayedText.includes('solution_steps'))
+                  ? '✨ Loading your answer...'
+                  : displayedText}
+              </GlobalMarkdown>
             </div>
           )}
         </div>
@@ -1143,7 +1202,12 @@ Please evaluate this answer strictly according to your system rubric.`;
         scannerRoutingInstructions += "\n\nPay special attention to deciphering handwritten text, messy variables, or hand-drawn diagrams before solving.";
       }
 
-      formData.append('customSystemInstruction', SYSTEM_INSTRUCTION_NURSERY + personaSuffix + scannerRoutingInstructions);
+      // Use TEXT_CHAT prompt for pure text messages, IMAGE_SCAN prompt only when an image is attached
+      const hasImageAttached = !!(activeAttachedFile && activeAttachedType === 'image');
+      const baseSystemInstruction = hasImageAttached
+        ? SYSTEM_INSTRUCTION_NURSERY + personaSuffix + scannerRoutingInstructions
+        : SYSTEM_INSTRUCTION_TEXT_CHAT + personaSuffix;
+      formData.append('customSystemInstruction', baseSystemInstruction);
       formData.append('profileContext', getProfileContext());
       formData.append('gradeLevel', safeGetItem('academic_grade') || '11th Grade (Junior)');
       

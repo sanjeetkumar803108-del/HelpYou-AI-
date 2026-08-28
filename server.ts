@@ -1194,17 +1194,25 @@ NEVER output a "Wall of Text". Always use proper line breaks and structure.
 DYNAMIC FORMATTING RULES:
 
 IF FORMAT IS "Bullet Points":
-1. Structure the output using clear, BOLD HEADINGS for different sections (e.g., **Key Concepts**).
-2. MANDATORY: Every single point must start with a standard visual bullet symbol (•). Do not use numbers, stars, or dashes, only the "•" symbol.
-3. STRICT FORMATTING: Ensure there is a line break before and after each heading. 
-4. CONCISE: Keep each bullet point under 2 sentences. 
-5. NO NARRATIVE: Do not write intro or conclusion paragraphs. Start immediately with the first heading and its associated bullet points.
+1. Start with ONE main heading using ## (e.g., ## Key Concepts from the Document).
+2. Then break the summary into logical topic sections. Use ### for each section heading.
+3. MANDATORY: Under each section heading, EVERY point MUST be on its OWN LINE starting with a hyphen followed by a space: "- " (standard markdown list format).
+4. CONCISE: Keep each bullet point under 2 sentences.
+5. NO NARRATIVE: Do not write intro or conclusion paragraphs. Start immediately with the main heading.
 6. EXAMPLE OF EXPECTED FORMAT:
 
-**Heading Name**
+## Main Document Title
 
-• Fact or point one.
-• Fact or point two.
+### Section One Name
+
+- First key fact or point about this topic.
+- Second key fact or point about this topic.
+- Third key fact or point.
+
+### Section Two Name
+
+- First key fact about section two.
+- Second key fact about section two.
 
 IF FORMAT IS "Short TL;DR":
 1. Provide the absolute bottom-line of the text.
@@ -1216,21 +1224,16 @@ IF FORMAT IS "Explain Like I'm 5":
 1. Break down complex jargon into grade-school level vocabulary.
 2. Use at least one relatable, everyday analogy (e.g., comparing a system to a school, a car, or pizza).
 3. Keep the tone extremely warm, engaging, and story-like.
-4. Use short paragraphs and emojis to make it visually friendly for beginners.`;
+4. Use short paragraphs to make it visually friendly for beginners.`;
     }
 
     if (action !== 'audio') {
-      promptText += "\n\nCRITICAL FORMATTING INSTRUCTIONS: You must generate clean, highly readable, and structured study notes. You are STRICTLY FORBIDDEN from using complex characters, emojis, or math formatting.\n" +
-        "You MUST obey the following rules blindly:\n" +
-        "1. NO LATEX OR MATH BLOCKS: Never use '$', '$$', '\\text{}', '\\rightarrow', or any LaTeX syntax anywhere in the response.\n" +
-        "2. PLAIN TEXT ARROWS: If you need an arrow, use standard keyboard characters only: '->' or '=>'.\n" +
-        "3. NO EMOJIS OR WEIRD UNICODE: Do not use emojis, fancy bullets, or special symbols. They break the PDF encoder.\n" +
-        "4. STRICT MARKDOWN ONLY: Use only basic, universal markdown formatting:\n" +
-        "   - Headings: '#', '##', '###'\n" +
-        "   - Lists: Use ONLY the standard hyphen '-' or numbers '1.' for lists. Do not use special bullets.\n" +
-        "   - Bold/Italic: '**text**' or '*text*'\n" +
-        "   - Code Blocks: Strictly use triple backticks (```) for any code, syntax, or technical snippets. Do not use $$ for code.\n" +
-        "Output ONLY standard, plain ASCII-compatible markdown text.";
+      promptText += "\n\nOUTPUT QUALITY RULES:\n" +
+        "1. Use ONLY standard markdown: ## headings, ### subheadings, - bullet lists, **bold**, *italic*.\n" +
+        "2. Each bullet point MUST be on its OWN separate line. Never put multiple points on the same line.\n" +
+        "3. NO LaTeX, no '$', no '$$', no '\\\\frac'. Write math as plain text (e.g., A = P(1 + r/n)^(nt)).\n" +
+        "4. NO emojis or special unicode characters.\n" +
+        "5. Ensure there is a blank line before and after every heading and before and after every list.";
     } else {
       promptText += "\n\nCRITICAL FORMATTING INSTRUCTIONS: Output ONLY standard, plain ASCII-compatible conversational text. You are STRICTLY FORBIDDEN from using emojis, LaTeX math blocks, special characters, or markdown formatting (like bold, italics, bullet points, or hashtags) as they interfere with text-to-speech rendering.";
     }
@@ -1264,15 +1267,43 @@ IF FORMAT IS "Explain Like I'm 5":
       return res.status(400).json({ error: "Text content is too short to process." });
     }
     
-    const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: contentsPayload,
-      config: {
-        responseMimeType: responseMimeType
+    // Model fallback chain for summarize — try faster models first, fall back on rate-limit
+    const summarizeModels = [
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+    ];
+    let summaryText = "";
+    let summarizeError: any = null;
+    for (const model of summarizeModels) {
+      try {
+        const response = await safeGenerateContent({
+          model,
+          contents: contentsPayload,
+          config: {
+            responseMimeType: responseMimeType,
+            maxOutputTokens: 8192,
+            temperature: 0.3,
+          }
+        });
+        summaryText = response.text || "";
+        summarizeError = null;
+        break;
+      } catch (err: any) {
+        const errStr = String(err.message || err).toLowerCase();
+        const isRateLimit = errStr.includes("429") || errStr.includes("quota") || errStr.includes("resource_exhausted") || errStr.includes("503") || errStr.includes("overloaded");
+        if (isRateLimit) {
+          console.warn(`[summarize] Model ${model} rate-limited, trying next...`);
+          summarizeError = err;
+          continue;
+        }
+        throw err; // non-rate-limit error → fail immediately
       }
-    });
-    
-    const summaryText = response.text || "";
+    }
+    if (summarizeError && !summaryText) {
+      throw summarizeError;
+    }
     
     // Handle JSON response for flashcards-json
     if (action === 'flashcards-json') {
@@ -2425,7 +2456,8 @@ app.post("/api/summarize-text", async (req, res) => {
 
     const systemInstruction = `SYSTEM INSTRUCTION: EXPERT SUMMARISER
 
-You are an expert academic and professional summarizer. Your task is to extract key information from the provided text and format it STRICTLY according to the user's requested mode. 
+
+You are an expert academic and professional summarizer. Your task is to extract key information from the provided text and format it STRICTLY according to the user's requested mode.
 
 USER'S REQUESTED FORMAT: ${selectedFormatName}
 
@@ -2435,17 +2467,24 @@ NEVER output a "Wall of Text". Always use proper line breaks and structure.
 DYNAMIC FORMATTING RULES:
 
 IF FORMAT IS "Bullet Points":
-1. Structure the output using clear, BOLD HEADINGS for different sections (e.g., **Key Concepts**).
-2. MANDATORY: Every single point must start with a standard visual bullet symbol (•). Do not use numbers, stars, or dashes, only the "•" symbol.
-3. STRICT FORMATTING: Ensure there is a line break before and after each heading. 
-4. CONCISE: Keep each bullet point under 2 sentences. 
-5. NO NARRATIVE: Do not write intro or conclusion paragraphs. Start immediately with the first heading and its associated bullet points.
+1. Start with ONE main heading using ## (e.g., ## Key Concepts from the Text).
+2. Then break the summary into logical topic sections. Use ### for each section heading.
+3. MANDATORY: Under each section heading, EVERY point MUST be on its OWN LINE starting with "- " (standard markdown list).
+4. CONCISE: Keep each bullet point under 2 sentences.
+5. NO NARRATIVE: Do not write intro or conclusion paragraphs. Start immediately with the main heading.
 6. EXAMPLE OF EXPECTED FORMAT:
 
-**Heading Name**
+## Main Topic Summary
 
-• Fact or point one.
-• Fact or point two.
+### Section One
+
+- First key fact about this section.
+- Second key fact about this section.
+
+### Section Two
+
+- First key fact about section two.
+- Second key fact about section two.
 
 IF FORMAT IS "Short TL;DR":
 1. Provide the absolute bottom-line of the text.
@@ -2455,30 +2494,55 @@ IF FORMAT IS "Short TL;DR":
 
 IF FORMAT IS "Explain Like I'm 5":
 1. Break down complex jargon into grade-school level vocabulary.
-2. Use at least one relatable, everyday analogy (e.g., comparing a system to a school, a car, or pizza).
+2. Use at least one relatable, everyday analogy.
 3. Keep the tone extremely warm, engaging, and story-like.
-4. Use short paragraphs and emojis to make it visually friendly for beginners.`;
+4. Use short paragraphs to make it visually friendly for beginners.
 
-    const response = await safeGenerateContent({
-      gradeLevel,
-      model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text }] },
-      config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
-    });
+OUTPUT QUALITY RULES:
+1. Use ONLY standard markdown: ## headings, ### subheadings, - bullet lists, **bold**, *italic*.
+2. Each bullet point MUST be on its OWN separate line. Never put multiple points on the same line.
+3. NO LaTeX, no '$', no '$$'. Write math as plain text (e.g., A = P(1 + r/n)^(nt)).
+4. Ensure there is a blank line before and after every heading and list block.`;
+
+    // Model fallback chain for text summarize
+    const textSumModels = [
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+    ];
+    let textSummaryResult = "";
+    let textSumError: any = null;
+    for (const model of textSumModels) {
+      try {
+        const response = await safeGenerateContent({
+          gradeLevel,
+          model,
+          contents: { parts: [{ text }] },
+          config: { systemInstruction: { parts: [{ text: systemInstruction }] }, maxOutputTokens: 8192, temperature: 0.3 }
+        });
+        textSummaryResult = response.text || "";
+        textSumError = null;
+        break;
+      } catch (err: any) {
+        const errStr = String(err.message || err).toLowerCase();
+        const isRateLimit = errStr.includes("429") || errStr.includes("quota") || errStr.includes("resource_exhausted") || errStr.includes("503") || errStr.includes("overloaded");
+        if (isRateLimit) {
+          console.warn(`[summarize-text] Model ${model} rate-limited, trying next...`);
+          textSumError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (textSumError && !textSummaryResult) throw textSumError;
     
-    res.json({ text: response.text });
+    res.json({ text: textSummaryResult });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Text summarize quota exceeded:", error.message);
       return res.json({ 
-        text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded
-
-The Gemini API is currently experiencing rate limits or has exceeded its quota.
-
-How to resolve this:
-1. Wait 60 seconds and submit your text again.
-2. Ensure you have configured a valid, active API Key in the Settings > Secrets panel of AI Studio.
-3. If you are using a free tier, consider adding billing to avoid limit blocks.`
+        text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please wait 60 seconds and try again.`
       });
     }
     console.error("Text summarize error:", error);
@@ -2494,27 +2558,20 @@ app.post("/api/generate-questions", async (req, res) => {
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
     const topicText = topic && topic.trim() ? topic.trim() : `general concepts in ${stream || 'academic subjects'}`;
 
-    const aiClient = getAI();
-    
     const systemInstruction = `You are an Elite Academic Advisor, US High School & AP/College Teacher, and Expert AI Tutor.
 The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions.
 Your ONLY job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
 
 CRITICAL RULES:
 1. NO ANSWERS: Do not include any answers, options, multiple choice letters, hints, solutions, or explanations. You must ONLY output the question prompts themselves.
-2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans. Do not output simple retrieval questions.
-3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-4. CRISP & CONCISE: Keep every question incredibly clear, direct, and free of redundant words. Avoid wordy, run-on sentences.
-5. WORD LIMIT: Each question must be extremely direct and MUST NOT exceed 30-40 words.
-6. CHUNKING FOR COMPLEXITY: If a question requires a complex scenario or detailed context, DO NOT write a massive paragraph. Instead, break it down using sub-parts (e.g., Part A, Part B) or bullet points.
-7. NO FLUFF: Maintain elite academic rigor and Bloom's Taxonomy cognitive depth, but deliver it in bite-sized, digestible mobile text.
+2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry.
+3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks.
+4. CRISP & CONCISE: Keep every question clear, direct, and under 40 words.
 
 Use this exact JSON structure:
 {
   "questions": [
-    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict the consumer response.",
-    "Analyze the ethical implications of using advanced AI algorithms for autonomous driving in critical, unavoidable crash scenarios.",
-    "Describe the primary biochemical and molecular steps that occur in a eukaryotic muscle cell during a sliding filament contraction."
+    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict consumer response."
   ]
 }`;
 
@@ -2522,7 +2579,7 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-3.7-flash",
+        model: "gemini-3.5-flash-lite",
         contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -2555,9 +2612,6 @@ Use this exact JSON structure:
     res.status(500).json({ error: error.message || "Failed to generate questions" });
   }
 });
-
-
-
 
 app.post("/api/evaluate-answer", async (req, res) => {
   try {

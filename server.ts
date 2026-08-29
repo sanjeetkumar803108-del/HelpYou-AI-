@@ -31,11 +31,12 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // 1. Strict Rate Limiting (Brute Force Protection)
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: { error: "Too many requests from this IP, please try again after 15 minutes." },
+  windowMs: 15 * 60 * 1000,
+  max: 5000,
+  message: { error: "Too many requests from this IP, please try again after a few minutes." },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false, default: false }
 });
 app.use('/api/', apiLimiter);
 

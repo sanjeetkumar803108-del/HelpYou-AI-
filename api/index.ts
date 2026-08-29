@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -36,6 +37,7 @@ const apiLimiter = rateLimit({
   message: { error: "Too many requests from this IP, please try again after a few minutes." },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false, default: false }
 });
 app.use('/api/', apiLimiter);
 
@@ -3465,7 +3467,7 @@ Required JSON Structure:
 });
 
 // Premium Subscriptions State Storage (File-backed database fallback)
-const SUBS_FILE_PATH = path.join(process.cwd(), "subscriptions.json");
+const SUBS_FILE_PATH = path.join(os.tmpdir(), "subscriptions.json");
 
 function getStoredSubscriptions(): Record<string, boolean> {
   try {

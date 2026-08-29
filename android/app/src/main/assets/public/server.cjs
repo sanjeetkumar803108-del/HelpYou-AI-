@@ -58,12 +58,11 @@ app.use(import_express.default.json({ limit: "50mb" }));
 app.use(import_express.default.urlencoded({ extended: true, limit: "50mb" }));
 var apiLimiter = (0, import_express_rate_limit.default)({
   windowMs: 15 * 60 * 1e3,
-  // 15 minutes
-  max: 100,
-  // Limit each IP to 100 requests per windowMs
-  message: { error: "Too many requests from this IP, please try again after 15 minutes." },
+  max: 5e3,
+  message: { error: "Too many requests from this IP, please try again after a few minutes." },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false, default: false }
 });
 app.use("/api/", apiLimiter);
 app.all(["/api/health", "/health", "/api/status"], (req, res) => {

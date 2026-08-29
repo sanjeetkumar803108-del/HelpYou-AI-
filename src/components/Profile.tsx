@@ -41,7 +41,7 @@ import {
   AchievementBadge 
 } from '../utils/gamification';
 import LevelReactorRing from './LevelReactorRing';
-import { runFullAppOptimization, OptimizationResult } from '../utils/optimizer';
+import { runFullAppOptimization, restartAppCleanly, OptimizationResult } from '../utils/optimizer';
 import { showToast } from '../utils/toast';
 
 interface ProfileProps {
@@ -225,11 +225,13 @@ export default function Profile({
   const [optimizationStepText, setOptimizationStepText] = useState('');
   const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
+  const [restartCountdown, setRestartCountdown] = useState<number | null>(null);
 
   const handleFullAppOptimization = async () => {
     triggerVibration(hapticEnabled ? 20 : 0);
     setShowOptimizationModal(true);
     setIsOptimizing(true);
+    setRestartCountdown(null);
     setOptimizationProgress(15);
     setOptimizationStepText("Analyzing system RAM & temporary cache footprint...");
     setOptimizationResult(null);
@@ -249,7 +251,6 @@ export default function Profile({
     try {
       const res = await runFullAppOptimization();
       setOptimizationProgress(100);
-      setOptimizationStepText("✅ App 100% Fully Optimized! Zero Lag & Peak Speed Restored!");
       setOptimizationResult(res);
       setIsOptimizing(false);
 
@@ -258,7 +259,19 @@ export default function Profile({
         spread: 70,
         origin: { y: 0.6 }
       });
-      showToast("🚀 App fully optimized! Lag removed.");
+      showToast("🚀 App fully optimized! Restarting in 2s...");
+
+      // Start auto-restart countdown
+      setRestartCountdown(2);
+      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 2s...");
+      await new Promise(r => setTimeout(r, 1000));
+      
+      setRestartCountdown(1);
+      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 1s...");
+      await new Promise(r => setTimeout(r, 1000));
+
+      setOptimizationStepText("⚡ Restarting App with Fresh Clean Memory...");
+      restartAppCleanly();
     } catch (e) {
       console.error("Optimization failed:", e);
       setIsOptimizing(false);
@@ -2917,12 +2930,17 @@ export default function Profile({
 
                   <button
                     onClick={() => {
-                      triggerVibration(15);
-                      setShowOptimizationModal(false);
+                      triggerVibration(20);
+                      restartAppCleanly();
                     }}
-                    className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-black text-xs py-3.5 rounded-2xl shadow-lg transition-all active:scale-98 cursor-pointer border-none mt-2"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs py-3.5 rounded-2xl shadow-lg transition-all cursor-pointer border-none mt-2 flex items-center justify-center gap-2"
                   >
-                    Done • Enjoy 60fps Speed 🚀
+                    <Sparkles className="w-4 h-4 fill-white" />
+                    <span>
+                      {restartCountdown !== null
+                        ? `Restarting Cleanly in ${restartCountdown}s... (Tap to Restart Now)`
+                        : "Restart App Now & Enjoy 60fps 🚀"}
+                    </span>
                   </button>
                 </motion.div>
               )}

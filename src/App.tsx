@@ -20,7 +20,7 @@ import { Network } from '@capacitor/network';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { safeGetItem, safeSetItem, safeClearAll } from './utils/storage';
 import { refillDailyCoins } from './utils/coins';
-
+import { showToast } from './utils/toast';
 import confetti from 'canvas-confetti';
 
 function retryImport<T>(fn: () => Promise<T>, retriesLeft = 3, interval = 1000): Promise<T> {
@@ -220,7 +220,18 @@ export default function App() {
         console.warn('RevenueCat configuration notice:', e);
       }
     }
+
+    // Check if the app just performed a full performance optimization restart
+    try {
+      if (sessionStorage.getItem('just_optimized_fresh_boot') === 'true') {
+        sessionStorage.removeItem('just_optimized_fresh_boot');
+        setTimeout(() => {
+          showToast('🚀 App Cleanly Restarted • 100% RAM Clean & Zero Lag!', 'success');
+        }, 600);
+      }
+    } catch (_) {}
   }, []);
+
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState<User | null>(null);

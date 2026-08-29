@@ -3047,7 +3047,7 @@ interface SearchSourceItem {
   sourceName: string;
   snippet: string;
   pubDate?: string;
-  type: 'news' | 'encyclopedia' | 'knowledge';
+  type: 'news' | 'encyclopedia' | 'knowledge' | 'academic';
 }
 
 async function extractSearchKeywords(userQuery: string): Promise<string[]> {
@@ -3083,7 +3083,7 @@ Output strictly a valid JSON array of strings, e.g. ["keyword 1", "keyword 2"]. 
   return [clean || userQuery];
 }
 
-async function performLiveWebSearch(query: string, searchKeywords: string[] = []): Promise<SearchSourceItem[]> {
+async function performLiveWebSearch(query: string, searchKeywords: string[] = [], userCountry: string = 'United States'): Promise<SearchSourceItem[]> {
   const sources: SearchSourceItem[] = [];
   const seenUrls = new Set<string>();
 
@@ -3315,7 +3315,6 @@ Return the response in the strict JSON array format specified.`;
       parsedResult = safeParseJSON(rawText, 'array');
     } catch (parseError) {
       console.error("Failed to parse JSON response for generate-practice:", parseError, rawText);
-      // Fallback questions
       parsedResult = [
         {
           "question": `Based on your previous mistake about "${question}", which of the following represents the correct understanding?`,

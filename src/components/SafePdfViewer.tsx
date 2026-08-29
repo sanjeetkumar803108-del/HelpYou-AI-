@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FileText, WifiOff } from 'lucide-react';
 
 interface SafePdfViewerProps {
-  pdfUrlOrBase64: string; // can be blob URL or data:application/pdf;base64...
+  pdfUrlOrBase64?: string; // can be blob URL or data:application/pdf;base64...
+  pdfUrl?: string;
 }
 
 declare global {
@@ -81,7 +82,8 @@ function tryCdnjsFallback(resolve: (value: any) => void, reject: (reason: any) =
   document.head.appendChild(script);
 }
 
-export default function SafePdfViewer({ pdfUrlOrBase64 }: SafePdfViewerProps) {
+export default function SafePdfViewer({ pdfUrlOrBase64, pdfUrl }: SafePdfViewerProps) {
+  const targetUrl = pdfUrlOrBase64 || pdfUrl || '';
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +93,7 @@ export default function SafePdfViewer({ pdfUrlOrBase64 }: SafePdfViewerProps) {
 
     const loadAndRender = async () => {
       try {
+        if (!targetUrl) return;
         setLoading(true);
         setError(null);
 
@@ -100,8 +103,8 @@ export default function SafePdfViewer({ pdfUrlOrBase64 }: SafePdfViewerProps) {
 
         // B. Parse PDF source data entirely in memory (no network fetch if Base64)
         let pdfData: Uint8Array;
-        if (pdfUrlOrBase64.startsWith('data:')) {
-          const base64Parts = pdfUrlOrBase64.split(',');
+        if (targetUrl.startsWith('data:')) {
+          const base64Parts = targetUrl.split(',');
           const base64Data = base64Parts[1] || base64Parts[0];
           // Strip any whitespace, newlines, or formatting noise
           const cleanedBase64 = base64Data.replace(/\s/g, '');
@@ -113,7 +116,7 @@ export default function SafePdfViewer({ pdfUrlOrBase64 }: SafePdfViewerProps) {
           }
         } else {
           // If it's a blob url, fetch locally
-          const response = await fetch(pdfUrlOrBase64);
+          const response = await fetch(targetUrl);
           const arrayBuffer = await response.arrayBuffer();
           pdfData = new Uint8Array(arrayBuffer);
         }

@@ -2748,7 +2748,7 @@ Output strictly a valid JSON array of strings, e.g. ["keyword 1", "keyword 2"]. 
   const clean = userQuery.replace(/^(bhai|tum|please|zara|karo|batao|explain|mujhe|janna|hai|deep|search|kya|hua|tha|pe|par|about)\s+/gi, "").trim();
   return [clean || userQuery];
 }
-async function performLiveWebSearch(query, searchKeywords = []) {
+async function performLiveWebSearch(query, searchKeywords = [], userCountry = "United States") {
   const sources = [];
   const seenUrls = /* @__PURE__ */ new Set();
   const queriesToSearch = Array.from(/* @__PURE__ */ new Set([

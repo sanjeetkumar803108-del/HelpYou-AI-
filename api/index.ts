@@ -3002,7 +3002,7 @@ interface SearchSourceItem {
   sourceName: string;
   snippet: string;
   pubDate?: string;
-  type: 'news' | 'encyclopedia' | 'knowledge';
+  type: 'news' | 'encyclopedia' | 'knowledge' | 'academic';
 }
 
 async function extractSearchKeywords(userQuery: string): Promise<string[]> {
@@ -3029,6 +3029,13 @@ Output strictly a valid JSON array of strings, e.g. ["keyword 1", "keyword 2"]. 
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed.map(k => String(k).trim()).filter(Boolean);
     }
+    return [];
+  } catch (err) {
+    console.error("Keyword extraction error:", err);
+    return [];
+  }
+}
+
 async function performLiveWebSearch(query: string, searchKeywords: string[] = [], userCountry: string = 'United States'): Promise<SearchSourceItem[]> {
   const sources: SearchSourceItem[] = [];
   const seenUrls = new Set<string>();

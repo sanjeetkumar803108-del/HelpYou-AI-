@@ -4,6 +4,7 @@ import { savePdfToHistory } from './pdfHistory';
 import { addStudyXP, trackQuestProgress } from './gamification';
 import { triggerVibration } from './vibrate';
 import { safeGetItem, safeSetItem } from './storage';
+import { sanitizePdfText } from './pdfSanitizer';
 
 export interface FormulaItem {
   name: string;
@@ -136,21 +137,22 @@ export async function exportFormulaSheetPDF(
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(67, 56, 202); // Dark Indigo
-    doc.text(`${category.name}`, margin + 4, currentY + 6);
+    doc.text(sanitizePdfText(`${category.name}`), margin + 4, currentY + 6);
 
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(140, 140, 150);
-    doc.text(category.subtitle, pageWidth - margin - 4, currentY + 6, { align: 'right' });
+    doc.text(sanitizePdfText(category.subtitle), pageWidth - margin - 4, currentY + 6, { align: 'right' });
 
     currentY += 13;
 
     // Formulas Grid
     for (const formula of category.formulas) {
       const cleanFormula = cleanLatexForPdf(formula.latex || formula.insertText || '');
+      const sanitizedFormulaName = sanitizePdfText(formula.name);
       
       // Calculate height needed
-      const nameLines = doc.splitTextToSize(formula.name, contentWidth - 10);
+      const nameLines = doc.splitTextToSize(sanitizedFormulaName, contentWidth - 10);
       const mathLines = doc.splitTextToSize(cleanFormula, contentWidth - 10);
       const boxHeight = Math.max(16, (nameLines.length * 4.5) + (mathLines.length * 5) + 6);
 

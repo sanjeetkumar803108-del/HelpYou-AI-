@@ -14,6 +14,7 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
+import { sanitizePdfText } from '../utils/pdfSanitizer';
 import SafePdfViewer from './SafePdfViewer';
 import AdvancedLoader from './AdvancedLoader';
 import GlobalMarkdown from './GlobalMarkdown';
@@ -24,52 +25,73 @@ interface QuestionGeneratorProps {
   onNavigateToTab?: (tab: string) => void;
 }
 
+export interface QuestionObject {
+  question: string;
+  expectedAnswer?: string;
+  keyRubricPoints?: string[];
+}
+
+export type QuestionItem = string | QuestionObject;
+
 interface SavedSet {
   id: string;
   topic: string;
   count: number;
   gradeLevel: string;
   stream: string;
-  questions: string[];
+  questions: QuestionItem[];
   userAnswers?: Record<number, string>;
   createdAt: Date;
   isPdf?: boolean;
 }
 
 const TOPIC_POOLS: Record<string, string[]> = {
-  computer: [
-    "OOP Polymorphism", "Binary Search Trees", "Recursion Depth", "Time Complexity O(N)",
-    "Dijkstra's Algorithm", "Merge Sort Efficiency", "REST API Design", "Neural Network Layers",
-    "Relational Database Joins", "Graph Breadth-First Search", "Hash Map Collisions", "SQL Query Optimization",
-    "Git Version Branching", "Cybersecurity Cryptography", "Lambda Functions", "Asynchronous Event Loops"
+  pcb: [
+    "Cell Biology & Organelles", "Genetics & Mendelian Inheritance", "Human Circulatory & Heart Physiology", 
+    "Chemical Equilibrium & Le Chatelier", "Biomolecules & Enzyme Catalysis", "Plant Photosynthesis & Respiration", 
+    "Coordination Compounds & Bonding", "Organic Reaction Mechanisms", "Ecology & Ecosystem Energy Flow", 
+    "Human Endocrine & Feedback Loops", "Chemical Kinetics & Reaction Rates", "DNA Replication & Transcription",
+    "Solutions & Colligative Properties", "Thermodynamics in Chemical Reactions"
   ],
-  science: [
-    "Photosynthesis Light Cycles", "Mitochondria ATP Synthesis", "DNA Replication Enzymes", "Mitosis Phase Regulators",
-    "Action Potential Steps", "Enzyme Inhibition kinetics", "Endocrine Hormone Loops", "Cardiovascular Pressure",
-    "Renal Filtration System", "Immune Lymphocyte Defense", "Glycolysis Pathways", "Genetic Pedigree Analysis",
-    "Pulmonary Gas Exchange", "Cell Membrane Transport"
+  pcm: [
+    "Calculus & Definite Integrals", "Electromagnetic Induction & Faraday's Law", "Thermodynamics & Heat Engines", 
+    "Rotational Dynamics & Moment of Inertia", "Wave Optics & Interference", "Vectors & 3D Analytical Geometry", 
+    "Chemical Kinetics & Rate Laws", "Electrostatics & Gauss's Theorem", "Matrices & Determinants", 
+    "Current Electricity & Kirchhoff's Laws", "Coordination Chemistry & Isomerism", "Differential Equations"
+  ],
+  computer: [
+    "OOP Polymorphism & Inheritance", "Binary Search Trees & Balancing", "Recursion & Call Stack Depth", 
+    "Time Complexity & Big-O Analysis", "Dijkstra's Shortest Path Algorithm", "Merge Sort vs Quick Sort", 
+    "REST API Design & Webhooks", "Neural Network Architecture & Backprop", "Relational Database Normalization & Joins", 
+    "Graph Breadth-First vs Depth-First", "Hash Map Collisions & Chaining", "SQL Query Optimization",
+    "Git Version Control & Branching", "Cybersecurity & Cryptographic Hashing"
   ],
   business: [
-    "Inflation & Interest Rates", "Perfect Competition Models", "Asset-Liability Balancing", "Monopoly Deadweight Loss",
-    "Marginal Cost curves", "Supply & Demand Shifts", "Fiscal vs Monetary Policy", "Stock Portfolio Risk",
-    "Market Elasticity Types", "Corporate Mergers strategy", "Behavioral Finance biases", "Cryptocurrency Economics",
-    "Opportunity Cost Decisions", "Game Theory Nash Equilibrium"
-  ],
-  stem: [
-    "Newton's Second Law", "Integration by Parts", "Vector Force Equilibrium", "Hooke's Law & Oscillators",
-    "Kinematic Equations motion", "Thermodynamics Entropy", "Maxwell's Equations basics", "Organic Chemistry Isomers",
-    "Trigonometric Identities", "Differential Equations", "Electric Flux & Gauss Law", "Fluid Dynamics Bernoulli",
-    "Linear Algebra Matrices", "Projectile Motion Physics"
+    "Inflation & Central Bank Interest Rates", "Perfect Competition vs Monopoly Equilibrium", "Asset-Liability Balancing", 
+    "Fiscal vs Monetary Policy Tools", "Supply & Demand Elasticity Models", "National Income Accounting & GDP", 
+    "Corporate Financial Statement Analysis", "Behavioral Finance & Decision Biases", "Marginal Cost & Revenue Curves", 
+    "Working Capital Management", "Game Theory & Nash Equilibrium"
   ],
   humanities: [
-    "Industrial Revolution Impact", "French Revolution Causes", "Shakespearean Sonnets theme", "Cold War Proxy Conflicts",
-    "Judicial Review doctrine", "Magna Carta Significance", "Literary Symbolism motifs", "Socratic Dialogue method",
-    "Globalization Pros & Cons", "Ancient Greek Philosophy", "Renaissance Humanism", "World War Treaty of Versailles"
+    "Industrial Revolution Socioeconomic Impact", "Constitutional Law & Judicial Review", "Cold War Proxy Geopolitics", 
+    "Cognitive Psychology & Memory Models", "Social Stratification & Globalization", "Literary Analysis & Critical Theory", 
+    "Socratic Dialogue & Dialectical Method", "Ancient Greek Democratic Philosophy", "Renaissance Humanism & Enlightenment", 
+    "World War Treaties & Diplomatic Breakdown"
+  ],
+  stem: [
+    "Newton's Laws of Motion & Momentum", "Integration by Parts & Substitution", "Vector Force Equilibrium", 
+    "Hooke's Law & Simple Harmonic Motion", "Kinematics & Projectile Motion", "Thermodynamic Entropy & Free Energy", 
+    "Maxwell's Electromagnetic Equations", "Fluid Dynamics & Bernoulli's Principle", "Linear Algebra & Eigenvalues"
+  ],
+  science: [
+    "Photosynthesis & Calvin Cycle", "Mitochondrial ATP Synthesis", "DNA Polymerase Replication Forks", 
+    "Mitosis & Meiosis Cell Cycle Checkpoints", "Neuron Action Potential Propagation", "Enzyme Kinetics & Michaelis-Menten", 
+    "Endocrine Feedback & Homeostasis", "Renal Nephron Filtration & Osmoregulation"
   ],
   default: [
-    "Quantum Mechanics Basics", "Climate Change Science", "Critical Thinking Skills", "Effective Public Speaking",
-    "AI Ethics & Future", "Space Exploration History", "Renaissance Art Movement", "Cognitive Psychology",
-    "Sustainable Energy Types", "Principles of Logic"
+    "Cell Biology & Molecular Genetics", "Chemical Equilibrium & Thermodynamics", "Calculus & Mathematical Modeling", 
+    "Newtonian Mechanics & Energy Conservation", "Economic Market Structures & Trade", "Cognitive Psychology & Learning", 
+    "Environmental Science & Climate Models", "Scientific Methodology & Logic"
   ]
 };
 
@@ -93,7 +115,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [previewPdfName, setPreviewPdfName] = useState<string>('');
   const [customTopic, setCustomTopic] = useState('');
   const [loading, setLoading] = useState(false);
-  const [questions, setQuestions] = useState<string[] | null>(null);
+  const [questions, setQuestions] = useState<QuestionItem[] | null>(null);
+  const [expandedRubrics, setExpandedRubrics] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   
   // Answers drafted by the user
@@ -194,11 +217,14 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
   const getPoolKey = (streamStr: string) => {
     const s = streamStr.toLowerCase();
-    if (s.includes('computer') || s.includes('software')) return 'computer';
-    if (s.includes('pre-med') || s.includes('science') || s.includes('medicine') || s.includes('health') || s.includes('biology')) return 'science';
-    if (s.includes('business') || s.includes('economics') || s.includes('commerce') || s.includes('finance')) return 'business';
-    if (s.includes('stem') || s.includes('engineering') || s.includes('math') || s.includes('calculus')) return 'stem';
-    if (s.includes('humanities') || s.includes('liberal') || s.includes('history') || s.includes('social') || s.includes('literature')) return 'humanities';
+    if (s.includes('pcb') || s.includes('neet') || s.includes('biology') || s.includes('medical') || s.includes('botany') || s.includes('zoology')) return 'pcb';
+    if (s.includes('pcm') || s.includes('jee') || s.includes('math') || s.includes('calculus')) return 'pcm';
+    if (s.includes('computer') || s.includes('software') || s.includes('it') || s.includes('coding') || s.includes('cs')) return 'computer';
+    if (s.includes('business') || s.includes('economics') || s.includes('commerce') || s.includes('finance') || s.includes('accounting')) return 'business';
+    if (s.includes('humanities') || s.includes('arts') || s.includes('liberal') || s.includes('history') || s.includes('political') || s.includes('social') || s.includes('literature') || s.includes('psychology')) return 'humanities';
+    if (s.includes('pre-med') || s.includes('medicine') || s.includes('health')) return 'pcb';
+    if (s.includes('stem') || s.includes('engineering') || s.includes('physics')) return 'stem';
+    if (s.includes('science')) return 'science';
     return 'default';
   };
 
@@ -224,6 +250,27 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     setIsRefreshing(true);
     refreshSuggestions();
     setTimeout(() => setIsRefreshing(false), 600);
+  };
+
+  const getQuestionText = (q: any): string => {
+    if (!q) return '';
+    if (typeof q === 'string') return q;
+    return q.question || '';
+  };
+
+  const getExpectedAnswer = (q: any): string => {
+    if (!q || typeof q === 'string') return '';
+    return q.expectedAnswer || '';
+  };
+
+  const getKeyRubricPoints = (q: any): string[] => {
+    if (!q || typeof q === 'string') return [];
+    return Array.isArray(q.keyRubricPoints) ? q.keyRubricPoints : [];
+  };
+
+  const normalizeQuestionBreaks = (text: string): string => {
+    if (!text) return '';
+    return text.replace(/([^\n])\s*(Part\s+[A-D]:|\([a-d]\)|\([i|v|x]+\))\s*/gi, '$1\n\n$2 ');
   };
 
   // Loading animation variables
@@ -624,27 +671,25 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
   // Quick topics suggestion based on stream/track
   const getSuggestedTopics = () => {
-    // Look up stream in regional tracks or default suggestions
-    const matchedTrack = REGIONAL_TRACKS[country]?.find(t => t.id === stream);
-    if (matchedTrack) {
-      if (stream.includes('Computer Science')) {
-        return ["OOP Polymorphism", "Binary Search Trees", "Recursion Depth", "Time Complexity O(N)"];
-      }
-      if (stream.includes('Pre-Med') || stream.includes('Science')) {
-        return ["Photosynthesis Light Cycles", "Mitochondria ATP Synthesis", "DNA Replication Enzymes", "Mitosis Phase Regulators"];
-      }
-      if (stream.includes('Business') || stream.includes('Economics')) {
-        return ["Inflation & Interest Rates", "Perfect Competition Models", "Asset-Liability Balancing", "Monopoly Deadweight Loss"];
-      }
-      if (stream.includes('STEM') || stream.includes('Engineering')) {
-        return ["Newton's Second Law", "Integration by Parts", "Vector Force Equilibrium", "Hooke's Law & Oscillators"];
-      }
-    }
-    return ["Quantum Mechanics Basics", "Industrial Revolution Impact", "Cognitive Dissonance Theory", "Plate Tectonics & Seismic Waves"];
+    const key = getPoolKey(stream);
+    const pool = TOPIC_POOLS[key] || TOPIC_POOLS.default;
+    return pool.slice(0, 4);
   };
 
-  const handleCopyQuestion = (text: string, index: number) => {
+  const handleCopyQuestion = (q: QuestionItem, index: number) => {
     triggerVibration(10);
+    const qText = getQuestionText(q);
+    const expected = getExpectedAnswer(q);
+    const rubrics = getKeyRubricPoints(q);
+    
+    let text = `Question ${index + 1}:\n${normalizeQuestionBreaks(qText)}`;
+    if (expected) {
+      text += `\n\nExpected Model Answer:\n${expected}`;
+    }
+    if (rubrics.length > 0) {
+      text += `\n\nKey Grading Keywords / Rubric:\n${rubrics.map(r => `• ${r}`).join('\n')}`;
+    }
+
     navigator.clipboard.writeText(text);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
@@ -653,7 +698,20 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const handleCopyAll = () => {
     if (!questions) return;
     triggerVibration(10);
-    const textToCopy = questions.map((q, i) => `${i + 1}. ${q}`).join('\n\n');
+    const textToCopy = questions.map((q, i) => {
+      const qText = getQuestionText(q);
+      const expected = getExpectedAnswer(q);
+      const rubrics = getKeyRubricPoints(q);
+      let block = `Question ${i + 1}:\n${normalizeQuestionBreaks(qText)}`;
+      if (expected) {
+        block += `\n\nExpected Model Answer:\n${expected}`;
+      }
+      if (rubrics.length > 0) {
+        block += `\n\nKey Grading Keywords:\n${rubrics.map(r => `• ${r}`).join('\n')}`;
+      }
+      return block;
+    }).join('\n\n' + '─'.repeat(30) + '\n\n');
+
     navigator.clipboard.writeText(textToCopy);
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
@@ -662,8 +720,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const handleShareQuestions = () => {
     if (!questions) return;
     triggerVibration(15);
-    const shareText = `📝 Try these Subjective Practice Questions from HelpYou AI Tutor!\n\nTopic: ${customTopic || stream}\n\n` + 
-      questions.map((q, i) => `${i + 1}. ${q}`).join('\n\n');
+    const shareText = `📝 Subjective Practice Questions from HelpYou AI Tutor!\n\nTopic: ${customTopic || stream}\n\n` + 
+      questions.map((q, i) => `${i + 1}. ${normalizeQuestionBreaks(getQuestionText(q))}`).join('\n\n');
     
     if (navigator.share) {
       navigator.share({
@@ -677,7 +735,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   };
 
   const generateQuestionsPDF = (
-    customQuestions?: string[],
+    customQuestions?: QuestionItem[],
     customTitle?: string,
     customGrade?: string,
     customStream?: string
@@ -709,7 +767,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
       
       doc.text(`Page ${pageNum}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
-      doc.text('Magic AI Tutor • Subjective Practice', pageWidth - margin, pageHeight - 10, { align: 'right' });
+      doc.text('HelpYou AI • Subjective Practice & Answer Key', pageWidth - margin, pageHeight - 10, { align: 'right' });
     };
 
     // Header Decorative Bar
@@ -719,10 +777,10 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
     // Title
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(20);
+    doc.setFontSize(18);
     doc.setTextColor(30, 30, 30);
     
-    const titleText = customTitle || (customTopic && customTopic.trim() ? customTopic.trim() : `${customStream || stream} Practice Set`);
+    const titleText = sanitizePdfText(customTitle || (customTopic && customTopic.trim() ? customTopic.trim() : `${customStream || stream} Practice Set`));
     const wrappedTitle: string[] = doc.splitTextToSize(titleText, contentWidth);
     for (const line of wrappedTitle) {
       if (currentY > pageHeight - 25) {
@@ -757,7 +815,9 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
     // List Questions
     for (let i = 0; i < qs.length; i++) {
-      const questionText = `${i + 1}. ${qs[i]}`;
+      const qItem = qs[i];
+      const qText = sanitizePdfText(normalizeQuestionBreaks(getQuestionText(qItem)));
+      const questionText = `${i + 1}. ${qText}`;
       
       // Wrap question text
       const wrappedQuestion: string[] = doc.splitTextToSize(questionText, contentWidth - 5);
@@ -776,12 +836,12 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
       // Draw question
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(11);
+      doc.setFontSize(10.5);
       doc.setTextColor(40, 40, 40);
 
       for (const line of wrappedQuestion) {
         doc.text(line, margin, currentY);
-        currentY += 6;
+        currentY += 5.5;
       }
 
       // Draw blank writing lines
@@ -790,7 +850,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       currentY += 3;
       for (let lineIdx = 0; lineIdx < 3; lineIdx++) {
         doc.line(margin + 5, currentY, pageWidth - margin, currentY);
-        currentY += 6;
+        currentY += 5.5;
       }
       currentY += 6; // spacing
     }
@@ -799,7 +859,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   };
 
   const handleExportPDF = async (
-    customQuestions?: string[],
+    customQuestions?: QuestionItem[],
     customTitle?: string,
     customGrade?: string,
     customStream?: string
@@ -833,7 +893,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   };
 
   const handleSharePDF = async (
-    customQuestions?: string[],
+    customQuestions?: QuestionItem[],
     customTitle?: string,
     customGrade?: string,
     customStream?: string
@@ -1163,228 +1223,310 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
               {/* Questions Stack */}
               <div className="space-y-5">
-                {questions.map((question, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.08 }}
-                    className="bg-white border border-zinc-200 shadow-sm rounded-3xl p-5 text-left space-y-4"
-                  >
-                    <div className="flex justify-between items-start gap-4">
-                      <h4 className="font-extrabold text-sm text-zinc-850 leading-relaxed">
-                        <span className="text-purple-600 font-black mr-2 bg-purple-50 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs shadow-inner shrink-0">
-                          {index + 1}
-                        </span>
-                        {question}
-                      </h4>
-                      <button
-                        onClick={() => handleCopyQuestion(question, index)}
-                        className="w-8 h-8 rounded-full bg-zinc-50 hover:bg-zinc-100 flex items-center justify-center text-zinc-450 transition-colors shrink-0"
-                        title="Copy Question"
-                      >
-                        {copiedIndex === index ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
+                {questions.map((question, index) => {
+                  const qText = getQuestionText(question);
+                  const expectedAns = getExpectedAnswer(question);
+                  const rubricPoints = getKeyRubricPoints(question);
 
-                    {/* Expandable practice answer draft box */}
-                    <div className="space-y-2 pt-2 border-t border-zinc-100">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-                          <PenTool className="w-3 h-3 text-zinc-400" /> Your Draft Response
-                        </label>
-                        {draftAnswers[index]?.trim() && (
-                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Draft Saved
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Separate hidden inputs for Camera and Gallery */}
-                      <input 
-                        type="file" 
-                        ref={(el) => { galleryInputRefs.current[index] = el; }} 
-                        onChange={(e) => { 
-                          const file = e.target.files?.[0]; 
-                          if (file) handleUploadAndTranscribe(index, file); 
-                        }} 
-                        accept="image/*" 
-                        className="hidden" 
-                      />
-                      <input 
-                        type="file" 
-                        ref={(el) => { cameraInputRefs.current[index] = el; }} 
-                        onChange={(e) => { 
-                          const file = e.target.files?.[0]; 
-                          if (file) handleUploadAndTranscribe(index, file); 
-                        }} 
-                        accept="image/*" 
-                        capture="environment"
-                        className="hidden" 
-                      />
-
-                      <div className="flex items-center gap-2 bg-[#FCFBF9] border border-zinc-200 rounded-2xl p-1.5 focus-within:ring-1 focus-within:ring-purple-400 focus-within:bg-white transition-all">
-                        <div className="relative">
-                          {uploadedAnswerFiles[index] ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                triggerVibration(10);
-                                setUploadedAnswerFiles(prev => {
-                                  const updated = { ...prev };
-                                  delete updated[index];
-                                  return updated;
-                                });
-                                setDraftAnswers(prev => {
-                                  const updated = { ...prev };
-                                  if (updated[index] === "[Handwritten Answer Image Attached 📷]") {
-                                    delete updated[index];
-                                  }
-                                  return updated;
-                                });
-                              }}
-                              disabled={evaluatingIndex === index}
-                              className="w-9 h-9 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-600 flex items-center justify-center transition-all shrink-0 cursor-pointer active:scale-95 disabled:opacity-50 border-none p-1 group relative"
-                              title="Click to remove uploaded image"
-                            >
-                              <img
-                                src={URL.createObjectURL(uploadedAnswerFiles[index])}
-                                alt="Uploaded preview"
-                                className="w-full h-full object-cover rounded-lg"
-                                referrerPolicy="no-referrer"
-                              />
-                              <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <X className="w-4 h-4 text-white" />
-                              </div>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                triggerVibration(10);
-                                setOpenMediaMenuIndex(openMediaMenuIndex === index ? null : index);
-                              }}
-                              disabled={evaluatingIndex === index}
-                              className="w-9 h-9 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center transition-all shrink-0 cursor-pointer active:scale-95 disabled:opacity-50 border-none animate-none"
-                              title="Choose upload method"
-                            >
-                              <Plus className="w-4 h-4 text-purple-600" />
-                            </button>
-                          )}
-
-                          {openMediaMenuIndex === index && (
-                            <>
-                              {/* Overlay/Backdrop to close the menu on tap outside */}
-                              <div 
-                                className="fixed inset-0 z-30" 
-                                onClick={() => setOpenMediaMenuIndex(null)}
-                              />
-                              
-                              {/* Menu options card */}
-                              <div className="absolute bottom-11 left-0 z-40 min-w-[140px] bg-white border border-zinc-250 rounded-2xl shadow-xl py-1.5 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    triggerVibration(10);
-                                    setOpenMediaMenuIndex(null);
-                                    setTimeout(() => {
-                                      cameraInputRefs.current[index]?.click();
-                                    }, 50);
-                                  }}
-                                  className="w-full px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 border-none bg-transparent cursor-pointer"
-                                >
-                                  <Camera className="w-4 h-4 text-purple-600" />
-                                  <span>Camera</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    triggerVibration(10);
-                                    setOpenMediaMenuIndex(null);
-                                    setTimeout(() => {
-                                      galleryInputRefs.current[index]?.click();
-                                    }, 50);
-                                  }}
-                                  className="w-full px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 border-none bg-transparent cursor-pointer"
-                                >
-                                  <Image className="w-4 h-4 text-purple-600" />
-                                  <span>Gallery</span>
-                                </button>
-                              </div>
-                            </>
-                          )}
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.08 }}
+                      className="bg-white border border-zinc-200 shadow-sm rounded-3xl p-5 text-left space-y-4"
+                    >
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-purple-600 font-black bg-purple-50 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs shadow-inner shrink-0">
+                              {index + 1}
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-purple-700">
+                              Subjective Practice Question
+                            </span>
+                          </div>
+                          <div className="font-extrabold text-sm text-zinc-900 leading-relaxed space-y-1 select-text">
+                            <GlobalMarkdown>
+                              {normalizeQuestionBreaks(qText)}
+                            </GlobalMarkdown>
+                          </div>
                         </div>
-
-                        <textarea
-                          rows={2}
-                          value={draftAnswers[index] || ''}
-                          onChange={(e) => handleUpdateAnswers(index, e.target.value)}
-                          placeholder="Type your response or upload a handwritten answer photo..."
-                          disabled={evaluatingIndex === index}
-                          className="flex-1 min-h-[36px] max-h-[120px] bg-transparent text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none resize-none py-2 px-1 leading-relaxed"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              if ((draftAnswers[index]?.trim() || uploadedAnswerFiles[index]) && evaluatingIndex !== index) {
-                                handleEvaluateAnswer(question, index);
-                              }
-                            }
-                          }}
-                        />
-
                         <button
-                          type="button"
-                          onClick={() => handleEvaluateAnswer(question, index)}
-                          disabled={evaluatingIndex === index || (!draftAnswers[index]?.trim() && !uploadedAnswerFiles[index])}
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 border-none ${
-                            (draftAnswers[index]?.trim() || uploadedAnswerFiles[index]) && evaluatingIndex !== index
-                              ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer active:scale-95' 
-                              : 'bg-zinc-150 text-zinc-400 cursor-not-allowed'
-                          }`}
-                          title="Submit answer for strict Step-Marking"
+                          onClick={() => handleCopyQuestion(question, index)}
+                          className="w-8 h-8 rounded-full bg-zinc-50 hover:bg-zinc-100 flex items-center justify-center text-zinc-450 transition-colors shrink-0 cursor-pointer"
+                          title="Copy Question & Rubric"
                         >
-                          {evaluatingIndex === index ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Send className="w-4 h-4" />
-                          )}
+                          {copiedIndex === index ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                         </button>
                       </div>
 
-                      {transcribingIndices[index] && (
-                        <div className="text-[10px] text-purple-600 font-bold animate-pulse flex items-center gap-1 mt-1 pl-2">
-                          <Sparkles className="w-3 h-3 text-amber-500 animate-spin" />
-                          Transcribing handwritten answer...
+                      {/* Expandable Expected Answer & Rubric Toggle */}
+                      {(expectedAns || rubricPoints.length > 0) && (
+                        <div className="pt-2 border-t border-zinc-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              triggerVibration(10);
+                              setExpandedRubrics(prev => ({ ...prev, [index]: !prev[index] }));
+                            }}
+                            className={`w-full py-2.5 px-3.5 rounded-2xl border text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+                              expandedRubrics[index]
+                                ? 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-xs'
+                                : 'bg-zinc-50 hover:bg-amber-50/50 border-zinc-200/80 text-zinc-750 hover:text-amber-900'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="text-sm">💡</span>
+                              <span>{expandedRubrics[index] ? "Hide Expected Answer & Marking Scheme" : "Check Expected Answer & Rubric"}</span>
+                            </span>
+                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${expandedRubrics[index] ? 'rotate-90 text-amber-700' : 'text-zinc-400'}`} />
+                          </button>
+
+                          <AnimatePresence>
+                            {expandedRubrics[index] && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden mt-2.5 space-y-3 bg-gradient-to-br from-amber-50/70 via-orange-50/30 to-amber-50/70 border border-amber-200/90 rounded-2xl p-4 shadow-inner"
+                              >
+                                {expectedAns && (
+                                  <div className="space-y-1.5 text-left">
+                                    <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-900 uppercase tracking-wider">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Expected Model Answer (Full Marks Benchmark)</span>
+                                    </div>
+                                    <div className="text-zinc-850 text-xs font-medium leading-relaxed bg-white/90 p-3 rounded-xl border border-amber-200/60 select-text">
+                                      <GlobalMarkdown>{expectedAns}</GlobalMarkdown>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {rubricPoints.length > 0 && (
+                                  <div className="space-y-1.5 pt-1 text-left">
+                                    <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-900 uppercase tracking-wider">
+                                      <Sparkles className="w-3.5 h-3.5 text-orange-600" />
+                                      <span>Essential Grading Keywords / Rubric Checklist</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {rubricPoints.map((pt, pIdx) => (
+                                        <span 
+                                          key={pIdx}
+                                          className="inline-flex items-center gap-1 text-[11px] font-bold bg-white text-zinc-800 border border-amber-300/80 px-2.5 py-1 rounded-xl shadow-xs"
+                                        >
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                          <span>{pt}</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       )}
 
-                      {evaluations[index] && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="mt-3 bg-purple-50/60 border border-purple-100 rounded-2xl p-4 text-left space-y-2 relative shadow-inner overflow-hidden"
-                        >
-                          <div className="absolute top-0 right-0 p-3 pointer-events-none opacity-10">
-                            <Sparkles className="w-16 h-16 text-purple-600" />
-                          </div>
-                          
-                          <div className="flex items-center gap-1.5 border-b border-purple-100/80 pb-2 mb-2">
-                            <span className="p-1 rounded-lg bg-purple-100 text-purple-700">
-                              <Sparkles className="w-3.5 h-3.5" />
+                      {/* Expandable practice answer draft box */}
+                      <div className="space-y-2 pt-2 border-t border-zinc-100">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                            <PenTool className="w-3 h-3 text-zinc-400" /> Your Draft Response
+                          </label>
+                          {draftAnswers[index]?.trim() && (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Draft Saved
                             </span>
-                            <h5 className="font-black text-[11px] text-purple-900 uppercase tracking-wide">
-                              Magic Tutor Step-Marking Evaluation
-                            </h5>
+                          )}
+                        </div>
+
+                        {/* Separate hidden inputs for Camera and Gallery */}
+                        <input 
+                          type="file" 
+                          ref={(el) => { galleryInputRefs.current[index] = el; }} 
+                          onChange={(e) => { 
+                            const file = e.target.files?.[0]; 
+                            if (file) handleUploadAndTranscribe(index, file); 
+                          }} 
+                          accept="image/*" 
+                          className="hidden" 
+                        />
+                        <input 
+                          type="file" 
+                          ref={(el) => { cameraInputRefs.current[index] = el; }} 
+                          onChange={(e) => { 
+                            const file = e.target.files?.[0]; 
+                            if (file) handleUploadAndTranscribe(index, file); 
+                          }} 
+                          accept="image/*" 
+                          capture="environment"
+                          className="hidden" 
+                        />
+
+                        <div className="flex items-center gap-2 bg-[#FCFBF9] border border-zinc-200 rounded-2xl p-1.5 focus-within:ring-1 focus-within:ring-purple-400 focus-within:bg-white transition-all">
+                          <div className="relative">
+                            {uploadedAnswerFiles[index] ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerVibration(10);
+                                  setUploadedAnswerFiles(prev => {
+                                    const updated = { ...prev };
+                                    delete updated[index];
+                                    return updated;
+                                  });
+                                  setDraftAnswers(prev => {
+                                    const updated = { ...prev };
+                                    if (updated[index] === "[Handwritten Answer Image Attached 📷]") {
+                                      delete updated[index];
+                                    }
+                                    return updated;
+                                  });
+                                }}
+                                disabled={evaluatingIndex === index}
+                                className="w-9 h-9 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-600 flex items-center justify-center transition-all shrink-0 cursor-pointer active:scale-95 disabled:opacity-50 border-none p-1 group relative"
+                                title="Click to remove uploaded image"
+                              >
+                                <img
+                                  src={URL.createObjectURL(uploadedAnswerFiles[index])}
+                                  alt="Uploaded preview"
+                                  className="w-full h-full object-cover rounded-lg"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <X className="w-4 h-4 text-white" />
+                                </div>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerVibration(10);
+                                  setOpenMediaMenuIndex(openMediaMenuIndex === index ? null : index);
+                                }}
+                                disabled={evaluatingIndex === index}
+                                className="w-9 h-9 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center transition-all shrink-0 cursor-pointer active:scale-95 disabled:opacity-50 border-none animate-none"
+                                title="Choose upload method"
+                              >
+                                <Plus className="w-4 h-4 text-purple-600" />
+                              </button>
+                            )}
+
+                            {openMediaMenuIndex === index && (
+                              <>
+                                {/* Overlay/Backdrop to close the menu on tap outside */}
+                                <div 
+                                  className="fixed inset-0 z-30" 
+                                  onClick={() => setOpenMediaMenuIndex(null)}
+                                />
+                                
+                                {/* Menu options card */}
+                                <div className="absolute bottom-11 left-0 z-40 min-w-[140px] bg-white border border-zinc-250 rounded-2xl shadow-xl py-1.5 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      triggerVibration(10);
+                                      setOpenMediaMenuIndex(null);
+                                      setTimeout(() => {
+                                        cameraInputRefs.current[index]?.click();
+                                      }, 50);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 border-none bg-transparent cursor-pointer"
+                                  >
+                                    <Camera className="w-4 h-4 text-purple-600" />
+                                    <span>Camera</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      triggerVibration(10);
+                                      setOpenMediaMenuIndex(null);
+                                      setTimeout(() => {
+                                        galleryInputRefs.current[index]?.click();
+                                      }, 50);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 border-none bg-transparent cursor-pointer"
+                                  >
+                                    <Image className="w-4 h-4 text-purple-600" />
+                                    <span>Gallery</span>
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </div>
-                          
-                          <div className="prose prose-purple max-w-none text-zinc-850 text-xs leading-relaxed">
-                            <GlobalMarkdown>{evaluations[index]}</GlobalMarkdown>
+
+                          <textarea
+                            rows={2}
+                            value={draftAnswers[index] || ''}
+                            onChange={(e) => handleUpdateAnswers(index, e.target.value)}
+                            placeholder="Type your response or upload a handwritten answer photo..."
+                            disabled={evaluatingIndex === index}
+                            className="flex-1 min-h-[36px] max-h-[120px] bg-transparent text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none resize-none py-2 px-1 leading-relaxed"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if ((draftAnswers[index]?.trim() || uploadedAnswerFiles[index]) && evaluatingIndex !== index) {
+                                  handleEvaluateAnswer(qText, index);
+                                }
+                              }
+                            }}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => handleEvaluateAnswer(qText, index)}
+                            disabled={evaluatingIndex === index || (!draftAnswers[index]?.trim() && !uploadedAnswerFiles[index])}
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 border-none ${
+                              (draftAnswers[index]?.trim() || uploadedAnswerFiles[index]) && evaluatingIndex !== index
+                                ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer active:scale-95' 
+                                : 'bg-zinc-150 text-zinc-400 cursor-not-allowed'
+                            }`}
+                            title="Submit answer for strict Step-Marking"
+                          >
+                            {evaluatingIndex === index ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Send className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+
+                        {transcribingIndices[index] && (
+                          <div className="text-[10px] text-purple-600 font-bold animate-pulse flex items-center gap-1 mt-1 pl-2">
+                            <Sparkles className="w-3 h-3 text-amber-500 animate-spin" />
+                            Transcribing handwritten answer...
                           </div>
-                        </motion.div>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
+                        )}
+
+                        {evaluations[index] && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mt-3 bg-purple-50/60 border border-purple-100 rounded-2xl p-4 text-left space-y-2 relative shadow-inner overflow-hidden"
+                          >
+                            <div className="absolute top-0 right-0 p-3 pointer-events-none opacity-10">
+                              <Sparkles className="w-16 h-16 text-purple-600" />
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5 border-b border-purple-100/80 pb-2 mb-2">
+                              <span className="p-1 rounded-lg bg-purple-100 text-purple-700">
+                                <Sparkles className="w-3.5 h-3.5" />
+                              </span>
+                              <h5 className="font-black text-[11px] text-purple-900 uppercase tracking-wide">
+                                Magic Tutor Step-Marking Evaluation
+                              </h5>
+                            </div>
+                            
+                            <div className="prose prose-purple max-w-none text-zinc-850 text-xs leading-relaxed">
+                              <GlobalMarkdown>{evaluations[index]}</GlobalMarkdown>
+                            </div>
+                          </motion.div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
 
               {/* Action and Success toast */}

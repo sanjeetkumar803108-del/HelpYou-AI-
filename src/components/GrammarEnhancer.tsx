@@ -1,6 +1,9 @@
 import { getApiUrl } from '../utils/api';
-import React, { useState } from 'react';
-import { ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, Trash2, Calendar, Camera, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, 
+  Trash2, Calendar, Camera, X, FileText, Share2, Download, Eye 
+} from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -10,22 +13,16 @@ import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { compressImage } from '../utils/imageCompressor';
+import { generateNotesPDFBlob } from '../lib/pdfExporter';
+import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
+import { sanitizePdfText } from '../utils/pdfSanitizer';
+import SafePdfViewer from './SafePdfViewer';
 
 interface GrammarEnhancerProps {
   onBack: () => void;
 }
 
 export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
-  const handleHeaderBack = () => {
-    triggerVibration(10);
-    if (showHistory) {
-      setShowHistory(false);
-    } else if (result) {
-      setResult(null);
-    } else {
-      onBack();
-    }
-  };
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -39,6 +36,63 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const [loadingStep, setLoadingStep] = useState(0);
   const [showLimitPopup, setShowLimitPopup] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [previewPdfUri, setPreviewPdfUri] = useState<string | null>(null);
+  const [previewPdfName, setPreviewPdfName] = useState<string>('');
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (previewPdfUri) {
+      setPreviewPdfUri(null);
+    } else if (showHistory) {
+      setShowHistory(false);
+    } else if (result) {
+      setResult(null);
+      setLoading(false);
+    } else {
+      onBack();
+    }
+  };
+
+  useEffect(() => {
+    const handleBackButton = (e: Event) => {
+      if (showLimitPopup) {
+        e.preventDefault();
+        triggerVibration(10);
+        setShowLimitPopup(false);
+      } else if (previewPdfUri) {
+        e.preventDefault();
+        triggerVibration(10);
+        setPreviewPdfUri(null);
+      } else if (showHistory) {
+        e.preventDefault();
+        triggerVibration(10);
+        setShowHistory(false);
+      } else if (result) {
+        e.preventDefault();
+        triggerVibration(10);
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+        setResult(null);
+        setLoading(false);
+      }
+    };
+    window.addEventListener('appBackButton', handleBackButton);
+    return () => {
+      window.removeEventListener('appBackButton', handleBackButton);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [showLimitPopup, previewPdfUri, showHistory, result]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -77,29 +131,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
     "Finalizing your enhanced text..."
   ];
 
-  const [showHistory, setShowHistory] = useState(false);
-
-  React.useEffect(() => {
-    const handleBackButton = (e: Event) => {
-      if (showLimitPopup) {
-        e.preventDefault();
-        triggerVibration(10);
-        setShowLimitPopup(false);
-      } else if (showHistory) {
-        e.preventDefault();
-        triggerVibration(10);
-        setShowHistory(false);
-      } else if (result) {
-        e.preventDefault();
-        triggerVibration(10);
-        setResult(null);
-      }
-    };
-    window.addEventListener('appBackButton', handleBackButton);
-    return () => window.removeEventListener('appBackButton', handleBackButton);
-  }, [showLimitPopup, showHistory, result]);
-
-  React.useEffect(() => {
+  useEffect(() => {
     let interval: NodeJS.Timeout;
     if (loading && !result) {
       setLoadingProgress(0);
@@ -122,6 +154,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       if (interval) clearInterval(interval);
     };
   }, [loading, result]);
+
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -188,12 +221,17 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const handleEnhance = async () => {
     if (!inputText.trim() && uploadedImages.length === 0) return;
 
-    // Check if user has at least 1 coin before starting, but do not deduct yet!
     const coins = getCoins();
     if (coins < 1) {
       window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "AI Grammar Enhancer", cost: 1 } }));
       return;
     }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     
     setLoading(true);
     setError(null);
@@ -207,7 +245,8 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       const response = await fetch(getApiUrl('/api/grammar-enhance'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText, mode, gradeLevel, images: uploadedImages })
+        body: JSON.stringify({ text: inputText, mode, gradeLevel, images: uploadedImages }),
+        signal: controller.signal
       });
       
       if (!response.ok) {
@@ -226,7 +265,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       }
       const data = await response.json();
       
-      // Deduct 1 coin now that the output has been successfully generated by the AI
+      // Deduct 1 coin
       deductCoins(1, "Grammar & Flow");
       
       setResult(data.text);
@@ -243,7 +282,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         try {
           let savedText = data.text;
           if (receivedFixes && receivedFixes.length > 0) {
-            savedText += "\n\n### 💡 What we fixed:\n" + (receivedFixes || []).map((f: string) => `- ${f}`).join("\n");
+            savedText += "\n\n### What we fixed:\n" + (receivedFixes || []).map((f: string) => `- ${f}`).join("\n");
           }
 
           await addDoc(collection(db, 'pocket_items'), {
@@ -259,19 +298,69 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         }
       }
     } catch (err: any) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        return;
+      }
       console.error(err);
       setError('Oops! Something went wrong on our end. Please try again.');
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
   const handleCopy = () => {
     if (result) {
-      navigator.clipboard.writeText(result);
+      navigator.clipboard.writeText(result.trim());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleShareOutput = async () => {
+    if (!result) return;
+    triggerVibration(10);
+    const cleanOutput = result.trim();
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          text: cleanOutput
+        });
+        return;
+      } catch (e: any) {
+        if (e.name === 'AbortError') return;
+      }
+    }
+    // Fallback
+    navigator.clipboard.writeText(cleanOutput);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportPDF = () => {
+    if (!result) return;
+    triggerVibration(10);
+    const title = `Grammar & Flow - ${mode === 'fix' ? 'Enhanced' : 'Academic Rewrite'}`;
+    let fullContent = `## Enhanced Text\n\n${result}`;
+    if (fixes && fixes.length > 0) {
+      fullContent += `\n\n### What Was Fixed\n` + fixes.map(f => `- ${f}`).join('\n');
+    }
+    const blob = generateNotesPDFBlob(title, fullContent, 'Grammar Enhancement');
+    savePDFMobile(blob, 'Grammar_Enhanced_Document.pdf');
+  };
+
+  const handlePreviewPDF = () => {
+    if (!result) return;
+    triggerVibration(10);
+    const title = `Grammar & Flow - ${mode === 'fix' ? 'Enhanced' : 'Academic Rewrite'}`;
+    let fullContent = `## Enhanced Text\n\n${result}`;
+    if (fixes && fixes.length > 0) {
+      fullContent += `\n\n### What Was Fixed\n` + fixes.map(f => `- ${f}`).join('\n');
+    }
+    const blob = generateNotesPDFBlob(title, fullContent, 'Grammar Enhancement');
+    const blobUrl = URL.createObjectURL(blob);
+    setPreviewPdfName('Grammar_Enhanced_Document.pdf');
+    setPreviewPdfUri(blobUrl);
   };
 
   return (
@@ -279,6 +368,38 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       {/* Background Glow */}
       <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-purple-100 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-80 h-80 bg-blue-50 rounded-full blur-[120px] pointer-events-none" />
+
+      {/* FULLSCREEN PDF PREVIEW MODAL */}
+      <AnimatePresence>
+        {previewPdfUri && (
+          <div className="fixed inset-0 bg-zinc-950 z-50 flex flex-col h-screen w-screen animate-fade-in">
+            <div className="bg-zinc-900 border-b border-zinc-800 px-5 py-4 flex items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  onClick={() => setPreviewPdfUri(null)}
+                  className="w-10 h-10 bg-zinc-800 hover:bg-zinc-750 rounded-full flex items-center justify-center text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-sm text-white truncate">{previewPdfName}</h3>
+                  <p className="text-[10px] text-zinc-400 font-bold">PDF Reader • Full Screen Mode</p>
+                </div>
+              </div>
+              <button
+                onClick={handleExportPDF}
+                className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+              >
+                <Download className="w-4 h-4" />
+                <span>Save</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden relative flex flex-col">
+              <SafePdfViewer pdfUrlOrBase64={previewPdfUri} />
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* FIXED/STICKY HEADER BAR */}
       <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center justify-between gap-4 shrink-0">
@@ -353,7 +474,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                 >
                   <div className="space-y-1.5 flex-1 min-w-0 pr-4">
                     <h4 className="font-black text-zinc-900 group-hover:text-purple-600 transition-colors truncate">
-                      {item.title || 'Grammar Polish'}
+                      {item.title || 'Grammar Enhancement'}
                     </h4>
                     <p className="text-[11px] text-zinc-400 font-bold flex items-center gap-1.5">
                       <Calendar className="w-3 h-3 text-zinc-400" />
@@ -379,57 +500,57 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center max-w-md mx-auto"
+          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center"
         >
           <div className="relative mb-8">
             <div className="absolute inset-0 bg-purple-500/10 rounded-full blur-xl animate-pulse" />
-            <div className="relative w-20 h-20 bg-gradient-to-tr from-purple-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-xl shadow-purple-500/20">
+            <div className="relative w-20 h-20 bg-gradient-to-tr from-purple-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-xl shadow-purple-500/20 animate-bounce">
               <Wand2 className="w-10 h-10 text-white animate-pulse" />
             </div>
           </div>
 
-          <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Enhancing Writing...</h3>
-          <p className="text-purple-600 font-bold text-sm tracking-wide uppercase mb-8 min-h-[20px]">
+          <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Enhancing Your Writing</h3>
+          <p className="text-purple-600 font-bold text-sm tracking-wide uppercase mb-6 min-h-[20px]">
             {enhancingSteps[loadingStep]}
           </p>
 
-          <div className="w-full bg-zinc-200/60 rounded-full h-3 mb-4 overflow-hidden border border-zinc-200 p-[2px]">
+          <div className="w-full max-w-md bg-zinc-200/60 rounded-full h-3 mb-4 overflow-hidden border border-zinc-200 p-[2px]">
             <div 
               className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full rounded-full transition-all duration-300 ease-out"
               style={{ width: `${loadingProgress}%` }}
             />
           </div>
-          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-12">
-            {loadingProgress}% Complete
-          </div>
-
-          <div className="w-full space-y-4">
-            <div className="h-4 bg-zinc-100 rounded-full w-full animate-pulse" />
-            <div className="h-4 bg-zinc-50 rounded-full w-[90%] animate-pulse" />
-            <div className="h-4 bg-zinc-100 rounded-full w-[95%] animate-pulse" />
+          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-8">
+            {loadingProgress}% Refined
           </div>
         </motion.div>
       ) : !result ? (
-        <div className="flex-1 flex flex-col z-10 w-full max-w-md mx-auto">
-          <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-md">
-            
-            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Paste Your Text Here</label>
-            <div className="relative mb-6">
+        <div className="flex-1 flex flex-col">
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-zinc-200 mb-6 flex-1 flex flex-col">
+            <div className="relative flex-1 flex flex-col min-h-[220px]">
               <textarea
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="E.g., I was went to the store to buying some milks but its was closed..."
+                placeholder="Paste or type your text here to refine grammar, fix punctuation, and elevate flow..."
                 disabled={loading || scanning}
-                className="w-full p-4 pb-8 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 resize-none h-48 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-semibold text-sm leading-relaxed disabled:opacity-60"
+                className="w-full flex-1 p-4 rounded-2xl border border-zinc-150 bg-zinc-50/50 text-zinc-900 placeholder:text-zinc-400 resize-none focus:outline-none focus:border-purple-500 focus:bg-white transition-all text-sm leading-relaxed font-sans font-medium"
               />
-              <div className={`absolute bottom-3 right-4 text-xs font-bold ${'text-zinc-400'}`}>
-                {wordCount} words
+              <div className="flex justify-between items-center text-xs text-zinc-400 mt-2 px-1 font-bold">
+                <span>{wordCount} words</span>
+                {inputText && (
+                  <button 
+                    onClick={() => setInputText('')}
+                    className="text-zinc-400 hover:text-red-500 transition-colors"
+                  >
+                    Clear Text
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* ATTACHED IMAGES PREVIEW GRID */}
+            {/* ATTACHED IMAGES PREVIEW */}
             {uploadedImages.length > 0 && (
-              <div className="mb-6 bg-zinc-50 border border-zinc-150 rounded-2xl p-4">
+              <div className="my-4 bg-zinc-50 border border-zinc-150 rounded-2xl p-4">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider">Attached Images ({uploadedImages.length}/5)</span>
                   <button 
@@ -463,8 +584,8 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
               </div>
             )}
 
-            {/* GALLERY IMAGE UPLOAD */}
-            <div className="mb-6">
+            {/* SCAN / ATTACH IMAGE BUTTON */}
+            <div className="my-4">
               <input 
                 type="file"
                 id="grammar-gallery-input"
@@ -481,7 +602,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                   document.getElementById('grammar-gallery-input')?.click();
                 }}
                 disabled={scanning || loading}
-                className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-100/50 font-extrabold text-sm transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-100 font-extrabold text-xs transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
               >
                 {scanning ? (
                   <>
@@ -491,7 +612,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                 ) : (
                   <>
                     <Camera className="w-4 h-4" />
-                    <span>Upload images</span>
+                    <span>Attach image(s) with text</span>
                   </>
                 )}
               </button>
@@ -552,55 +673,82 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
           className="flex-1 flex flex-col z-10"
         >
           {/* Enhanced Version Card */}
-          <div className="bg-white rounded-[2rem] p-6 shadow-md border border-zinc-200 mb-6 relative flex-1 flex flex-col text-zinc-800">
-            <div className="flex justify-between items-center mb-4 border-b border-zinc-200 pb-4">
-               <h3 className="text-lg font-bold text-purple-600">Enhanced Version</h3>
+          <div className="bg-white rounded-[2rem] p-6 shadow-md border border-zinc-200 mb-4 relative flex-1 flex flex-col text-zinc-800">
+            <div className="flex justify-between items-center mb-4 border-b border-zinc-100 pb-3">
+               <h3 className="text-base font-bold text-purple-700 flex items-center gap-2">
+                 <Wand2 className="w-4 h-4 text-purple-600" />
+                 <span>Enhanced Version</span>
+               </h3>
                <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 transition-colors bg-zinc-50 hover:bg-zinc-100 px-3 py-1.5 rounded-lg border border-zinc-200 shadow-sm"
+                  className="flex items-center gap-1.5 text-xs font-bold text-zinc-600 hover:text-zinc-900 transition-colors bg-zinc-50 hover:bg-zinc-100 px-3 py-1.5 rounded-lg border border-zinc-200 shadow-sm cursor-pointer"
                >
-                  {copied ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? <CheckCircle className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
                </button>
             </div>
-            <div className="prose prose-sm max-w-none prose-p:leading-relaxed overflow-y-auto flex-1">
+            <div className="prose prose-sm max-w-none prose-p:leading-relaxed overflow-y-auto flex-1 select-text">
               <GlobalMarkdown>{result}</GlobalMarkdown>
             </div>
           </div>
 
           {/* CHANGES MADE FEEDBACK LOGIC */}
           {fixes.length > 0 && (
-            <div className="bg-amber-50/70 border border-amber-200/80 rounded-[2rem] p-6 shadow-sm mb-6">
-              <h4 className="text-xs font-black text-amber-800 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <div className="bg-amber-50/80 border border-amber-200/80 rounded-[2rem] p-5 shadow-sm mb-4">
+              <h4 className="text-xs font-black text-amber-800 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
                 <span>💡</span> What we fixed:
               </h4>
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {(fixes || []).map((fix, idx) => (
-                  <li key={idx} className="text-xs font-medium text-amber-900 flex items-start gap-2 leading-relaxed">
+                  <li key={idx} className="text-xs font-medium text-amber-950 flex items-start gap-2 leading-relaxed">
                     <span className="text-amber-500 select-none mt-0.5">•</span>
-                    <span>{fix}</span>
+                    <span>{sanitizePdfText(fix)}</span>
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* ACCESSIBILITY & UX - High Visibility Copy Button */}
-          <button
-            onClick={handleCopy}
-            className="w-full py-4 rounded-xl font-bold text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-purple-500/20 text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-purple-500/10 mb-3 cursor-pointer"
-          >
-            {copied ? <CheckCircle className="w-5 h-5 text-green-300" /> : <Copy className="w-5 h-5" />}
-            {copied ? 'Copied to Clipboard!' : '📋 Copy Text'}
-          </button>
+          {/* MULTI-ACTION BAR: Share Output, PDF Export & PDF Preview */}
+          <div className="grid grid-cols-3 gap-2.5 mb-3">
+            <button
+              onClick={handleShareOutput}
+              className="py-3.5 px-3 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 active:scale-95 shadow-xs cursor-pointer"
+              title="Share output text directly"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Share Output</span>
+            </button>
+
+            <button
+              onClick={handlePreviewPDF}
+              className="py-3.5 px-3 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 active:scale-95 shadow-xs cursor-pointer"
+              title="View PDF"
+            >
+              <Eye className="w-4 h-4 text-purple-600" />
+              <span>View PDF</span>
+            </button>
+
+            <button
+              onClick={handleExportPDF}
+              className="py-3.5 px-3 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-purple-500/20 bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 active:scale-95 shadow-md shadow-purple-500/10 cursor-pointer"
+              title="Download PDF"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export PDF</span>
+            </button>
+          </div>
           
           <button 
             onClick={() => {
               setResult(null);
+              setInputText('');
+              setUploadedImages([]);
+              setFixes([]);
             }}
-            className="w-full py-3.5 rounded-xl font-extrabold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm"
+            className="w-full py-3.5 rounded-2xl font-extrabold text-xs text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm cursor-pointer"
           >
-            Enhance Another
+            Enhance Another Text
           </button>
         </motion.div>
       )}

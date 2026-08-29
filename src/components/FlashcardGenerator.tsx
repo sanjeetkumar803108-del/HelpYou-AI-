@@ -7,6 +7,8 @@ import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { deductCoins, getCoins } from '../utils/coins';
+import { getProfilePayload } from '../utils/profile';
+import GlobalMarkdown from './GlobalMarkdown';
 
 interface Flashcard {
   question: string;
@@ -715,17 +717,16 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
           animate={{ opacity: 1, y: 0 }}
           className="flex-1 flex flex-col"
         >
-          
           {/* Flashcard UI */}
-          <div className="flex-1 flex flex-col items-center justify-center mb-6 relative perspective-1000 w-full max-w-sm mx-auto min-h-[340px]">
+          <div className="flex-1 flex flex-col items-center justify-center mb-6 relative perspective-1000 w-full max-w-sm sm:max-w-md mx-auto min-h-[380px] sm:min-h-[420px]">
             {/* Dynamic premium glowing backlight that pulses */}
-            <div className={`absolute -inset-2 rounded-[2.5rem] blur-3xl opacity-20 transition-all duration-700 ease-in-out ${
+            <div className={`absolute -inset-2 rounded-[2.5rem] blur-3xl opacity-25 transition-all duration-700 ease-in-out ${
               flipped 
                 ? 'bg-gradient-to-tr from-indigo-500 via-purple-600 to-pink-500 scale-105 animate-pulse' 
                 : 'bg-gradient-to-tr from-pink-500 via-purple-600 to-indigo-500 scale-105 animate-pulse'
             }`} />
 
-            <div className="w-full h-80 relative z-10">
+            <div className="w-full min-h-[360px] sm:min-h-[390px] h-[360px] sm:h-[390px] relative z-10">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={flipped ? `back-${currentIndex}` : `front-${currentIndex}`}
@@ -748,10 +749,10 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                   animate={{ rotateY: 0, opacity: 1 }}
                   exit={{ rotateY: flipped ? 180 : -180, opacity: 0 }}
                   transition={{ type: "spring", damping: 20, stiffness: 380, mass: 0.4 }}
-                  className={`absolute inset-0 w-full h-full rounded-[2.2rem] p-8 shadow-lg border flex flex-col items-center justify-center text-center backdrop-blur-3xl overflow-hidden cursor-grab active:cursor-grabbing select-none ${
+                  className={`absolute inset-0 w-full h-full rounded-[2.2rem] p-6 sm:p-7 shadow-xl border flex flex-col items-center justify-between text-center backdrop-blur-3xl overflow-hidden cursor-grab active:cursor-grabbing select-none ${
                     flipped 
-                      ? 'bg-gradient-to-br from-indigo-50/95 via-indigo-100/98 to-white/98 border-indigo-200' 
-                      : 'bg-gradient-to-br from-pink-50/95 via-pink-100/98 to-white/98 border-pink-200'
+                      ? 'bg-gradient-to-br from-indigo-50/95 via-indigo-100/98 to-white/98 border-indigo-200 shadow-indigo-500/10' 
+                      : 'bg-gradient-to-br from-pink-50/95 via-pink-100/98 to-white/98 border-pink-200 shadow-pink-500/10'
                   }`}
                   onClick={() => {
                     if (Math.abs(dragX.get()) < 10) {
@@ -775,32 +776,53 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                   <div className={`absolute top-0 bottom-0 right-0 w-[2px] bg-gradient-to-b ${flipped ? 'from-indigo-500/0 via-indigo-500/50 to-indigo-500/0' : 'from-pink-500/0 via-pink-500/50 to-pink-500/0'}`} />
 
                   {/* Corner Tech Brackets with premium glows */}
-                  <div className={`absolute top-6 left-6 w-4 h-4 border-t-2 border-l-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
-                  <div className={`absolute top-6 right-6 w-4 h-4 border-t-2 border-r-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
-                  <div className={`absolute bottom-6 left-6 w-4 h-4 border-b-2 border-l-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
-                  <div className={`absolute bottom-6 right-6 w-4 h-4 border-b-2 border-r-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
+                  <div className={`absolute top-5 left-5 w-4 h-4 border-t-2 border-l-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
+                  <div className={`absolute top-5 right-5 w-4 h-4 border-t-2 border-r-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
+                  <div className={`absolute bottom-5 left-5 w-4 h-4 border-b-2 border-l-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
+                  <div className={`absolute bottom-5 right-5 w-4 h-4 border-b-2 border-r-2 ${flipped ? 'border-indigo-400' : 'border-pink-400'}`} />
 
                   {/* Animated Top/Bottom glowing borders */}
                   <div className={`absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r ${flipped ? 'from-transparent via-indigo-500/50 to-transparent' : 'from-transparent via-pink-500/50 to-transparent'}`} />
                   <div className={`absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r ${flipped ? 'from-transparent via-indigo-500/50 to-transparent' : 'from-transparent via-pink-500/50 to-transparent'}`} />
 
-                  <span className={`absolute top-6 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                    flipped 
-                      ? 'text-indigo-800 bg-indigo-100 border border-indigo-200' 
-                      : 'text-pink-800 bg-pink-100 border border-pink-200'
-                  }`}>
-                    {flipped ? '✨ Answer Key' : '❓ Question Card'}
-                  </span>
-
-                  <div className="my-auto px-2 max-h-[160px] overflow-y-auto">
-                    <p className={`text-lg md:text-xl leading-relaxed ${flipped ? 'text-indigo-950 font-extrabold' : 'text-pink-950 font-black'}`}>
-                      {flipped ? flashcards[currentIndex].answer : flashcards[currentIndex].question}
-                    </p>
+                  {/* Top Badge */}
+                  <div className="w-full flex justify-center shrink-0 pt-0.5">
+                    <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-2xs ${
+                      flipped 
+                        ? 'text-indigo-800 bg-indigo-100/90 border border-indigo-200' 
+                        : 'text-pink-800 bg-pink-100/90 border border-pink-200'
+                    }`}>
+                      {flipped ? '✨ Complete Answer Key' : '❓ Core Question'}
+                    </span>
                   </div>
 
-                  <span className="absolute bottom-6 text-[10px] font-bold tracking-widest text-zinc-400 uppercase flex items-center gap-1.5 animate-pulse">
-                    <span>👆</span> Tap to flip or swipe to navigate
-                  </span>
+                  {/* Center Content Body with dynamic scrolling and markdown support */}
+                  <div 
+                    className="flex-1 w-full my-auto flex flex-col items-center justify-center px-2 py-3 overflow-hidden"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <div className="w-full max-h-[220px] sm:max-h-[250px] overflow-y-auto pr-1 select-text scrollbar-thin scrollbar-thumb-zinc-300 overscroll-contain">
+                      <div className={`w-full leading-relaxed ${
+                        (flipped ? flashcards[currentIndex]?.answer : flashcards[currentIndex]?.question)?.length > 180
+                          ? 'text-xs sm:text-sm text-left'
+                          : (flipped ? flashcards[currentIndex]?.answer : flashcards[currentIndex]?.question)?.length > 90
+                            ? 'text-sm sm:text-base text-left sm:text-center'
+                            : 'text-base sm:text-lg text-center'
+                      } ${flipped ? 'text-indigo-950 font-semibold' : 'text-pink-950 font-bold'}`}>
+                        <GlobalMarkdown>
+                          {flipped ? flashcards[currentIndex]?.answer : flashcards[currentIndex]?.question}
+                        </GlobalMarkdown>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Tap to Flip Hint */}
+                  <div className="w-full flex justify-center shrink-0 pb-0.5">
+                    <span className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase flex items-center gap-1.5 animate-pulse">
+                      <span>👆</span> Tap to flip or swipe to navigate
+                    </span>
+                  </div>
                 </motion.div>
               </AnimatePresence>
             </div>

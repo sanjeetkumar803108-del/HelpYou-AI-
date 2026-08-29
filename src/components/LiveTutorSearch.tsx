@@ -217,8 +217,9 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const [searchResponse, setSearchResponse] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
-  const [showNotesBlending, setShowNotesBlending] = useState(false);
+const [showNotesBlending, setShowNotesBlending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [highlightedSourceIdx, setHighlightedSourceIdx] = useState<number | null>(null);
 
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
@@ -227,9 +228,9 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   // Dynamic search loading steps animation
   const searchSteps = [
     { label: "1. Analyzing query & extracting core entities...", icon: "🔍", sub: "Converting conversational prompts into high-precision search keywords" },
-    { label: "2. Querying Google News RSS & Wikipedia REST...", icon: "🌐", sub: "Fetching verified breaking articles and encyclopedia records in real time" },
+    { label: "2. Querying Live Academic Wires & Peer-Reviewed Repositories...", icon: "🏛️", sub: "Fetching verified research papers, government registries, and wire updates in real time" },
     { label: "3. Grounding citations & validating direct URLs...", icon: "⚡", sub: "Verifying live source links to ensure 0 broken links or 404s" },
-    { label: "4. Synthesizing in-depth academic research report...", icon: "🧠", sub: "Generating comprehensive multi-paragraph analysis with LaTeX equations" }
+    { label: "4. Synthesizing in-depth academic research report...", icon: "🧠", sub: "Generating comprehensive multi-paragraph analysis with LaTeX equations and inline citations" }
   ];
 
   useEffect(() => {
@@ -319,9 +320,14 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     setSearchResponse(null);
     setCheckedSteps({});
     setCopied(false);
+    setHighlightedSourceIdx(null);
 
     try {
       const currentNotes = localNotes.trim();
+      const activeUid = auth.currentUser?.uid;
+      const country = safeGetItem('academic_country') || (activeUid ? safeGetItem(`academic_country_${activeUid}`) : null) || 'United States';
+      const grade = safeGetItem('academic_grade') || (activeUid ? safeGetItem(`academic_grade_${activeUid}`) : null) || '11th Grade (Junior)';
+      const stream = safeGetItem('academic_stream') || (activeUid ? safeGetItem(`academic_stream_${activeUid}`) : null) || 'STEM / Engineering';
 
       const response = await fetch(getApiUrl('/api/live-study-tutor'), {
         method: 'POST',
@@ -329,7 +335,10 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
         body: JSON.stringify({
           query: activeQuery,
           profileContext: getProfileContext(),
-          studentNotes: currentNotes || undefined
+          studentNotes: currentNotes || undefined,
+          country,
+          gradeLevel: grade,
+          academicStream: stream
         }),
       });
 
@@ -346,6 +355,16 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
       let formattedResult: SearchResult;
       if (data && typeof data === 'object') {
         const updates = data.live_updates || data.updates || data.content || data.summary || data.text || data.explanation || "";
+        
+        // Hard filter to eliminate any Wikipedia links from output
+        const rawSourceLinks = Array.isArray(data.source_links) ? data.source_links : [];
+        const cleanSourceLinks = rawSourceLinks.filter((l: string) => typeof l === 'string' && !l.includes('wikipedia.org') && !l.includes('wikimedia.org'));
+        
+        const rawDetailedSources = Array.isArray(data.detailed_sources) ? data.detailed_sources : undefined;
+        const cleanDetailedSources = rawDetailedSources 
+          ? rawDetailedSources.filter((s: DetailedSource) => s && s.uri && !s.uri.includes('wikipedia.org') && !s.uri.includes('wikimedia.org'))
+          : undefined;
+
         formattedResult = {
           topic_title: data.topic_title || data.title || activeQuery,
           live_updates: updates,
@@ -353,8 +372,8 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
           action_steps: Array.isArray(data.action_steps) ? data.action_steps : (data.steps || []),
           pro_tips: data.pro_tips || data.tip || '',
           related_queries: Array.isArray(data.related_queries) ? data.related_queries : [],
-          source_links: Array.isArray(data.source_links) ? data.source_links : [],
-          detailed_sources: Array.isArray(data.detailed_sources) ? data.detailed_sources : undefined,
+          source_links: cleanSourceLinks,
+          detailed_sources: cleanDetailedSources,
           text: data.text || ""
         };
       } else {
@@ -454,25 +473,45 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     const name = (source.sourceName || '').toLowerCase();
     const title = (source.title || '').toLowerCase();
 
-    if (domain.includes('wikipedia') || name.includes('wikipedia')) {
-      return { label: 'Wikipedia Encyclopedia', color: 'bg-zinc-100 text-zinc-800 border-zinc-300' };
+    if (domain.includes('.edu') || name.includes('university') || domain.includes('harvard') || domain.includes('mit.edu') || domain.includes('stanford.edu') || domain.includes('ox.ac.uk') || domain.includes('cam.ac.uk')) {
+      return { label: '🏛️ University Research (.edu)', color: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
     }
-    if (domain.includes('news.google') || name.includes('google news')) {
-      return { label: 'Google Live News Feed', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+    if (domain.includes('.gov') || domain.includes('.nic.in') || domain.includes('gov.uk') || domain.includes('canada.ca') || domain.includes('nih.gov') || domain.includes('nasa.gov') || domain.includes('ed.gov') || domain.includes('pib.gov.in') || domain.includes('nta.ac.in') || domain.includes('ncert.nic.in')) {
+      return { label: '🏛️ Official Government / Registry (.gov)', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
     }
-    if (domain.includes('britannica')) {
-      return { label: 'Encyclopaedia Britannica', color: 'bg-amber-50 text-amber-800 border-amber-200' };
+    if (domain.includes('doi.org') || domain.includes('nature.com') || domain.includes('science.org') || domain.includes('ieee.org') || domain.includes('jstor.org') || domain.includes('springer.com') || domain.includes('sciencedirect.com') || domain.includes('plos.org') || name.includes('peer-reviewed') || name.includes('journal')) {
+      return { label: '🔬 Peer-Reviewed Academic Journal', color: 'bg-purple-50 text-purple-800 border-purple-200' };
     }
-    if (domain.includes('allen') || title.includes('allen')) {
-      return { label: 'Allen Academic Updates', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+    if (domain.includes('britannica.com')) {
+      return { label: '📚 Peer-Edited Encyclopaedia Britannica', color: 'bg-amber-50 text-amber-800 border-amber-200' };
     }
-    if (domain.includes('pw') || title.includes('physics wallah')) {
-      return { label: 'Physics Wallah Verified', color: 'bg-violet-50 text-violet-700 border-violet-200' };
+    if (domain.includes('news.google') || domain.includes('reuters.com') || domain.includes('apnews.com') || domain.includes('bbc.com') || domain.includes('thehindu.com') || domain.includes('indianexpress.com')) {
+      return { label: '📰 Verified Press Wire', color: 'bg-blue-50 text-blue-700 border-blue-200' };
     }
-    if (domain.includes('lpu') || domain.includes('careers360') || domain.includes('shiksha')) {
-      return { label: 'National Exam Portal', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
+    if (domain.includes('collegeboard.org') || domain.includes('ucas.com') || domain.includes('allen') || domain.includes('pw.live')) {
+      return { label: '🎓 Official Academic Portal', color: 'bg-teal-50 text-teal-800 border-teal-200' };
     }
-    return { label: source.sourceName || getCleanDomain(link), color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+    return { label: source.sourceName || getCleanDomain(link), color: 'bg-slate-50 text-slate-800 border-slate-200' };
+  };
+
+  const scrollToSource = (index1Based: number) => {
+    triggerVibration(10);
+    const zeroIdx = index1Based - 1;
+    setHighlightedSourceIdx(zeroIdx);
+    const elem = document.getElementById(`academic-source-${index1Based}`);
+    if (elem) {
+      elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    setTimeout(() => {
+      setHighlightedSourceIdx(null);
+    }, 3000);
+  };
+
+  const formatUpdatesWithInteractiveCitations = (content: string) => {
+    if (!content) return '';
+    return content.replace(/\[(\d+)\]/g, (match, p1) => {
+      return `<a href="#academic-source-${p1}" class="inline-citation-badge inline-flex items-center justify-center px-1.5 py-0.2 text-[10px] font-black text-blue-700 bg-blue-100/90 hover:bg-blue-200 rounded-md mx-0.5 border border-blue-300/60 no-underline shadow-2xs cursor-pointer align-super" data-source-id="${p1}">[${p1}]</a>`;
+    });
   };
 
   const openSourceUrl = (url: string) => {
@@ -489,7 +528,20 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const totalStepsCount = searchResponse?.action_steps?.length || 0;
 
   return (
-    <div className="flex flex-col h-full bg-[#FAF9F6] font-sans overflow-hidden select-none">
+    <div 
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        const citationBadge = target.closest('[data-source-id]') as HTMLElement;
+        if (citationBadge) {
+          e.preventDefault();
+          const sourceId = citationBadge.getAttribute('data-source-id');
+          if (sourceId) {
+            scrollToSource(Number(sourceId));
+          }
+        }
+      }}
+      className="flex flex-col h-full bg-[#FAF9F6] font-sans overflow-hidden select-none"
+    >
       {/* Ultra-Luxury Glassmorphic Header */}
       <header className="px-5 py-4 border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl flex justify-between items-center shrink-0 z-10 shadow-xs">
         <div className="flex items-center gap-3">
@@ -512,7 +564,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
             </h2>
             <p className="text-[10px] text-zinc-400 font-bold flex items-center gap-1">
               <ShieldCheck className="w-3 h-3 text-blue-500" />
-              100% Grounded Real-Time Web Intelligence
+              100% Grounded Academic & Web Intelligence
             </p>
           </div>
         </div>
@@ -862,7 +914,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                       </span>
                       {searchResponse.detailed_sources && (
                         <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/60">
-                          📚 {searchResponse.detailed_sources.length} Verified Sources
+                          📚 {searchResponse.detailed_sources.length} Peer / Academic Sources
                         </span>
                       )}
                       <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-zinc-100 text-zinc-700 border border-zinc-200">
@@ -881,11 +933,11 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                         {Array.isArray(searchResponse.live_updates) ? (
                           searchResponse.live_updates.map((update, idx) => (
                             <div key={idx} className="space-y-1.5 border-b border-zinc-200/40 pb-3 last:border-b-0 last:pb-0">
-                              <GlobalMarkdown>{update}</GlobalMarkdown>
+                              <GlobalMarkdown>{formatUpdatesWithInteractiveCitations(update)}</GlobalMarkdown>
                             </div>
                           ))
                         ) : (
-                          <GlobalMarkdown>{searchResponse.live_updates}</GlobalMarkdown>
+                          <GlobalMarkdown>{formatUpdatesWithInteractiveCitations(searchResponse.live_updates)}</GlobalMarkdown>
                         )}
                       </div>
                     </div>
@@ -949,13 +1001,13 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                     </div>
                   )}
 
-                  {/* 100% Real Clickable Source Cards */}
+                  {/* 100% Real Clickable Source Cards (Wikipedia Blacklisted) */}
                   {searchResponse.detailed_sources && searchResponse.detailed_sources.length > 0 && (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider px-1 text-zinc-500">
                         <span className="flex items-center gap-1.5">
                           <Globe className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Verified Live Citations ({searchResponse.detailed_sources.length})</span>
+                          <span>Verified Academic Citations ({searchResponse.detailed_sources.length})</span>
                         </span>
                         <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                           100% Verified URLs
@@ -965,15 +1017,24 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                       <div className="grid grid-cols-1 gap-2.5">
                         {searchResponse.detailed_sources.map((src, idx) => {
                           const badgeInfo = getSourceBadgeInfo(src, src.uri);
+                          const isHighlighted = highlightedSourceIdx === idx;
                           return (
                             <div
+                              id={`academic-source-${idx + 1}`}
                               key={idx}
                               onClick={() => openSourceUrl(src.uri)}
-                              className="flex items-center justify-between p-4 bg-white hover:bg-zinc-50 rounded-2xl border border-zinc-200/80 shadow-xs hover:shadow-md transition-all hover:translate-x-1 active:scale-[0.99] cursor-pointer group"
+                              className={`flex items-center justify-between p-4 bg-white hover:bg-zinc-50 rounded-2xl border transition-all hover:translate-x-1 active:scale-[0.99] cursor-pointer group ${
+                                isHighlighted 
+                                  ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-50/50 shadow-md scale-[1.01]' 
+                                  : 'border-zinc-200/80 shadow-xs hover:shadow-md'
+                              }`}
                             >
                               <div className="flex items-center gap-3.5 min-w-0 pr-2">
-                                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
                                   <Newspaper className="w-5 h-5" />
+                                  <span className="absolute -top-1.5 -left-1.5 w-4.5 h-4.5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                                    {idx + 1}
+                                  </span>
                                 </div>
                                 <div className="min-w-0 space-y-0.5">
                                   <p className="text-xs font-black text-zinc-900 group-hover:text-blue-600 transition-colors line-clamp-1">

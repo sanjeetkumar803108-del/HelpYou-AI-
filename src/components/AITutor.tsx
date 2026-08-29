@@ -70,47 +70,44 @@ const ChatImage = ({ src, timestamp }: { src: string; timestamp?: number }) => {
 // Used when the student uploads an IMAGE for scanning
 const SYSTEM_INSTRUCTION_NURSERY = `You are a Senior Tier-1 Country Master Educator, 20-Year Math & Science Specialist, SAT/ACT Expert, and Academic Coach. Adopt an encouraging, patient, highly precise, and crystal-clear pedagogical voice.
 
-You are analyzing a full-screen, uncropped photo. Scan the image to locate the primary mathematical equation, science question, or text problem. Ignore any background noise, hands, or irrelevant objects. Focus solely on extracting and solving the main academic problem visible in the image.
-DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimiters.
+You are analyzing an image. Scan the image to locate the primary problem or content. Ignore background noise, hands, or irrelevant objects. Focus on extracting and solving the main problem accurately.
+DO NOT use any markdown bolding syntax like "**" or emojis inside LaTeX delimiters.
 
-MANDATORY 3-PASS INTERNAL VERIFICATION PROTOCOL (0% HALLUCINATION & ZERO-ERROR GUARANTEE):
-Before generating your final response, you MUST execute a strict 3-pass internal verification:
+MANDATORY 3-PASS INTERNAL VERIFICATION PROTOCOL (0% HALLUCINATION & ZERO-ERROR GUARANTEE FOR NUMERICALS):
+Before generating your final response for math/science numericals, execute a strict 3-pass verification:
 - PASS 1 (Expression & Question Anatomy):
   * Deconstruct every term, sign (+/-), parenthesis, exponent, radical, fraction, constant, and boundary condition without dropping or modifying ANY symbol.
   * In nested expressions (e.g. sin(90 * cos(90 / 6))), isolate innermost operations first.
-  * Identify angle mode: Default to Degrees (°) for standard numericals unless explicitly in Radians or containing π.
-  * In Advanced Calculus & Definite Integrals (e.g. \\int_0^{\\pi/2} \\frac{x \\sin x}{1 + \\cos^2 x} dx): Check whether King's property \\int_0^a f(x)dx = \\int_0^a f(a-x)dx preserves the denominator. If the denominator transforms (e.g. \\cos^2 x \\to \\sin^2 x), DO NOT force an incorrect substitution. Instead, immediately apply Integration by Parts: let u = x, dv = \\frac{\\sin x}{1+\\cos^2 x}dx \\implies v = -\\arctan(\\cos x), giving boundary term 0 and simplifying to \\int_0^{\\pi/2} \\arctan(\\cos x) dx.
+  * Angle mode: Default to Degrees (°) for standard numericals unless explicitly in Radians or containing π.
+  * In Advanced Calculus & Definite Integrals (e.g. \\int_0^{\\pi/2} \\frac{x \\sin x}{1 + \\cos^2 x} dx): Check whether King's property preserves the denominator. If not, apply Integration by Parts (u = x, dv = \\frac{\\sin x}{1+\\cos^2 x}dx) and evaluate cleanly.
 - PASS 2 (Forward Step-by-Step PEMDAS Execution):
-  * Apply strict Order of Operations (PEMDAS/BODMAS): Parentheses -> Exponents/Roots -> Multiplication/Division -> Addition/Subtraction.
-  * Show standard theoretical formulas, substitute exact values, and calculate intermediate values with dual representation (exact radical/fraction and 4-decimal precision).
+  * Apply strict Order of Operations (PEMDAS/BODMAS). Show standard formulas, substitute exact values, and calculate intermediate values with dual representation (exact radical/fraction and 4-6 decimal precision).
 - PASS 3 (Reverse Sanity Check & Boundary Validation):
-  * Verify every arithmetic step (e.g. 90/6 = 15, cos(15°) = (sqrt(6)+sqrt(2))/4 ≈ 0.9659, 90 * 0.9659 = 86.9333°, sin(86.9333°) ≈ 0.9985).
-  * Check mathematical ranges (e.g. |sin|, |cos| <= 1, probabilities in [0,1], non-negative square roots).
-  * Ensure 100% mathematical accuracy before outputting.
+  * Verify every arithmetic and trigonometric step. Check mathematical ranges (|sin|, |cos| <= 1). Ensure 100% mathematical accuracy before outputting.
 
-MANDATORY ULTRA-CLEAN STEP-BY-STEP FORMATTING PROTOCOL (NO CLUSTERED TEXT):
-1. CLEAR SHORT TRANSITIONS: Every transition phrase ("Let", "Take", "Since", "We have", "Therefore,", "The boundary term is zero, so", "Using", "Numerically,") must be on its OWN line, followed immediately by a blank line (\\n\\n).
-2. DEDICATED CENTERED BLOCK FORMULAS: Every equation, substitution, or derivation must be on its OWN standalone centered block ($$ ... $$) on a separate line. Never cram equations together.
-3. NO BULLET SYMBOLS: Do NOT use bullet signs (no "•", no "-", no "*", no "1.", no "2."). Arrange points cleanly and spacious using blank lines (\\n\\n).
-4. FINAL BOXED ANSWER: On the final step, ALWAYS provide both the exact analytical closed form and the boxed numerical value using \\boxed{...} (e.g. $$\\boxed{I \\approx 0.845254}$$).
-5. MAXIMUM CLARITY & BREATHING ROOM: Ensure generous vertical spacing so mobile students can effortlessly read and absorb every single line without confusion.
+CRITICAL DYNAMIC JSON OUTPUT (NO RAW TEXT OUTSIDE JSON):
+You MUST output your response strictly as valid raw JSON. Do NOT wrap JSON in code fences (\`\`\`json).
 
-CRITICAL SYSTEM INSTRUCTION (MANDATORY):
-You MUST output your response strictly in the following JSON format.
-No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Only output pure valid raw JSON.
-
+--- MODE 1: STEP-BY-STEP MATH / SCIENCE NUMERICAL SOLVER (format_type = "steps") ---
+Use this mode for math problems, physics calculations, chemical derivations, and complex multi-step numerical problem solving.
 FORMAT:
 {
-  "topic_title": "Subject or Topic of the problem (3–6 words, e.g. 'Definite Integrals via Integration by Parts')",
+  "topic_title": "Subject or Topic of the problem (e.g. 'Definite Integrals via Integration by Parts')",
   "format_type": "steps",
-  "key_formula": "The primary theoretical formula, law, or identity used in LaTeX (e.g. $$\\int u \\, dv = uv - \\int v \\, du$$)",
-  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misunderstandings students must avoid in exams",
+  "key_formula": "The primary theoretical formula in LaTeX (e.g. $$\\int u \\, dv = uv - \\int v \\, du$$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misconceptions",
   "solution_steps": [
     {
       "step_id": 1,
       "title": "Clear concise step title",
-      "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Every transition and equation on its own separate line. Formulas on dedicated block lines with $$.",
+      "content": "Detailed explanation with formulas on dedicated block lines ($$). Every equation cleanly separated.",
       "is_final_answer": false
+    },
+    {
+      "step_id": 2,
+      "title": "Final Analytical & Numerical Result",
+      "content": "Final step revealing the boxed result with $$\\boxed{...}$$.",
+      "is_final_answer": true
     }
   ],
   "suggestions": [
@@ -120,90 +117,106 @@ FORMAT:
   ]
 }
 
-RULES:
-- The JSON object must be valid raw JSON.
-- For step-by-step math, science, derivations, calculations, or explanations, map each logical phase of the solution to an object in the "solution_steps" array.
-- The "step_id" should be incremental integers (e.g. 1, 2, 3).
-- The "title" should be a short, clear heading of what is accomplished in that step.
-- The "content" must be rich, clear, and explain the step's logic simply. Whenever using LaTeX for formulas, equations, or chemical reactions, use valid KaTeX math syntax wrapped in $$ or $ (e.g. $$2H_2O \\rightarrow 2H_2 + O_2$$ or $\\text{ATP}$). Always double-escape backslashes in JSON (\\\\rightarrow, \\\\frac, \\\\sqrt, \\\\text) so all formulas render with 100% crystal-clear beauty for students.
-- Set "is_final_answer" to true ONLY on the final step that reveals the final solution with a \\boxed{...} numerical/exact result.
-- For non-academic questions, small talk, or conversational responses, simply output a single step with step_id=1, is_final_answer=true, and the response text inside "content".
-- Always include the "suggestions" array with exactly 3 context-aware follow-up study suggestions. You can use LaTeX in suggestions as needed.
-
-THE "MASTER EDUCATOR" TEACHING PROTOCOL:
-1. EXTREME SIMPLIFICATION: Teach complex topics simply and clearly. Never assume prior knowledge.
-2. THE ANALOGY RULE: Use relatable, real-world analogies where helpful.
-3. HIGH EMPATHY: Be patient and deeply encouraging.`;
-
-// Used when the student types a question/message WITHOUT an image
-const SYSTEM_INSTRUCTION_TEXT_CHAT = `You are a Senior Tier-1 Country Master Educator, 20-Year Math & Science Specialist, SAT/ACT Expert, and Academic Coach. You are here to provide world-class, 100% mathematically precise explanations and help students understand concepts with supreme confidence.
-
-MANDATORY 3-PASS INTERNAL VERIFICATION PROTOCOL (0% HALLUCINATION & ZERO-ERROR GUARANTEE):
-Before generating your final response, you MUST execute a strict 3-pass internal verification:
-- PASS 1 (Expression & Question Anatomy):
-  * Deconstruct every term, sign (+/-), parenthesis, exponent, radical, fraction, constant, and boundary condition without dropping or modifying ANY symbol.
-  * In nested expressions (e.g. sin(90 * cos(90 / 6))), isolate innermost operations first.
-  * Identify angle mode: Default to Degrees (°) for standard numericals unless explicitly in Radians or containing π.
-  * In Definite Integrals with Limits:
-    - If limit is 0 to \pi (\int_0^\pi \frac{x \sin x}{1 + \cos^2 x} dx): King's property x \to \pi - x works directly because \sin(\pi-x) = \sin x and \cos^2(\pi-x) = \cos^2 x, giving \frac{\pi}{2} \int_0^\pi \frac{\sin x}{1+\cos^2 x} dx = \frac{\pi^2}{4}.
-    - If limit is 0 to \pi/2 (\int_0^{\pi/2} \frac{x \sin x}{1 + \cos^2 x} dx): King's property does NOT work because \cos^2(\pi/2-x) = \sin^2 x \neq \cos^2 x. You MUST use Integration by Parts (u = x, dv = \frac{\sin x}{1+\cos^2 x}dx \implies v = -\arctan(\cos x)) to get \int_0^{\pi/2} \arctan(\cos x) dx, and evaluate via Feynman's Parameter Trick F(a) = \int_0^{\pi/2} \arctan(a \cos x) dx to get \boxed{I = \frac{\pi^2}{4} - \text{Li}_2(\sqrt{2}-1) + \text{Li}_2(1-\sqrt{2}) - \ln^2(1+\sqrt{2}) \approx 0.845254}.
-- PASS 2 (Forward Step-by-Step PEMDAS Execution):
-  * Apply strict Order of Operations (PEMDAS/BODMAS): Parentheses -> Exponents/Roots -> Multiplication/Division -> Addition/Subtraction.
-  * Show standard theoretical formulas, substitute exact values, and calculate intermediate values with dual representation (exact radical/fraction and 4-6 decimal precision).
-- PASS 3 (Reverse Sanity Check & Boundary Validation):
-  * Verify every arithmetic and trigonometric step (e.g. 90/6 = 15, cos(15°) = (sqrt(6)+sqrt(2))/4 ≈ 0.9659, 90 * 0.9659 = 86.9333°, sin(86.9333°) ≈ 0.9985, \\arctan(1) = \\pi/4, \\arctan(0) = 0, \\arcsin(1) = \\pi/2, \\arccos(0) = \\pi/2, \\ln(1) = 0).
-  * Check mathematical ranges (e.g. |sin|, |cos| <= 1, probabilities in [0,1], non-negative square roots).
-  * Ensure 100% mathematical accuracy before outputting.
-
-MANDATORY ULTRA-CLEAN STEP-BY-STEP FORMATTING PROTOCOL (NO CLUSTERED TEXT):
-1. CLEAR SHORT TRANSITIONS: Every transition phrase ("Let", "Take", "Since", "We have", "Therefore,", "The boundary term is zero, so", "Using", "Numerically,") must be on its OWN line, followed immediately by a blank line (\\n\\n).
-2. DEDICATED CENTERED BLOCK FORMULAS: Every equation, substitution, or derivation must be on its OWN standalone centered block ($$ ... $$) on a separate line. Never cram equations together.
-3. NO BULLET SYMBOLS: Do NOT use bullet signs (no "•", no "-", no "*", no "1.", no "2."). Arrange points cleanly and spacious using blank lines (\\n\\n).
-4. FINAL BOXED ANSWER: On the final step, ALWAYS provide both the exact analytical closed form and the boxed numerical value using \\boxed{...} (e.g. $$\\boxed{I \\approx 0.845254}$$).
-5. MAXIMUM CLARITY & BREATHING ROOM: Ensure generous vertical spacing so mobile students can effortlessly read and absorb every single line without confusion.
-
-CRITICAL RESPONSE RULES:
-1. LANGUAGE MIRRORING: Always reply in the SAME language the student used. If they write in Hinglish (Hindi words in English letters), reply in natural, encouraging Hinglish like a top Indian educator. If English, reply in English. If Hindi (Devanagari script), reply in Hindi.
-2. GREETING / SMALL TALK: If the student sends a casual greeting (e.g. "Hi", "Hey bhai", "Kya haal hai", "Hello", "How are you"), respond warmly and casually as a friendly tutor. Do NOT hallucinate a math problem. Just greet back and ask how you can help them study today.
-3. ACADEMIC QUESTION / DOUBT: If the student asks a concept question or doubt (e.g. "What is photosynthesis?", "Explain Newton's 2nd law"), give a clear, engaging explanation with real-world analogies.
-4. MATH / SCIENCE NUMERICAL: If the student types a math or science problem (e.g. "Solve sin(60)", "Find the derivative of x²"), solve it step by step with LaTeX for all formulas.
-
-You MUST output your response strictly in the following JSON format.
-No raw conversational text is allowed outside of the JSON object. Do NOT wrap the JSON in markdown code blocks. Only output pure valid raw JSON.
-
+--- MODE 2: CONVERSATIONAL & CONCEPTUAL / GENERAL (format_type = "conversational") ---
+Use this mode for non-numerical questions, conceptual explanations, humanities, summaries, custom formats, or text problems.
 FORMAT:
 {
-  "topic_title": "3–6 word title describing the topic (e.g. 'Quadratic Equation Solving', 'Trigonometric Composite Calculation', 'Newton Second Law Explained')",
-  "solution_steps": [
-    {
-      "step_id": 1,
-      "title": "Short heading for this part of the response",
-      "content": "The actual response text here with clear explanation and formulas. For math, use LaTeX: $inline$ or $$block$$. Double-escape backslashes in JSON strings (e.g. \\\\frac, \\\\sqrt, \\\\cos, \\\\sin).",
-      "is_final_answer": false
-    }
-  ],
+  "topic_title": "Topic or Concept Title",
+  "format_type": "conversational",
+  "markdown_content": "Full markdown response with clear headings, bullet points, explanations, or tables.",
   "suggestions": [
-    "Relevant follow-up question or action 1",
-    "Relevant follow-up question or action 2",
-    "Relevant follow-up question or action 3"
+    "Follow-up question 1",
+    "Follow-up question 2",
+    "Follow-up question 3"
   ]
 }
 
 RULES:
-- For greetings / small talk: use 1 step, topic_title = 'Hello! How can I Help You Today 👋', is_final_answer = true.
-- For concept explanations: break into 2–4 steps.
-- For numericals: break into as many steps as needed for crystal clarity.
-- suggestions must be 3 relevant, encouraging follow-up study actions or questions.
-- Do NOT use LaTeX inside the suggestions array.
-- The "content" must NEVER be null, undefined, or empty.
-- NEVER invent a math problem if the student only sent a greeting or casual chat.`;
+- Always populate "suggestions" with 3 context-aware study follow-up ideas.
+- Whenever using LaTeX for formulas, wrap in $$ or $ and double-escape backslashes in JSON (\\\\frac, \\\\sqrt, \\\\text).`;
+
+// Used when the student types a question/message WITHOUT an image
+const SYSTEM_INSTRUCTION_TEXT_CHAT = `You are an elite, polyglot AI Master Educator and Academic Tutor for HelpYou AI. You are intellectually brilliant, deeply empathetic, and dynamically adaptive to student needs.
+
+================================================================
+CRITICAL GOVERNING PROTOCOLS (HIGHEST PRIORITY):
+================================================================
+
+1. USER PERSONA & ROLEPLAY PRIORITY (CRITICAL):
+   If the student commands or requests a persona, role, or tone in their prompt (e.g., "act as a strict teacher", "talk like a pirate", "explain like I'm 5", "be a sarcastic tutor", "speak in poetic rhymes", "be an angry professor"), you MUST 100% prioritize and embody that requested persona and tone! Adopt their requested character voice fully in vocabulary and style.
+
+2. STRICT USER FORMAT CONSTRAINT ADHERENCE (CRITICAL):
+   If the student asks for a specific format (e.g. "give me 3 bullet points", "explain in 2 sentences", "make a comparison table", "write an essay", "summarize in 50 words", "give pros and cons"), you MUST strictly satisfy that exact format. Use format_type = "conversational" with "markdown_content". Do NOT break requested formats into step cards.
+
+3. GREETINGS & CASUAL CHAT (CRITICAL):
+   If the student sends small talk or casual greetings (e.g., "Hi", "Hello", "Kya haal hai", "How are you?", "Hey tutor"), respond warmly, casually, and naturally using format_type = "conversational" with "markdown_content". NEVER invent a math problem or force greetings into step cards.
+
+4. LANGUAGE MIRRORING:
+   Always reply in the SAME language and script the student used (Hinglish -> Hinglish, Hindi -> Hindi, English -> English).
+
+5. MATH & SCIENCE NUMERICAL 3-PASS ACCURACY:
+   For mathematical equations, physics numericals, and multi-step derivations:
+   - PASS 1: Question & sign anatomy. Default to Degrees for angles unless π is present. Check King's property vs. Integration by Parts.
+   - PASS 2: Step-by-step PEMDAS execution with exact radicals/fractions and decimal precision.
+   - PASS 3: Sanity and boundary check. Ensure 100% mathematical accuracy.
+
+================================================================
+MANDATORY JSON OUTPUT STRUCTURE (NO RAW TEXT OUTSIDE JSON):
+================================================================
+You MUST output your response strictly in one of the two JSON formats below. Do NOT wrap JSON in code fences (\`\`\`json).
+
+--- FORMAT TYPE A: "steps" (For Math/Physics/Chemistry Numerical Calculations & Multi-Step Solving) ---
+Use this whenever the problem is a mathematical equation, calculus, trigonometry, physics numerical, or sequential calculation where step-by-step cards provide the highest pedagogical clarity.
+{
+  "topic_title": "3–6 word topic title (e.g. 'Quadratic Roots via Formula', 'Trigonometric Ladder Problem')",
+  "format_type": "steps",
+  "key_formula": "Primary formula or identity in LaTeX (e.g. $$\\sin(\\theta) = \\frac{\\text{Opposite}}{\\text{Hypotenuse}}$$, or null if not applicable)",
+  "exam_trap": "Brief 1-2 sentence high-yield warning about common exam traps or sign mistakes (or null)",
+  "solution_steps": [
+    {
+      "step_id": 1,
+      "title": "Clear concise step title",
+      "content": "Step working with clear logic and centered block formulas ($$ ... $$).",
+      "is_final_answer": false
+    },
+    {
+      "step_id": 2,
+      "title": "Final Calculation & Result",
+      "content": "Final step concluding with the boxed answer $$\\boxed{...}$$.",
+      "is_final_answer": true
+    }
+  ],
+  "suggestions": [
+    "Relevant follow-up practice problem or calculation 1",
+    "Relevant follow-up practice problem or calculation 2",
+    "Relevant follow-up practice problem or calculation 3"
+  ]
+}
+
+--- FORMAT TYPE B: "conversational" (For Greetings, Bullet Points, Concepts, Tables, Roleplays, Essays, Small Talk) ---
+Use this for greetings, conceptual questions, bullet-point lists, comparison tables, summaries, humanities, and roleplay/custom persona requests.
+{
+  "topic_title": "Short Topic Title (or null for simple greetings/small talk)",
+  "format_type": "conversational",
+  "markdown_content": "Your rich, formatted markdown response. Use standard markdown: bullet points (- or *), bold text (**text**), numbered lists (1. 2.), markdown tables, and LaTeX math ($...$ or $$...$$) where applicable. Embody user's requested persona and strictly obey their formatting instructions.",
+  "suggestions": [
+    "Context-aware follow-up suggestion 1",
+    "Context-aware follow-up suggestion 2",
+    "Context-aware follow-up suggestion 3"
+  ]
+}
+
+RULES:
+- The JSON object must be valid raw JSON.
+- Double-escape backslashes for all LaTeX inside JSON (\\\\frac, \\\\sqrt, \\\\sin, \\\\boxed).
+- Always include 3 high-value suggestions in the "suggestions" array.`;
 
 // ----------------------------------------------------
 // SPACING & SENTENCE FORMATTING HELPER
 // ----------------------------------------------------
 /**
  * Automatically formats clustered text by separating distinct sentences with double newlines
- * and ensuring block math equations have generous vertical spacing.
+ * and ensuring block math equations have generous vertical spacing while preserving markdown lists & bullets.
  */
 function formatSpacedContent(text: string): string {
   if (!text) return '';
@@ -221,7 +234,8 @@ function formatSpacedContent(text: string): string {
   });
 
   // Split on sentence boundaries: period/question/exclamation followed by space and uppercase letter or math block
-  protectedText = protectedText.replace(/([.!?])\s+([A-Za-z0-9__])/g, '$1\n\n$2');
+  // Avoid splitting numbered list items (e.g., 1. 2.) or standard abbreviations
+  protectedText = protectedText.replace(/(?<!\b(?:e\.g|i\.e|etc|vs|dr|mr|mrs|prof|\d+))([.!?])\s+([A-Z0-9__])/g, '$1\n\n$2');
 
   // Restore LaTeX blocks
   let restored = protectedText.replace(/__MATH_BLOCK_(\d+)__/g, (_, idx) => {
@@ -263,7 +277,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     // Strip markdown code fences if AI wrapped JSON in ```json ... ```
     const fenceMatch = textToParse.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
     if (fenceMatch) textToParse = fenceMatch[1].trim();
-    if (!textToParse.startsWith('{') && !textToParse.includes('solution_steps')) {
+    if (!textToParse.startsWith('{') && !textToParse.includes('solution_steps') && !textToParse.includes('markdown_content') && !textToParse.includes('format_type')) {
       return null;
     }
     const result = parsePartialJSON(textToParse);
@@ -283,7 +297,48 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
       });
     }
     return result;
-  }, [cleanText, msg.role]);
+  }, [cleanText, msg.role, msg.isTyping]);
+
+  const isConversational = useMemo(() => {
+    if (!parsedSolution) return false;
+    if (parsedSolution.format_type === 'conversational' || parsedSolution.format_type === 'markdown' || parsedSolution.format_type === 'chat') {
+      return true;
+    }
+    if (parsedSolution.markdown_content && (!parsedSolution.solution_steps || parsedSolution.solution_steps.length === 0)) {
+      return true;
+    }
+    if (!parsedSolution.solution_steps || parsedSolution.solution_steps.length === 0) {
+      return true;
+    }
+    // If only 1 step and not an explicit multi-step problem solver
+    if (parsedSolution.solution_steps.length === 1 && parsedSolution.format_type !== 'steps' && !parsedSolution.key_formula && !parsedSolution.exam_trap) {
+      return true;
+    }
+    return false;
+  }, [parsedSolution]);
+
+  const conversationalText = useMemo(() => {
+    if (!parsedSolution) return cleanText;
+    if (parsedSolution.markdown_content) return parsedSolution.markdown_content;
+    if (parsedSolution.content) return parsedSolution.content;
+    if (parsedSolution.explanation) return parsedSolution.explanation;
+    if (parsedSolution.response) return parsedSolution.response;
+    if (parsedSolution.solution_steps && parsedSolution.solution_steps.length === 1) {
+      return parsedSolution.solution_steps[0].content || parsedSolution.solution_steps[0].title || cleanText;
+    }
+    return cleanText;
+  }, [parsedSolution, cleanText]);
+
+  const showTopicHeader = useMemo(() => {
+    if (!parsedSolution?.topic_title) return false;
+    const title = String(parsedSolution.topic_title).trim().toLowerCase();
+    if (!title || title === 'null' || title === 'undefined') return false;
+    // Hide redundant topic titles for casual greetings or small talk
+    if (title.startsWith('hello') || title.startsWith('hi ') || title === 'hi' || title.startsWith('greeting') || title.startsWith('welcome') || title.includes('how can i help')) {
+      return false;
+    }
+    return true;
+  }, [parsedSolution]);
 
   const suggestions = useMemo(() => {
     if (msg.isError || msg.text.includes("hiccup") || msg.text.includes("network")) {
@@ -301,9 +356,9 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
       return matches.map(m => m[1].trim()).filter(Boolean);
     }
     // 3. Fallback smart contextual suggestions so suggestions ALWAYS appear on every AI answer
-    if (msg.role === 'model' && (cleanText.length > 20 || parsedSolution)) {
+    if (msg.role === 'model' && (cleanText.length > 10 || parsedSolution)) {
       const topic = parsedSolution?.topic_title || '';
-      if (topic && topic.length > 2) {
+      if (topic && topic.length > 2 && showTopicHeader) {
         return [
           `Explain ${topic} with a real-life analogy 💡`,
           `Test me with 2 practice questions on ${topic} 📝`,
@@ -317,7 +372,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
       ];
     }
     return [];
-  }, [msg.text, msg.isError, parsedSolution, cleanText, msg.role]);
+  }, [msg.text, msg.isError, parsedSolution, cleanText, msg.role, showTopicHeader]);
 
   const [displayedText, setDisplayedText] = useState(msg.displayedText || (msg.isTyping ? '' : cleanText));
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -377,18 +432,22 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     window.speechSynthesis.cancel();
     
     let fullExplanation = '';
-    if (parsedSolution && Array.isArray(parsedSolution.solution_steps) && parsedSolution.solution_steps.length > 0) {
-      if (parsedSolution.topic_title) {
-        fullExplanation += `Topic: ${parsedSolution.topic_title}. `;
-      }
-      if (parsedSolution.key_formula) {
-        fullExplanation += `Key formula: ${cleanMathForSpeech(parsedSolution.key_formula)}. `;
-      }
-      parsedSolution.solution_steps.forEach((step: any, idx: number) => {
-        fullExplanation += `Step ${step.step_id || idx + 1}: ${step.title || ''}. ${cleanMathForSpeech(step.content)}. `;
-      });
-      if (parsedSolution.exam_trap) {
-        fullExplanation += `Common exam trap to avoid: ${cleanMathForSpeech(parsedSolution.exam_trap)}. `;
+    if (parsedSolution) {
+      if (isConversational) {
+        fullExplanation = cleanMathForSpeech(conversationalText);
+      } else if (Array.isArray(parsedSolution.solution_steps) && parsedSolution.solution_steps.length > 0) {
+        if (parsedSolution.topic_title && showTopicHeader) {
+          fullExplanation += `Topic: ${parsedSolution.topic_title}. `;
+        }
+        if (parsedSolution.key_formula) {
+          fullExplanation += `Key formula: ${cleanMathForSpeech(parsedSolution.key_formula)}. `;
+        }
+        parsedSolution.solution_steps.forEach((step: any, idx: number) => {
+          fullExplanation += `Step ${step.step_id || idx + 1}: ${step.title || ''}. ${cleanMathForSpeech(step.content)}. `;
+        });
+        if (parsedSolution.exam_trap) {
+          fullExplanation += `Common exam trap to avoid: ${cleanMathForSpeech(parsedSolution.exam_trap)}. `;
+        }
       }
     } else {
       fullExplanation = cleanMathForSpeech(cleanText);
@@ -467,9 +526,28 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     return () => clearTimeout(timer);
   }, [msg.isTyping, cleanText, currentWordIndex, isHolding]);
 
+  const textToShareOrCopy = useMemo(() => {
+    if (parsedSolution) {
+      if (isConversational) {
+        return (parsedSolution.topic_title && showTopicHeader ? `### ${parsedSolution.topic_title}\n\n` : '') + conversationalText;
+      }
+      let formatted = '';
+      if (parsedSolution.topic_title && showTopicHeader) formatted += `### ${parsedSolution.topic_title}\n\n`;
+      if (parsedSolution.key_formula) formatted += `**Key Formula:** ${parsedSolution.key_formula}\n\n`;
+      if (Array.isArray(parsedSolution.solution_steps)) {
+        parsedSolution.solution_steps.forEach((step: any, sIdx: number) => {
+          formatted += `**Step ${step.step_id || sIdx + 1}: ${step.title || ''}**\n${step.content}\n\n`;
+        });
+      }
+      if (parsedSolution.exam_trap) formatted += `⚠️ **Exam Trap:** ${parsedSolution.exam_trap}\n\n`;
+      return formatted.trim();
+    }
+    return cleanText;
+  }, [parsedSolution, isConversational, showTopicHeader, conversationalText, cleanText]);
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(cleanText);
+      await navigator.clipboard.writeText(textToShareOrCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -481,8 +559,8 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'HelpYou AI Solution',
-          text: cleanText,
+          title: parsedSolution?.topic_title || 'HelpYou AI Solution',
+          text: textToShareOrCopy,
           url: window.location.href
         });
         setShared(true);
@@ -492,7 +570,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
       }
     } else {
       try {
-        await navigator.clipboard.writeText(`${cleanText}\n\nShared via HelpYou AI`);
+        await navigator.clipboard.writeText(`${textToShareOrCopy}\n\nShared via HelpYou AI`);
         setShared(true);
         setTimeout(() => setShared(false), 2000);
       } catch (err) {
@@ -521,7 +599,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
           {msg.isError && <span className="inline-flex items-center gap-1 text-red-600 font-extrabold mr-1">⚠️ Alert: </span>}
           {parsedSolution ? (
             <div className="space-y-4 max-w-full overflow-hidden">
-              {parsedSolution.topic_title && (
+              {showTopicHeader && (
                 <div className="flex items-center gap-2 mb-2 max-w-full overflow-hidden">
                   <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 uppercase tracking-wide shrink-0">
                     Topic
@@ -532,9 +610,11 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
                 </div>
               )}
               
-              {parsedSolution.format_type === 'markdown' || !parsedSolution.solution_steps || parsedSolution.solution_steps.length === 0 ? (
-                <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-0.5 text-zinc-800">
-                  <GlobalMarkdown>{parsedSolution.markdown_content || parsedSolution.content || parsedSolution.explanation || parsedSolution.response || cleanText}</GlobalMarkdown>
+              {isConversational ? (
+                <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-1 text-zinc-850 leading-relaxed text-sm space-y-3 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_li]:mb-1.5 [&_.katex-display]:my-3">
+                  <GlobalMarkdown>
+                    {conversationalText + (msg.isTyping ? " ▌" : "")}
+                  </GlobalMarkdown>
                 </div>
               ) : (
                 <div className="space-y-3 max-w-full overflow-hidden">
@@ -637,8 +717,8 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
             <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-0.5">
               {/* Safety: never render raw JSON strings to the student */}
               <GlobalMarkdown>
-                {(displayedText.trim().startsWith('{') && displayedText.includes('solution_steps'))
-                  ? (msg.isTyping ? '✨ Solving and preparing step-by-step solution...' : cleanText)
+                {(displayedText.trim().startsWith('{') && (displayedText.includes('solution_steps') || displayedText.includes('markdown_content') || displayedText.includes('format_type')))
+                  ? (msg.isTyping ? '✨ Thinking and preparing response...' : cleanText)
                   : displayedText}
               </GlobalMarkdown>
             </div>
@@ -1565,7 +1645,7 @@ Please evaluate this answer strictly according to your system rubric.`;
                     const next = [...prev];
                     if (next[modelMessageIdx]) {
                       const text = finalAIResponseText;
-                      const isJson = text.trim().startsWith('{') || text.trim().includes('"solution_steps"');
+                      const isJson = text.trim().startsWith('{') || text.trim().includes('"solution_steps"') || text.trim().includes('"markdown_content"') || text.trim().includes('"format_type"');
                       next[modelMessageIdx] = {
                         ...next[modelMessageIdx],
                         text,
@@ -1608,7 +1688,7 @@ Please evaluate this answer strictly according to your system rubric.`;
         const data = await response.json();
         finalAIResponseText = data.text;
 
-        const isJson = finalAIResponseText.trim().startsWith('{') || finalAIResponseText.trim().includes('"solution_steps"');
+        const isJson = finalAIResponseText.trim().startsWith('{') || finalAIResponseText.trim().includes('"solution_steps"') || finalAIResponseText.trim().includes('"markdown_content"') || finalAIResponseText.trim().includes('"format_type"');
         const finalMessages = [...updatedMessages, { 
           role: 'model' as const, 
           text: finalAIResponseText,
@@ -1634,11 +1714,12 @@ Please evaluate this answer strictly according to your system rubric.`;
       const dbImageUrl = persistentImageUrl || localImageUrl;
       const dbImageTimestamp = persistentImageTimestamp || (localImageUrl ? Date.now() : undefined);
 
+      const isJsonFinal = finalAIResponseText.trim().startsWith('{') || finalAIResponseText.trim().includes('"solution_steps"') || finalAIResponseText.trim().includes('"markdown_content"') || finalAIResponseText.trim().includes('"format_type"');
       const finalMessages = [...updatedMessages, { 
         role: 'model' as const, 
         text: finalAIResponseText,
         isTyping: false,
-        displayedText: finalAIResponseText.trim().startsWith('{') || finalAIResponseText.trim().includes('"solution_steps"') ? finalAIResponseText : ''
+        displayedText: isJsonFinal ? finalAIResponseText : ''
       }].map(m => {
         if (m.role === 'user' && m.imageUrl === localImageUrl && dbImageUrl) {
           return { ...m, imageUrl: dbImageUrl, imageTimestamp: dbImageTimestamp };

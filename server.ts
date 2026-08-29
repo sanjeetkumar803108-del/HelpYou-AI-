@@ -304,16 +304,32 @@ function extractUserQuery(params: any): string {
   return "";
 }
 
-
-
-
 async function safeGenerateContent(params: any, retries = 3, delay = 200): Promise<any> {
-  // Extract gradeLevel if provided
-  const gradeLevel = params.gradeLevel;
+  // Extract student profile data if provided
+  const gradeLevel = params.gradeLevel || params.grade;
+  const stream = params.stream || params.academic_stream;
+  const country = params.country || params.academic_country;
+  const region = params.region || params.regionSystem || params.academic_region;
+  const userRole = params.userRole || params.role;
+  const learningStyle = params.learningStyle;
+  const profileContext = params.profileContext || params.userProfile;
 
   // We only clone the top-level structure and config elements to avoid serializing huge base64 strings (which causes CPU freezes and timeouts).
   const clonedParams = { ...params };
   delete clonedParams.gradeLevel;
+  delete clonedParams.grade;
+  delete clonedParams.stream;
+  delete clonedParams.academic_stream;
+  delete clonedParams.country;
+  delete clonedParams.academic_country;
+  delete clonedParams.region;
+  delete clonedParams.regionSystem;
+  delete clonedParams.academic_region;
+  delete clonedParams.userRole;
+  delete clonedParams.role;
+  delete clonedParams.learningStyle;
+  delete clonedParams.profileContext;
+  delete clonedParams.userProfile;
 
   // Ensure config exists
   if (!clonedParams.config) {
@@ -361,17 +377,33 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
       ...originalParts.slice(1)
     ];
 
-    if (gradeLevel) {
-      const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
+    // Universal Student Profile Adaptation Engine
+    const profileLines: string[] = [];
+    if (gradeLevel) profileLines.push(`• Academic Level / Grade: ${gradeLevel}`);
+    if (stream) profileLines.push(`• Academic Track / Stream: ${stream}`);
+    if (country || region) profileLines.push(`• Educational Standard / Region: ${country || region}`);
+    if (userRole) profileLines.push(`• Student Role: ${userRole}`);
+    if (learningStyle) profileLines.push(`• Learning Style Preference: ${learningStyle}`);
+    if (profileContext && typeof profileContext === 'string') profileLines.push(`• Profile Background: ${profileContext}`);
+
+    if (profileLines.length > 0) {
+      const studentProfileInstruction = `STUDENT PROFILE & PERSONALIZATION DIRECTIVE:
+You are actively interacting with a student who has the following academic profile:
+${profileLines.join('\n')}
+
+MANDATORY ADAPTATION RULES:
+1. PEDAGOGICAL CALIBRATION: Calibrate conceptual depth, mathematical rigor, sentence complexity, and vocabulary precisely to this student's grade level (${gradeLevel || 'Standard'}). Never use graduate-level jargon if the student is in middle/high school, and never over-simplify or talk down to a college student.
+2. STREAM RELEVANCE: When providing real-world examples, analogies, applications, or problem setups, tailor them to their academic track (${stream || 'General Academic'}). (e.g. use physics/engineering examples for STEM, biological/clinical examples for Pre-Med, commerce/market examples for Business, social/literary contexts for Humanities).
+3. CURRICULUM ACCURACY: Respect regional standards (${country || region || 'Global'}). Use terminology, units, and conventions aligned with standard regional curricula (e.g. AP/SAT in US, A-Levels/GCSE in UK, HSC/VCE in Australia, IB in International).
+4. EMPOWERING TONE: Maintain an encouraging, intellectually stimulating, and supportive mentor persona.`;
 
       const parts = clonedParams.config.systemInstruction.parts || [];
       const text = parts[0]?.text || "";
       clonedParams.config.systemInstruction.parts = [
-        { text: `${gradeInstruction}\n\n${text}`.trim() },
+        { text: `${studentProfileInstruction}\n\n${text}`.trim() },
         ...parts.slice(1)
       ];
     }
-
   }
 
   const query = extractUserQuery(clonedParams);
@@ -947,7 +979,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       }
 
       if (userMessage) {
-        parts.push({ text: userMessage + "\n\nPlease continue providing step-by-step guidance." });
+        parts.push({ text: userMessage });
       } else if (imagePart) {
         parts.push({ text: "Please look at this uploaded homework image and assist me." });
       }
@@ -1117,12 +1149,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     if (req.file) {
       try {
         const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
-        const pdfData = await pdf(req.file.buffer, { max: 60 });
-
-        // Explicitly check page count
-        if (pdfData.numpages > 60) {
-          return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
-        }
+        const pdfData = await pdf(req.file.buffer, { max: 100 });
 
         extractedText = pdfData.text || "";
         // If extracted text is too short, it might be a scanned PDF or images
@@ -1153,12 +1180,13 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     } else if (action === 'flashcards' || action === 'flashcards-json') {
       if (action === 'flashcards-json') {
         responseMimeType = "application/json";
-        promptText = `Act as an expert study coach. Extract the top 10 to 15 most critical, high-yield concepts from the provided document and format them into flashcards.
-        Rules:
-        1. The 'question' should be concise and direct.
-        2. The 'answer' should be short (1-2 sentences max).
-        3. If there is code/HTML, wrap it in backticks.
-        4. Output ONLY a valid JSON array of objects.
+        promptText = `Act as an expert study coach and cognitive learning specialist. Extract the top 10 to 15 most critical, high-yield concepts from the provided document and format them into comprehensive flashcards.
+        Strict Rules for Flashcards:
+        1. CORE CONCEPTS: Focus on key definitions, dates, formulas, mechanisms, and high-yield takeaways.
+        2. QUESTION: The 'question' should be clear, precise, and direct.
+        3. ANSWER COMPLETION (ZERO TRUNCATION): The 'answer' MUST be 100% complete, fully formulated, and self-contained. NEVER truncate sentences, cut off mid-clause, or leave thoughts incomplete (e.g. NEVER end with '...' or 'compounds like...'). Provide the complete definition and essential context within 2 to 3 crystal-clear, elegant, grammatically complete sentences.
+        4. ESCAPING: If there is code/HTML, wrap it in backticks (e.g., \`<div>\`).
+        5. OUTPUT FORMAT: Output ONLY a valid JSON array of objects directly parseable by JSON.parse.
         
         Format:
         [
@@ -1166,7 +1194,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
           ...
         ]`;
       } else {
-        promptText = "Extract the most important facts and concepts from the provided document and format them into 10 high-quality flashcards. Format exactly like this for each:\n\n**Q: [Question]**\n*A: [Answer]*\n\nCRITICAL: If the document contains code tags, HTML, or web development terms (like <div>, <header>, etc.), ALWAYS wrap them in markdown backticks (e.g., `<div>`) so they render as plain text and not formatting. Keep answers concise.";
+        promptText = "Extract the most important facts and concepts from the provided document and format them into 10 high-quality flashcards. Format exactly like this for each:\n\n**Q: [Question]**\n*A: [Answer]*\n\nCRITICAL: If the document contains code tags, HTML, or web development terms (like <div>, <header>, etc.), ALWAYS wrap them in markdown backticks (e.g., `<div>`) so they render as plain text and not formatting. Always provide complete, self-contained sentences for answers.";
       }
     } else if (action === 'quiz') {
       promptText = `You are an expert tutor. Create a 5-question multiple choice quiz based on the provided document.
@@ -1443,39 +1471,77 @@ Your score output must EXACTLY match this format:
 HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: [ContentScore]/25, Style: [StyleScore]/25, Grammar: [GrammarScore]/25)`;
     }
 
-    const systemInstruction = `Act as an expert certified educator and Essay Grader for the "${curr}" curriculum, specifically for the subject/essay type: "${subj}".
-Your task is to grade and provide constructive, highly specific feedback on the student's essay.
+    let pointDeductionTemplate = "";
+    if (curr.includes('AP')) {
+      pointDeductionTemplate = `- Thesis: [State points earned (0 or 1) and exact reasoning]
+- Evidence & Commentary: [State points earned (0 to 4) and analyze specific textual evidence/gaps]
+- Sophistication: [State points earned (0 or 1) and analyze rhetorical complexity/nuance]`;
+    } else if (curr.includes('IELTS') || curr.includes('TOEFL')) {
+      pointDeductionTemplate = `- Task Achievement: [Band score and prompt coverage analysis]
+- Coherence & Cohesion: [Band score and logical transitions analysis]
+- Lexical Resource: [Band score and vocabulary precision]
+- Grammatical Range & Accuracy: [Band score and structural variety]`;
+    } else if (curr.includes('IB')) {
+      pointDeductionTemplate = `- Criterion A (Focus & Method): [Score and specific explanation]
+- Criterion B (Knowledge & Understanding): [Score and specific explanation]
+- Criterion C (Critical Thinking & Analysis): [Score and specific explanation]
+- Criterion D (Presentation & Language): [Score and specific explanation]`;
+    } else if (curr.includes('A-Levels')) {
+      pointDeductionTemplate = `- AO1 (Knowledge & Understanding): [Mark breakdown and reasoning]
+- AO2 (Analysis & Method): [Mark breakdown and reasoning]
+- AO3 (Context & Synthesis): [Mark breakdown and reasoning]`;
+    } else {
+      pointDeductionTemplate = `- Focus & Organization: [Score out of 25 and specific structural breakdown]
+- Content & Development: [Score out of 25 and evidence/argument depth]
+- Style & Sentence Structure: [Score out of 25 and phrasing/flow]
+- Grammar & Mechanics: [Score out of 25 and technical accuracy]`;
+    }
 
-CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.
+    const systemInstruction = `You are a Senior Academic Examiner, Certified College Board AP Reader, and Elite Essay Assessor for the "${curr}" curriculum, specifically for "${subj}".
+Your task is to grade and provide rigorous, highly specific, actionable feedback on the student's essay.
 
-Tone: Encouraging, professional, and clear. Speak directly to the student.
+GRADE LEVEL CALIBRATION: The student is in Grade: ${gradeLevel}. Calibrate your explanations, tone, and examples so they are encouraging, academically rigorous, and crystal-clear.
 
-CRITICAL RULES (MUST FOLLOW):
-1. NO RAW LETTER GRADES (except if A-Level curriculum where A-Level bands specify grades, but do not just write "A" or "B" without details).
-2. OFFICIAL SPECIFIC RUBRIC FORMAT: 
+CRITICAL GRADING RULES (STRICT COMPLIANCE REQUIRED):
+1. OFFICIAL RUBRIC SCORE HEADER:
 ${rubricInstructions}
-3. ⚡ SPEED & CONCISENESS RULE: Deliver your feedback using highly concise, clear, and punchy plain text. Keep sentence lengths short. Avoid general or redundant context. Limit the response to a total of 250 words to ensure instant grading delivery.
-4. STRICT PLAIN TEXT RULE (CRITICAL): Absolutely DO NOT use any Markdown formatting like asterisks (** or *), hashes (#), underscores, backticks, or dashes/bullet points (-, *, •). Use simple numbered steps (e.g., 1. or 2.) or regular line breaks and capitalized section headers. Do not output any HTML tags or markdown formatting symbols. Output ONLY clean, raw plain text.
 
-Analyze the provided text and output your response EXACTLY in the following structure. Do not add any conversational filler before or after.
+2. NO WALL OF TEXT (CATEGORIZED POINT DEDUCTION ANALYSIS):
+Under "POINT DEDUCTION ANALYSIS", you MUST break down the score category by category using clean bullet points. For every single category where full points were NOT awarded, explicitly explain the exact deficiency in 1-2 sharp sentences.
+${pointDeductionTemplate}
+
+3. ZERO-TOLERANCE MECHANICAL, PUNCTUATION & HOMOPHONE AUDIT:
+Under "GRAMMAR, MECHANICS & POLISH", you MUST actively detect and explicitly list EVERY mechanical flaw in the essay, including:
+- Comma splices, run-on sentences, missing apostrophes, and punctuation errors.
+- Homophone confusion (e.g., "there" vs. "their", "affect" vs. "effect", "your" vs. "you're", "its" vs. "it's").
+- Subject-verb disagreement and tense shifts.
+NEVER write vague placeholders like "minor word choice issues." You MUST quote the exact erroneous sentence/phrase from the essay and provide the exact corrected sentence!
+
+4. STRUCTURED OUTPUT FORMAT:
+Analyze the provided essay and output your response strictly in the following format:
 
 ${scoreHeader}
 
-POINT DEDUCTION ANALYSIS:
-[Explain any lost points or bands. For every single point/band the student did NOT earn, explicitly state which point was lost and why in 1-2 plain sentences. If they scored perfectly, write: "No points lost! Outstanding work."]
+### POINT DEDUCTION ANALYSIS
+${pointDeductionTemplate}
 
-STRENGTHS:
-[1-2 clear, plain sentences highlighting a strong point in their writing, without any dashes, asterisks or bullet points]
+### STRENGTHS
+- [1-2 sentences highlighting a strong conceptual or stylistic element of the essay with specific examples]
 
-AREAS FOR IMPROVEMENT:
-1. [Area 1 in plain text]
-2. [Area 2 in plain text]
+### AREAS FOR IMPROVEMENT
+1. [First high-priority structural or argument improvement with actionable advice]
+2. [Second high-priority improvement with actionable advice]
 
-GRAMMAR AND POLISH:
-[Highlight 1 specific grammatical error and provide the corrected version in a simple plain sentence, without any markdown]
+### GRAMMAR, MECHANICS & POLISH
+[If errors are found, list each one clearly as follows:]
+1. [Error Name, e.g. Comma Splice / Homophone Typo / Subject-Verb Agreement]
+   - Original: "[Exact quote from student essay]"
+   - Correction: "[Exact corrected sentence]"
+   - Why: [1 sentence explaining the rule]
+[If the essay is mechanically flawless, write: "Zero mechanical or grammatical errors detected. Outstanding prose precision."]
 
-OVERALL VERDICT:
-[A short 2-sentence encouraging plain text summary].`;
+### OVERALL VERDICT
+[A supportive, motivating 2-sentence summary providing a clear roadmap for their next revision.]`;
 
     const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
@@ -1690,13 +1756,14 @@ app.post("/api/generate-flashcards", async (req, res) => {
     const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const aiClient = getAI();
 
-    const systemInstruction = `Act as an expert study coach and cognitive learning specialist. Analyze the provided text. Regardless of the text's length, extract exactly the top ${requestedCount} most critical, high-yield concepts. Generate exactly ${requestedCount} flashcards. Prioritize quality and core concepts.
+    const systemInstruction = `Act as an expert study coach, cognitive learning specialist, and master educator. Analyze the provided text. Regardless of the text's length, extract exactly the top ${requestedCount} most critical, high-yield concepts, definitions, chemical mechanisms, mathematical formulas, and core principles. Generate exactly ${requestedCount} flashcards. Prioritize high-yield quality and conceptual depth.
 
 Rules for Flashcards:
-1. Focus on key definitions, dates, formulas, or core concepts.
-2. The 'question' should be concise and direct.
-3. The 'answer' should be short and easy to memorize (1-2 sentences max).
+1. Focus on key definitions, dates, formulas, core concepts, mechanisms, and high-yield exam takeaways.
+2. The 'question' should be concise, clear, and direct.
+3. CRITICAL ANSWER COMPLETION (ZERO TRUNCATION): The 'answer' MUST be 100% complete, fully formulated, and self-contained. NEVER truncate sentences, cut off mid-clause, or leave thoughts incomplete (e.g. NEVER end with '...' or 'compounds like...'). Provide the complete scientific definition and essential context within 2 to 3 crystal-clear, elegant, grammatically complete sentences.
 4. CRITICAL: If the topic involves coding, HTML, or web development (like <div>, <header>, <span>), ALWAYS wrap those tags or attributes in markdown backticks (e.g., \`<div>\`) so they are treated as plain text and not rendered as HTML.
+5. Use LaTeX formatting with single dollar signs (e.g., $E = mc^2$) for math or chemical formulas.
 
 CRITICAL OUTPUT RULE:
 You must output ONLY a valid JSON array of objects. Do not wrap the JSON in markdown blocks (like \`\`\`json), do not include any introductory or concluding text. The output must be directly parseable by a JSON parser.
@@ -1705,20 +1772,23 @@ Format exactly like this:
 [
   {
     "question": "What is the powerhouse of the cell?",
-    "answer": "The mitochondria."
+    "answer": "The mitochondria is the cellular organelle responsible for generating the majority of chemical energy in the form of ATP through cellular respiration."
   },
   {
     "question": "What year did the US declare independence?",
-    "answer": "1776."
+    "answer": "The United States declared independence in 1776 following the adoption of the Declaration of Independence by the Continental Congress on July 4."
   }
 ]`;
 
     const response = await safeGenerateContent({
+      gradeLevel,
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Generate exactly ${requestedCount} flashcards from this text: ${text}` }] },
+      contents: { parts: [{ text: `Generate exactly ${requestedCount} high-yield, fully complete flashcards from this text:\n\n${text}` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+        temperature: 0.2
       }
     });
 
@@ -2186,8 +2256,6 @@ app.post("/api/generate-content", async (req, res) => {
 
     const wordCount = topic ? topic.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
 
-
-
     if (!topic || !type) {
       return res.status(400).json({ error: "Missing topic or type" });
     }
@@ -2197,66 +2265,87 @@ app.post("/api/generate-content", async (req, res) => {
     let formatSpecificRules = "";
     if (type.toUpperCase() === "ESSAY") {
       formatSpecificRules = `
-- Avoid the basic 3-point template or five-paragraph essay structure.
-- Dive deep into complex analysis, address potential counter-arguments, and synthesize information authoritatively.`;
+- ESSAY SCHOLARSHIP & RIGOR: Avoid the simplistic 5-paragraph template. Synthesize theoretical frameworks, evaluate counter-arguments, and present persuasive, evidence-based academic reasoning.
+- MANDATORY IN-TEXT CITATIONS (APA / MLA / ACADEMIC): You MUST integrate authentic parenthetical in-text citations throughout the body paragraphs for every factual claim, statistical figure, scientific definition, or theoretical argument (e.g., (Author, Year) for APA; (Author Page) for MLA).
+- 1-TO-1 CITATION TO REFERENCE MAPPING: Every source listed in the References or Works Cited section at the end of the essay MUST appear at least once as an in-text citation inside the body text. Never produce a detached bibliography.
+- TITLE PAGE & SECTION HEADINGS:
+  * APA Format: Include a structured APA 7th Edition Title Block at the beginning:
+    # [Complete Descriptive Paper Title]
+    **Author:** Student Researcher  
+    **Affiliation:** Academic Department, [Institution]  
+    **Course:** Academic Writing & Research  
+    **Instructor:** Course Examiner  
+    **Date:** ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}  
+    ---
+    Use clear markdown headings (## Introduction, ## Critical Analysis, ## Synthesis & Counter-Perspectives, ## Conclusion, ## References).
+  * MLA Format: Include standard MLA 9th Edition Header:
+    Student Researcher  
+    Course Examiner  
+    Academic Writing & Research  
+    ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}  
+    ### [Centered Title of the Essay]  
+    ---
+    Follow with standard body paragraphs and ## Works Cited.
+  * Standard Format: Title at top (# Title), followed by structured introduction, analytical body paragraphs, and conclusion.`;
     } else if (type.toUpperCase() === "BLOG") {
       formatSpecificRules = `
-- Ground the text in reality. Use concrete examples, hypothetical case studies, or hard numbers (e.g., specific revenue differences, subscriber counts).
+- Ground the text in reality. Use concrete examples, hypothetical case studies, or hard numbers (e.g., specific metrics, benchmarks, case studies).
 - Use punchy, scannable paragraphs and Markdown subheadings (###).`;
     } else if (type.toUpperCase() === "POEM") {
       formatSpecificRules = `
-- Strictly use proper line breaks (\\n) and stanzas. Do not output a continuous block of text.
-- Focus on vivid, sensory imagery and rhythm.`;
+- STRICT POEM & STANZA FORMATTING (ZERO PROSE MERGING): If the content type is Poem, you MUST output structured poetic verse with explicit line breaks.
+- Separate every stanza with an empty line (\\n\\n).
+- Inside each stanza, every single line of poetry MUST end with a newline character (\\n).
+- NEVER output continuous prose or block paragraphs for a poem.
+- Employ vivid sensory imagery, evocative rhythm, distinct meter, and artistic line breaks.`;
     } else if (type.toUpperCase() === "PARAGRAPH") {
       formatSpecificRules = `
-- Deliver a single, highly concentrated block of thought without filler fluff.`;
+- Deliver a single, highly concentrated, intellectually substantive block of thought without filler fluff.`;
     }
 
     let toneSpecificRules = "";
     if (tone.toUpperCase() === "ACADEMIC") {
       toneSpecificRules = `
-- Maintain extreme objectivity and formal structure.
-- Incorporate realistic (or requested) citations logically.
-- Synthesize complex mechanisms.`;
+- Maintain extreme objectivity, elevated scholarship, and formal structure.
+- Incorporate parenthetical citations logically into every analytical paragraph.
+- Synthesize complex mechanisms with authoritative clarity.`;
     } else if (tone.toUpperCase() === "PERSUASIVE") {
       toneSpecificRules = `
 - Write from the trenches. Be direct, authoritative, and logic-driven.
-- Convince the reader using realistic scenarios, not abstract philosophy.`;
+- Convince the reader using realistic scenarios, empirical evidence, and sharp logic.`;
     } else if (tone.toUpperCase() === "CREATIVE") {
       toneSpecificRules = `
 - "Show, don't tell."
-- Focus on emotional resonance, setting the scene, and exploring the human element.
-- Avoid melodrama.`;
+- Focus on emotional resonance, setting the scene, and exploring the human condition.
+- Avoid melodrama and clichéd tropes.`;
     } else if (tone.toUpperCase() === "CASUAL") {
       toneSpecificRules = `
-- Write like a knowledgeable friend or a top-tier Reddit/Twitter thread.
-- Be relatable, conversational, and highly engaging.`;
+- Write like a brilliant mentor or a masterclass article.
+- Be relatable, conversational, energetic, and highly engaging.`;
     }
 
-    const systemInstruction = `You are an expert, human-sounding writer capable of adapting to any format and tone. Your primary goal is to generate high-quality, deeply engaging content while strictly avoiding formulaic "AI-speak."
+    const systemInstruction = `You are an Elite Academic Author, Senior Essayist, and Master Literary Writer capable of adapting flawlessly to any format and tone. Your primary goal is to generate high-quality, deeply engaging content while strictly adhering to formatting standards and avoiding formulaic "AI-speak."
 
 1. THE GLOBAL ANTI-ROBOT FILTER (Applies to ALL outputs):
-- BAN AI CLICHÉS: Never use overused words like "delve," "testament," "realm," "tapestry," "crucial," "foster," or "unassailable." Use natural, precise, and internet-native vocabulary.
+- BAN AI CLICHÉS: Never use overused words like "delve," "testament," "realm," "tapestry," "crucial," "foster," or "unassailable." Use natural, precise, and sophisticated vocabulary.
 - NO ROBOTIC TRANSITIONS: Eliminate mechanical transitions ("Firstly," "Furthermore," "In conclusion," "Ultimately"). Weave ideas together naturally.
-- NO GENERIC ENDINGS: Never end with a summary paragraph wrapping up the text. End with a provocative thought, a call-to-action, or a lingering image depending on the format.
 - NO ROBOTIC FILLER: Do not say "Here is your content" or "Certainly". Output ONLY the final content itself.
 
 2. DYNAMIC FORMAT RULES (Adapt based on user's 'Content Type' selection):
 ${formatSpecificRules}
 
 3. DYNAMIC TONE RULES (Adapt based on user's 'Tone' selection):
-${toneSpecificRules}
-
-ACADEMIC FORMATTING COMPLIANCE (If applicable):
-- MLA: If MLA formatting was selected, include a standard MLA Header, centered title, in-text citations, and Works Cited.
-- APA: If APA formatting was selected, include APA Title block, section headers, in-text citations, and References.
-- Standard: Standard introduction, body, and conclusion.`;
+${toneSpecificRules}`;
 
     const response = await safeGenerateContent({
       gradeLevel,
       model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone. Topic: ${topic}` }] },
-      config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
+      config: { 
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        maxOutputTokens: 8192,
+        temperature: 0.3
+      }
     });
 
     const outputText = response.text || "No content generated.";
@@ -2580,25 +2669,30 @@ app.post("/api/generate-questions", async (req, res) => {
 
     const aiClient = getAI();
     
-    const systemInstruction = `You are an Elite Academic Advisor, US High School & AP/College Teacher, and Expert AI Tutor.
-The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions.
-Your ONLY job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
+    const systemInstruction = `You are an Elite Academic Advisor, Senior Examiner, and Master Educator.
+The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions along with comprehensive expected answers and examiner marking rubrics for self-evaluation.
+Your job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
 
 CRITICAL RULES:
-1. NO ANSWERS: Do not include any answers, options, multiple choice letters, hints, solutions, or explanations. You must ONLY output the question prompts themselves.
-2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans. Do not output simple retrieval questions.
-3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-4. CRISP & CONCISE: Keep every question incredibly clear, direct, and free of redundant words. Avoid wordy, run-on sentences.
-5. WORD LIMIT: Each question must be extremely direct and MUST NOT exceed 30-40 words.
-6. CHUNKING FOR COMPLEXITY: If a question requires a complex scenario or detailed context, DO NOT write a massive paragraph. Instead, break it down using sub-parts (e.g., Part A, Part B) or bullet points.
-7. NO FLUFF: Maintain elite academic rigor and Bloom's Taxonomy cognitive depth, but deliver it in bite-sized, digestible mobile text.
+1. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans.
+2. SUB-PART FORMATTING (MANDATORY LINE BREAKS): If a question has sub-parts (e.g., Part A, Part B, (i), (ii)), you MUST separate each sub-part with a double newline '\\n\\n' so each part starts on its own line. NEVER merge multiple parts onto a single continuous line.
+3. EXPECTED ANSWER: For each question, provide a complete, high-scoring model answer ('expectedAnswer') in 2-4 comprehensive, elegant, grammatically complete sentences. Use LaTeX ($formula$) for any math or chemical formulas.
+4. GRADING RUBRIC / KEYWORDS: For each question, provide an array of 3-5 essential keywords or marking criteria ('keyRubricPoints') that examiners require to award full marks.
+5. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json.
 
 Use this exact JSON structure:
 {
   "questions": [
-    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict the consumer response.",
-    "Analyze the ethical implications of using advanced AI algorithms for autonomous driving in critical, unavoidable crash scenarios.",
-    "Describe the primary biochemical and molecular steps that occur in a eukaryotic muscle cell during a sliding filament contraction."
+    {
+      "question": "Part A: State Le Chatelier's Principle regarding dynamic chemical equilibrium.\\n\\nPart B: Predict the directional shift when temperature is increased in an exothermic synthesis reaction.",
+      "expectedAnswer": "Part A: Le Chatelier's Principle states that when a system at chemical equilibrium is disturbed by a change in temperature, pressure, or concentration, the system shifts in a direction that opposes the disturbance to re-establish equilibrium.\\n\\nPart B: In an exothermic reaction ($\\\\Delta H < 0$), heat is released as a product. Raising temperature adds heat, causing the equilibrium to shift in the reverse (endothermic) direction toward reactants, decreasing product yield.",
+      "keyRubricPoints": [
+        "Accurate statement of Le Chatelier's Principle",
+        "Heat treated as product in exothermic reaction ($\\\\Delta H < 0$)",
+        "Shift towards reverse / reactant direction",
+        "Decrease in product concentration and equilibrium constant $K_{eq}$"
+      ]
+    }
   ]
 }`;
 
@@ -2607,10 +2701,12 @@ Use this exact JSON structure:
       const response = await safeGenerateContent({
         gradeLevel,
         model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions now.` }] },
+        contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions with expected answers and rubrics now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          maxOutputTokens: 8192,
+          temperature: 0.2
         }
       });
       generatedText = response.text || "";
@@ -3246,60 +3342,79 @@ Return the response in the strict JSON array format specified.`;
 });
 
 app.post("/api/live-study-tutor", async (req, res) => {
-  const { query, profileContext, studentNotes, gradeLevel } = req.body;
+  const rawQueryInput = req.body.query || req.body.prompt || req.body.search || "";
+  const profileContext = req.body.profileContext;
+  const studentNotes = req.body.studentNotes;
+  const gradeLevel = req.body.gradeLevel || req.body.userGrade || "11th Grade (Junior)";
+  const country = req.body.country || "United States";
+  const academicStream = req.body.academicStream || "STEM / Engineering";
+
   try {
-    if (!query || !query.trim()) {
+    if (!rawQueryInput || !rawQueryInput.trim()) {
       return res.status(400).json({ error: "Missing search query" });
     }
 
-    const rawQuery = query.trim();
+    const rawQuery = rawQueryInput.trim();
 
     // 1. Smart Keyword & Entity Extraction
     const keywords = await extractSearchKeywords(rawQuery);
 
-    // 2. Multi-Engine Real-Time Live Web Search (Google News RSS, Wikipedia Deep REST, DuckDuckGo)
-    const searchResults = await performLiveWebSearch(rawQuery, keywords);
+    // 2. Multi-Engine Real-Time Live Web Search (Google News RSS, Crossref Academic DOI, DuckDuckGo)
+    const searchResults = await performLiveWebSearch(rawQuery, keywords, country);
 
     const verifiedContextString = searchResults.map((s, idx) =>
-      `[Verified Source ${idx + 1}] Title: ${s.title}\nURL: ${s.uri}\nPublisher: ${s.sourceName}\nContent Snippet: ${s.snippet}\n`
+      `[Source ${idx + 1}] Title: ${s.title}\nURL: ${s.uri}\nPublisher: ${s.sourceName}\nContent Snippet: ${s.snippet}\n`
     ).join('\n---\n');
 
     const systemInstruction = `You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
-Your mission is to process student queries and produce an elite, point-wise, in-depth academic research report grounded in real-time verified data.
+Your mission is to process student queries and produce an elite, point-wise, in-depth academic research report grounded in real-time verified data, peer-reviewed journals, and accredited national educational repositories.
 
-CRITICAL FORMATTING & STRUCTURE RULES:
-1. ONLY ONE MAIN HEADLINE:
-   - "topic_title" MUST be a crisp, elegant, concise headline of 3 to 6 words max (e.g. "Jeju Island Case Investigation", "JEE Main 2026 Registration Guide"). Avoid long multi-clause sentence titles.
-2. NEVER OUTPUT LARGE UNBROKEN PARAGRAPHS:
+CRITICAL ACADEMIC INTEGRITY & CITATION RULES:
+1. STRICT WIKIPEDIA HARD-BAN:
+   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output. Tier-1 academic institutions (US, UK, Canada, Australia, IB schools) strictly ban Wikipedia citations and penalize students.
+   - Strictly prioritize peer-reviewed journals (.edu, .gov, Nature, Science, IEEE, NIH, JSTOR, Springer, Elsevier, Crossref DOI), authoritative encyclopedias (Encyclopaedia Britannica), accredited national education boards (CollegeBoard, NCERT, UCAS), and verified global news wires (Reuters, AP, BBC).
+
+2. MANDATORY INLINE CITATIONS PROTOCOL:
+   - Every single factual claim, statistic, date, quote, policy decision, exam notification, or scientific theorem in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...ratified in early 2026 [1]...", "...quantum coherence increased by 42% [2]...").
+   - Every citation number [1], [2], [3] MUST correspond directly to the 1-based index of the items in "source_links" and "detailed_sources". This guarantees students can map every single fact to its exact accredited source when writing essays.
+
+3. ONLY ONE MAIN HEADLINE:
+   - "topic_title" MUST be a crisp, elegant, concise headline of 3 to 6 words max (e.g. "Jeju Island Case Investigation", "JEE Main 2026 Registration Guide", "Quantum Entanglement Principles"). Avoid long multi-clause sentence titles.
+
+4. NEVER OUTPUT LARGE UNBROKEN PARAGRAPHS:
    - All explanations MUST be strictly broken down into small, digestible subheadings and point-wise bullet points.
-   - Each entry in "live_updates" MUST start with a small markdown subheading (e.g. "### 📌 Core Background & Overview", "### 🔍 Detailed Timeline & Developments", "### ⚖️ Systemic Impact & Public Reforms", "### 💡 High-Yield Student Takeaways").
-   - Under each subheading, provide 2 to 4 detailed bullet points starting with bold anchors (e.g. "* **Incident Timeline:** In late August 2026...").
-3. TRUTHFULNESS & GROUNDING:
-   - Base all facts, recent dates, exam notices, historical events, and names strictly on reality and the provided Verified Web Search Context.
-   - ZERO HALLUCINATIONS: Do not fabricate dates, numbers, event outcomes, or policies.
-4. STEM vs HUMANITIES RIGOR:
-   - STEM Queries (Physics, Chemistry, Math, Biology): Provide core formulas wrapped in LaTeX ($...$ or $$...$$), step-by-step principles, and key parameters.
+   - Each entry in "live_updates" MUST start with a small markdown subheading (e.g. "### 📌 Core Background & Overview", "### 🔍 Detailed Timeline & Key Developments", "### ⚖️ Analytical Impact & Real-World Consequences", "### 💡 High-Yield Student Takeaways").
+   - Under each subheading, provide 2 to 4 detailed bullet points starting with bold anchors and ending with inline citations (e.g. "* **Incident Timeline:** In late August 2026, official authorities confirmed the findings [1].").
+
+5. REGIONAL ACADEMIC ADAPTATION:
+   - The student is located in ${country}, Grade: ${gradeLevel}, Stream: ${academicStream}.
+   - Contextualize terminology, syllabus relevance, and exam boards according to their national curriculum (e.g., AP/SAT/CollegeBoard for USA, GCSE/A-Levels for UK, JEE/NEET/CBSE for India, VCE/HSC for Australia).
+
+6. STEM vs HUMANITIES RIGOR:
+   - STEM Queries (Physics, Chemistry, Math, Biology): Provide core formulas wrapped in LaTeX ($...$ or $$...$$), step-by-step derivations, and key parameters.
    - Humanities/News Queries: Provide structured bullet points covering background origin, chronological milestones, institutional impact, and current status.
-5. LANGUAGE MATCHING:
-   - If the user wrote in Hinglish (e.g. "Bhai Jeju island pe kya hua tha"), write the entire response in natural, articulate, point-wise Hinglish.
+
+7. LANGUAGE MATCHING:
+   - If the user wrote in Hinglish (e.g. "Bhai Jeju island pe kya hua tha"), write the entire response in natural, articulate, point-wise Hinglish with academic precision.
    - If Hindi, write Hindi. If English, write English.
-6. ZERO FAKE URLS:
-   - In "source_links", ONLY use exact verified URLs from context. If no URLs match, use verified official root domains.
+
+8. ZERO FAKE URLS:
+   - In "source_links", ONLY use exact verified URLs from context or accredited root domains (e.g., britannica.com, nature.com, nih.gov, ed.gov, ncert.nic.in). NEVER use Wikipedia.
 
 STRICT JSON OUTPUT FORMAT:
 {
   "topic_title": "Concise Main Headline (3-6 words)",
   "match_score": "98%",
   "live_updates": [
-    "### 📌 Core Background & Overview\\n* **Foundational Context:** Clear, detailed background facts.\\n* **Core Definition & Significance:** Key concepts students need to know.",
-    "### 🔍 Detailed Timeline & Key Developments\\n* **Chronological Events:** Specific dates and verified occurrences.\\n* **Key Turning Points:** Critical discoveries or policy shifts.",
-    "### ⚖️ Analytical Impact & Real-World Consequences\\n* **Institutional Response:** Official commissions, public reaction, or examination implications.\\n* **Modern Status:** Current status as of today.",
-    "### 💡 High-Yield Student Takeaways\\n* **Critical Exam Insights:** High-yield questions and summary synthesis.\\n* **Common Misconceptions:** Key distinctions to avoid exam traps."
+    "### 📌 Core Background & Overview\\n* **Foundational Context:** Clear, verified background facts supported by research [1].\\n* **Core Definition & Significance:** Key concepts students need to know for examination [2].",
+    "### 🔍 Detailed Timeline & Key Developments\\n* **Chronological Milestones:** Specific dates and verified occurrences [1].\\n* **Key Turning Points:** Critical discoveries or institutional policy shifts [2].",
+    "### ⚖️ Analytical Impact & Real-World Consequences\\n* **Institutional Findings:** Official commissions or syllabus implications [1].\\n* **Current 2026 Status:** Up-to-date verified status as of today [2].",
+    "### 💡 High-Yield Student Takeaways\\n* **Critical Exam Insights:** High-yield questions and summary synthesis [1].\\n* **Common Misconceptions:** Key distinctions to avoid exam traps [2]."
   ],
   "action_steps": [
     "Step 1: Foundational Review - core concepts and essential timeline to master",
     "Step 2: Analytical Deep-Dive - key turning points or core mechanisms",
-    "Step 3: Synthesis & Verification - high-yield review against verified facts"
+    "Step 3: Synthesis & Verification - review findings against accredited citations"
   ],
   "pro_tips": "In-depth educator pro-tip highlighting common exam traps or memory anchors.",
   "related_queries": [
@@ -3314,13 +3429,17 @@ STRICT JSON OUTPUT FORMAT:
 }`;
 
     const contentPrompt = `STUDENT SEARCH QUERY: "${rawQuery}"
-${profileContext ? `STUDENT PROFILE CONTEXT:\n${profileContext}\n` : ""}
+STUDENT ACADEMIC PROFILE & LOCATION:
+- Country: ${country}
+- Grade Level: ${gradeLevel}
+- Academic Stream: ${academicStream}
+${profileContext ? `ADDITIONAL PROFILE CONTEXT:\n${profileContext}\n` : ""}
 ${studentNotes ? `STUDENT LOCAL STUDY NOTES / TARGET SYLLABUS:\n${studentNotes}\n` : ""}
 
-VERIFIED REAL-TIME WEB SEARCH DATA:
-${verifiedContextString || "No external search feeds returned. Synthesize using accurate, verified ground truth."}
+VERIFIED REAL-TIME ACADEMIC & RESEARCH DATA:
+${verifiedContextString || "No external search feeds returned. Synthesize using accurate, verified ground truth from peer-reviewed databases."}
 
-Conduct a deep, point-wise, structured academic research analysis with small markdown subheadings (### ...) and bullet points under each section, returning strictly the JSON structure above.`;
+Conduct an elite, point-wise, structured academic research report with small markdown subheadings (### ...), bullet points, and mandatory inline bracketed citations ([1], [2]) mapping to verified references, returning strictly the JSON structure above.`;
 
     const response = await safeGenerateContent({
       gradeLevel,
@@ -3362,7 +3481,7 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
       };
     }
 
-    // Build verified detailed_sources with exact titles and working URLs
+    // Build verified detailed_sources with exact titles and working URLs (Wikipedia Hard-Banned)
     const cleanSources: string[] = [];
     const detailedSources: { title: string; uri: string; sourceName?: string }[] = [];
     const seenUrls = new Set<string>();
@@ -3372,7 +3491,7 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
       : searchResults.map(s => s.uri);
 
     for (const link of candidateLinks) {
-      if (typeof link !== 'string' || !link.startsWith('http') || seenUrls.has(link)) continue;
+      if (typeof link !== 'string' || !link.startsWith('http') || seenUrls.has(link) || link.includes('wikipedia.org') || link.includes('wikimedia.org')) continue;
       seenUrls.add(link);
       cleanSources.push(link);
 
@@ -3382,12 +3501,13 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
         try {
           const u = new URL(link);
           const host = u.hostname.replace(/^www\./, '');
-          if (host.includes('wikipedia')) displayTitle = 'Wikipedia Academic Article';
-          else if (host.includes('britannica')) displayTitle = 'Encyclopaedia Britannica';
+          if (host.includes('britannica')) displayTitle = 'Encyclopaedia Britannica Academic';
+          else if (host.includes('nature')) displayTitle = 'Nature Journal Research';
+          else if (host.includes('doi.org')) displayTitle = 'Peer-Reviewed DOI Study';
           else if (host.includes('news.google')) displayTitle = 'Google News Live Feed';
           else displayTitle = `${host} Verified Research`;
         } catch (_) {
-          displayTitle = 'Verified Web Source';
+          displayTitle = 'Verified Academic Source';
         }
       }
 
@@ -3401,7 +3521,7 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
     // If search results had sources but none matched, include the top search results
     if (detailedSources.length === 0 && searchResults.length > 0) {
       for (const s of searchResults.slice(0, 5)) {
-        if (!seenUrls.has(s.uri)) {
+        if (!seenUrls.has(s.uri) && !s.uri.includes('wikipedia.org') && !s.uri.includes('wikimedia.org')) {
           seenUrls.add(s.uri);
           cleanSources.push(s.uri);
           detailedSources.push({
@@ -3413,14 +3533,31 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
       }
     }
 
-    // Guaranteed fallback sources if completely empty
+    // Guaranteed fallback sources if completely empty (Tier-1 Academic Portals based on country)
     if (detailedSources.length === 0) {
-      const defaultWiki = `https://en.wikipedia.org/wiki/${encodeURIComponent((keywords[0] || rawQuery).replace(/ /g, '_'))}`;
-      cleanSources.push(defaultWiki, "https://news.google.com");
+      const mainKeyword = keywords[0] || rawQuery;
+      const encodedKw = encodeURIComponent(mainKeyword);
+      const countryNorm = (country || '').toLowerCase();
+
+      const britannicaUrl = `https://www.britannica.com/search?query=${encodedKw}`;
+      const natureUrl = `https://www.nature.com/search?q=${encodedKw}`;
+
+      cleanSources.push(britannicaUrl, natureUrl);
       detailedSources.push(
-        { title: `${keywords[0] || rawQuery} - Wikipedia Encyclopedia`, uri: defaultWiki, sourceName: "Wikipedia" },
-        { title: "Google News Real-Time Index", uri: "https://news.google.com", sourceName: "Google News" }
+        { title: `${mainKeyword} - Encyclopaedia Britannica Academic`, uri: britannicaUrl, sourceName: "Encyclopaedia Britannica" },
+        { title: `${mainKeyword} - Nature Academic Research Index`, uri: natureUrl, sourceName: "Nature Journal" }
       );
+
+      if (countryNorm.includes('india')) {
+        cleanSources.push("https://ncert.nic.in");
+        detailedSources.push({ title: "NCERT National Academic Repository", uri: "https://ncert.nic.in", sourceName: "NCERT India" });
+      } else if (countryNorm.includes('kingdom') || countryNorm.includes('uk')) {
+        cleanSources.push("https://www.gov.uk/education");
+        detailedSources.push({ title: "UK Department for Education Official Portal", uri: "https://www.gov.uk/education", sourceName: "GOV.UK Education" });
+      } else {
+        cleanSources.push("https://www.loc.gov");
+        detailedSources.push({ title: "Library of Congress Academic Database", uri: "https://www.loc.gov", sourceName: "Library of Congress" });
+      }
     }
 
     parsedResult.source_links = cleanSources.slice(0, 6);

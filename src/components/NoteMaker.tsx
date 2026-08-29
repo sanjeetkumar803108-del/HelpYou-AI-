@@ -635,18 +635,39 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   };
 
   // HTML5 Audio element control handlers
-  const togglePlay = () => {
-    if (!audioRef.current) return;
+  const togglePlay = async () => {
     triggerVibration(10);
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        console.error("Audio playback failed", err);
-      });
+    // If HTML5 audio is ready, toggle play/pause directly without re-generation
+    if (audioRef.current && audioUrl) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        audioRef.current.play().then(() => {
+          setIsPlaying(true);
+        }).catch(err => {
+          console.error("Audio playback failed", err);
+        });
+      }
+      return;
+    }
+
+    // If audio is not yet in state, check persistent IndexedDB cache
+    if (result) {
+      const cached = await getAudioCache(currentSavedId, result);
+      if (cached) {
+        setAudioData(cached);
+        setIsSpeechFallback(false);
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
+          }
+        }, 200);
+        return;
+      }
+
+      // If not in cache, load via TTS or speech synthesis
+      startSpeechFallback();
     }
   };
 
@@ -680,7 +701,6 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
 
   // Speech Synthesis fallback control handlers with sentence queue for Android WebView
 
-
   const startSpeechFallback = async () => {
     if (!result) return;
     triggerVibration(10);
@@ -697,23 +717,20 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
             .then(() => setIsPlaying(true))
             .catch(e => console.error('Audio play error:', e));
         }
-      }, 150);
+      }, 200);
       return;
     }
 
-    // 2. On native Android/iOS, if not cached yet, generate via TTS and cache it
-    if (Capacitor.isNativePlatform()) {
-      setIsGeneratingAudio(true);
-      try {
-        showToast('Generating audio... please wait', 'info', 4000);
-        const ttsResponse = await fetch(getApiUrl('/api/tts'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: result }),
-        });
-        if (!ttsResponse.ok) throw new Error('TTS API returned ' + ttsResponse.status);
-        const contentType = ttsResponse.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) throw new Error('Unexpected TTS response format');
+    // 2. Fetch TTS audio and cache it
+    setIsGeneratingAudio(true);
+    try {
+      showToast('Preparing audio briefing...', 'info', 3000);
+      const ttsResponse = await fetch(getApiUrl('/api/tts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: result }),
+      });
+      if (ttsResponse.ok) {
         const ttsData = await ttsResponse.json();
         if (ttsData.audio) {
           const audioDataUrl = ttsData.audio.startsWith('data:')
@@ -725,7 +742,6 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
           // Save to IndexedDB so it never needs to generate again!
           await saveAudioCache(currentSavedId, result, audioDataUrl);
 
-          // Auto-play once audioRef updates
           setTimeout(() => {
             if (audioRef.current) {
               audioRef.current.play()
@@ -733,21 +749,18 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                 .catch(e => console.error('Audio play error:', e));
             }
           }, 300);
-        } else {
-          throw new Error('No audio field in TTS response');
+          return;
         }
-      } catch (e) {
-        console.error('TTS retry failed:', e);
-        showToast('Audio generation failed. Check your internet connection.', 'error');
-      } finally {
-        setIsGeneratingAudio(false);
       }
-      return;
+    } catch (e) {
+      console.warn('TTS on-demand fetch notice:', e);
+    } finally {
+      setIsGeneratingAudio(false);
     }
 
-    // Web browser fallback — speechSynthesis
+    // Fallback to SpeechSynthesis if TTS fails
     if (!('speechSynthesis' in window)) {
-      showToast('Audio playback is not supported on this browser.', 'warning');
+      showToast('Audio playback is not supported on this device.', 'warning');
       return;
     }
 
@@ -922,7 +935,28 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         setIsGeneratingAudio(false);
                       } else {
                         setAudioData(null);
-                        setIsSpeechFallback(true);
+                        setIsSpeechFallback(false);
+                        setIsGeneratingAudio(false);
+                        // Fetch TTS silently in background and cache it
+                        (async () => {
+                          try {
+                            const ttsRes = await fetch(getApiUrl('/api/tts'), {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ text: item.text }),
+                            });
+                            if (ttsRes.ok) {
+                              const ttsData = await ttsRes.json();
+                              if (ttsData.audio) {
+                                const fetched = ttsData.audio.startsWith('data:')
+                                  ? ttsData.audio
+                                  : `data:audio/wav;base64,${ttsData.audio}`;
+                                setAudioData(fetched);
+                                await saveAudioCache(item.id, item.text, fetched);
+                              }
+                            }
+                          } catch (_) {}
+                        })();
                       }
                     }}
                     className="bg-white border border-zinc-200/80 hover:border-indigo-300 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer flex justify-between items-start group"

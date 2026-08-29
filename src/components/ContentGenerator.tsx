@@ -1,12 +1,18 @@
 import { getApiUrl } from '../utils/api';
-import React, { useState } from 'react';
-import { ArrowLeft, Loader2, Save, PenTool, Type, FileText, Feather, Edit3, Copy, FileDown, Check, History, Trash2, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  ArrowLeft, Loader2, Save, PenTool, Type, FileText, Feather, 
+  Edit3, Copy, FileDown, Check, History, Trash2, Calendar, Share2, 
+  Sparkles, ExternalLink, Eye, Download
+} from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import { motion } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
-import { savePDFMobile } from '../utils/mobileSaver';
+import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
+import { sanitizePdfText } from '../utils/pdfSanitizer';
+import SafePdfViewer from './SafePdfViewer';
 import { deductCoins, getCoins } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
@@ -22,10 +28,177 @@ const CONTENT_TYPES = [
   { id: 'Blog', label: 'Blog', icon: Edit3 },
 ];
 
+export function generateContentPDFBlob(
+  type: string,
+  topicTitle: string,
+  tone: string,
+  format: string,
+  content: string
+): Blob {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - (margin * 2);
+
+  let currentY = 22;
+  let pageCount = 1;
+
+  const addFooter = (pageNum: number) => {
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(140, 140, 140);
+    doc.setDrawColor(225, 225, 225);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+    doc.text(`Page ${pageNum}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+    doc.text('HelpYou AI • Academic & Creative Suite', pageWidth - margin, pageHeight - 10, { align: 'right' });
+  };
+
+  // Header Decorative Top Bar
+  doc.setFillColor(8, 145, 178); // Cyan-600 Accent
+  doc.rect(margin, currentY, contentWidth, 2.5, 'F');
+  currentY += 9;
+
+  // Document Title (sanitized from emojis)
+  const titleText = sanitizePdfText(topicTitle && topicTitle.trim() ? topicTitle.trim() : `${type} Document`);
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(24, 24, 27);
+  
+  const wrappedTitle = doc.splitTextToSize(titleText, contentWidth);
+  for (const line of wrappedTitle) {
+    if (currentY > pageHeight - 25) {
+      doc.addPage();
+      pageCount++;
+      currentY = 22;
+    }
+    doc.text(line, margin, currentY);
+    currentY += 7.5;
+  }
+  currentY += 2;
+
+  // Metadata Subtitle Bar
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(113, 113, 122);
+  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const metaLine = `Type: ${type}  |  Tone: ${tone}  |  Format: ${type === 'Essay' ? format : 'Standard'}  |  Date: ${dateStr}`;
+  doc.text(metaLine, margin, currentY);
+  currentY += 5;
+
+  // Subtle Divider
+  doc.setDrawColor(220, 220, 225);
+  doc.setLineWidth(0.3);
+  doc.line(margin, currentY, pageWidth - margin, currentY);
+  currentY += 8;
+
+  addFooter(pageCount);
+
+  // Split text by double newlines or stanzas and sanitize emojis
+  const sanitizedContent = sanitizePdfText(content);
+  const blocks = sanitizedContent.split(/\n\n+/);
+
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (!trimmed) continue;
+
+    // Check for Markdown Headings
+    if (trimmed.startsWith('#')) {
+      const headingText = sanitizePdfText(trimmed.replace(/^#+\s*/, '').replace(/[*_`]/g, ''));
+      const level = (trimmed.match(/^#+/) || ['#'])[0].length;
+      
+      if (currentY > pageHeight - 25) {
+        doc.addPage();
+        pageCount++;
+        addFooter(pageCount);
+        currentY = 22;
+      }
+
+      currentY += 3;
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(level === 1 ? 13 : level === 2 ? 11.5 : 10.5);
+      doc.setTextColor(15, 23, 42);
+
+      const wrappedHeading = doc.splitTextToSize(headingText, contentWidth);
+      for (const hLine of wrappedHeading) {
+        doc.text(hLine, margin, currentY);
+        currentY += 6;
+      }
+      currentY += 3;
+      continue;
+    }
+
+    // Poem Stanzas Rendering
+    if (type === 'Poem') {
+      const poemLines = trimmed.split('\n');
+      doc.setFont('Times', 'italic');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 30, 30);
+
+      for (const pLine of poemLines) {
+        const cleanLine = sanitizePdfText(pLine.replace(/[*_`]/g, ''));
+        if (currentY > pageHeight - 22) {
+          doc.addPage();
+          pageCount++;
+          addFooter(pageCount);
+          currentY = 22;
+        }
+        doc.text(cleanLine.trim(), margin + 8, currentY);
+        currentY += 6;
+      }
+      currentY += 4; // Extra space between stanzas
+      continue;
+    }
+
+    // Normal or Academic Essay Paragraphs
+    const cleanPara = sanitizePdfText(trimmed.replace(/[*_`]/g, ''));
+    const isAcademic = tone.toUpperCase() === 'ACADEMIC' || format.includes('APA') || format.includes('MLA');
+    
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(39, 39, 42);
+
+    const paraLines = doc.splitTextToSize(cleanPara, contentWidth - (isAcademic ? 6 : 0));
+    
+    if (currentY + (paraLines.length * 5.2) > pageHeight - 22) {
+      doc.addPage();
+      pageCount++;
+      addFooter(pageCount);
+      currentY = 22;
+    }
+
+    let isFirstLine = true;
+    for (const line of paraLines) {
+      if (currentY > pageHeight - 20) {
+        doc.addPage();
+        pageCount++;
+        addFooter(pageCount);
+        currentY = 22;
+      }
+      // Indent 6mm for first line of academic paragraph
+      const indentX = (isAcademic && isFirstLine) ? 6 : 0;
+      doc.text(line, margin + indentX, currentY);
+      currentY += 5.2;
+      isFirstLine = false;
+    }
+    currentY += 4; // Paragraph spacing
+  }
+
+  return doc.output('blob');
+}
+
 export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   const handleHeaderBack = () => {
     triggerVibration(10);
-    if (showHistory) {
+    if (previewPdfUri) {
+      setPreviewPdfUri(null);
+    } else if (showHistory) {
       setShowHistory(false);
     } else if (result) {
       setResult(null);
@@ -33,6 +206,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       onBack();
     }
   };
+
   const [topic, setTopic] = useState('');
   const [selectedType, setSelectedType] = useState('Essay');
   const [selectedTone, setSelectedTone] = useState('Academic');
@@ -43,6 +217,8 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [previewPdfUri, setPreviewPdfUri] = useState<string | null>(null);
+  const [previewPdfName, setPreviewPdfName] = useState<string>('');
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
 
@@ -56,9 +232,13 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
 
   const [showHistory, setShowHistory] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleBackButton = (e: Event) => {
-      if (showHistory) {
+      if (previewPdfUri) {
+        e.preventDefault();
+        triggerVibration(10);
+        setPreviewPdfUri(null);
+      } else if (showHistory) {
         e.preventDefault();
         triggerVibration(10);
         setShowHistory(false);
@@ -70,11 +250,11 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
     };
     window.addEventListener('appBackButton', handleBackButton);
     return () => window.removeEventListener('appBackButton', handleBackButton);
-  }, [showHistory, result]);
+  }, [previewPdfUri, showHistory, result]);
 
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let interval: NodeJS.Timeout;
     if (loading && !result) {
       setLoadingProgress(0);
@@ -97,6 +277,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       if (interval) clearInterval(interval);
     };
   }, [loading, result]);
+
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -111,14 +292,15 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       );
       const querySnapshot = await getDocs(q);
       const items: any[] = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
         const isContentGen = data.type === 'content_generation' || 
-                             (data.title && data.title.toLowerCase().includes('generated content')) ||
+                             data.type === 'note' ||
+                             (data.title && data.title.toLowerCase().includes('generated')) ||
                              (data.title && data.title.toLowerCase().includes('ai writer'));
-        if (isContentGen) {
+        if (isContentGen && data.text) {
           items.push({
-            id: doc.id,
+            id: docSnap.id,
             ...data,
             createdAt: data.createdAt?.toDate() || new Date(),
             isPdf: !!data.isPdf
@@ -165,7 +347,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   const handleGenerate = async () => {
     if (!topic.trim()) return;
 
-    // Check if user has at least 1 coin before starting, but do not deduct yet!
+    // Check coins before generating
     const coins = getCoins();
     if (coins < 1) {
       window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "AI Writing Helper", cost: 1 } }));
@@ -180,7 +362,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds timeout
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
 
       const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
       const response = await fetch(getApiUrl('/api/generate-content'), {
@@ -205,29 +387,32 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
           const parsedError = JSON.parse(errText);
           errMsg = parsedError.error || errMsg;
         } catch (_) {
-          // If it's not JSON, use default or snippet
           if (errText.length > 0 && errText.length < 200) errMsg = errText;
         }
         throw new Error(errMsg);
       }
+      
       const genContentType = response.headers.get("content-type") || "";
       if (!genContentType.includes("application/json")) {
         throw new Error("Server returned invalid response format");
       }
       const data = await response.json();
       
-      // Deduct 1 coin now that the output has been successfully generated by the AI
       deductCoins(1, "AI Writing Helper");
-      
       setResult(data.text);
-      // Auto-save
+
+      // Auto-save to cloud history
       if (auth.currentUser) {
         try {
           const docRef = await addDoc(collection(db, 'pocket_items'), {
             userId: auth.currentUser.uid,
-            type: 'note',
+            type: 'content_generation',
             title: `Generated ${selectedType}: ${topic.length > 30 ? topic.substring(0, 30) + '...' : topic}`,
             text: data.text,
+            topic: topic,
+            contentType: selectedType,
+            tone: selectedTone,
+            format: selectedType === 'Essay' ? selectedFormat : 'Standard',
             createdAt: serverTimestamp()
           });
           setCurrentSavedId(docRef.id);
@@ -238,7 +423,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       }
     } catch (err: any) {
       console.error(err);
-      setError('Oops! Something went wrong on our end. Please try again.');
+      setError(err.message || 'Oops! Something went wrong on our end. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -246,13 +431,12 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
 
   const handleCopy = async () => {
     if (!result) return;
+    triggerVibration(10);
     try {
       await navigator.clipboard.writeText(result);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Clipboard copy failed: ', err);
-      // Fallback
       const textArea = document.createElement("textarea");
       textArea.value = result;
       document.body.appendChild(textArea);
@@ -268,81 +452,141 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
     }
   };
 
-  const handleExportPDF = async () => {
+  const handleViewPDF = async () => {
     if (!result) return;
+    triggerVibration(15);
     setExporting(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const pdfDoc = new jsPDF('p', 'mm', 'a4');
-      const margin = 15;
-      const pageWidth = pdfDoc.internal.pageSize.getWidth();
-      const pageHeight = pdfDoc.internal.pageSize.getHeight();
-      const maxLineWidth = pageWidth - (margin * 2);
+      const filename = `HelpYou_AI_${selectedType.toLowerCase()}_${Date.now()}.pdf`;
+      const blob = generateContentPDFBlob(
+        selectedType,
+        topic || `${selectedType} Study Guide`,
+        selectedTone,
+        selectedType === 'Essay' ? selectedFormat : 'Standard',
+        result
+      );
 
-      // Simple Markdown-to-Plaintext cleanup for PDF rendering
-      const cleanText = result.replace(/[*#`_\-~[\]()]/g, '');
-      const lines = pdfDoc.splitTextToSize(cleanText, maxLineWidth);
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewPdfUri(blobUrl);
+      setPreviewPdfName(filename);
 
-      let cursorY = 20;
-      pdfDoc.setFont("helvetica", "normal");
-      
-      // Title Block
-      pdfDoc.setFontSize(14);
-      pdfDoc.setFont("helvetica", "bold");
-      pdfDoc.text(`${selectedType} Study Guide - HelpYou AI`, margin, cursorY);
-      cursorY += 10;
-      
-      pdfDoc.setFontSize(10);
-      pdfDoc.setFont("helvetica", "italic");
-      pdfDoc.text(`Topic: ${topic.substring(0, 70)}${topic.length > 70 ? '...' : ''}`, margin, cursorY);
-      cursorY += 5;
-      pdfDoc.text(`Tone: ${selectedTone} | Academic Format: ${selectedType === 'Essay' ? selectedFormat : 'Standard'}`, margin, cursorY);
-      cursorY += 10;
-
-      pdfDoc.setDrawColor(220, 220, 220);
-      pdfDoc.line(margin, cursorY - 5, pageWidth - margin, cursorY - 5);
-
-      pdfDoc.setFont("helvetica", "normal");
-      pdfDoc.setFontSize(11);
-
-      lines.forEach((line: string) => {
-        if (cursorY > pageHeight - 20) {
-          pdfDoc.addPage();
-          cursorY = 20;
+      // Flag item as PDF in Firestore
+      if (currentSavedId && auth.currentUser) {
+        try {
+          await updateDoc(doc(db, 'pocket_items', currentSavedId), { isPdf: true });
+          setHistoryItems(prev => prev.map(item => item.id === currentSavedId ? { ...item, isPdf: true } : item));
+        } catch (historyErr) {
+          console.warn('Could not save PDF tag to Content Generator history:', historyErr);
         }
-        pdfDoc.text(line, margin, cursorY);
-        cursorY += 7; // line spacing
-      });
+      }
+    } catch (err) {
+      console.error("Failed to preview PDF:", err);
+      alert("Could not generate PDF preview. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
-       // Programmatically write directly to mobile file manager with automatic permission checks
-       const filename = `HelpYou_AI_${selectedType.toLowerCase()}_generation.pdf`;
-       const blob = pdfDoc.output('blob');
+  const handleSharePDF = async () => {
+    if (!result) return;
+    triggerVibration(15);
+    setExporting(true);
+    try {
+      const filename = `HelpYou_AI_${selectedType.toLowerCase()}_${Date.now()}.pdf`;
+      const blob = generateContentPDFBlob(
+        selectedType,
+        topic || `${selectedType} Study Guide`,
+        selectedTone,
+        selectedType === 'Essay' ? selectedFormat : 'Standard',
+        result
+      );
 
-       // Automatically flag this item as a PDF in this feature's own history
-       if (currentSavedId && auth.currentUser) {
-         try {
-           await updateDoc(doc(db, 'pocket_items', currentSavedId), { isPdf: true });
-           console.log(`[History] Marked ContentGenerator item ${currentSavedId} as PDF`);
-           setHistoryItems(prev => prev.map(item => item.id === currentSavedId ? { ...item, isPdf: true } : item));
-         } catch (historyErr) {
-           console.warn('Could not save PDF tag to Content Generator history:', historyErr);
-         }
-       }
+      // Share PDF file natively via Capacitor or Web API
+      await sharePDFMobile(blob, filename);
 
-       await savePDFMobile(blob, filename);
-     } catch (err) {
-       console.error("Failed to export PDF:", err);
-       alert("Could not generate PDF. Please try again.");
-     } finally {
-       setExporting(false);
-     }
-   };
+      // Flag item as PDF in Firestore
+      if (currentSavedId && auth.currentUser) {
+        try {
+          await updateDoc(doc(db, 'pocket_items', currentSavedId), { isPdf: true });
+          setHistoryItems(prev => prev.map(item => item.id === currentSavedId ? { ...item, isPdf: true } : item));
+        } catch (historyErr) {
+          console.warn('Could not save PDF tag to Content Generator history:', historyErr);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to share PDF:", err);
+      alert("Could not share PDF. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleShareText = async () => {
+    if (!result) return;
+    triggerVibration(10);
+    const shareTitle = `${selectedType}: ${topic.substring(0, 40)}`;
+    const shareText = `📚 ${selectedType.toUpperCase()} - generated with HelpYou AI\n\nTopic: ${topic}\nTone: ${selectedTone} | Format: ${selectedType === 'Essay' ? selectedFormat : 'Standard'}\n\n${result}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText
+        });
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          handleCopy();
+        }
+      }
+    } else {
+      handleCopy();
+    }
+  };
 
   return (
     <div className="h-full flex flex-col relative text-zinc-900 bg-[#FAF9F6] overflow-hidden">
       {/* Background Glow */}
       <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-cyan-100 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-80 h-80 bg-blue-50 rounded-full blur-[120px] pointer-events-none" />
+
+      {/* FULL-SCREEN PDF PREVIEW MODAL */}
+      {previewPdfUri && (
+        <div className="fixed inset-0 z-50 bg-[#FAF9F6] flex flex-col">
+          <div className="pt-6 pb-4 px-6 bg-white border-b border-zinc-200 shadow-sm flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  triggerVibration(10);
+                  setPreviewPdfUri(null);
+                }}
+                className="w-10 h-10 bg-zinc-50 hover:bg-zinc-100 rounded-full flex items-center justify-center text-zinc-600 transition-colors border border-zinc-200 active:scale-95"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h3 className="font-extrabold text-sm md:text-base text-zinc-900 line-clamp-1">
+                  {previewPdfName}
+                </h3>
+                <p className="text-[11px] text-zinc-400 font-bold">Formatted PDF Preview</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSharePDF}
+                className="flex items-center gap-1.5 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-full font-black text-xs shadow-md transition-all cursor-pointer"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Share PDF</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 p-3 bg-zinc-100 overflow-hidden">
+            <SafePdfViewer pdfUrl={previewPdfUri} />
+          </div>
+        </div>
+      )}
 
       {/* FIXED/STICKY HEADER BAR */}
       <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center justify-between gap-4 shrink-0">
@@ -410,6 +654,10 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                   onClick={() => {
                     triggerVibration(15);
                     setResult(item.text);
+                    setTopic(item.topic || item.title || '');
+                    setSelectedType(item.contentType || 'Essay');
+                    setSelectedTone(item.tone || 'Academic');
+                    setSelectedFormat(item.format || 'Standard');
                     setCurrentSavedId(item.id);
                     setSaved(true);
                     setShowHistory(false);
@@ -439,6 +687,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                   <button
                     onClick={(e) => deleteHistoryItem(item.id, e)}
                     className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors active:scale-95"
+                    title="Delete item"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -516,7 +765,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                   placeholder="E.g., The impact of AI on modern education..."
                   className="w-full p-4 pb-8 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 resize-none h-32 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-semibold text-sm leading-relaxed"
                 />
-                <div className={`absolute bottom-3 right-4 text-xs font-bold ${'text-zinc-400'}`}>
+                <div className="absolute bottom-3 right-4 text-xs font-bold text-zinc-400">
                   {wordCount} words
                 </div>
               </div>
@@ -545,12 +794,12 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                 </div>
               </div>
 
-              {/* US Formats (Visible only if 'Essay' is selected) */}
+              {/* Academic Formats (Visible only if 'Essay' is selected) */}
               {selectedType === 'Essay' && (
                 <div className="mb-6">
                   <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Academic Format</label>
                   <div className="flex flex-wrap gap-2">
-                    {["MLA Format", "APA Format", "Standard"].map((fmt) => {
+                    {["Standard", "APA Format", "MLA Format"].map((fmt) => {
                       const isSelected = selectedFormat === fmt;
                       return (
                         <button
@@ -579,7 +828,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
 
               <button
                 onClick={handleGenerate}
-                disabled={!topic.trim() || loading || false}
+                disabled={!topic.trim() || loading}
                 className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-cyan-500/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center border border-cyan-500/20 cursor-pointer"
               >
                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : `Generate ${selectedType}`}
@@ -593,49 +842,94 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
             className="flex-1 flex flex-col z-10 w-full max-w-lg mx-auto"
           >
             {/* Document Header Panel */}
-            <div className="bg-zinc-100/80 border border-zinc-200/80 rounded-t-2xl px-5 py-3 text-xs font-semibold text-zinc-500 flex justify-between items-center">
-              <span>{selectedType} Study Document</span>
-              <span className="bg-white border border-zinc-200 text-zinc-600 px-2.5 py-0.5 rounded-full font-bold">
-                Tone: {selectedTone}
-              </span>
-            </div>
-
-            {/* Generated Document Content */}
-            <div className="bg-white rounded-b-2xl p-6 shadow-md border-x border-b border-zinc-200 mb-4 prose prose-sm max-w-none prose-headings:font-bold prose-headings:tracking-tight text-zinc-800">
-              <GlobalMarkdown>{result || ''}</GlobalMarkdown>
-            </div>
-
-            {/* Sleek Action Bar */}
-            <div className="flex items-center justify-between gap-3 mb-6 bg-white border border-zinc-200 rounded-2xl p-3 shadow-sm">
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 pl-2">Export / Share</span>
-              <div className="flex items-center gap-2">
-                {/* [📋 Copy to Clipboard] */}
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-700 shadow-sm transition-all cursor-pointer select-none"
-                  title="Copy text content to clipboard"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 text-green-600" />
-                      <span className="text-green-600 font-extrabold">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-zinc-500" />
-                      <span>Copy to Clipboard</span>
-                    </>
-                  )}
-                </button>
-
+            <div className="bg-zinc-100/90 border border-zinc-200 rounded-t-2xl px-5 py-3 text-xs font-semibold text-zinc-600 flex justify-between items-center">
+              <span className="font-extrabold text-zinc-700">{selectedType} Document</span>
+              <div className="flex items-center gap-1.5">
+                <span className="bg-white border border-zinc-200 text-zinc-700 px-2.5 py-0.5 rounded-full font-bold">
+                  {selectedTone}
+                </span>
+                {selectedType === 'Essay' && selectedFormat !== 'Standard' && (
+                  <span className="bg-cyan-50 border border-cyan-200 text-cyan-700 px-2 py-0.5 rounded-full font-black text-[10px]">
+                    {selectedFormat}
+                  </span>
+                )}
               </div>
+            </div>
+
+            {/* Generated Document Content with Format-Specific Typography */}
+            {selectedType === 'Poem' ? (
+              <div className="bg-[#FAFAF8] rounded-b-2xl p-6 md:p-8 shadow-md border-x border-b border-zinc-200 mb-4 whitespace-pre-wrap font-serif italic text-zinc-800 leading-relaxed text-sm md:text-base select-text">
+                <GlobalMarkdown>{result || ''}</GlobalMarkdown>
+              </div>
+            ) : selectedType === 'Essay' && (selectedTone === 'Academic' || selectedFormat === 'APA Format' || selectedFormat === 'MLA Format') ? (
+              <div className="bg-white rounded-b-2xl p-6 md:p-8 shadow-md border-x border-b border-zinc-200 mb-4 prose prose-sm max-w-none prose-headings:font-black prose-headings:tracking-tight text-zinc-900 leading-loose [&>p]:indent-8 [&>p]:leading-loose text-justify select-text">
+                <GlobalMarkdown>{result || ''}</GlobalMarkdown>
+              </div>
+            ) : (
+              <div className="bg-white rounded-b-2xl p-6 md:p-8 shadow-md border-x border-b border-zinc-200 mb-4 prose prose-sm max-w-none prose-headings:font-bold prose-headings:tracking-tight text-zinc-800 leading-relaxed select-text">
+                <GlobalMarkdown>{result || ''}</GlobalMarkdown>
+              </div>
+            )}
+
+            {/* Sleek Action Bar with View PDF, Share PDF, Share Text & Copy */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 bg-white border border-zinc-200 rounded-2xl p-3 shadow-sm">
+              {/* [📄 View PDF] */}
+              <button
+                onClick={handleViewPDF}
+                disabled={exporting}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
+                title="View formatted PDF"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin text-cyan-600" /> : <Eye className="w-4 h-4 text-cyan-600" />}
+                <span>View PDF</span>
+              </button>
+
+              {/* [🚀 Share PDF (Native File Share)] */}
+              <button
+                onClick={handleSharePDF}
+                disabled={exporting}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-xl font-black text-xs shadow-md transition-all cursor-pointer select-none border-none"
+                title="Share PDF file natively"
+              >
+                <Share2 className="w-4 h-4 text-white" />
+                <span>Share PDF</span>
+              </button>
+
+              {/* [💬 Share Text] */}
+              <button
+                onClick={handleShareText}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
+                title="Share formatted text"
+              >
+                <Share2 className="w-4 h-4 text-zinc-600" />
+                <span>Share Text</span>
+              </button>
+
+              {/* [📋 Copy to Clipboard] */}
+              <button
+                onClick={handleCopy}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
+                title="Copy markdown text to clipboard"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span className="text-emerald-600 font-black">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 text-zinc-600" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
             </div>
             
             <button 
               onClick={() => {
                 setResult(null);
               }}
-              className="w-full mt-3 py-3.5 rounded-xl font-extrabold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm cursor-pointer"
+              className="w-full py-3.5 rounded-xl font-extrabold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm cursor-pointer active:scale-98"
             >
               Create Another
             </button>

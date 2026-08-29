@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { ArrowLeft, Upload, FileImage, FileDown, FileText, History, Share2, Eye } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, Upload, FileImage, FileDown, FileText, History, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
@@ -9,22 +9,16 @@ import { pickNativeFiles } from '../utils/mobilePicker';
 import SafePdfViewer from './SafePdfViewer';
 import { triggerVibration } from '../utils/vibrate';
 
-export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => void; onOpenHistory?: () => void }) {
-  const handleHeaderBack = () => {
-    triggerVibration(10);
-    if (pdfBlobUrl) {
-      setPdfBlobUrl(null);
-    } else if (showPreviewPage) {
-      setShowPreviewPage(false);
-    } else if (images.length > 0) {
-      setImages([]);
-    } else {
-      onBack();
-    }
-  };
-  const [images, setImages] = useState<string[]>([]);
+interface ImageItem {
+  id: string;
+  src: string;
+  isBlobUrl: boolean;
+}
 
+export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => void; onOpenHistory?: () => void }) {
+  const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [compilingPage, setCompilingPage] = useState(0);
   const [fileName, setFileName] = useState('');
   const [quality, setQuality] = useState<'standard' | 'high'>('standard');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
@@ -33,12 +27,44 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   const [showPreviewPage, setShowPreviewPage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mountTimeRef = useRef<number>(Date.now());
+  const activeBlobUrlsRef = useRef<Set<string>>(new Set());
 
-  React.useEffect(() => {
+  // Cleanup all memory / object URLs when unmounting to completely prevent memory leaks
+  useEffect(() => {
     mountTimeRef.current = Date.now();
+    return () => {
+      activeBlobUrlsRef.current.forEach(url => {
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      });
+      activeBlobUrlsRef.current.clear();
+    };
   }, []);
 
-  React.useEffect(() => {
+  const clearAllImages = () => {
+    triggerVibration(10);
+    activeBlobUrlsRef.current.forEach(url => {
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    });
+    activeBlobUrlsRef.current.clear();
+    setImages([]);
+  };
+
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (pdfBlobUrl) {
+      try { URL.revokeObjectURL(pdfBlobUrl); } catch (_) {}
+      setPdfBlobUrl(null);
+      setPdfDataUri(null);
+    } else if (showPreviewPage) {
+      setShowPreviewPage(false);
+    } else if (images.length > 0) {
+      clearAllImages();
+    } else {
+      onBack();
+    }
+  };
+
+  useEffect(() => {
     const handleBackButton = (e: Event) => {
       if (pdfBlobUrl || showPreviewPage || images.length > 0) {
         e.preventDefault();
@@ -48,17 +74,6 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
     window.addEventListener('appBackButton', handleBackButton);
     return () => window.removeEventListener('appBackButton', handleBackButton);
   }, [pdfBlobUrl, showPreviewPage, images]);
-
-  const downloadPDF = async () => {
-    if (!pdfBlobUrl) return;
-    try {
-      const response = await fetch(pdfBlobUrl);
-      const blob = await response.blob();
-      await savePDFMobile(blob, pdfFileName || 'HelpYou-AI-Document.pdf');
-    } catch (err) {
-      console.error('Failed to download PDF via mobile saver:', err);
-    }
-  };
 
   const sharePDF = async () => {
     if (!pdfBlobUrl) return;
@@ -89,8 +104,16 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
     if (Capacitor.isNativePlatform()) {
       const picked = await pickNativeFiles({ types: 'image', multiple: true });
       if (picked && picked.length > 0) {
-        const newImages = picked.map(p => p.dataUrl);
-        setImages(prev => [...prev, ...newImages]);
+        const newItems: ImageItem[] = picked.map(p => {
+          const blobUrl = URL.createObjectURL(p.blob);
+          activeBlobUrlsRef.current.add(blobUrl);
+          return {
+            id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+            src: blobUrl,
+            isBlobUrl: true
+          };
+        });
+        setImages(prev => [...prev, ...newItems]);
       }
     } else {
       fileInputRef.current?.click();
@@ -99,14 +122,31 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newImages = Array.from(e.target.files).map(file => URL.createObjectURL(file));
-      setImages(prev => [...prev, ...newImages]);
+      const files = Array.from(e.target.files);
+      const newItems: ImageItem[] = files.map(file => {
+        const blobUrl = URL.createObjectURL(file);
+        activeBlobUrlsRef.current.add(blobUrl);
+        return {
+          id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+          src: blobUrl,
+          isBlobUrl: true
+        };
+      });
+      setImages(prev => [...prev, ...newItems]);
       e.target.value = '';
     }
   };
 
   const removeImage = (indexToRemove: number) => {
-    setImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
+    triggerVibration(5);
+    setImages(prev => {
+      const item = prev[indexToRemove];
+      if (item && item.isBlobUrl) {
+        try { URL.revokeObjectURL(item.src); } catch (_) {}
+        activeBlobUrlsRef.current.delete(item.src);
+      }
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
   };
 
   // Desktop Drag and Drop Handlers
@@ -148,9 +188,9 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
     longPressTimeout.current = setTimeout(() => {
       setTouchDraggingIndex(index);
       if (navigator.vibrate) {
-        navigator.vibrate(50); // Small vibration feedback for touch activation
+        navigator.vibrate(50);
       }
-    }, 400); // 400ms long-press activation
+    }, 400);
   };
 
   const handleTouchMove = (e: React.TouchEvent, currentIndex: number) => {
@@ -159,7 +199,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       return;
     }
     
-    e.preventDefault(); // Prevent standard page scrolling while dragging is active
+    e.preventDefault();
     
     const touch = e.touches[0];
     const targetElement = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -186,50 +226,58 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   const handleSavePDF = async () => {
     if (images.length === 0) return;
     setLoading(true);
+    setCompilingPage(1);
 
     try {
-      // Yield to main thread to show loader
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Yield to main thread to show loader smoothly
+      await new Promise(resolve => setTimeout(resolve, 80));
       
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
 
       for (let i = 0; i < images.length; i++) {
-        let imgSrc = images[i];
+        setCompilingPage(i + 1);
+        // Non-blocking yield: prevents Android ANR ("App Not Responding") watchdog from triggering on 100+ images!
+        await new Promise(resolve => setTimeout(resolve, 15));
+
+        const item = images[i];
+        let imgSrc = item.src;
         
-        // Handle local file:// URIs properly on native mobile wrappers
         if (Capacitor.isNativePlatform() && imgSrc.startsWith('file://')) {
           imgSrc = Capacitor.convertFileSrc(imgSrc);
         }
         
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.src = imgSrc;
-        await new Promise((resolve, reject) => {
+        await new Promise((resolve) => {
           img.onload = resolve;
-          img.onerror = reject;
+          img.onerror = resolve; // Gracefully continue if one image fails to load
         });
 
-        // Compression canvas
+        if (!img.width || !img.height) continue;
+
+        // Memory-safe offscreen canvas compression
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
         const isHigh = quality === 'high';
-        const MAX_WIDTH = isHigh ? 2400 : 1200;
-        const MAX_HEIGHT = isHigh ? 3200 : 1600;
-        const compressionQuality = isHigh ? 0.95 : 0.65;
+        const MAX_WIDTH = isHigh ? 1800 : 1200;
+        const MAX_HEIGHT = isHigh ? 2400 : 1600;
+        const compressionQuality = isHigh ? 0.85 : 0.65;
         
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
           if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
+            height = Math.round(height * (MAX_WIDTH / width));
             width = MAX_WIDTH;
           }
         } else {
           if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
+            width = Math.round(width * (MAX_HEIGHT / height));
             height = MAX_HEIGHT;
           }
         }
@@ -238,6 +286,10 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         canvas.height = height;
         ctx?.drawImage(img, 0, 0, width, height);
         const compressedDataUrl = canvas.toDataURL('image/jpeg', compressionQuality);
+
+        // Immediate release of canvas memory buffer
+        canvas.width = 1;
+        canvas.height = 1;
 
         const imgRatio = width / height;
         const pdfRatio = pdfWidth / pdfHeight;
@@ -263,13 +315,14 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
 
       const outputName = fileName.trim() ? `${fileName.trim().replace(/\.pdf$/i, '')}.pdf` : 'HelpYou-AI-Document.pdf';
       setPdfFileName(outputName);
+      
       const blob = pdf.output('blob');
       const blobUrl = URL.createObjectURL(blob);
       setPdfBlobUrl(blobUrl);
 
-      // Automatic capture for centralized PDF history
+      // Memory-safe capture for centralized PDF history without giant 80MB base64 storage crashes
       try {
-        const dataUri = pdf.output('datauristring');
+        const dataUri = blob.size < 4 * 1024 * 1024 ? pdf.output('datauristring') : blobUrl;
         setPdfDataUri(dataUri);
         savePdfToHistory({
           title: outputName,
@@ -282,10 +335,11 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         console.warn('Could not auto-save PDF to history:', historyErr);
       }
     } catch (err) {
-      console.error(err);
-      alert('Failed to generate PDF. Try with fewer images.');
+      console.error('Failed to generate PDF:', err);
+      alert('Failed to generate PDF. Please try again.');
     } finally {
       setLoading(false);
+      setCompilingPage(0);
     }
   };
 
@@ -336,7 +390,9 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center gap-4 shrink-0">
           <button 
             onClick={() => {
-              if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+              if (pdfBlobUrl) {
+                try { URL.revokeObjectURL(pdfBlobUrl); } catch (_) {}
+              }
               setPdfBlobUrl(null);
               setPdfDataUri(null);
             }}
@@ -369,7 +425,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
             {pdfFileName}
           </p>
           <p className="text-xs text-zinc-400 font-semibold mb-8 max-w-xs font-sans">
-            {images.length} {images.length === 1 ? 'image' : 'images'} converted • {quality === 'high' ? 'High Quality' : 'Standard Quality'}
+            {images.length} {images.length === 1 ? 'page' : 'pages'} compiled • {quality === 'high' ? 'High Quality' : 'Standard Quality'}
           </p>
 
           <div className="w-full max-w-sm flex flex-col gap-3 px-4">
@@ -394,10 +450,12 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
             {/* Create Another Option */}
             <button
               onClick={() => {
-                if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+                if (pdfBlobUrl) {
+                  try { URL.revokeObjectURL(pdfBlobUrl); } catch (_) {}
+                }
                 setPdfBlobUrl(null);
                 setPdfDataUri(null);
-                setImages([]);
+                clearAllImages();
                 setFileName('');
               }}
               className="mt-6 text-xs font-black text-zinc-400 hover:text-zinc-700 transition-colors uppercase tracking-widest cursor-pointer"
@@ -418,30 +476,31 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-[#FAF9F6]/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center"
+            className="absolute inset-0 bg-[#FAF9F6]/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center"
           >
-            <div className="relative">
+            <div className="relative mb-6">
               <motion.div
-                animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.8, 0.4] }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl"
+                className="absolute inset-0 bg-blue-500/20 rounded-3xl blur-xl"
               />
-              <motion.div
-                animate={{ y: [-5, 5, -5] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                className="relative bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-5 shadow-2xl flex items-center justify-center text-white border border-blue-400/50"
-              >
-                 <FileText className="w-12 h-12" />
-                 <span className="absolute -bottom-3 right-[-10px] bg-white text-blue-600 text-xs font-black px-2.5 py-1 rounded-md shadow-md border border-zinc-200 uppercase tracking-widest">PDF</span>
-              </motion.div>
+              <div className="relative bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl p-6 shadow-2xl flex items-center justify-center text-white border border-blue-400/40">
+                 <FileText className="w-12 h-12 animate-pulse" />
+                 <span className="absolute -bottom-2 right-[-6px] bg-white text-blue-600 text-[10px] font-black px-2.5 py-1 rounded-md shadow-md border border-zinc-200 uppercase tracking-widest">PDF</span>
+              </div>
             </div>
-            <motion.p 
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className="mt-8 text-blue-600 font-bold tracking-widest uppercase text-sm"
-            >
-              Building PDF...
-            </motion.p>
+            
+            <h4 className="text-zinc-900 font-extrabold text-lg mb-1 tracking-tight">Building PDF Document...</h4>
+            <p className="text-blue-600 font-bold text-xs tracking-wider uppercase mb-4">
+              Processing Page {compilingPage} of {images.length}
+            </p>
+
+            <div className="w-full max-w-xs bg-zinc-200/80 rounded-full h-2.5 overflow-hidden border border-zinc-200">
+              <div 
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-200 ease-out"
+                style={{ width: `${Math.max(5, (compilingPage / Math.max(1, images.length)) * 100)}%` }}
+              />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -471,7 +530,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
               <span>Image to PDF</span>
             </h2>
             <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">
-              {images.length > 0 ? `${images.length} photos selected • Unlimited` : 'Select unlimited gallery photos into one PDF'}
+              {images.length > 0 ? `${images.length} photos selected` : 'Select gallery photos into one PDF'}
             </p>
           </div>
         </div>
@@ -479,10 +538,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         <div className="flex items-center gap-2">
           {images.length > 0 && (
             <button
-              onClick={() => {
-                triggerVibration(10);
-                setImages([]);
-              }}
+              onClick={clearAllImages}
               className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
             >
               Clear
@@ -520,7 +576,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
               className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
             >
               <Upload className="w-4 h-4" />
-              <span>Select Photos (Unlimited)</span>
+              <span>Upload Images</span>
             </button>
           </div>
         ) : (
@@ -541,13 +597,13 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
 
             {/* Grid display with Drag events */}
             <div className="grid grid-cols-2 gap-4 pb-12">
-              {images.map((img, idx) => {
+              {images.map((item, idx) => {
                 const isDragging = idx === draggedIndex || idx === touchDraggingIndex;
                 const isDragOver = idx === dragOverIndex;
 
                 return (
                   <div 
-                    key={idx}
+                    key={item.id}
                     data-index={idx}
                     draggable
                     onDragStart={(e) => handleDragStart(e, idx)}
@@ -566,7 +622,12 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
                           : 'border-zinc-200 hover:border-zinc-300'
                     }`}
                   >
-                    <img src={img} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover pointer-events-none" />
+                    <img 
+                      src={item.src} 
+                      alt={`Page ${idx + 1}`} 
+                      loading="lazy"
+                      className="w-full h-full object-cover pointer-events-none" 
+                    />
                     
                     {/* Index Badge */}
                     <div className="absolute top-2 left-2 bg-blue-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-blue-500 shadow-sm">
@@ -600,7 +661,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
                   <Upload className="w-5 h-5" />
                 </div>
                 <span className="text-xs text-zinc-900 font-extrabold block">Add More</span>
-                <span className="text-[10px] text-zinc-400 font-semibold block">Unlimited</span>
+                <span className="text-[10px] text-zinc-400 font-semibold block">Select Images</span>
               </div>
             </div>
           </div>

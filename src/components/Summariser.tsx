@@ -17,12 +17,21 @@ interface SummariserProps {
 }
 
 export default function Summariser({ onBack }: SummariserProps) {
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const handleHeaderBack = () => {
     triggerVibration(10);
-    if (showHistory) {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (previewPdfUri) {
+      setPreviewPdfUri(null);
+    } else if (showHistory) {
       setShowHistory(false);
     } else if (result) {
       setResult(null);
+      setLoading(false);
     } else {
       onBack();
     }
@@ -63,11 +72,21 @@ export default function Summariser({ onBack }: SummariserProps) {
       } else if (result) {
         e.preventDefault();
         triggerVibration(10);
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
         setResult(null);
+        setLoading(false);
       }
     };
     window.addEventListener('appBackButton', handleBackButton);
-    return () => window.removeEventListener('appBackButton', handleBackButton);
+    return () => {
+      window.removeEventListener('appBackButton', handleBackButton);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [previewPdfUri, showHistory, result]);
 
   React.useEffect(() => {
@@ -202,6 +221,12 @@ export default function Summariser({ onBack }: SummariserProps) {
       return;
     }
     
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -212,7 +237,8 @@ export default function Summariser({ onBack }: SummariserProps) {
       const response = await fetch(getApiUrl('/api/summarize-text'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText, format, gradeLevel })
+        body: JSON.stringify({ text: inputText, format, gradeLevel }),
+        signal: controller.signal
       });
       
       if (!response.ok) {
@@ -253,10 +279,14 @@ export default function Summariser({ onBack }: SummariserProps) {
         }
       }
     } catch (err: any) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        return;
+      }
       console.error(err);
       setError('Oops! Something went wrong on our end. Please try again.');
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   };
 

@@ -135,8 +135,23 @@ function extractWithRegex(cleaned: string): any {
       try { exam_trap = JSON.parse(`"${trapMatch[1]}"`); } catch { exam_trap = trapMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'); }
     }
 
+    // Extract markdown_content / content / explanation if present
+    let markdown_content: string | undefined;
+    const mdMatch = cleaned.match(/"(?:markdown_content|content|explanation|response)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+    if (mdMatch) {
+      try {
+        markdown_content = JSON.parse(`"${mdMatch[1]}"`);
+      } catch {
+        markdown_content = mdMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      }
+    }
+
     if (steps.length > 0) {
-      return { topic_title, format_type, key_formula, exam_trap, solution_steps: steps, suggestions };
+      return { topic_title, format_type, key_formula, exam_trap, solution_steps: steps, suggestions, markdown_content };
+    }
+
+    if (markdown_content) {
+      return { topic_title, format_type: format_type || 'conversational', markdown_content, suggestions, key_formula, exam_trap };
     }
   } catch (err) {
     console.warn("Regex extraction failed:", err);

@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { savePDFMobile } from '../utils/mobileSaver';
+import { sanitizePdfText } from '../utils/pdfSanitizer';
 
 /**
  * Generates the jsPDF document instance and returns it as a Blob.
@@ -39,8 +40,8 @@ export function generateNotesPDFBlob(title: string, markdownContent: string, act
   doc.rect(margin, currentY, contentWidth, 3, 'F');
   currentY += 10;
 
-  // Main Document Title (cleaned from extension)
-  const cleanTitle = title.replace(/\.[^/.]+$/, "");
+  // Main Document Title (cleaned from extension and emojis)
+  const cleanTitle = sanitizePdfText(title.replace(/\.[^/.]+$/, ""));
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(22);
   doc.setTextColor(30, 30, 30);
@@ -73,7 +74,8 @@ export function generateNotesPDFBlob(title: string, markdownContent: string, act
   currentY += 12;
 
   // Process and parse markdown lines
-  const rawLines = markdownContent.split('\n');
+  const sanitizedMarkdown = sanitizePdfText(markdownContent);
+  const rawLines = sanitizedMarkdown.split('\n');
   let pageCount = 1;
 
   addFooter(pageCount);
@@ -111,10 +113,10 @@ export function generateNotesPDFBlob(title: string, markdownContent: string, act
       textColor = [31, 41, 55]; // Dark Gray
       cleanLine = rawLine.substring(4);
       currentY += 2;
-    } else if (rawLine.startsWith('- ') || rawLine.startsWith('* ')) {
+    } else if (rawLine.startsWith('- ') || rawLine.startsWith('* ') || rawLine.startsWith('• ')) {
       fontSize = 10.5;
       fontStyle = 'normal';
-      cleanLine = '• ' + rawLine.substring(2);
+      cleanLine = '• ' + rawLine.replace(/^[-*•]\s*/, '');
       indent = 6;
     } else if (/^\d+\.\s/.test(rawLine)) {
       fontSize = 10.5;
@@ -129,6 +131,7 @@ export function generateNotesPDFBlob(title: string, markdownContent: string, act
     cleanLine = cleanLine.replace(/__(.*?)__/g, '$1');
     cleanLine = cleanLine.replace(/_(.*?)_/g, '$1');
     cleanLine = cleanLine.replace(/`(.*?)`/g, '$1');
+    cleanLine = sanitizePdfText(cleanLine);
 
     // Setup typography context in jsPDF
     doc.setFont('Helvetica', fontStyle);

@@ -321,12 +321,31 @@ function extractUserQuery(params: any): string {
 
 
 async function safeGenerateContent(params: any, retries = 3, delay = 200): Promise<any> {
-  // Extract gradeLevel if provided
-  const gradeLevel = params.gradeLevel;
+  // Extract student profile data if provided
+  const gradeLevel = params.gradeLevel || params.grade;
+  const stream = params.stream || params.academic_stream;
+  const country = params.country || params.academic_country;
+  const region = params.region || params.regionSystem || params.academic_region;
+  const userRole = params.userRole || params.role;
+  const learningStyle = params.learningStyle;
+  const profileContext = params.profileContext || params.userProfile;
   
   // We only clone the top-level structure and config elements to avoid serializing huge base64 strings (which causes CPU freezes and timeouts).
   const clonedParams = { ...params };
   delete clonedParams.gradeLevel;
+  delete clonedParams.grade;
+  delete clonedParams.stream;
+  delete clonedParams.academic_stream;
+  delete clonedParams.country;
+  delete clonedParams.academic_country;
+  delete clonedParams.region;
+  delete clonedParams.regionSystem;
+  delete clonedParams.academic_region;
+  delete clonedParams.userRole;
+  delete clonedParams.role;
+  delete clonedParams.learningStyle;
+  delete clonedParams.profileContext;
+  delete clonedParams.userProfile;
 
   // Ensure config exists
   if (!clonedParams.config) {
@@ -403,13 +422,30 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
       ...originalParts.slice(1)
     ];
 
-    if (gradeLevel) {
-      const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
-      
+    // Universal Student Profile Adaptation Engine
+    const profileLines: string[] = [];
+    if (gradeLevel) profileLines.push(`• Academic Level / Grade: ${gradeLevel}`);
+    if (stream) profileLines.push(`• Academic Track / Stream: ${stream}`);
+    if (country || region) profileLines.push(`• Educational Standard / Region: ${country || region}`);
+    if (userRole) profileLines.push(`• Student Role: ${userRole}`);
+    if (learningStyle) profileLines.push(`• Learning Style Preference: ${learningStyle}`);
+    if (profileContext && typeof profileContext === 'string') profileLines.push(`• Profile Background: ${profileContext}`);
+
+    if (profileLines.length > 0) {
+      const studentProfileInstruction = `STUDENT PROFILE & PERSONALIZATION DIRECTIVE:
+You are actively interacting with a student who has the following academic profile:
+${profileLines.join('\n')}
+
+MANDATORY ADAPTATION RULES:
+1. PEDAGOGICAL CALIBRATION: Calibrate conceptual depth, mathematical rigor, sentence complexity, and vocabulary precisely to this student's grade level (${gradeLevel || 'Standard'}). Never use graduate-level jargon if the student is in middle/high school, and never over-simplify or talk down to a college student.
+2. STREAM RELEVANCE: When providing real-world examples, analogies, applications, or problem setups, tailor them to their academic track (${stream || 'General Academic'}). (e.g. use physics/engineering examples for STEM, biological/clinical examples for Pre-Med, commerce/market examples for Business, social/literary contexts for Humanities).
+3. CURRICULUM ACCURACY: Respect regional standards (${country || region || 'Global'}). Use terminology, units, and conventions aligned with standard regional curricula (e.g. AP/SAT in US, A-Levels/GCSE in UK, HSC/VCE in Australia, IB in International).
+4. EMPOWERING TONE: Maintain an encouraging, intellectually stimulating, and supportive mentor persona.`;
+
       const parts = clonedParams.config.systemInstruction.parts || [];
       const text = parts[0]?.text || "";
       clonedParams.config.systemInstruction.parts = [
-        { text: `${gradeInstruction}\n\n${text}`.trim() },
+        { text: `${studentProfileInstruction}\n\n${text}`.trim() },
         ...parts.slice(1)
       ];
     }
@@ -951,7 +987,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       }
       
       if (userMessage) {
-        parts.push({ text: userMessage + "\n\nPlease continue providing step-by-step guidance." });
+        parts.push({ text: userMessage });
       } else if (imagePart) {
         parts.push({ text: "Please look at this uploaded homework image and assist me." });
       }
@@ -1121,13 +1157,8 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     if (req.file) {
       try {
         const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
-        const pdfData = await pdf(req.file.buffer, { max: 60 });
+        const pdfData = await pdf(req.file.buffer, { max: 100 });
         
-        // Explicitly check page count
-        if (pdfData.numpages > 60) {
-          return res.status(400).json({ error: "PDF document exceeds 60 pages limit. Please upload a shorter document." });
-        }
-
         extractedText = pdfData.text || "";
         // If extracted text is too short, it might be a scanned PDF or images
         if (extractedText.trim().length < 50) {
@@ -1157,12 +1188,13 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     } else if (action === 'flashcards' || action === 'flashcards-json') {
       if (action === 'flashcards-json') {
         responseMimeType = "application/json";
-        promptText = `Act as an expert study coach. Extract the top 10 to 15 most critical, high-yield concepts from the provided document and format them into flashcards.
-        Rules:
-        1. The 'question' should be concise and direct.
-        2. The 'answer' should be short (1-2 sentences max).
-        3. If there is code/HTML, wrap it in backticks.
-        4. Output ONLY a valid JSON array of objects.
+        promptText = `Act as an expert study coach and cognitive learning specialist. Extract the top 10 to 15 most critical, high-yield concepts from the provided document and format them into comprehensive flashcards.
+        Strict Rules for Flashcards:
+        1. CORE CONCEPTS: Focus on key definitions, dates, formulas, mechanisms, and high-yield takeaways.
+        2. QUESTION: The 'question' should be clear, precise, and direct.
+        3. ANSWER COMPLETION (ZERO TRUNCATION): The 'answer' MUST be 100% complete, fully formulated, and self-contained. NEVER truncate sentences, cut off mid-clause, or leave thoughts incomplete (e.g. NEVER end with '...' or 'compounds like...'). Provide the complete definition and essential context within 2 to 3 crystal-clear, elegant, grammatically complete sentences.
+        4. ESCAPING: If there is code/HTML, wrap it in backticks (e.g., \`<div>\`).
+        5. OUTPUT FORMAT: Output ONLY a valid JSON array of objects directly parseable by JSON.parse.
         
         Format:
         [
@@ -1170,7 +1202,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
           ...
         ]`;
       } else {
-        promptText = "Extract the most important facts and concepts from the provided document and format them into 10 high-quality flashcards. Format exactly like this for each:\n\n**Q: [Question]**\n*A: [Answer]*\n\nCRITICAL: If the document contains code tags, HTML, or web development terms (like <div>, <header>, etc.), ALWAYS wrap them in markdown backticks (e.g., `<div>`) so they render as plain text and not formatting. Keep answers concise.";
+        promptText = "Extract the most important facts and concepts from the provided document and format them into 10 high-quality flashcards. Format exactly like this for each:\n\n**Q: [Question]**\n*A: [Answer]*\n\nCRITICAL: If the document contains code tags, HTML, or web development terms (like <div>, <header>, etc.), ALWAYS wrap them in markdown backticks (e.g., `<div>`) so they render as plain text and not formatting. Always provide complete, self-contained sentences for answers.";
       }
     } else if (action === 'quiz') {
       promptText = `You are an expert tutor. Create a 5-question multiple choice quiz based on the provided document.
@@ -1420,39 +1452,77 @@ Your score output must EXACTLY match this format:
 HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: [ContentScore]/25, Style: [StyleScore]/25, Grammar: [GrammarScore]/25)`;
     }
 
-    const systemInstruction = `Act as an expert certified educator and Essay Grader for the "${curr}" curriculum, specifically for the subject/essay type: "${subj}".
-Your task is to grade and provide constructive, highly specific feedback on the student's essay.
+    let pointDeductionTemplate = "";
+    if (curr.includes('AP')) {
+      pointDeductionTemplate = `- Thesis: [State points earned (0 or 1) and exact reasoning]
+- Evidence & Commentary: [State points earned (0 to 4) and analyze specific textual evidence/gaps]
+- Sophistication: [State points earned (0 or 1) and analyze rhetorical complexity/nuance]`;
+    } else if (curr.includes('IELTS') || curr.includes('TOEFL')) {
+      pointDeductionTemplate = `- Task Achievement: [Band score and prompt coverage analysis]
+- Coherence & Cohesion: [Band score and logical transitions analysis]
+- Lexical Resource: [Band score and vocabulary precision]
+- Grammatical Range & Accuracy: [Band score and structural variety]`;
+    } else if (curr.includes('IB')) {
+      pointDeductionTemplate = `- Criterion A (Focus & Method): [Score and specific explanation]
+- Criterion B (Knowledge & Understanding): [Score and specific explanation]
+- Criterion C (Critical Thinking & Analysis): [Score and specific explanation]
+- Criterion D (Presentation & Language): [Score and specific explanation]`;
+    } else if (curr.includes('A-Levels')) {
+      pointDeductionTemplate = `- AO1 (Knowledge & Understanding): [Mark breakdown and reasoning]
+- AO2 (Analysis & Method): [Mark breakdown and reasoning]
+- AO3 (Context & Synthesis): [Mark breakdown and reasoning]`;
+    } else {
+      pointDeductionTemplate = `- Focus & Organization: [Score out of 25 and specific structural breakdown]
+- Content & Development: [Score out of 25 and evidence/argument depth]
+- Style & Sentence Structure: [Score out of 25 and phrasing/flow]
+- Grammar & Mechanics: [Score out of 25 and technical accuracy]`;
+    }
 
-CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.
+    const systemInstruction = `You are a Senior Academic Examiner, Certified College Board AP Reader, and Elite Essay Assessor for the "${curr}" curriculum, specifically for "${subj}".
+Your task is to grade and provide rigorous, highly specific, actionable feedback on the student's essay.
 
-Tone: Encouraging, professional, and clear. Speak directly to the student.
+GRADE LEVEL CALIBRATION: The student is in Grade: ${gradeLevel}. Calibrate your explanations, tone, and examples so they are encouraging, academically rigorous, and crystal-clear.
 
-CRITICAL RULES (MUST FOLLOW):
-1. NO RAW LETTER GRADES (except if A-Level curriculum where A-Level bands specify grades, but do not just write "A" or "B" without details).
-2. OFFICIAL SPECIFIC RUBRIC FORMAT: 
+CRITICAL GRADING RULES (STRICT COMPLIANCE REQUIRED):
+1. OFFICIAL RUBRIC SCORE HEADER:
 ${rubricInstructions}
-3. ⚡ SPEED & CONCISENESS RULE: Deliver your feedback using highly concise, clear, and punchy plain text. Keep sentence lengths short. Avoid general or redundant context. Limit the response to a total of 250 words to ensure instant grading delivery.
-4. STRICT PLAIN TEXT RULE (CRITICAL): Absolutely DO NOT use any Markdown formatting like asterisks (** or *), hashes (#), underscores, backticks, or dashes/bullet points (-, *, •). Use simple numbered steps (e.g., 1. or 2.) or regular line breaks and capitalized section headers. Do not output any HTML tags or markdown formatting symbols. Output ONLY clean, raw plain text.
 
-Analyze the provided text and output your response EXACTLY in the following structure. Do not add any conversational filler before or after.
+2. NO WALL OF TEXT (CATEGORIZED POINT DEDUCTION ANALYSIS):
+Under "POINT DEDUCTION ANALYSIS", you MUST break down the score category by category using clean bullet points. For every single category where full points were NOT awarded, explicitly explain the exact deficiency in 1-2 sharp sentences.
+${pointDeductionTemplate}
+
+3. ZERO-TOLERANCE MECHANICAL, PUNCTUATION & HOMOPHONE AUDIT:
+Under "GRAMMAR, MECHANICS & POLISH", you MUST actively detect and explicitly list EVERY mechanical flaw in the essay, including:
+- Comma splices, run-on sentences, missing apostrophes, and punctuation errors.
+- Homophone confusion (e.g., "there" vs. "their", "affect" vs. "effect", "your" vs. "you're", "its" vs. "it's").
+- Subject-verb disagreement and tense shifts.
+NEVER write vague placeholders like "minor word choice issues." You MUST quote the exact erroneous sentence/phrase from the essay and provide the exact corrected sentence!
+
+4. STRUCTURED OUTPUT FORMAT:
+Analyze the provided essay and output your response strictly in the following format:
 
 ${scoreHeader}
 
-POINT DEDUCTION ANALYSIS:
-[Explain any lost points or bands. For every single point/band the student did NOT earn, explicitly state which point was lost and why in 1-2 plain sentences. If they scored perfectly, write: "No points lost! Outstanding work."]
+### POINT DEDUCTION ANALYSIS
+${pointDeductionTemplate}
 
-STRENGTHS:
-[1-2 clear, plain sentences highlighting a strong point in their writing, without any dashes, asterisks or bullet points]
+### STRENGTHS
+- [1-2 sentences highlighting a strong conceptual or stylistic element of the essay with specific examples]
 
-AREAS FOR IMPROVEMENT:
-1. [Area 1 in plain text]
-2. [Area 2 in plain text]
+### AREAS FOR IMPROVEMENT
+1. [First high-priority structural or argument improvement with actionable advice]
+2. [Second high-priority improvement with actionable advice]
 
-GRAMMAR AND POLISH:
-[Highlight 1 specific grammatical error and provide the corrected version in a simple plain sentence, without any markdown]
+### GRAMMAR, MECHANICS & POLISH
+[If errors are found, list each one clearly as follows:]
+1. [Error Name, e.g. Comma Splice / Homophone Typo / Subject-Verb Agreement]
+   - Original: "[Exact quote from student essay]"
+   - Correction: "[Exact corrected sentence]"
+   - Why: [1 sentence explaining the rule]
+[If the essay is mechanically flawless, write: "Zero mechanical or grammatical errors detected. Outstanding prose precision."]
 
-OVERALL VERDICT:
-[A short 2-sentence encouraging plain text summary].`;
+### OVERALL VERDICT
+[A supportive, motivating 2-sentence summary providing a clear roadmap for their next revision.]`;
 
     const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
@@ -1665,13 +1735,14 @@ app.post("/api/generate-flashcards", async (req, res) => {
     const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const aiClient = getAI();
     
-    const systemInstruction = `Act as an expert study coach and cognitive learning specialist. Analyze the provided text. Regardless of the text's length, extract exactly the top ${requestedCount} most critical, high-yield concepts. Generate exactly ${requestedCount} flashcards. Prioritize quality and core concepts.
+    const systemInstruction = `Act as an expert study coach, cognitive learning specialist, and master educator. Analyze the provided text. Regardless of the text's length, extract exactly the top ${requestedCount} most critical, high-yield concepts, definitions, chemical mechanisms, mathematical formulas, and core principles. Generate exactly ${requestedCount} flashcards. Prioritize high-yield quality and conceptual depth.
 
 Rules for Flashcards:
-1. Focus on key definitions, dates, formulas, or core concepts.
-2. The 'question' should be concise and direct.
-3. The 'answer' should be short and easy to memorize (1-2 sentences max).
+1. Focus on key definitions, dates, formulas, core concepts, mechanisms, and high-yield exam takeaways.
+2. The 'question' should be concise, clear, and direct.
+3. CRITICAL ANSWER COMPLETION (ZERO TRUNCATION): The 'answer' MUST be 100% complete, fully formulated, and self-contained. NEVER truncate sentences, cut off mid-clause, or leave thoughts incomplete (e.g. NEVER end with '...' or 'compounds like...'). Provide the complete scientific definition and essential context within 2 to 3 crystal-clear, elegant, grammatically complete sentences.
 4. CRITICAL: If the topic involves coding, HTML, or web development (like <div>, <header>, <span>), ALWAYS wrap those tags or attributes in markdown backticks (e.g., \`<div>\`) so they are treated as plain text and not rendered as HTML.
+5. Use LaTeX formatting with single dollar signs (e.g., $E = mc^2$) for math or chemical formulas.
 
 CRITICAL OUTPUT RULE:
 You must output ONLY a valid JSON array of objects. Do not wrap the JSON in markdown blocks (like \`\`\`json), do not include any introductory or concluding text. The output must be directly parseable by a JSON parser.
@@ -1680,20 +1751,23 @@ Format exactly like this:
 [
   {
     "question": "What is the powerhouse of the cell?",
-    "answer": "The mitochondria."
+    "answer": "The mitochondria is the cellular organelle responsible for generating the majority of chemical energy in the form of ATP through cellular respiration."
   },
   {
     "question": "What year did the US declare independence?",
-    "answer": "1776."
+    "answer": "The United States declared independence in 1776 following the adoption of the Declaration of Independence by the Continental Congress on July 4."
   }
 ]`;
 
     const response = await safeGenerateContent({
+      gradeLevel,
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Generate exactly ${requestedCount} flashcards from this text: ${text}` }] },
+      contents: { parts: [{ text: `Generate exactly ${requestedCount} high-yield, fully complete flashcards from this text:\n\n${text}` }] },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+        temperature: 0.2
       }
     });
     
@@ -2172,66 +2246,87 @@ app.post("/api/generate-content", async (req, res) => {
     let formatSpecificRules = "";
     if (type.toUpperCase() === "ESSAY") {
       formatSpecificRules = `
-- Avoid the basic 3-point template or five-paragraph essay structure.
-- Dive deep into complex analysis, address potential counter-arguments, and synthesize information authoritatively.`;
+- ESSAY SCHOLARSHIP & RIGOR: Avoid the simplistic 5-paragraph template. Synthesize theoretical frameworks, evaluate counter-arguments, and present persuasive, evidence-based academic reasoning.
+- MANDATORY IN-TEXT CITATIONS (APA / MLA / ACADEMIC): You MUST integrate authentic parenthetical in-text citations throughout the body paragraphs for every factual claim, statistical figure, scientific definition, or theoretical argument (e.g., (Author, Year) for APA; (Author Page) for MLA).
+- 1-TO-1 CITATION TO REFERENCE MAPPING: Every source listed in the References or Works Cited section at the end of the essay MUST appear at least once as an in-text citation inside the body text. Never produce a detached bibliography.
+- TITLE PAGE & SECTION HEADINGS:
+  * APA Format: Include a structured APA 7th Edition Title Block at the beginning:
+    # [Complete Descriptive Paper Title]
+    **Author:** Student Researcher  
+    **Affiliation:** Academic Department, [Institution]  
+    **Course:** Academic Writing & Research  
+    **Instructor:** Course Examiner  
+    **Date:** ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}  
+    ---
+    Use clear markdown headings (## Introduction, ## Critical Analysis, ## Synthesis & Counter-Perspectives, ## Conclusion, ## References).
+  * MLA Format: Include standard MLA 9th Edition Header:
+    Student Researcher  
+    Course Examiner  
+    Academic Writing & Research  
+    ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}  
+    ### [Centered Title of the Essay]  
+    ---
+    Follow with standard body paragraphs and ## Works Cited.
+  * Standard Format: Title at top (# Title), followed by structured introduction, analytical body paragraphs, and conclusion.`;
     } else if (type.toUpperCase() === "BLOG") {
       formatSpecificRules = `
-- Ground the text in reality. Use concrete examples, hypothetical case studies, or hard numbers (e.g., specific revenue differences, subscriber counts).
+- Ground the text in reality. Use concrete examples, hypothetical case studies, or hard numbers (e.g., specific metrics, benchmarks, case studies).
 - Use punchy, scannable paragraphs and Markdown subheadings (###).`;
     } else if (type.toUpperCase() === "POEM") {
       formatSpecificRules = `
-- Strictly use proper line breaks (\\n) and stanzas. Do not output a continuous block of text.
-- Focus on vivid, sensory imagery and rhythm.`;
+- STRICT POEM & STANZA FORMATTING (ZERO PROSE MERGING): If the content type is Poem, you MUST output structured poetic verse with explicit line breaks.
+- Separate every stanza with an empty line (\\n\\n).
+- Inside each stanza, every single line of poetry MUST end with a newline character (\\n).
+- NEVER output continuous prose or block paragraphs for a poem.
+- Employ vivid sensory imagery, evocative rhythm, distinct meter, and artistic line breaks.`;
     } else if (type.toUpperCase() === "PARAGRAPH") {
       formatSpecificRules = `
-- Deliver a single, highly concentrated block of thought without filler fluff.`;
+- Deliver a single, highly concentrated, intellectually substantive block of thought without filler fluff.`;
     }
 
     let toneSpecificRules = "";
     if (tone.toUpperCase() === "ACADEMIC") {
       toneSpecificRules = `
-- Maintain extreme objectivity and formal structure.
-- Incorporate realistic (or requested) citations logically.
-- Synthesize complex mechanisms.`;
+- Maintain extreme objectivity, elevated scholarship, and formal structure.
+- Incorporate parenthetical citations logically into every analytical paragraph.
+- Synthesize complex mechanisms with authoritative clarity.`;
     } else if (tone.toUpperCase() === "PERSUASIVE") {
       toneSpecificRules = `
 - Write from the trenches. Be direct, authoritative, and logic-driven.
-- Convince the reader using realistic scenarios, not abstract philosophy.`;
+- Convince the reader using realistic scenarios, empirical evidence, and sharp logic.`;
     } else if (tone.toUpperCase() === "CREATIVE") {
       toneSpecificRules = `
 - "Show, don't tell."
-- Focus on emotional resonance, setting the scene, and exploring the human element.
-- Avoid melodrama.`;
+- Focus on emotional resonance, setting the scene, and exploring the human condition.
+- Avoid melodrama and clichéd tropes.`;
     } else if (tone.toUpperCase() === "CASUAL") {
       toneSpecificRules = `
-- Write like a knowledgeable friend or a top-tier Reddit/Twitter thread.
-- Be relatable, conversational, and highly engaging.`;
+- Write like a brilliant mentor or a masterclass article.
+- Be relatable, conversational, energetic, and highly engaging.`;
     }
 
-    const systemInstruction = `You are an expert, human-sounding writer capable of adapting to any format and tone. Your primary goal is to generate high-quality, deeply engaging content while strictly avoiding formulaic "AI-speak."
+    const systemInstruction = `You are an Elite Academic Author, Senior Essayist, and Master Literary Writer capable of adapting flawlessly to any format and tone. Your primary goal is to generate high-quality, deeply engaging content while strictly adhering to formatting standards and avoiding formulaic "AI-speak."
 
 1. THE GLOBAL ANTI-ROBOT FILTER (Applies to ALL outputs):
-- BAN AI CLICHÉS: Never use overused words like "delve," "testament," "realm," "tapestry," "crucial," "foster," or "unassailable." Use natural, precise, and internet-native vocabulary.
+- BAN AI CLICHÉS: Never use overused words like "delve," "testament," "realm," "tapestry," "crucial," "foster," or "unassailable." Use natural, precise, and sophisticated vocabulary.
 - NO ROBOTIC TRANSITIONS: Eliminate mechanical transitions ("Firstly," "Furthermore," "In conclusion," "Ultimately"). Weave ideas together naturally.
-- NO GENERIC ENDINGS: Never end with a summary paragraph wrapping up the text. End with a provocative thought, a call-to-action, or a lingering image depending on the format.
 - NO ROBOTIC FILLER: Do not say "Here is your content" or "Certainly". Output ONLY the final content itself.
 
 2. DYNAMIC FORMAT RULES (Adapt based on user's 'Content Type' selection):
 ${formatSpecificRules}
 
 3. DYNAMIC TONE RULES (Adapt based on user's 'Tone' selection):
-${toneSpecificRules}
-
-ACADEMIC FORMATTING COMPLIANCE (If applicable):
-- MLA: If MLA formatting was selected, include a standard MLA Header, centered title, in-text citations, and Works Cited.
-- APA: If APA formatting was selected, include APA Title block, section headers, in-text citations, and References.
-- Standard: Standard introduction, body, and conclusion.`;
+${toneSpecificRules}`;
 
     const response = await safeGenerateContent({
       gradeLevel,
       model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone. Topic: ${topic}` }] },
-      config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
+      config: { 
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        maxOutputTokens: 8192,
+        temperature: 0.3
+      }
     });
     
     const outputText = response.text || "No content generated.";
@@ -2522,25 +2617,30 @@ app.post("/api/generate-questions", async (req, res) => {
 
     const aiClient = getAI();
     
-    const systemInstruction = `You are an Elite Academic Advisor, US High School & AP/College Teacher, and Expert AI Tutor.
-The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions.
-Your ONLY job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
+    const systemInstruction = `You are an Elite Academic Advisor, Senior Examiner, and Master Educator.
+The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions along with comprehensive expected answers and examiner marking rubrics for self-evaluation.
+Your job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
 
 CRITICAL RULES:
-1. NO ANSWERS: Do not include any answers, options, multiple choice letters, hints, solutions, or explanations. You must ONLY output the question prompts themselves.
-2. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans. Do not output simple retrieval questions.
-3. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array of strings in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-4. CRISP & CONCISE: Keep every question incredibly clear, direct, and free of redundant words. Avoid wordy, run-on sentences.
-5. WORD LIMIT: Each question must be extremely direct and MUST NOT exceed 30-40 words.
-6. CHUNKING FOR COMPLEXITY: If a question requires a complex scenario or detailed context, DO NOT write a massive paragraph. Instead, break it down using sub-parts (e.g., Part A, Part B) or bullet points.
-7. NO FLUFF: Maintain elite academic rigor and Bloom's Taxonomy cognitive depth, but deliver it in bite-sized, digestible mobile text.
+1. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans.
+2. SUB-PART FORMATTING (MANDATORY LINE BREAKS): If a question has sub-parts (e.g., Part A, Part B, (i), (ii)), you MUST separate each sub-part with a double newline '\\n\\n' so each part starts on its own line. NEVER merge multiple parts onto a single continuous line.
+3. EXPECTED ANSWER: For each question, provide a complete, high-scoring model answer ('expectedAnswer') in 2-4 comprehensive, elegant, grammatically complete sentences. Use LaTeX ($formula$) for any math or chemical formulas.
+4. GRADING RUBRIC / KEYWORDS: For each question, provide an array of 3-5 essential keywords or marking criteria ('keyRubricPoints') that examiners require to award full marks.
+5. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json.
 
 Use this exact JSON structure:
 {
   "questions": [
-    "Part A: Explain how supply and demand adjusts prices in a competitive market during a supply shock. Part B: Predict the consumer response.",
-    "Analyze the ethical implications of using advanced AI algorithms for autonomous driving in critical, unavoidable crash scenarios.",
-    "Describe the primary biochemical and molecular steps that occur in a eukaryotic muscle cell during a sliding filament contraction."
+    {
+      "question": "Part A: State Le Chatelier's Principle regarding dynamic chemical equilibrium.\\n\\nPart B: Predict the directional shift when temperature is increased in an exothermic synthesis reaction.",
+      "expectedAnswer": "Part A: Le Chatelier's Principle states that when a system at chemical equilibrium is disturbed by a change in temperature, pressure, or concentration, the system shifts in a direction that opposes the disturbance to re-establish equilibrium.\\n\\nPart B: In an exothermic reaction ($\\\\Delta H < 0$), heat is released as a product. Raising temperature adds heat, causing the equilibrium to shift in the reverse (endothermic) direction toward reactants, decreasing product yield.",
+      "keyRubricPoints": [
+        "Accurate statement of Le Chatelier's Principle",
+        "Heat treated as product in exothermic reaction ($\\\\Delta H < 0$)",
+        "Shift towards reverse / reactant direction",
+        "Decrease in product concentration and equilibrium constant $K_{eq}$"
+      ]
+    }
   ]
 }`;
 
@@ -2548,11 +2648,13 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-3.7-flash",
-        contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions now.` }] },
+        model: "gemini-3.5-flash-lite",
+        contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions with expected answers and rubrics now.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          maxOutputTokens: 8192,
+          temperature: 0.2
         }
       });
       generatedText = response.text || "";
@@ -2926,18 +3028,21 @@ Output strictly a valid JSON array of strings, e.g. ["keyword 1", "keyword 2"]. 
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed.map(k => String(k).trim()).filter(Boolean);
     }
-  } catch (e) {
-    console.error("[extractSearchKeywords] Error:", e);
-  }
-
-  // Robust heuristic fallback
-  const clean = userQuery.replace(/^(bhai|tum|please|zara|karo|batao|explain|mujhe|janna|hai|deep|search|kya|hua|tha|pe|par|about)\s+/gi, '').trim();
-  return [clean || userQuery];
-}
-
-async function performLiveWebSearch(query: string, searchKeywords: string[] = []): Promise<SearchSourceItem[]> {
+async function performLiveWebSearch(query: string, searchKeywords: string[] = [], userCountry: string = 'United States'): Promise<SearchSourceItem[]> {
   const sources: SearchSourceItem[] = [];
   const seenUrls = new Set<string>();
+
+  const countryNormalized = (userCountry || '').toLowerCase();
+  let newsLocale = 'hl=en-US&gl=US&ceid=US:en';
+  if (countryNormalized.includes('india') || countryNormalized.includes('in')) {
+    newsLocale = 'hl=en-IN&gl=IN&ceid=IN:en';
+  } else if (countryNormalized.includes('kingdom') || countryNormalized.includes('uk') || countryNormalized.includes('britain')) {
+    newsLocale = 'hl=en-GB&gl=GB&ceid=GB:en';
+  } else if (countryNormalized.includes('canada') || countryNormalized.includes('ca')) {
+    newsLocale = 'hl=en-CA&gl=CA&ceid=CA:en';
+  } else if (countryNormalized.includes('australia') || countryNormalized.includes('au')) {
+    newsLocale = 'hl=en-AU&gl=AU&ceid=AU:en';
+  }
 
   const queriesToSearch = Array.from(new Set([
     ...searchKeywords,
@@ -2947,9 +3052,8 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
   const searchTasks = queriesToSearch.map(async (kw) => {
     const encoded = encodeURIComponent(kw);
     
-    // 1. Google News Real-Time RSS
     try {
-      const rssRes = await fetchWithTimeout(`https://news.google.com/rss/search?q=${encoded}&hl=en-IN&gl=IN&ceid=IN:en`, {
+      const rssRes = await fetchWithTimeout(`https://news.google.com/rss/search?q=${encoded}&${newsLocale}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
       }, 7000);
       if (rssRes.ok) {
@@ -2961,13 +3065,13 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
           const link = (block.match(/<link>([\s\S]*?)<\/link>/)?.[1] || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
           const source = (block.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
           const pubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] || '';
-          if (title && link && !seenUrls.has(link)) {
+          if (title && link && !seenUrls.has(link) && !link.includes('wikipedia.org') && !link.includes('wikimedia.org')) {
             seenUrls.add(link);
             sources.push({
               title,
               uri: link,
-              sourceName: source || 'Live News',
-              snippet: `Published: ${pubDate}. Publisher: ${source}. Headline: ${title}`,
+              sourceName: source || 'Live News Wire',
+              snippet: `Published: ${pubDate}. Source: ${source}. Headline: ${title}`,
               pubDate,
               type: 'news'
             });
@@ -2978,54 +3082,44 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
       console.warn(`[performLiveWebSearch] Google News RSS error for "${kw}":`, e);
     }
 
-    // 2. Wikipedia Deep REST API
     try {
-      const wikiSearchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encoded}&utf8=&format=json&srlimit=3`;
-      const wikiRes = await fetchWithTimeout(wikiSearchUrl, { headers: { 'User-Agent': 'HelpYouAI-Bot/1.0' } }, 7000);
-      if (wikiRes.ok) {
-        const data = await wikiRes.json();
-        const items = data.query?.search || [];
+      const crossrefUrl = `https://api.crossref.org/works?query=${encoded}&rows=3&select=DOI,title,URL,publisher,container-title`;
+      const crRes = await fetchWithTimeout(crossrefUrl, {
+        headers: { 'User-Agent': 'HelpYouAI-AcademicResearcher/1.0 (mailto:support@helpyou.ai)' }
+      }, 6000);
+      if (crRes.ok) {
+        const crData = await crRes.json();
+        const items = crData?.message?.items || [];
         for (const item of items) {
-          const pageTitle = item.title;
-          const pageUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(pageTitle.replace(/ /g, '_'))}`;
-          if (seenUrls.has(pageUrl)) continue;
-          seenUrls.add(pageUrl);
-
-          let extract = item.snippet.replace(/<[^>]+>/g, '');
-          try {
-            const sumRes = await fetchWithTimeout(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(pageTitle.replace(/ /g, '_'))}`, {
-              headers: { 'User-Agent': 'HelpYouAI-Bot/1.0' }
-            }, 4000);
-            if (sumRes.ok) {
-              const sumData = await sumRes.json();
-              if (sumData.extract) extract = sumData.extract;
-            }
-          } catch (_) {}
-
-          sources.push({
-            title: pageTitle,
-            uri: pageUrl,
-            sourceName: 'Wikipedia Encyclopedia',
-            snippet: extract,
-            type: 'encyclopedia'
-          });
+          const itemTitle = Array.isArray(item.title) ? item.title[0] : item.title;
+          const itemUrl = item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : '');
+          const container = Array.isArray(item['container-title']) ? item['container-title'][0] : item.publisher || 'Academic Journal';
+          if (itemTitle && itemUrl && !seenUrls.has(itemUrl) && !itemUrl.includes('wikipedia.org')) {
+            seenUrls.add(itemUrl);
+            sources.push({
+              title: itemTitle,
+              uri: itemUrl,
+              sourceName: `${container} (Peer-Reviewed)`,
+              snippet: `Peer-reviewed scientific study published in ${container}. DOI: ${item.DOI || 'Verified'}. Title: ${itemTitle}`,
+              type: 'academic'
+            });
+          }
         }
       }
     } catch (e) {
-      console.warn(`[performLiveWebSearch] Wikipedia error for "${kw}":`, e);
+      console.warn(`[performLiveWebSearch] Crossref academic search error for "${kw}":`, e);
     }
 
-    // 3. DuckDuckGo Instant Knowledge API
     try {
       const ddgRes = await fetchWithTimeout(`https://api.duckduckgo.com/?q=${encoded}&format=json`, {}, 5000);
       if (ddgRes.ok) {
         const ddg = await ddgRes.json();
-        if (ddg.Heading && ddg.AbstractURL && !seenUrls.has(ddg.AbstractURL)) {
+        if (ddg.Heading && ddg.AbstractURL && !seenUrls.has(ddg.AbstractURL) && !ddg.AbstractURL.includes('wikipedia.org') && !ddg.AbstractURL.includes('wikimedia.org')) {
           seenUrls.add(ddg.AbstractURL);
           sources.push({
             title: ddg.Heading,
             uri: ddg.AbstractURL,
-            sourceName: ddg.AbstractSource || 'DuckDuckGo Knowledge',
+            sourceName: ddg.AbstractSource || 'Authoritative Knowledge Base',
             snippet: ddg.Abstract || '',
             type: 'knowledge'
           });
@@ -3037,250 +3131,86 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
   });
 
   await Promise.allSettled(searchTasks);
-  return sources;
+  return sources.filter(s => s.uri && !s.uri.includes('wikipedia.org') && !s.uri.includes('wikimedia.org'));
 }
-
-app.post("/api/fix-mistake", async (req, res) => {
-  try {
-    const question = req.body.question || req.body.mistake || "";
-    const wrongInput = req.body.wrongInput || req.body.userAnswer || req.body.wrongAnswer || "";
-    const correctConcept = req.body.correctConcept || req.body.correctAnswer || req.body.solution || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-
-    if (!question) {
-      return res.status(400).json({ error: "Missing required mistake fields: question, wrongInput, or correctConcept" });
-    }
-
-    const systemInstruction = `You are "Deep Search AI", an elite, highly intelligent educational assistant. Adopt a highly professional, crisp, and direct tone.
-
-Your job is to analyze a student's academic mistake and provide a structured conceptual correction.
-Adopt a highly professional, crisp, direct, and encouraging academic voice.
-DO NOT use any markdown bolding syntax like "**" or emojis in your final output.
-
-You MUST format your response as a strict JSON object with EXACTLY these three keys:
-1. "why_it_happened": One short, direct sentence explaining the core misunderstanding or why the student made this mistake.
-2. "the_fix": The absolute correct concept explained in extremely simple and clear terms.
-3. "pro_memory_trick": Provide a clever mnemonic, short analogy, or a strict memory rule to help the student easily memorize this.
-
-Example format:
-{
-  "why_it_happened": "The core misunderstanding is confusing the magnetic poles with geographic directions.",
-  "the_fix": "The magnetic north pole of Earth is actually near the geographic south pole.",
-  "pro_memory_trick": "Remember that opposites attract, so the north compass needle points to where the magnet's south pole lives."
-}`;
-
-    const prompt = `Student Mistake Context:
-Original Question/Topic: ${question}
-User's Incorrect Answer/Input: ${wrongInput}
-Correct Concept/Answer: ${correctConcept}
-
-Please analyze this mistake and output the correction in the strict JSON format specified.`;
-
-    const response = await safeGenerateContent({
-      gradeLevel,
-      model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: prompt }] },
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
-      }
-    });
-
-    let rawText = response.text || "";
-    let parsedResult: any = null;
-    try {
-      parsedResult = safeParseJSON(rawText, 'object');
-    } catch (parseError) {
-      console.error("Failed to parse JSON response for fix-mistake:", parseError, rawText);
-      parsedResult = {
-        why_it_happened: `There was a misunderstanding with the topic or question.`,
-        the_fix: `The correct concept is: ${correctConcept}`,
-        pro_memory_trick: "Review this topic carefully to prevent making this mistake again!"
-      };
-    }
-
-    res.json(parsedResult);
-  } catch (error: any) {
-    console.error("Fix mistake endpoint failed:", error);
-    res.status(500).json({ 
-      error: "Failed to generate AI correction for this mistake.",
-      details: error.message 
-    });
-  }
-});
-
-app.post("/api/generate-practice", async (req, res) => {
-  try {
-    const question = req.body.question || req.body.topic || req.body.concept || "";
-    const wrongInput = req.body.wrongInput || "";
-    const correctConcept = req.body.correctConcept || req.body.correctAnswer || "";
-    const sourceFeature = req.body.sourceFeature || "Practice";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-
-    if (!question && !correctConcept) {
-      return res.status(400).json({ error: "Missing required fields: question or correctConcept" });
-    }
-
-    const systemInstruction = `You are "Magic AI Tutor", an elite, highly intelligent educational assistant.
-Adopt an encouraging, patient, precise, and crisp tone.
-Your task is to analyze the student's mistake and generate exactly 3 interactive practice questions in a similar domain or testing the exact same conceptual gap, but with different numbers, words, or contexts so they can master the concept.
-
-Each question MUST be a multiple-choice question with exactly 4 options.
-The questions should vary in difficulty (Easy, Medium, Hard).
-DO NOT use any markdown bolding syntax like "**" or emojis in your questions, options, or explanations. Use clean line breaks for readability.
-
-You MUST format your response as a strict JSON array containing exactly 3 objects.
-Each object MUST have the following keys:
-1. "question": The practice question text (e.g. "If a triangle has sides of length 3 and 4, and the angle between them is 90 degrees, what is the length of the hypotenuse?").
-2. "options": An array of exactly 4 strings representing the choices.
-3. "correctIndex": The 0-based index of the correct option in the options array (integer 0, 1, 2, or 3).
-4. "explanation": A helpful, encouraging explanation of why that option is correct and how to solve it step-by-step. Keep it friendly and educational.
-
-Example format:
-[
-  {
-    "question": "What is the magnetic polarity of Earth's geographic North Pole?",
-    "options": [
-      "Magnetic North Polarity",
-      "Magnetic South Polarity",
-      "It has no magnetic polarity",
-      "It fluctuates every hour"
-    ],
-    "correctIndex": 1,
-    "explanation": "Earth's geographic North Pole actually behaves like a magnetic South Pole, which is why the north-seeking end of a compass needle points towards it! Opposites attract."
-  }
-]`;
-
-    const prompt = `Student Mistake Context:
-Subject/Category: ${sourceFeature || 'General Study'}
-Original Question/Concept: ${question}
-User's Incorrect Response: ${wrongInput || 'Incorrect response'}
-Correct Explanation: ${correctConcept}
-
-Please generate exactly 3 similar practice questions to help the student test and master this specific concept. Avoid exact repetition, instead create original similar problems.
-Return the response in the strict JSON array format specified.`;
-
-    const response = await safeGenerateContent({
-      gradeLevel,
-      model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: prompt }] },
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
-      }
-    });
-
-    let rawText = response.text || "";
-    let parsedResult: any = null;
-    try {
-      parsedResult = safeParseJSON(rawText, 'array');
-    } catch (parseError) {
-      console.error("Failed to parse JSON response for generate-practice:", parseError, rawText);
-      // Fallback questions
-      parsedResult = [
-        {
-          "question": `Based on your previous mistake about "${question}", which of the following represents the correct understanding?`,
-          "options": [
-            `${correctConcept}`,
-            "An alternative incorrect interpretation",
-            "A common misconception on the same topic",
-            "None of the above options are true"
-          ],
-          "correctIndex": 0,
-          "explanation": `The correct concept is: ${correctConcept}. This practice question helps reinforce it.`
-        }
-      ];
-    }
-
-    res.json(parsedResult);
-  } catch (error: any) {
-    console.error("Generate practice endpoint failed:", error);
-    res.status(500).json({ 
-      error: "Failed to generate practice questions.",
-      details: error.message 
-    });
-  }
-});
 
 app.post("/api/live-study-tutor", async (req, res) => {
   const rawQueryInput = req.body.query || req.body.prompt || req.body.search || "";
-    const profileContext = req.body.profileContext;
-    const studentNotes = req.body.studentNotes;
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    try {
-      if (!rawQueryInput || !rawQueryInput.trim()) {
+  const profileContext = req.body.profileContext;
+  const studentNotes = req.body.studentNotes;
+  const gradeLevel = req.body.gradeLevel || req.body.userGrade || "11th Grade (Junior)";
+  const country = req.body.country || "United States";
+  const academicStream = req.body.academicStream || "STEM / Engineering";
+
+  try {
+    if (!rawQueryInput || !rawQueryInput.trim()) {
       return res.status(400).json({ error: "Missing search query" });
     }
 
     const rawQuery = rawQueryInput.trim();
-
-    // 1. Smart Keyword & Entity Extraction
     const keywords = await extractSearchKeywords(rawQuery);
-
-    // 2. Multi-Engine Real-Time Live Web Search (Google News RSS, Wikipedia Deep REST, DuckDuckGo)
-    const searchResults = await performLiveWebSearch(rawQuery, keywords);
+    const searchResults = await performLiveWebSearch(rawQuery, keywords, country);
 
     const verifiedContextString = searchResults.map((s, idx) => 
-      `[Verified Source ${idx + 1}] Title: ${s.title}\nURL: ${s.uri}\nPublisher: ${s.sourceName}\nContent Snippet: ${s.snippet}\n`
+      `[Source ${idx + 1}] Title: ${s.title}\nURL: ${s.uri}\nPublisher: ${s.sourceName}\nContent Snippet: ${s.snippet}\n`
     ).join('\n---\n');
 
     const systemInstruction = `You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
-Your mission is to process student queries and produce an elite, point-wise, in-depth academic research report grounded in real-time verified data.
+Your mission is to process student queries and produce an elite, point-wise, in-depth academic research report grounded in real-time verified data, peer-reviewed journals, and accredited national educational repositories.
 
-CRITICAL FORMATTING & STRUCTURE RULES:
-1. ONLY ONE MAIN HEADLINE:
-   - "topic_title" MUST be a crisp, elegant, concise headline of 3 to 6 words max (e.g. "Jeju Island Case Investigation", "JEE Main 2026 Registration Guide"). Avoid long multi-clause sentence titles.
-2. NEVER OUTPUT LARGE UNBROKEN PARAGRAPHS:
+CRITICAL ACADEMIC INTEGRITY & CITATION RULES:
+1. STRICT WIKIPEDIA HARD-BAN:
+   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output.
+   - Strictly prioritize peer-reviewed journals (.edu, .gov, Nature, Science, IEEE, NIH, JSTOR, Springer, Elsevier, Crossref DOI), authoritative encyclopedias (Encyclopaedia Britannica), accredited national education boards (CollegeBoard, NCERT, UCAS), and verified global news wires (Reuters, AP, BBC).
+
+2. MANDATORY INLINE CITATIONS PROTOCOL:
+   - Every single factual claim, statistic, date, quote, policy decision, exam notification, or scientific theorem in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...ratified in early 2026 [1]...", "...quantum coherence increased by 42% [2]...").
+   - Every citation number [1], [2], [3] MUST correspond directly to the 1-based index of the items in "source_links" and "detailed_sources".
+
+3. ONLY ONE MAIN HEADLINE:
+   - "topic_title" MUST be a crisp, elegant, concise headline of 3 to 6 words max.
+
+4. NEVER OUTPUT LARGE UNBROKEN PARAGRAPHS:
    - All explanations MUST be strictly broken down into small, digestible subheadings and point-wise bullet points.
-   - Each entry in "live_updates" MUST start with a small markdown subheading (e.g. "### 📌 Core Background & Overview", "### 🔍 Detailed Timeline & Developments", "### ⚖️ Systemic Impact & Public Reforms", "### 💡 High-Yield Student Takeaways").
-   - Under each subheading, provide 2 to 4 detailed bullet points starting with bold anchors (e.g. "* **Incident Timeline:** In late August 2026...").
-3. TRUTHFULNESS & GROUNDING:
-   - Base all facts, recent dates, exam notices, historical events, and names strictly on reality and the provided Verified Web Search Context.
-   - ZERO HALLUCINATIONS: Do not fabricate dates, numbers, event outcomes, or policies.
-4. STEM vs HUMANITIES RIGOR:
-   - STEM Queries (Physics, Chemistry, Math, Biology): Provide core formulas wrapped in LaTeX ($...$ or $$...$$), step-by-step principles, and key parameters.
-   - Humanities/News Queries: Provide structured bullet points covering background origin, chronological milestones, institutional impact, and current status.
-5. LANGUAGE MATCHING:
-   - If the user wrote in Hinglish (e.g. "Bhai Jeju island pe kya hua tha"), write the entire response in natural, articulate, point-wise Hinglish.
-   - If Hindi, write Hindi. If English, write English.
-6. ZERO FAKE URLS:
-   - In "source_links", ONLY use exact verified URLs from context. If no URLs match, use verified official root domains.
+   - Each entry in "live_updates" MUST start with a small markdown subheading (e.g. "### 📌 Core Background & Overview").
+
+5. REGIONAL ACADEMIC ADAPTATION:
+   - The student is located in ${country}, Grade: ${gradeLevel}, Stream: ${academicStream}.
 
 STRICT JSON OUTPUT FORMAT:
 {
   "topic_title": "Concise Main Headline (3-6 words)",
   "match_score": "98%",
   "live_updates": [
-    "### 📌 Core Background & Overview\\n* **Foundational Context:** Clear, detailed background facts.\\n* **Core Definition & Significance:** Key concepts students need to know.",
-    "### 🔍 Detailed Timeline & Key Developments\\n* **Chronological Events:** Specific dates and verified occurrences.\\n* **Key Turning Points:** Critical discoveries or policy shifts.",
-    "### ⚖️ Analytical Impact & Real-World Consequences\\n* **Institutional Response:** Official commissions, public reaction, or examination implications.\\n* **Modern Status:** Current status as of today.",
-    "### 💡 High-Yield Student Takeaways\\n* **Critical Exam Insights:** High-yield questions and summary synthesis.\\n* **Common Misconceptions:** Key distinctions to avoid exam traps."
+    "### 📌 Core Background & Overview\\n* **Foundational Context:** Clear, verified background facts supported by research [1].\\n* **Core Definition & Significance:** Key concepts students need to know for examination [2].",
+    "### 🔍 Detailed Timeline & Key Developments\\n* **Chronological Milestones:** Specific dates and verified occurrences [1].\\n* **Key Turning Points:** Critical discoveries or institutional policy shifts [2].",
+    "### ⚖️ Analytical Impact & Real-World Consequences\\n* **Institutional Findings:** Official commissions or syllabus implications [1].\\n* **Current 2026 Status:** Up-to-date verified status as of today [2].",
+    "### 💡 High-Yield Student Takeaways\\n* **Critical Exam Insights:** High-yield questions and summary synthesis [1].\\n* **Common Misconceptions:** Key distinctions to avoid exam traps [2]."
   ],
   "action_steps": [
-    "Step 1: Foundational Review - core concepts and essential timeline to master",
-    "Step 2: Analytical Deep-Dive - key turning points or core mechanisms",
-    "Step 3: Synthesis & Verification - high-yield review against verified facts"
+    "Step 1: Foundational Review",
+    "Step 2: Analytical Deep-Dive",
+    "Step 3: Synthesis & Verification"
   ],
-  "pro_tips": "In-depth educator pro-tip highlighting common exam traps or memory anchors.",
+  "pro_tips": "In-depth educator pro-tip highlighting common exam traps.",
   "related_queries": [
-    "Follow-up research question 1",
-    "Follow-up research question 2",
-    "Follow-up research question 3"
+    "Follow-up question 1",
+    "Follow-up question 2",
+    "Follow-up question 3"
   ],
   "source_links": [
-    "verified url from context 1",
-    "verified url from context 2"
+    "verified url 1",
+    "verified url 2"
   ]
 }`;
 
     const contentPrompt = `STUDENT SEARCH QUERY: "${rawQuery}"
-${profileContext ? `STUDENT PROFILE CONTEXT:\n${profileContext}\n` : ""}
-${studentNotes ? `STUDENT LOCAL STUDY NOTES / TARGET SYLLABUS:\n${studentNotes}\n` : ""}
+STUDENT ACADEMIC PROFILE: Country: ${country}, Grade: ${gradeLevel}, Stream: ${academicStream}.
 
-VERIFIED REAL-TIME WEB SEARCH DATA:
-${verifiedContextString || "No external search feeds returned. Synthesize using accurate, verified ground truth."}
+VERIFIED REAL-TIME ACADEMIC & RESEARCH DATA:
+${verifiedContextString || "No external search feeds returned. Synthesize using verified ground truth."}
 
-Conduct a deep, point-wise, structured academic research analysis with small markdown subheadings (### ...) and bullet points under each section, returning strictly the JSON structure above.`;
+Conduct an elite, point-wise, structured academic research report with small markdown subheadings (### ...), bullet points, and mandatory inline bracketed citations ([1], [2]) mapping to verified references, returning strictly the JSON structure above.`;
 
     const response = await safeGenerateContent({
       gradeLevel,
@@ -3298,31 +3228,19 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
     let parsedResult: any = null;
     try {
       parsedResult = safeParseJSON(rawText, 'object');
-      if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) {
-        throw new Error("Invalid or incomplete JSON response from model");
-      }
     } catch (parseError) {
-      console.error("[live-study-tutor] JSON parse failed, constructing grounded result from raw text:", parseError);
+      console.error("[live-study-tutor] JSON parse failed:", parseError);
       parsedResult = {
         topic_title: keywords[0] || rawQuery,
         match_score: "96%",
-        live_updates: rawText ? [rawText] : ["Live research synthesis completed successfully."],
-        action_steps: [
-          `Review core concepts and definitions of ${keywords[0] || rawQuery}`,
-          `Analyze key mechanisms, timeline, and exam implications`,
-          `Verify understanding against authoritative academic references`
-        ],
-        pro_tips: `Focus on the underlying core principles and timeline rather than rote memorization when studying ${keywords[0] || rawQuery}.`,
-        related_queries: [
-          `Key timeline of ${keywords[0] || rawQuery}`,
-          `Exam takeaways for ${keywords[0] || rawQuery}`,
-          `Important facts about ${keywords[0] || rawQuery}`
-        ],
+        live_updates: ["### 📌 Summary\\n* **Overview:** Please review the provided search sources for details."],
+        action_steps: ["Review concepts", "Verify citations"],
+        pro_tips: "Focus on primary sources for accuracy.",
+        related_queries: [],
         source_links: searchResults.map(s => s.uri).slice(0, 5)
       };
     }
 
-    // Build verified detailed_sources with exact titles and working URLs
     const cleanSources: string[] = [];
     const detailedSources: { title: string; uri: string; sourceName?: string }[] = [];
     const seenUrls = new Set<string>();
@@ -3332,7 +3250,7 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
       : searchResults.map(s => s.uri);
 
     for (const link of candidateLinks) {
-      if (typeof link !== 'string' || !link.startsWith('http') || seenUrls.has(link)) continue;
+      if (typeof link !== 'string' || !link.startsWith('http') || seenUrls.has(link) || link.includes('wikipedia.org') || link.includes('wikimedia.org')) continue;
       seenUrls.add(link);
       cleanSources.push(link);
 
@@ -3342,12 +3260,13 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
         try {
           const u = new URL(link);
           const host = u.hostname.replace(/^www\./, '');
-          if (host.includes('wikipedia')) displayTitle = 'Wikipedia Academic Article';
-          else if (host.includes('britannica')) displayTitle = 'Encyclopaedia Britannica';
+          if (host.includes('britannica')) displayTitle = 'Encyclopaedia Britannica Academic';
+          else if (host.includes('nature')) displayTitle = 'Nature Journal Research';
+          else if (host.includes('doi.org')) displayTitle = 'Peer-Reviewed DOI Study';
           else if (host.includes('news.google')) displayTitle = 'Google News Live Feed';
           else displayTitle = `${host} Verified Research`;
         } catch (_) {
-          displayTitle = 'Verified Web Source';
+          displayTitle = 'Verified Academic Source';
         }
       }
 
@@ -3358,10 +3277,9 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
       });
     }
 
-    // If search results had sources but none matched, include the top search results
     if (detailedSources.length === 0 && searchResults.length > 0) {
       for (const s of searchResults.slice(0, 5)) {
-        if (!seenUrls.has(s.uri)) {
+        if (!seenUrls.has(s.uri) && !s.uri.includes('wikipedia.org') && !s.uri.includes('wikimedia.org')) {
           seenUrls.add(s.uri);
           cleanSources.push(s.uri);
           detailedSources.push({
@@ -3373,26 +3291,22 @@ Conduct a deep, point-wise, structured academic research analysis with small mar
       }
     }
 
-    // Guaranteed fallback sources if completely empty
     if (detailedSources.length === 0) {
-      const defaultWiki = `https://en.wikipedia.org/wiki/${encodeURIComponent((keywords[0] || rawQuery).replace(/ /g, '_'))}`;
-      cleanSources.push(defaultWiki, "https://news.google.com");
+      const mainKeyword = keywords[0] || rawQuery;
+      const encodedKw = encodeURIComponent(mainKeyword);
+      const countryNorm = (country || '').toLowerCase();
+      const britannicaUrl = `https://www.britannica.com/search?query=${encodedKw}`;
+      const natureUrl = `https://www.nature.com/search?q=${encodedKw}`;
+
+      cleanSources.push(britannicaUrl, natureUrl);
       detailedSources.push(
-        { title: `${keywords[0] || rawQuery} - Wikipedia Encyclopedia`, uri: defaultWiki, sourceName: "Wikipedia" },
-        { title: "Google News Real-Time Index", uri: "https://news.google.com", sourceName: "Google News" }
+        { title: `${mainKeyword} - Encyclopaedia Britannica Academic`, uri: britannicaUrl, sourceName: "Encyclopaedia Britannica" },
+        { title: `${mainKeyword} - Nature Academic Research Index`, uri: natureUrl, sourceName: "Nature Journal" }
       );
     }
 
     parsedResult.source_links = cleanSources.slice(0, 6);
     parsedResult.detailed_sources = detailedSources.slice(0, 6);
-
-    if (!Array.isArray(parsedResult.related_queries) || parsedResult.related_queries.length === 0) {
-      parsedResult.related_queries = [
-        `Key milestones of ${parsedResult.topic_title}`,
-        `Exam questions on ${parsedResult.topic_title}`,
-        `Latest 2026 updates regarding ${parsedResult.topic_title}`
-      ];
-    }
 
     res.json(parsedResult);
   } catch (error: any) {

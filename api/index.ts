@@ -3,6 +3,7 @@ dotenv.config();
 
 import express from "express";
 import path from "path";
+import fs from "fs";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -3456,8 +3457,6 @@ Required JSON Structure:
   }
 });
 
-import fs from "fs";
-
 // Premium Subscriptions State Storage (File-backed database fallback)
 const SUBS_FILE_PATH = path.join(process.cwd(), "subscriptions.json");
 
@@ -3509,6 +3508,14 @@ app.get("/api/time", (req, res) => {
   res.json({ timestamp: Date.now() });
 });
 
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.NOW_REGION ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT
+);
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production" && !isServerless) {
     try {
@@ -3522,7 +3529,7 @@ async function startServer() {
     } catch (e) {
       console.warn("Vite dev server not loaded:", e);
     }
-  } else {
+  } else if (!isServerless) {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
 
@@ -3535,19 +3542,13 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-  server.timeout = 300000;
+  if (!isServerless) {
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+    server.timeout = 300000;
+  }
 }
-
-const isServerless = Boolean(
-  process.env.VERCEL ||
-  process.env.VERCEL_ENV ||
-  process.env.NOW_REGION ||
-  process.env.AWS_LAMBDA_FUNCTION_NAME ||
-  process.env.LAMBDA_TASK_ROOT
-);
 
 if (!isServerless) {
   startServer();

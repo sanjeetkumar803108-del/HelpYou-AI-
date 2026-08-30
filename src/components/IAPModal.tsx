@@ -4,7 +4,7 @@ import { CheckCircle2, XCircle, ShieldCheck, CreditCard, Crown, ChevronDown, Che
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { auth } from '../lib/firebase';
-import { pricingMap } from './PaywallModal';
+import { localizedPricingMap } from './PaywallModal';
 
 interface IAPModalProps {
   isOpen: boolean;
@@ -31,14 +31,8 @@ export default function IAPModal({ isOpen, onClose, billingCycle, hasTrial, onRe
     || (userUid ? safeGetItem(`academic_country_${userUid}`) : null) 
     || 'United States';
 
-  // FIX: Added localized pricing
-  const basePrice = pricingMap[selectedCountry] || pricingMap['Others / International'];
-  const currencySymbolMatch = basePrice.match(/^([^\d.]+)/);
-  const numericMatch = basePrice.match(/([\d.]+)/);
-  const symbol = currencySymbolMatch ? currencySymbolMatch[1] : '$';
-  const monthlyNum = numericMatch ? parseFloat(numericMatch[1]) : 14.99;
-
-  const convertedPrice = billingCycle === 'monthly' ? basePrice : `${symbol}${(monthlyNum * 10).toFixed(2)}`;
+  const pricing = localizedPricingMap[selectedCountry] || localizedPricingMap['Others / International'];
+  const convertedPrice = billingCycle === 'monthly' ? pricing.monthlyDiscounted : pricing.yearlyDiscounted;
   const cycleLabel = billingCycle === 'monthly' ? 'month' : 'year';
 
   const paymentMethods = [

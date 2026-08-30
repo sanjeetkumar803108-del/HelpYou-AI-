@@ -45,6 +45,11 @@ export async function pickNativeFiles(options: {
 
   try {
     if (types === 'image') {
+      const isCancellation = (err: any) => {
+        const msg = (err?.message || String(err || '')).toLowerCase();
+        return msg.includes('cancel') || msg.includes('dismiss') || msg.includes('closed') || msg.includes('abort');
+      };
+
       if (multiple) {
         // 1. Try FilePicker.pickImages for multi-image gallery selection without limits
         try {
@@ -66,7 +71,11 @@ export async function pickNativeFiles(options: {
             }
             if (output.length > 0) return output;
           }
-        } catch (e1) {
+          return [];
+        } catch (e1: any) {
+          if (isCancellation(e1)) {
+            return []; // User intentionally pressed back/cancelled - DO NOT open subsequent pickers!
+          }
           console.warn('[mobilePicker] FilePicker.pickImages error, trying pickFiles:', e1);
         }
 
@@ -91,7 +100,11 @@ export async function pickNativeFiles(options: {
             }
             if (output.length > 0) return output;
           }
-        } catch (e2) {
+          return [];
+        } catch (e2: any) {
+          if (isCancellation(e2)) {
+            return [];
+          }
           console.warn('[mobilePicker] FilePicker.pickFiles error, trying Camera.pickImages:', e2);
         }
 
@@ -119,36 +132,46 @@ export async function pickNativeFiles(options: {
             }
             if (output.length > 0) return output;
           }
-        } catch (e3) {
+        } catch (e3: any) {
+          if (isCancellation(e3)) {
+            return [];
+          }
           console.warn('[mobilePicker] Camera.pickImages error:', e3);
         }
+        return [];
       }
 
       // Single image fallback (Camera.getPhoto)
-      const photo = await Camera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.Base64,
-        source: CameraSource.Photos,
-      });
+      try {
+        const photo = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.Base64,
+          source: CameraSource.Photos,
+        });
 
-      if (!photo.base64String) return [];
+        if (!photo.base64String) return [];
 
-      const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
-      const name = `gallery_${Date.now()}.${photo.format || 'jpg'}`;
-      const base64 = photo.base64String;
-      const dataUrl = `data:${mimeType};base64,${base64}`;
-      const blob = base64ToBlob(base64, mimeType);
-      const fileObj = blobToFile(blob, name);
+        const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
+        const name = `gallery_${Date.now()}.${photo.format || 'jpg'}`;
+        const base64 = photo.base64String;
+        const dataUrl = `data:${mimeType};base64,${base64}`;
+        const blob = base64ToBlob(base64, mimeType);
+        const fileObj = blobToFile(blob, name);
 
-      return [{
-        name,
-        mimeType,
-        base64,
-        dataUrl,
-        blob,
-        fileObj,
-      }];
+        return [{
+          name,
+          mimeType,
+          base64,
+          dataUrl,
+          blob,
+          fileObj,
+        }];
+      } catch (err: any) {
+        if (isCancellation(err)) return [];
+        console.warn('[mobilePicker] Single image picker error:', err);
+        return [];
+      }
     }
 
     let pickerTypes: string[] = [];

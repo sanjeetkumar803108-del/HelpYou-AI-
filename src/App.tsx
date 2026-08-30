@@ -915,7 +915,7 @@ export default function App() {
         <div className={activeTab === 'aitutor' ? 'h-full flex flex-col' : 'hidden'}>
           <ErrorBoundary>
             <Suspense fallback={<FullPageSkeleton />}>
-              <AITutor isVip={isVip} />
+              <AITutor isVip={isVip} isActive={activeTab === 'aitutor'} />
             </Suspense>
           </ErrorBoundary>
         </div>

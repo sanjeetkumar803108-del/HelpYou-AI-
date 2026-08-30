@@ -28,19 +28,73 @@ import { safeGetItem } from '../utils/storage';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown from './GlobalMarkdown';
 
+import { getUserProfileData } from '../utils/profile';
+
 interface Flashcard {
   question: string;
   answer: string;
 }
 
-const QUICK_TOPICS = [
-  { label: 'Cell Division & Mitosis', icon: '🧬', color: 'from-emerald-500/10 to-teal-500/10 border-emerald-200 text-emerald-800' },
-  { label: "Newton's Laws & Friction", icon: '⚡', color: 'from-amber-500/10 to-orange-500/10 border-amber-200 text-amber-800' },
-  { label: 'Chemical Bonding & Orbitals', icon: '🧪', color: 'from-blue-500/10 to-indigo-500/10 border-blue-200 text-blue-800' },
-  { label: 'French Revolution Timeline', icon: '📜', color: 'from-purple-500/10 to-pink-500/10 border-purple-200 text-purple-800' },
-  { label: 'Python Recursion & Big-O', icon: '💻', color: 'from-cyan-500/10 to-blue-500/10 border-cyan-200 text-cyan-800' },
-  { label: 'Indian Constitution & Rights', icon: '⚖️', color: 'from-rose-500/10 to-red-500/10 border-rose-200 text-rose-800' },
-];
+const getDynamicQuickTopics = () => {
+  const profile = getUserProfileData();
+  const stream = (profile.stream || '').toLowerCase();
+  const country = (profile.country || '').toLowerCase();
+  const isIndia = country.includes('india');
+
+  if (stream.includes('med') || stream.includes('bio')) {
+    return [
+      { label: 'Cell Division & Mitosis', icon: '🧬' },
+      { label: 'DNA Replication & Transcription', icon: '🧪' },
+      { label: 'Human Circulatory System', icon: '🫀' },
+      { label: 'Photosynthesis Light Reactions', icon: '🌿' },
+      { label: 'Enzyme Kinetics & Inhibitors', icon: '⚡' },
+      { label: isIndia ? 'NEET High-Yield Genetics' : 'AP Biology Key Concepts', icon: '🎯' },
+    ];
+  }
+
+  if (stream.includes('business') || stream.includes('econ') || stream.includes('commerce')) {
+    return [
+      { label: 'Supply & Demand Elasticity', icon: '📈' },
+      { label: 'Fiscal & Monetary Policy', icon: '🏦' },
+      { label: 'Financial Statements & Balance Sheet', icon: '🧾' },
+      { label: 'Market Structures (Monopoly vs Perfect)', icon: '💼' },
+      { label: 'Opportunity Cost & Trade-offs', icon: '⚖️' },
+      { label: 'Inflation & GDP Indicators', icon: '📊' },
+    ];
+  }
+
+  if (stream.includes('human') || stream.includes('art') || stream.includes('law')) {
+    return [
+      { label: isIndia ? 'Indian Constitution & Fundamental Rights' : 'US Constitution & Bill of Rights', icon: '⚖️' },
+      { label: 'French & Industrial Revolutions', icon: '📜' },
+      { label: 'Rhetorical Devices & Argument Analysis', icon: '✍️' },
+      { label: 'World War I & II Key Treaties', icon: '🌍' },
+      { label: 'Major Philosophical Theories', icon: '🏛️' },
+      { label: 'Sociological Perspectives', icon: '👥' },
+    ];
+  }
+
+  if (stream.includes('cs') || stream.includes('computer') || stream.includes('code')) {
+    return [
+      { label: 'Python Recursion & Big-O Notation', icon: '💻' },
+      { label: 'Data Structures (Trees & Hash Maps)', icon: '💾' },
+      { label: 'Object-Oriented Programming (OOP)', icon: '⚙️' },
+      { label: 'HTTP Protocols & REST APIs', icon: '🌐' },
+      { label: 'Database Indexing & SQL Queries', icon: '🗄️' },
+      { label: 'Sorting Algorithms (Merge vs Quick)', icon: '⚡' },
+    ];
+  }
+
+  // Default / STEM Engineering
+  return [
+    { label: "Newton's Laws & Friction", icon: '⚡' },
+    { label: 'Chemical Bonding & Orbitals', icon: '🧪' },
+    { label: 'Integration by Parts & Calculus', icon: '📐' },
+    { label: 'Thermodynamics & Heat Engines', icon: '🔥' },
+    { label: 'Electromagnetic Induction & Optics', icon: '🧲' },
+    { label: isIndia ? 'JEE Physics Core Formulas' : 'AP Physics Mechanics Key Laws', icon: '🎯' },
+  ];
+};
 
 const parseFlashcardsFromText = (text: string): Flashcard[] => {
   const cards: Flashcard[] = [];
@@ -488,7 +542,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
               </span>
               <span>Active Recall Flashcards</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-bold line-clamp-1">Rapid 15–25 word revision & spaced repetition</p>
+            <p className="text-[11px] text-zinc-500 font-bold line-clamp-1">Active Recall & Spaced Repetition</p>
           </div>
         </div>
 
@@ -695,7 +749,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-black text-zinc-900 leading-tight">Active Recall & Rapid Revision</p>
-                <p className="text-[11px] text-zinc-500 font-bold leading-tight mt-0.5">Enter any topic or paste notes to generate 15–25 word bite-sized study cards.</p>
+                <p className="text-[11px] text-zinc-500 font-bold leading-tight mt-0.5">Enter any topic or paste your notes to generate study cards.</p>
               </div>
             </div>
 
@@ -707,7 +761,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {QUICK_TOPICS.map((topic, idx) => (
+                {getDynamicQuickTopics().map((topic, idx) => (
                   <button
                     key={idx}
                     type="button"
@@ -750,7 +804,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                 ) : (
                   <>
                     <UploadCloud className="w-4 h-4 text-pink-500" />
-                    <span>Upload Document or Notes (PDF / TXT / MD)</span>
+                    <span>Upload Notes</span>
                   </>
                 )}
               </button>

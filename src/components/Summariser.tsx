@@ -301,8 +301,8 @@ export default function Summariser({ onBack }: SummariserProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 30 * 1024 * 1024) {
-      setError("File is too large! Please select a PDF smaller than 30MB (Max 60 pages).");
+    if (file.size > 8 * 1024 * 1024) {
+      setError("File is too large! Please select a PDF smaller than 8MB.");
       triggerVibration(20);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;

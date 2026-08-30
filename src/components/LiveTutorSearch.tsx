@@ -512,32 +512,46 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
       ? searchResponse.live_updates.join('\n\n')
       : searchResponse.live_updates;
 
-    const textToShare = `${searchResponse.topic_title}\n\n${updates}\n\nShared via HelpYou AI Deep Search`;
+    const textToShare = `${searchResponse.topic_title}\n\n${updates}`.trim();
     if (navigator.share) {
       try {
         await navigator.share({
           title: searchResponse.topic_title,
           text: textToShare
         });
-      } catch (_) {}
-    } else {
-      copyReportToClipboard();
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+      }
     }
+    navigator.clipboard.writeText(textToShare).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
   };
 
   const scrollToSource = (index1Based: number) => {
     triggerVibration(15);
-    const zeroIdx = index1Based - 1;
     const sources = effectiveDetailedSources;
-    const targetSource = (zeroIdx >= 0 && zeroIdx < sources.length) ? sources[zeroIdx] : (sources[0] || null);
+    if (sources.length === 0) return;
 
-    if (targetSource) {
-      setActiveCitationSource({ index: index1Based, source: targetSource });
+    let mappedIdx = index1Based;
+    if (mappedIdx > sources.length) {
+      mappedIdx = ((mappedIdx - 1) % sources.length) + 1;
+    } else if (mappedIdx < 1) {
+      mappedIdx = 1;
     }
 
-    setHighlightedSourceIdx(zeroIdx < sources.length ? zeroIdx : 0);
+    const zeroIdx = mappedIdx - 1;
+    const targetSource = sources[zeroIdx] || sources[0];
 
-    const targetId = zeroIdx < sources.length ? `academic-source-${index1Based}` : `academic-source-1`;
+    if (targetSource) {
+      setActiveCitationSource({ index: mappedIdx, source: targetSource });
+    }
+
+    setHighlightedSourceIdx(zeroIdx);
+
+    const targetId = `academic-source-${mappedIdx}`;
     const elem = document.getElementById(targetId) || document.getElementById('academic-sources-container');
     if (elem) {
       elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -551,6 +565,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const formatCitationsWithInteractiveBadges = (content: string) => {
     if (!content) return '';
     let result = String(content);
+    const totalSources = effectiveDetailedSources.length;
 
     // 1. Expand range citations like [1-3], [1–3], [1—3] -> [1] [2] [3]
     result = result.replace(/\[\s*(\d+)\s*[-–—]\s*(\d+)\s*\]/g, (_, start, end) => {
@@ -574,8 +589,17 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     result = result.replace(/\[(?:Source|Ref|Reference|Citation|Src)[:\s]+(\d+)\]/gi, '[$1]');
 
     // 4. Convert all [X] into vibrant, interactive clickable badge buttons (Bold Blue Pill)
+    // Clamping / remapping: strictly maps any citation badge > totalSources into 1..totalSources range
     result = result.replace(/\[\s*(\d+)\s*\]/g, (_, p1) => {
-      return `<button type="button" class="inline-citation-badge inline-flex items-center justify-center px-1.5 py-0.2 text-[10.5px] font-black text-blue-700 hover:text-white bg-blue-100/95 hover:bg-blue-600 active:scale-90 rounded-md mx-0.5 border border-blue-300/80 hover:border-blue-600 transition-all cursor-pointer select-none align-baseline shadow-2xs font-sans tracking-tight" data-source-id="${p1}" title="Tap to view verified Source #${p1}">[${p1}]</button>`;
+      let num = parseInt(p1, 10);
+      if (totalSources > 0) {
+        if (num > totalSources) {
+          num = ((num - 1) % totalSources) + 1;
+        } else if (num < 1) {
+          num = 1;
+        }
+      }
+      return `<button type="button" class="inline-citation-badge inline-flex items-center justify-center px-1.5 py-0.2 text-[10.5px] font-black text-blue-700 hover:text-white bg-blue-100/95 hover:bg-blue-600 active:scale-90 rounded-md mx-0.5 border border-blue-300/80 hover:border-blue-600 transition-all cursor-pointer select-none align-baseline shadow-2xs font-sans tracking-tight" data-source-id="${num}" title="Tap to view verified Source #${num}">[${num}]</button>`;
     });
 
     return result;
@@ -1184,73 +1208,100 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                     </p>
                   </div>
 
-                  {/* 4 Premium Category Tiles */}
-                  <div className="grid grid-cols-2 gap-3 w-full max-w-sm pt-2">
-                    {[
+                  {/* 4 Profile-Personalized Category Tiles */}
+                  {(() => {
+                    const activeUid = auth.currentUser?.uid;
+                    const country = safeGetItem('academic_country') || (activeUid ? safeGetItem(`academic_country_${activeUid}`) : null) || 'United States';
+                    const stream = safeGetItem('academic_stream') || (activeUid ? safeGetItem(`academic_stream_${activeUid}`) : null) || 'STEM / Engineering';
+                    const isIndia = country.toLowerCase().includes('india');
+                    const isSTEM = stream.toLowerCase().includes('stem') || stream.toLowerCase().includes('engineer');
+                    const isMed = stream.toLowerCase().includes('med') || stream.toLowerCase().includes('bio');
+                    const isBiz = stream.toLowerCase().includes('business') || stream.toLowerCase().includes('econ');
+
+                    const tiles = [
                       {
-                        title: "2026 Exam Calendars",
-                        desc: "JEE, NEET, Board notices",
+                        title: isIndia ? "2026 Exam Schedules" : "Academic Calendar 2026",
+                        desc: isIndia ? (isSTEM ? "JEE Main/Adv & Boards" : isMed ? "NEET UG & Boards" : "CUET & Board dates") : "AP, SAT & College exams",
                         icon: "🎓",
-                        query: "JEE Main 2026 registration dates and latest syllabus updates",
+                        query: isIndia 
+                          ? (isSTEM ? "JEE Main 2026 registration dates and latest syllabus updates" : isMed ? "NEET UG 2026 eligibility and examination dates" : "CBSE 12th Board 2026 exam date sheet")
+                          : "CollegeBoard AP Exam 2026 calendar and syllabus updates",
                         bg: "bg-blue-50/80 hover:bg-blue-100/80 border-blue-200/80"
                       },
                       {
-                        title: "Case Investigations",
-                        desc: "Timelines & official reports",
-                        icon: "🏛️",
-                        query: "Jeju island incident complete history and timeline",
-                        bg: "bg-amber-50/80 hover:bg-amber-100/80 border-amber-200/80"
-                      },
-                      {
-                        title: "STEM & Derivations",
-                        desc: "Formulas & mechanisms",
-                        icon: "🔬",
-                        query: "Quantum entanglement mechanism and key mathematical principles",
+                        title: isSTEM ? "Physics & Calculus Insights" : isMed ? "Genetics & Biology Research" : isBiz ? "Macroeconomics & Markets" : "History & Constitution",
+                        desc: isSTEM ? "Formulas, laws & derivations" : isMed ? "Cell mechanisms & pathology" : isBiz ? "Fiscal policy & inflation 2026" : "Revolutions & legal milestones",
+                        icon: isSTEM ? "🔬" : isMed ? "🧬" : isBiz ? "📈" : "🏛️",
+                        query: isSTEM 
+                          ? "Quantum entanglement mechanism and key mathematical principles"
+                          : isMed 
+                            ? "CRISPR gene editing breakthroughs and clinical applications 2026"
+                            : isBiz 
+                              ? "Global inflation trends and monetary policy analysis 2026"
+                              : "Jeju island incident complete history and timeline",
                         bg: "bg-purple-50/80 hover:bg-purple-100/80 border-purple-200/80"
                       },
                       {
-                        title: "Breaking News & Space",
-                        desc: "Live discoveries & tech",
+                        title: "High-Yield Concept Deep-Dive",
+                        desc: "Verified facts & case reports",
+                        icon: "🧠",
+                        query: isSTEM ? "Thermodynamics Carnot engine cycle efficiency derivation" : isMed ? "Immune system T-cell receptor signaling pathway" : "Artificial Intelligence regulations in education 2026",
+                        bg: "bg-amber-50/80 hover:bg-amber-100/80 border-amber-200/80"
+                      },
+                      {
+                        title: "Breaking Academic Discoveries",
+                        desc: "Live verified journal wires",
                         icon: "🚀",
-                        query: "Latest James Webb Space Telescope discoveries 2026",
+                        query: "Latest scientific discoveries in 2026 verified research papers",
                         bg: "bg-emerald-50/80 hover:bg-emerald-100/80 border-emerald-200/80"
                       }
-                    ].map((tile, tIdx) => (
-                      <button
-                        key={tIdx}
-                        onClick={() => handleSearch(tile.query)}
-                        className={`p-3.5 rounded-2xl border text-left flex flex-col gap-1 shadow-xs transition-all active:scale-95 hover:shadow-md cursor-pointer ${tile.bg}`}
-                      >
-                        <span className="text-xl">{tile.icon}</span>
-                        <h4 className="text-xs font-black text-zinc-900 leading-tight mt-1">{tile.title}</h4>
-                        <p className="text-[10px] font-bold text-zinc-500 leading-tight">{tile.desc}</p>
-                      </button>
-                    ))}
-                  </div>
+                    ];
 
-                  {/* Quick Pill Suggestions */}
-                  <div className="space-y-2.5 w-full pt-2">
-                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                      Popular Search Prompts
-                    </span>
-                    <div className="flex flex-wrap justify-center gap-2 px-1">
-                      {[
-                        "JEE 2026 latest updates",
-                        "NEET 2026 syllabus changes",
-                        "Jeju uprising timeline",
-                        "CRISPR gene editing 2026 updates"
-                      ].map((sug, sIdx) => (
-                        <button
-                          key={sIdx}
-                          onClick={() => handleSearch(sug)}
-                          className="text-[11px] px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200/80 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Sparkles className="w-3 h-3 text-blue-500" />
-                          <span>{sug}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                    const dynamicPills = isIndia
+                      ? (isSTEM ? ["JEE 2026 syllabus updates", "Rotational motion torque derivation", "Organic reaction mechanisms", "NCERT 2026 updates"]
+                        : isMed ? ["NEET 2026 updates", "Photosynthesis light reactions", "DNA replication enzymes", "Biomolecules summary"]
+                        : ["CUET 2026 exam pattern", "Indian Constitution amendments", "Microeconomics demand curves", "World War timeline"])
+                      : (isSTEM ? ["AP Physics C mechanics", "Calculus integration techniques", "Quantum coherence updates", "SAT Math strategies"]
+                        : isMed ? ["AP Biology gene expression", "Cellular respiration cycle", "Human anatomy pathways", "Immunology basics"]
+                        : ["AP Macroeconomics GDP", "US History civil rights", "Rhetorical devices analysis", "Business ethics case studies"]);
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 w-full max-w-sm pt-2">
+                          {tiles.map((tile, tIdx) => (
+                            <button
+                              key={tIdx}
+                              onClick={() => handleSearch(tile.query)}
+                              className={`p-3.5 rounded-2xl border text-left flex flex-col gap-1 shadow-xs transition-all active:scale-95 hover:shadow-md cursor-pointer ${tile.bg}`}
+                            >
+                              <span className="text-xl">{tile.icon}</span>
+                              <h4 className="text-xs font-black text-zinc-900 leading-tight mt-1">{tile.title}</h4>
+                              <p className="text-[10px] font-bold text-zinc-500 leading-tight">{tile.desc}</p>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Quick Pill Suggestions Tailored to Profile */}
+                        <div className="space-y-2.5 w-full pt-2">
+                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                            Curriculum Search Prompts ({country} • {stream})
+                          </span>
+                          <div className="flex flex-wrap justify-center gap-2 px-1">
+                            {dynamicPills.map((sug, sIdx) => (
+                              <button
+                                key={sIdx}
+                                onClick={() => handleSearch(sug)}
+                                className="text-[11px] px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200/80 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Sparkles className="w-3 h-3 text-blue-500" />
+                                <span>{sug}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </motion.div>
               )}
             </AnimatePresence>

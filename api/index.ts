@@ -1426,11 +1426,9 @@ app.post("/api/tts", async (req, res) => {
     }
 
     const selectedVoice = voice || "Kore";
-    const pcmBuffers: Buffer[] = [];
 
-    // Synthesize all chunks in order for full-length, end-to-end audio
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkText = chunks[i];
+    // Synthesize all chunks in parallel with Promise.all for ultra-fast generation
+    const chunkPromises = chunks.map(async (chunkText, i) => {
       try {
         const response = await safeGenerateContent({
           model: "gemini-3.1-flash-tts-preview",
@@ -1445,25 +1443,32 @@ app.post("/api/tts", async (req, res) => {
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         if (base64Audio) {
-          const rawPcm = Buffer.from(base64Audio, "base64");
-          pcmBuffers.push(rawPcm);
+          return { index: i, buffer: Buffer.from(base64Audio, "base64") };
         } else {
           console.warn(`TTS: No audio returned for chunk ${i + 1}/${chunks.length}`);
+          return null;
         }
       } catch (chunkErr: any) {
         console.error(`TTS error on chunk ${i + 1}/${chunks.length}:`, chunkErr);
         if (chunkErr.message === "GEMINI_QUOTA_EXHAUSTED") {
           throw chunkErr;
         }
+        return null;
       }
-    }
+    });
 
-    if (pcmBuffers.length === 0) {
+    const chunkResults = await Promise.all(chunkPromises);
+    const validBuffers = chunkResults
+      .filter((r): r is { index: number; buffer: Buffer } => r !== null)
+      .sort((a, b) => a.index - b.index)
+      .map(r => r.buffer);
+
+    if (validBuffers.length === 0) {
       return res.status(500).json({ error: "Failed to synthesize complete audio" });
     }
 
     // Seamlessly concatenate all raw linear PCM audio chunks into one complete WAV file
-    const fullPcmBuffer = Buffer.concat(pcmBuffers);
+    const fullPcmBuffer = Buffer.concat(validBuffers);
     const wavBuffer = pcmToWav(fullPcmBuffer);
     const base64Wav = wavBuffer.toString("base64");
 
@@ -3599,6 +3604,29 @@ Conduct an elite, point-wise, structured academic research report with small mar
     parsedResult.source_links = cleanSources.slice(0, 6);
     parsedResult.detailed_sources = detailedSources.slice(0, 6);
 
+    // Strictly clamp any citation [X] > total sources so bad hallucinated numbers never appear
+    const finalSourcesCount = parsedResult.detailed_sources.length;
+    if (finalSourcesCount > 0) {
+      const clampCitations = (text: string) => {
+        if (!text) return '';
+        return text.replace(/\[\s*(\d+)\s*\]/g, (_, p1) => {
+          let n = parseInt(p1, 10);
+          if (n > finalSourcesCount) {
+            n = ((n - 1) % finalSourcesCount) + 1;
+          } else if (n < 1) {
+            n = 1;
+          }
+          return `[${n}]`;
+        });
+      };
+
+      if (Array.isArray(parsedResult.live_updates)) {
+        parsedResult.live_updates = parsedResult.live_updates.map((u: any) => typeof u === 'string' ? clampCitations(u) : u);
+      } else if (typeof parsedResult.live_updates === 'string') {
+        parsedResult.live_updates = clampCitations(parsedResult.live_updates);
+      }
+    }
+
     res.json(parsedResult);
   } catch (error: any) {
     console.error("[live-study-tutor] Fatal error:", error);
@@ -3628,19 +3656,19 @@ app.post("/api/generate-trivia", async (req, res) => {
     while (attempts < 3) {
       attempts++;
       
-      let promptText = `Generate a single short, brain-engaging Common Sense / Presence of Mind trivia question for:
+      let promptText = `Generate a single short, curriculum-aligned academic brain booster trivia question for:
 - Student Academic Grade/Level: ${gradeLevel || "High School"}
 - Academic Stream/Interest: ${academicStream || "General Science & Logic"}
 - Student's Country & Context: ${country || "Global"}`;
 
       if (country && country.trim().length > 0) {
-        promptText += `\n- Country Context: Use everyday observations, relatable logic, or cultural common sense relevant to ${country}.`;
+        promptText += `\n- Country Context: Align with the national academic curriculum and everyday relatable logic relevant to ${country}.`;
       }
 
       if (topic && topic.trim().length > 0) {
         promptText += `\n- Specific Category Focus: ${topic}`;
       } else {
-        promptText += `\n- Category Focus: Common sense, presence of mind, lateral thinking riddle, everyday physics paradox, or practical logic teaser.`;
+        promptText += `\n- Category Focus: High-yield academic concepts, everyday scientific applications, mathematical intuition, or clever logical problem solving tailored to ${academicStream}.`;
       }
 
       if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
@@ -3651,28 +3679,28 @@ app.post("/api/generate-trivia", async (req, res) => {
         promptText += `\n${extraAvoidInstruction}`;
       }
 
-      const systemInstruction = `You are the Master of Brain Workout, Common Sense, Presence of Mind & Cognitive Trivia for Students.
+      const systemInstruction = `You are the Master of Academic Brain Booster & Cognitive Trivia for Students.
 
 MISSION:
-Generate a single, ultra-short, mind-bending multiple choice brain booster question tailored STRICTLY to the student's profile (Grade level, Stream, and Country).
+Generate a single, ultra-short, highly engaging multiple choice brain booster question tailored STRICTLY to the student's profile (Grade level: ${gradeLevel}, Stream: ${academicStream}, and Country: ${country}).
 
-QUESTION PHILOSOPHY (COMMON SENSE & PRESENCE OF MIND):
-1. Focus on COMMON SENSE, PRESENCE OF MIND, LATERAL THINKING, INTUITIVE SCIENCE/PHYSICS PARADOXES, CLEVER LOGIC RIDDLES, or DAILY LIFE OBSERVATIONS. Avoid boring long textbook memorization questions!
-2. The question must trigger an instant "Aha!" moment or test how alert the student is.
+QUESTION PHILOSOPHY:
+1. Focus on HIGH-YIELD ACADEMIC CONCEPTS, PRACTICAL SCIENCE/PHYSICS/MATH APPLICATIONS, CLEVER LOGIC SHORTCUTS, or ACCURATE CURRICULAR INSIGHTS.
+2. The question must trigger an instant "Aha!" moment and reinforce real academic learning.
 3. STRICT SHORT LENGTH CONSTRAINTS:
    - "question": STRICTLY SHORT & PUNCHY — 15 to 25 words maximum! (1 or 2 crisp sentences). NEVER output long wordy paragraphs.
    - "options": EXACTLY 3 or 4 short options (1 to 4 words each).
-   - "fact": STRICTLY 15 to 25 words max explaining the clever logic, common sense catch, or mind-blowing reality with an emoji (e.g. "💡 Common Sense Catch: ...").
-4. SUBJECT TAG: 2-3 words with an appropriate emoji (e.g. "🧠 Common Sense Logic", "⚡ Everyday Physics", "💡 Presence of Mind", "🔢 Mental Math Paradox", "🌍 Nature Riddle").
+   - "fact": STRICTLY 15 to 25 words max explaining the core concept or logic with an emoji (e.g. "💡 High-Yield Concept: ...").
+4. SUBJECT TAG: 2-3 words with an appropriate emoji (e.g. "⚡ Physics Intuition", "🧪 Chemistry in Action", "🧬 Biology Masterclass", "📐 Mental Math Shortcut", "📈 Economics Insight").
 
 STRICT JSON OUTPUT FORMAT:
 Output ONLY a valid JSON object matching this exact schema:
 {
-  "subjectTag": "💡 Presence of Mind",
-  "question": "If an electric train moves North at 60mph and wind blows West at 20mph, which way does the smoke blow?",
-  "options": ["North", "West", "South-West", "No smoke (Electric)"],
-  "correctIndex": 3,
-  "fact": "⚡ Presence of mind test! Electric trains do not produce smoke! 🚂"
+  "subjectTag": "⚡ Physics Intuition",
+  "question": "If you double the speed of a car, by what factor does its braking distance increase on a dry road?",
+  "options": ["2 times", "4 times", "8 times", "Remains same"],
+  "correctIndex": 1,
+  "fact": "💡 Kinetic Energy is proportional to velocity squared (v^2), so braking distance quadruples! 🚗"
 }`;
 
       const response = await safeGenerateContent({

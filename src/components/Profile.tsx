@@ -1797,48 +1797,6 @@ export default function Profile({
               HelpYou AI customizes solutions, vocabulary, and tutor responses dynamically based on your selected Study Level (High School, College, or Advanced). Change your level anytime!
             </p>
           </div>
-
-          {/* Full Optimize App Card (Bottom of Main Profile) */}
-          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-[2.25rem] p-5 text-white shadow-lg relative overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-3 relative z-10">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center text-white backdrop-blur-md shadow-inner">
-                  <Zap className="w-5 h-5 fill-white text-white" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black text-white leading-tight flex items-center gap-1.5">
-                    Speed Booster & RAM Optimizer
-                    <span className="text-[8px] bg-white/25 px-2 py-0.5 rounded-full uppercase font-black tracking-wider">
-                      Lag-Free ⚡
-                    </span>
-                  </h4>
-                  <p className="text-[9.5px] text-white/80 font-bold mt-0.5">Purge dead RAM, cached blobs & boost 60fps speed</p>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-[10.5px] text-white/95 font-medium leading-relaxed mb-3.5 relative z-10">
-              Clear temporary image buffers, stale session tokens, and optimize the AI tutor rendering pipeline with 1-tap.
-            </p>
-
-            <button
-              onClick={handleFullAppOptimization}
-              disabled={isOptimizing}
-              className="w-full bg-white hover:bg-zinc-50 text-emerald-800 active:scale-98 font-black text-xs py-3 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer relative z-10 border-none disabled:opacity-75"
-            >
-              {isOptimizing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
-                  <span>Optimizing Device Memory...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 text-emerald-600 fill-emerald-600" />
-                  <span>⚡ Full Optimize App</span>
-                </>
-              )}
-            </button>
-          </div>
         </div>
       </div>
 

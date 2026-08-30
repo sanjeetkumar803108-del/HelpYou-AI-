@@ -1258,20 +1258,20 @@ ${extractedText}` };
     if (summarizeError && !summaryText) {
       throw summarizeError;
     }
+    const outputText = summaryText || "";
     if (action === "flashcards-json") {
-      const flashcards = safeParseJSON(summaryText, "array");
-      summaryCache.set(cacheKey, flashcards);
-      return res.json({ flashcards });
+      const parsed = safeParseJSON(outputText, "object");
+      const cards = parsed?.flashcards || [];
+      summaryCache.set(cacheKey, cards);
+      return res.json({ flashcards: cards });
     }
-    summaryCache.set(cacheKey, summaryText);
-    res.json({ text: summaryText });
+    summaryCache.set(cacheKey, outputText);
+    res.json({ text: outputText });
   } catch (error) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
+      console.warn("Summarize quota exceeded:", error.message);
       return res.status(429).json({
-        error: "QUOTA_EXCEEDED",
-        text: `\u26A0\uFE0F AI Tutor Notice: Rate Limit / Quota Exceeded
-
-The Gemini API is currently experiencing rate limits or has exceeded its quota. Please try again in 60 seconds.`
+        error: "API quota limit exceeded for PDF summarization. Please try again in 60 seconds."
       });
     }
     console.error("Summarize error:", error);
@@ -1289,9 +1289,7 @@ app.post("/api/tts", async (req, res) => {
       return res.status(400).json({ error: "Text is empty after cleaning" });
     }
     const selectedVoice = voice || "Kore";
-    const pcmBuffers = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunkText = chunks[i];
+    const chunkPromises = chunks.map(async (chunkText, i) => {
       try {
         const response = await safeGenerateContent({
           model: "gemini-3.1-flash-tts-preview",
@@ -1307,22 +1305,25 @@ ${chunkText}` }] }],
         });
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         if (base64Audio) {
-          const rawPcm = Buffer.from(base64Audio, "base64");
-          pcmBuffers.push(rawPcm);
+          return { index: i, buffer: Buffer.from(base64Audio, "base64") };
         } else {
           console.warn(`TTS: No audio returned for chunk ${i + 1}/${chunks.length}`);
+          return null;
         }
       } catch (chunkErr) {
         console.error(`TTS error on chunk ${i + 1}/${chunks.length}:`, chunkErr);
         if (chunkErr.message === "GEMINI_QUOTA_EXHAUSTED") {
           throw chunkErr;
         }
+        return null;
       }
-    }
-    if (pcmBuffers.length === 0) {
+    });
+    const chunkResults = await Promise.all(chunkPromises);
+    const validBuffers = chunkResults.filter((r) => r !== null).sort((a, b) => a.index - b.index).map((r) => r.buffer);
+    if (validBuffers.length === 0) {
       return res.status(500).json({ error: "Failed to synthesize complete audio" });
     }
-    const fullPcmBuffer = Buffer.concat(pcmBuffers);
+    const fullPcmBuffer = Buffer.concat(validBuffers);
     const wavBuffer = pcmToWav(fullPcmBuffer);
     const base64Wav = wavBuffer.toString("base64");
     res.json({ audio: base64Wav, mimeType: "audio/wav" });
@@ -3287,6 +3288,26 @@ Conduct an elite, point-wise, structured academic research report with small mar
     }
     parsedResult.source_links = cleanSources.slice(0, 6);
     parsedResult.detailed_sources = detailedSources.slice(0, 6);
+    const finalSourcesCount = parsedResult.detailed_sources.length;
+    if (finalSourcesCount > 0) {
+      const clampCitations = (text) => {
+        if (!text) return "";
+        return text.replace(/\[\s*(\d+)\s*\]/g, (_, p1) => {
+          let n = parseInt(p1, 10);
+          if (n > finalSourcesCount) {
+            n = (n - 1) % finalSourcesCount + 1;
+          } else if (n < 1) {
+            n = 1;
+          }
+          return `[${n}]`;
+        });
+      };
+      if (Array.isArray(parsedResult.live_updates)) {
+        parsedResult.live_updates = parsedResult.live_updates.map((u) => typeof u === "string" ? clampCitations(u) : u);
+      } else if (typeof parsedResult.live_updates === "string") {
+        parsedResult.live_updates = clampCitations(parsedResult.live_updates);
+      }
+    }
     if (!Array.isArray(parsedResult.related_queries) || parsedResult.related_queries.length === 0) {
       parsedResult.related_queries = [
         `Key milestones of ${parsedResult.topic_title}`,
@@ -3314,20 +3335,20 @@ app.post("/api/generate-trivia", async (req, res) => {
     let extraAvoidInstruction = "";
     while (attempts < 3) {
       attempts++;
-      let promptText = `Generate a single short, brain-engaging Common Sense / Presence of Mind trivia question for:
+      let promptText = `Generate a single short, curriculum-aligned academic brain booster trivia question for:
 - Student Academic Grade/Level: ${gradeLevel || studyLevel || "High School"}
 - Academic Stream/Interest: ${academicStream || "General Science & Logic"}
 - Student's Country & Context: ${country || "Global"}`;
       if (country && country.trim().length > 0) {
         promptText += `
-- Country Context: Use everyday observations, relatable logic, or cultural common sense relevant to ${country}.`;
+- Country Context: Align with the national academic curriculum and everyday relatable logic relevant to ${country}.`;
       }
       if (topic && topic.trim().length > 0) {
         promptText += `
 - Specific Category Focus: ${topic}`;
       } else {
         promptText += `
-- Category Focus: Common sense, presence of mind, lateral thinking riddle, everyday physics paradox, or practical logic teaser.`;
+- Category Focus: High-yield academic concepts, everyday scientific applications, mathematical intuition, or clever logical problem solving tailored to ${academicStream}.`;
       }
       if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
         promptText += `
@@ -3337,28 +3358,28 @@ app.post("/api/generate-trivia", async (req, res) => {
         promptText += `
 ${extraAvoidInstruction}`;
       }
-      const systemInstruction = `You are the Master of Brain Workout, Common Sense, Presence of Mind & Cognitive Trivia for Students.
+      const systemInstruction = `You are the Master of Academic Brain Booster & Cognitive Trivia for Students.
 
 MISSION:
-Generate a single, ultra-short, mind-bending multiple choice brain booster question tailored STRICTLY to the student's profile (Grade level, Stream, and Country).
+Generate a single, ultra-short, highly engaging multiple choice brain booster question tailored STRICTLY to the student's profile (Grade level: ${gradeLevel}, Stream: ${academicStream}, and Country: ${country}).
 
-QUESTION PHILOSOPHY (COMMON SENSE & PRESENCE OF MIND):
-1. Focus on COMMON SENSE, PRESENCE OF MIND, LATERAL THINKING, INTUITIVE SCIENCE/PHYSICS PARADOXES, CLEVER LOGIC RIDDLES, or DAILY LIFE OBSERVATIONS. Avoid boring long textbook memorization questions!
-2. The question must trigger an instant "Aha!" moment or test how alert the student is.
+QUESTION PHILOSOPHY:
+1. Focus on HIGH-YIELD ACADEMIC CONCEPTS, PRACTICAL SCIENCE/PHYSICS/MATH APPLICATIONS, CLEVER LOGIC SHORTCUTS, or ACCURATE CURRICULAR INSIGHTS.
+2. The question must trigger an instant "Aha!" moment and reinforce real academic learning.
 3. STRICT SHORT LENGTH CONSTRAINTS:
    - "question": STRICTLY SHORT & PUNCHY \u2014 15 to 25 words maximum! (1 or 2 crisp sentences). NEVER output long wordy paragraphs.
    - "options": EXACTLY 3 or 4 short options (1 to 4 words each).
-   - "fact": STRICTLY 15 to 25 words max explaining the clever logic, common sense catch, or mind-blowing reality with an emoji (e.g. "\u{1F4A1} Common Sense Catch: ...").
-4. SUBJECT TAG: 2-3 words with an appropriate emoji (e.g. "\u{1F9E0} Common Sense Logic", "\u26A1 Everyday Physics", "\u{1F4A1} Presence of Mind", "\u{1F522} Mental Math Paradox", "\u{1F30D} Nature Riddle").
+   - "fact": STRICTLY 15 to 25 words max explaining the core concept or logic with an emoji (e.g. "\u{1F4A1} High-Yield Concept: ...").
+4. SUBJECT TAG: 2-3 words with an appropriate emoji (e.g. "\u26A1 Physics Intuition", "\u{1F9EA} Chemistry in Action", "\u{1F9EC} Biology Masterclass", "\u{1F4D0} Mental Math Shortcut", "\u{1F4C8} Economics Insight").
 
 STRICT JSON OUTPUT FORMAT:
 Output ONLY a valid JSON object matching this exact schema:
 {
-  "subjectTag": "\u{1F4A1} Presence of Mind",
-  "question": "If an electric train moves North at 60mph and wind blows West at 20mph, which way does the smoke blow?",
-  "options": ["North", "West", "South-West", "No smoke (Electric)"],
-  "correctIndex": 3,
-  "fact": "\u26A1 Presence of mind test! Electric trains do not produce smoke! \u{1F682}"
+  "subjectTag": "\u26A1 Physics Intuition",
+  "question": "If you double the speed of a car, by what factor does its braking distance increase on a dry road?",
+  "options": ["2 times", "4 times", "8 times", "Remains same"],
+  "correctIndex": 1,
+  "fact": "\u{1F4A1} Kinetic Energy is proportional to velocity squared (v^2), so braking distance quadruples! \u{1F697}"
 }`;
       const response = await safeGenerateContent({
         gradeLevel: gradeLevel || "High School",

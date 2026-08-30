@@ -548,18 +548,24 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
   };
 
   useEffect(() => {
-    return () => {
+    const handleStopAll = () => {
       if (audioRef.current) {
         try {
           audioRef.current.pause();
-          audioRef.current.removeAttribute('src');
+          audioRef.current.currentTime = 0;
         } catch (_) {}
       }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-        } catch (_) {}
+        try { window.speechSynthesis.cancel(); } catch (_) {}
       }
+      setIsPlayingAudio(false);
+      setIsLoadingAudio(false);
+    };
+
+    window.addEventListener('helpyou:stop-all-tutor-audio', handleStopAll);
+    return () => {
+      window.removeEventListener('helpyou:stop-all-tutor-audio', handleStopAll);
+      handleStopAll();
     };
   }, []);
 
@@ -980,150 +986,48 @@ const PERSONAS = {
   }
 };
 
-const SAMPLE_PROMPTS_POOL = [
-  { 
-    title: "Playful Math Quiz", 
-    desc: "Give me an easy math quiz question with 4 emoji options!", 
-    text: "Give me a super fun math practice question with 4 options! Don't show the correct answer, let me guess first!",
-    emoji: "🧮",
-    category: "Math"
-  },
-  { 
-    title: "Feeling Sad / Stressed", 
-    desc: "I am feeling scared about my exams. Please motivate me.", 
-    text: "I am really depressed and stressed out about my upcoming school exams. I feel like I'll fail. Please help me.",
-    emoji: "❤️",
-    category: "Stress Buster"
-  },
-  { 
-    title: "Why is Sky Blue?", 
-    desc: "Explain this mystery like explaining to a nursery kid.", 
-    text: "Why is the sky blue? Explain to me in super simple nursery student terms with a magical story.",
-    emoji: "☁️",
-    category: "Science"
-  },
-  { 
-    title: "Gravity Magic", 
-    desc: "What is gravity and why don't we float away into space?", 
-    text: "Explain gravity with an apple story like explaining to a kindergarten child.",
-    emoji: "🍎",
-    category: "Physics"
-  },
-  { 
-    title: "Periodic Table Trick", 
-    desc: "How do I easily memorize the first 10 elements?", 
-    text: "Show me a super fun mnemonic or memory story to memorize the first 10 elements of the periodic table in 1 minute!",
-    emoji: "🧪",
-    category: "Chemistry"
-  },
-  { 
-    title: "Quantum Physics Simply", 
-    desc: "What is quantum superposition for an 8-year-old?", 
-    text: "Explain quantum superposition and Schrodinger's Cat like I am 8 years old with a cool superhero analogy!",
-    emoji: "⚛️",
-    category: "Physics"
-  },
-  { 
-    title: "Algebra Secret Hack", 
-    desc: "Teach me a shortcut to solve quadratic equations.", 
-    text: "Teach me an amazing math hack or shortcut to solve standard quadratic equations instantly in my head!",
-    emoji: "📐",
-    category: "Algebra"
-  },
-  { 
-    title: "Photosynthesis Magic", 
-    desc: "How do leaves cook food? Tell me a story.", 
-    text: "Explain photosynthesis like a magical green chef cooking food inside leaf kitchens! Keep it super simple and fun.",
-    emoji: "🍃",
-    category: "Biology"
-  },
-  { 
-    title: "Fractions in Real Life", 
-    desc: "Explain fractions using a pizza delivery story.", 
-    text: "Explain fractions and how to add them using a fun pizza party division story. Make it extremely visual!",
-    emoji: "🍕",
-    category: "Math"
-  },
-  { 
-    title: "SAT Grammar Secret", 
-    desc: "Give me the #1 trick for grammar correction.", 
-    text: "Give me an elite, easy-to-remember trick to master subject-verb agreement or pronoun rules for exams!",
-    emoji: "📝",
-    category: "Grammar"
-  },
-  { 
-    title: "Super Memory Tool", 
-    desc: "Teach me how to use a Mind Palace.", 
-    text: "Teach me how to build a 3-step 'Mind Palace' or 'Method of Loci' to memorize any lists of facts instantly!",
-    emoji: "🏰",
-    category: "Brain Hack"
-  },
-  { 
-    title: "Active Recall Study", 
-    desc: "Why is passive reading a trap and how to fix it?", 
-    text: "Why is highlighting and passive reading a trap? Tell me how to study using active recall and spaced repetition in 3 simple rules.",
-    emoji: "🧠",
-    category: "Study Tip"
-  },
-  {
-    title: "Black Holes Simplified",
-    desc: "Explain black holes using a trampoline analogy.",
-    text: "What is a black hole and event horizon? Explain it to me using a trampoline or sheet of rubber analogy. Make it super visual!",
-    emoji: "🕳️",
-    category: "Physics"
-  },
-  {
-    title: "Lego Chemical Bonds",
-    desc: "Understand ionic vs covalent bonds using Lego bricks.",
-    text: "Explain ionic and covalent chemical bonding using Lego bricks as an analogy. Make it extremely fun and easy to grasp!",
-    emoji: "🧱",
-    category: "Chemistry"
-  },
-  {
-    title: "DNA: The Cell's Code",
-    desc: "Is DNA like computer code? Explain simply.",
-    text: "Explain what DNA, genes, and chromosomes are using a computer software code or game programming analogy!",
-    emoji: "🧬",
-    category: "Biology"
-  },
-  {
-    title: "Percentage Instant Trick",
-    desc: "Find percentages in your head in 2 seconds.",
-    text: "Teach me the secret algebraic symmetry trick (e.g. x% of y is y% of x) to calculate tough percentages in my head instantly!",
-    emoji: "🔢",
-    category: "Math"
-  },
-  {
-    title: "Why Oceans Have Tides",
-    desc: "How does the Moon pull water without touching it?",
-    text: "Why do oceans have high and low tides? Explain the gravitational tug-of-war of the Moon simply with an easy-to-remember story.",
-    emoji: "🌊",
-    category: "Earth Science"
-  },
-  {
-    title: "Water-Drinking Plants",
-    desc: "How do giant trees pull water up to their top leaves?",
-    text: "How do 100-foot trees drink water from their roots against gravity? Explain capillary action and transpiration using a straw analogy!",
-    emoji: "🌳",
-    category: "Biology"
-  },
-  {
-    title: "Battle of Waterloo",
-    desc: "What happened to Napoleon? Tell me like a thriller story.",
-    text: "Describe the historic Battle of Waterloo and Napoleon's downfall like a high-stakes dramatic thriller story in 3 simple parts!",
-    emoji: "🎖️",
-    category: "History"
-  },
-  {
-    title: "How Heart Pumps Blood",
-    desc: "Tell me a story of a red blood cell's journey.",
-    text: "Explain how the human heart and circulatory system work by describing a day in the life of a brave red blood cell traveling through pipelines!",
-    emoji: "❤️",
-    category: "Biology"
-  }
-];
+const getDynamicTutorPrompts = () => {
+  const profile = getUserProfileData();
+  const stream = (profile.stream || '').toLowerCase();
+  const isIndia = (profile.country || '').toLowerCase().includes('india');
 
-export default function AITutor({ isVip }: { isVip: boolean }) {
+  if (stream.includes('med') || stream.includes('bio')) {
+    return [
+      { title: "DNA Replication Secrets", desc: "How enzymes copy genetic code without errors.", text: "Explain DNA replication, helicase, and polymerase in 3 super clear visual steps!", emoji: "🧬", category: "Biology" },
+      { title: "Heart & Blood Pipeline", desc: "Red blood cell's journey through valves.", text: "Explain how the heart pumps oxygenated vs deoxygenated blood through systemic and pulmonary circulation!", emoji: "🫀", category: "Physiology" },
+      { title: "Cellular Respiration Cycle", desc: "Glycolysis to Krebs cycle ATP generation.", text: "Break down cellular respiration and ATP production with a clear power-plant analogy!", emoji: "⚡", category: "Biochemistry" },
+      { title: isIndia ? "NEET High-Yield Trap" : "AP Bio Key Distinction", desc: "Difference between mitosis and meiosis.", text: "What is the crucial difference between Mitosis and Meiosis that students always mess up in exams?", emoji: "🎯", category: "Exam Tip" },
+      { title: "Photosynthesis Mechanisms", desc: "Light reactions vs Calvin cycle.", text: "Explain light-dependent and light-independent photosynthesis reactions simply!", emoji: "🌿", category: "Botany" }
+    ];
+  }
+
+  if (stream.includes('business') || stream.includes('econ') || stream.includes('commerce')) {
+    return [
+      { title: "Supply & Demand Elasticity", desc: "Price changes and consumer response.", text: "Explain price elasticity of demand with real-world examples like coffee vs gasoline!", emoji: "📈", category: "Economics" },
+      { title: "Central Bank & Inflation", desc: "How interest rates control money supply.", text: "How do central banks control inflation using interest rates and quantitative easing?", emoji: "🏦", category: "Macroeconomics" },
+      { title: "Balance Sheet Accounting", desc: "Assets = Liabilities + Equity.", text: "Teach me how to balance a financial sheet with a simple business case study!", emoji: "🧾", category: "Finance" },
+      { title: "Market Competition Models", desc: "Monopoly vs Oligopoly vs Perfect.", text: "Compare perfect competition, monopoly, and oligopoly with everyday tech company examples!", emoji: "💼", category: "Business" }
+    ];
+  }
+
+  if (stream.includes('human') || stream.includes('art') || stream.includes('law')) {
+    return [
+      { title: isIndia ? "Fundamental Rights Analysis" : "Constitutional Amendments", desc: "Key civil liberties and court tests.", text: "Explain the landmark constitutional balance between fundamental rights and public interest!", emoji: "⚖️", category: "Civics & Law" },
+      { title: "World History Turning Point", desc: "Causes and aftermath of revolutions.", text: "Explain the 3 main triggers and global consequences of the Industrial Revolution!", emoji: "📜", category: "History" },
+      { title: "Rhetorical Masterclass", desc: "Ethos, Pathos, and Logos in essays.", text: "How do I analyze rhetorical appeals in persuasive essays to score top marks?", emoji: "✍️", category: "Literature" }
+    ];
+  }
+
+  // Default / STEM Engineering
+  return [
+    { title: "Newton's Laws & Friction", desc: "Free body diagrams made intuitive.", text: "Explain how friction and normal force interact on an inclined plane with a simple step-by-step trick!", emoji: "⚡", category: "Physics" },
+    { title: "Calculus Chain Rule Hack", desc: "Derivatives of composite functions.", text: "Teach me the easiest way to master the chain rule and integration by substitution!", emoji: "📐", category: "Math" },
+    { title: "Chemical Orbitals & Bonds", desc: "Hybridization and VSEPR theory.", text: "Explain sp, sp2, and sp3 hybridization simply using balloon shapes as an analogy!", emoji: "🧪", category: "Chemistry" },
+    { title: isIndia ? "JEE Physics Core Derivation" : "AP Physics Work-Energy Theorem", desc: "Conservation of energy in mechanics.", text: "Derive and explain the Work-Energy Theorem with an intuitive frictionless roller coaster example!", emoji: "🎯", category: "Mechanics" }
+  ];
+};
+
+export default function AITutor({ isVip, isActive = true }: { isVip: boolean; isActive?: boolean }) {
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
@@ -1142,11 +1046,26 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     };
   }, []);
 
+  // Stop all speech synthesis and audio playback immediately when navigating away or switching tabs
+  useEffect(() => {
+    if (isActive === false) {
+      window.dispatchEvent(new CustomEvent('helpyou:stop-all-tutor-audio'));
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch (_) {}
+      }
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (_) {}
+      }
+      setIsListening(false);
+    }
+  }, [isActive]);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [samplePrompts, setSamplePrompts] = useState<typeof SAMPLE_PROMPTS_POOL>([]);
+  const [samplePrompts, setSamplePrompts] = useState<any[]>([]);
 
   const rotateSuggestions = () => {
-    const shuffled = [...SAMPLE_PROMPTS_POOL].sort(() => 0.5 - Math.random());
+    const dynamicPool = getDynamicTutorPrompts();
+    const shuffled = [...dynamicPool].sort(() => 0.5 - Math.random());
     setSamplePrompts(shuffled.slice(0, 4));
   };
 
@@ -1382,31 +1301,19 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
       }
 
       const rec = new SpeechRecognition();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = 'en-IN'; // Highly accurate for English, Hinglish, & Indian names (e.g. Sangam)
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'en-US';
 
       baseTextRef.current = chatInput.trim();
 
       rec.onresult = (event: any) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
-
-        for (let i = 0; i < event.results.length; ++i) {
-          const result = event.results[i];
-          const text = result[0]?.transcript || '';
-          if (result.isFinal) {
-            finalTranscript += text + ' ';
-          } else {
-            interimTranscript += text;
-          }
-        }
-
-        const currentSpeech = (finalTranscript + interimTranscript).trim();
-        const base = baseTextRef.current;
-        
-        if (currentSpeech) {
-          setChatInput(base ? `${base} ${currentSpeech}` : currentSpeech);
+        const speech = (event.results?.[0]?.[0]?.transcript || '').trim();
+        if (speech) {
+          // Clean duplicate consecutive words (e.g. "what what" -> "what")
+          const cleaned = speech.replace(/\b(\w+)\s+\1\b/gi, '$1').replace(/\s+/g, ' ');
+          const base = baseTextRef.current;
+          setChatInput(base ? `${base} ${cleaned}` : cleaned);
         }
       };
 

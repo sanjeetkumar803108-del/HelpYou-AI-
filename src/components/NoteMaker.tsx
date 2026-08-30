@@ -395,8 +395,8 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
-    if (selected.size > 30 * 1024 * 1024) {
-      setError("File is too large! Please select a PDF smaller than 30MB (Max 60 pages).");
+    if (selected.size > 8 * 1024 * 1024) {
+      setError("File is too large! Please select a PDF smaller than 8MB.");
       triggerVibration(20);
       return;
     }
@@ -854,6 +854,26 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     setIsPlayingFallback(false);
   };
 
+  const handleDownloadAudio = () => {
+    if (!audioData) {
+      showToast("Audio is still generating or not available yet.", "info", 2500);
+      return;
+    }
+    triggerVibration(15);
+    try {
+      const link = document.createElement('a');
+      link.href = audioData;
+      link.download = `HelpYou_AI_Audio_Summary_${Date.now()}.wav`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("Audio downloaded! 🎧", "success", 2500);
+    } catch (e) {
+      console.error("Download failed:", e);
+      showToast("Could not download audio.", "error", 2500);
+    }
+  };
+
   // Time formatter
   const formatTime = (secs: number) => {
     if (isNaN(secs)) return '0:00';
@@ -1033,8 +1053,8 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                               const picked = await pickNativeFiles({ types: 'pdf', multiple: false });
                               if (picked && picked.length > 0) {
                                 const fileObj = picked[0].fileObj;
-                                if (fileObj.size > 30 * 1024 * 1024) {
-                                  setError("File is too large! Please select a PDF smaller than 30MB.");
+                                if (fileObj.size > 8 * 1024 * 1024) {
+                                  setError("File is too large! Please select a PDF smaller than 8MB.");
                                   triggerVibration(20);
                                   return;
                                 }
@@ -1055,8 +1075,8 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                         <div className="w-16 h-16 bg-indigo-50 group-hover:scale-110 group-hover:bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mb-4 border border-indigo-100 transition-all">
                           <FilePlus className="w-8 h-8" />
                         </div>
-                        <p className="font-bold mb-1 text-zinc-900 text-sm md:text-base">Upload your big PDF</p>
-                        <p className="text-xs text-zinc-400 mb-4 font-semibold">Max size: 30MB | We will extract and host a study audio briefing</p>
+                        <p className="font-bold mb-1 text-zinc-900 text-sm md:text-base">Upload your PDF notes</p>
+                        <p className="text-xs text-zinc-400 mb-4 font-semibold">Max size: 8MB | High-yield AI audio summary</p>
                         <button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-2.5 rounded-xl text-xs md:text-sm font-bold active:scale-[0.98] transition-all shadow-md shadow-indigo-500/10">
                           Select File
                         </button>
@@ -1213,6 +1233,18 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                       <h4 className="text-lg font-black text-zinc-900 mt-2 tracking-tight">AI Audio Masterclass</h4>
                       <p className="text-[11px] text-zinc-400 font-bold">Smart Host summary of your uploaded document</p>
                     </div>
+
+                    {audioData && (
+                      <button
+                        type="button"
+                        onClick={handleDownloadAudio}
+                        className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-2xl text-xs font-black flex items-center gap-1.5 active:scale-95 transition-all shadow-xs cursor-pointer"
+                        title="Download Audio Briefing (WAV)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Audio</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* HTML5 Audio Node */}

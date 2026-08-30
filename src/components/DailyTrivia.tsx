@@ -74,12 +74,40 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
   const studyLevel = userProfile.studyLevel || 'High School';
 
   const getStreamSuggestions = () => {
+    const stream = academicStream.toLowerCase();
+    if (stream.includes('med') || stream.includes('bio')) {
+      return [
+        "🧬 Genetics & Cell Teasers",
+        "🫀 Human Body Curiosities",
+        "🌿 Plant & Nature Logic",
+        "🧪 Bio-Molecular Riddles",
+        "💡 Medical Common Sense"
+      ];
+    }
+    if (stream.includes('business') || stream.includes('econ') || stream.includes('commerce')) {
+      return [
+        "📈 Market & Price Logic",
+        "🏦 Everyday Money Common Sense",
+        "⚖️ Business Ethics Paradox",
+        "📊 Probability & Statistics",
+        "💡 Economic Intuition"
+      ];
+    }
+    if (stream.includes('human') || stream.includes('art') || stream.includes('law')) {
+      return [
+        "📜 History Mystery & Chronology",
+        "🏛️ Constitutional Common Sense",
+        "✍️ Word Origin & Language Teasers",
+        "🌍 Global Geography Logic",
+        "💡 Lateral Thinking"
+      ];
+    }
     return [
-      "💡 Common Sense Logic",
-      "⚡ Everyday Physics & Science",
-      "🧠 Mind Teasers & Riddles",
-      "🔢 Mental Math Paradox",
-      "🌍 Real-World Curiosities"
+      "⚡ Everyday Physics Paradox",
+      "🔢 Mental Math Shortcuts",
+      "🧪 Chemistry in Daily Life",
+      "📐 Geometric Intuition",
+      "💡 Logic Teasers"
     ];
   };
 
@@ -419,7 +447,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
               <Sparkles className="absolute w-4 h-4 text-purple-600" />
             </div>
             <p className="text-sm font-black text-zinc-800 text-center">Consulting AI Brain Coach...</p>
-            <p className="text-xs text-zinc-400 text-center mt-1.5 px-6 font-medium">Generating a short, mind-bending presence of mind teaser tailored for you! 🧠💡</p>
+            <p className="text-xs text-zinc-400 text-center mt-1.5 px-6 font-medium">Generating a personalized brain booster question tailored for you! 🧠💡</p>
           </div>
         ) : (
           trivia && (
@@ -433,8 +461,6 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
                 <span className="text-[10px] bg-indigo-50 border border-indigo-100/60 text-indigo-600 px-3 py-1 rounded-full font-black tracking-wide uppercase select-none mb-2 flex items-center gap-1">
                   <BookOpen className="w-3 h-3" /> {trivia.subjectTag || "Brain Booster"}
                 </span>
-                
-                <h3 className="text-lg font-black text-zinc-900 mt-1 leading-tight">Presence of Mind Challenge</h3>
                 
                 {hasAnswered && (
                   <p className={`text-[10px] px-3 py-1 rounded-full inline-block font-extrabold mt-2 ${

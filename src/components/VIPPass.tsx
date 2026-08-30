@@ -65,7 +65,7 @@ export default function VIPPass({ isVip, onUpgrade, onClose }: { isVip: boolean,
             Unlock Full Academic Power with <span className="bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">HelpYou AI PRO</span>
           </h2>
           <p className="text-xs text-zinc-600 font-medium">
-            Get instant solutions, live web search, audio voice guidance, and unlimited revision cards.
+            Get instant solutions, live web search, writing enhancements, and unlimited revision cards.
           </p>
         </div>
 
@@ -93,11 +93,11 @@ export default function VIPPass({ isVip, onUpgrade, onClose }: { isVip: boolean,
 
           <div className="bg-white border border-zinc-200/90 p-4 rounded-2xl flex items-center gap-3.5 shadow-sm">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 font-bold shrink-0 text-lg">
-              🔊
+              ✍️
             </div>
             <div>
-              <h4 className="text-sm font-bold text-zinc-900">Audio Voice & Revision Cards</h4>
-              <p className="text-xs text-zinc-500 font-medium mt-0.5">Listen to voice tutor guidance and auto-track memory mistakes.</p>
+              <h4 className="text-sm font-bold text-zinc-900">Grammar & Active Flashcards</h4>
+              <p className="text-xs text-zinc-500 font-medium mt-0.5">Polish writing flow and auto-track memory mistakes with flashcards.</p>
             </div>
           </div>
         </div>

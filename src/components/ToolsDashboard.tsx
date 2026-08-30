@@ -26,7 +26,6 @@ const FEATURE_COSTS: Record<string, number> = {
   'testprep': 2,
   'questiongenerator': 2,
   'contentgenerator': 1,
-  'notemaker': 5,
   'essaygrader': 1,
   'youtubesummarizer': 1,
   'grammar': 1,

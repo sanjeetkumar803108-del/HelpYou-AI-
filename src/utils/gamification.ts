@@ -275,7 +275,7 @@ export function getWeeklyQuests(): Quest[] {
     {
       id: 'quest_notes_2',
       title: 'Summary Scholar',
-      desc: 'Generate 2 AI study notes or audio summaries',
+      desc: 'Generate 2 AI study summaries or flashcard sets',
       xpReward: 60,
       coinReward: 6,
       icon: '📝',

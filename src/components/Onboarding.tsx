@@ -124,17 +124,17 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       }
     },
     {
-      topicIcon: <AudioLines className="w-2.5 h-2.5 text-indigo-500" />,
+      topicIcon: <Sparkles className="w-2.5 h-2.5 text-indigo-500" />,
       helpyou: {
-        title: "Revise your notes",
-        desc: "with Summary Audio",
-        icon: <Headphones className="w-3.5 h-3.5 text-indigo-600" />,
-        highlight: "Summary Audio"
+        title: "Grammar & Flow",
+        desc: "Polishes your writing",
+        icon: <Sparkles className="w-3.5 h-3.5 text-indigo-600" />,
+        highlight: "Grammar & Flow"
       },
       other: {
-        title: "No Audio",
-        desc: "Revision Support",
-        icon: <FileAudio className="w-3.5 h-3.5 text-zinc-400" />
+        title: "Basic Spell Check",
+        desc: "No Contextual Flow",
+        icon: <Bot className="w-3.5 h-3.5 text-zinc-400" />
       }
     },
     {

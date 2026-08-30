@@ -68,8 +68,8 @@ const EVENING_STUDY_MESSAGES: { title: string; body: string }[] = [
     body: "Keep the flame burning! Just 5 minutes of quick revision keeps your streak alive and boosts retention 🔥"
   },
   {
-    title: "🎧 Turn Heavy Notes into an Audio Podcast!",
-    body: "Tired of reading? Relax and listen to AI audio study podcasts of your notes before bed. Tap to listen! 🎙️"
+    title: "⚡ Supercharge Retention with Smart Flashcards!",
+    body: "Tired of heavy reading? Master key concepts with 3D AI flashcards before bed. Tap to revise! 🧠"
   },
   {
     title: "🏆 Quick 2-Minute Brain Challenge!",

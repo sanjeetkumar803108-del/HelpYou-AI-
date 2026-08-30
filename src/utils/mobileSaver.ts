@@ -343,21 +343,60 @@ export async function sharePDFMobile(pdfData: Blob | ArrayBuffer | string, filen
 }
 
 /**
- * Dispatches a global event to show an in-app Toast/Snackbar notification.
+ * Utility to save and share Audio Summary files on mobile (Capacitor/Android) and Web browsers.
  */
-export function showInAppToast(message: string) {
-  const msgLower = message.toLowerCase();
-  if (
-    msgLower.includes('saved') || 
-    msgLower.includes('file manager') || 
-    msgLower.includes('pdf saved') || 
-    msgLower.includes('opened successfully') ||
-    msgLower.includes('save to device') ||
-    msgLower.includes('success')
-  ) {
-    console.log(`[MobileSaver] Silenced toast: ${message}`);
-    return;
+export async function saveAudioMobile(audioData: string | Blob, filename: string): Promise<boolean> {
+  let cleanFilename = filename.trim().replace(/[\\/:"*?<>|]/g, '_');
+  if (!cleanFilename.toLowerCase().endsWith('.wav') && !cleanFilename.toLowerCase().endsWith('.mp3')) {
+    cleanFilename += '.wav';
   }
-  const event = new CustomEvent('show-mobile-toast', { detail: { message } });
-  window.dispatchEvent(event);
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const b64Data = await getBase64(audioData);
+      const savedFile = await Filesystem.writeFile({
+        path: cleanFilename,
+        data: b64Data,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+
+      try {
+        await Share.share({
+          title: cleanFilename,
+          text: `Listen to your AI Audio Summary: ${cleanFilename}`,
+          url: savedFile.uri,
+          dialogTitle: 'Save or Share Audio Summary',
+        });
+      } catch (shareErr) {
+        await FileOpener.open({
+          filePath: savedFile.uri,
+          contentType: 'audio/wav',
+        });
+      }
+
+      triggerVibration(25);
+      return true;
+    } catch (e: any) {
+      console.error('[MobileSaver] Error saving audio file:', e);
+      return false;
+    }
+  }
+
+  // Web Browser fallback
+  try {
+    const b64 = typeof audioData === 'string' && audioData.startsWith('data:')
+      ? audioData
+      : `data:audio/wav;base64,${await getBase64(audioData)}`;
+    const link = document.createElement('a');
+    link.href = b64;
+    link.download = cleanFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return true;
+  } catch (e) {
+    console.error('[MobileSaver] Browser audio download failed:', e);
+    return false;
+  }
 }

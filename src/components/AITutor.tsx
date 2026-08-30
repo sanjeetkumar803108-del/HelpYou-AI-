@@ -1,4 +1,4 @@
-import { getProfileContext } from "../utils/profile";
+import { getProfileContext, getUserProfileData } from "../utils/profile";
 import { safeGetItem, safeSetItem } from "../utils/storage";
 import { triggerVibration, hapticNotification, hapticImpact } from "../utils/vibrate";
 import { detectAndLogMistake } from "../utils/mistakes";

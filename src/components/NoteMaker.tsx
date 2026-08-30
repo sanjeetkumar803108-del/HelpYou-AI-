@@ -13,6 +13,7 @@ import { triggerVibration } from '../utils/vibrate';
 import { Capacitor } from '@capacitor/core';
 import { pickNativeFiles } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
+import { saveAudioMobile } from '../utils/mobileSaver';
 import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 
 // Persistent IndexedDB Audio Cache Helpers
@@ -851,20 +852,22 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     setIsPlayingFallback(false);
   };
 
-  const handleDownloadAudio = () => {
+  const handleDownloadAudio = async () => {
     if (!audioData) {
       showToast("Audio is still generating or not available yet.", "info", 2500);
       return;
     }
     triggerVibration(15);
     try {
-      const link = document.createElement('a');
-      link.href = audioData;
-      link.download = `HelpYou_AI_Audio_Summary_${Date.now()}.wav`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast("Audio downloaded! 🎧", "success", 2500);
+      const filename = file?.name 
+        ? `${file.name.replace(/\.[^/.]+$/, '')}_audio_summary.wav`
+        : `HelpYou_AI_Audio_Summary_${Date.now()}.wav`;
+      const success = await saveAudioMobile(audioData, filename);
+      if (success) {
+        showToast("Audio saved successfully! 🎧", "success", 2500);
+      } else {
+        showToast("Could not download audio.", "error", 2500);
+      }
     } catch (e) {
       console.error("Download failed:", e);
       showToast("Could not download audio.", "error", 2500);

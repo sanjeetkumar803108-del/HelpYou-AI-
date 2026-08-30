@@ -421,9 +421,10 @@ ${text}`.trim() },
   const query = extractUserQuery(clonedParams);
   const sysInstr = clonedParams?.config?.systemInstruction?.parts?.[0]?.text || "";
   const respMime = clonedParams?.config?.responseMimeType || "";
-  const isSpecialtyModel = params.model && (params.model.includes("tts") || params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = params.model;
-  let modelsToTry = isSpecialtyModel ? [requestedModel] : [
+  const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(import_genai.Modality.AUDIO);
+  const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash" : params.model;
+  let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp"].filter((v, i, a) => a.indexOf(v) === i) : isSpecialtyModel ? [requestedModel] : [
     requestedModel || "gemini-3.5-flash-lite",
     "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
@@ -1292,7 +1293,7 @@ app.post("/api/tts", async (req, res) => {
     const chunkPromises = chunks.map(async (chunkText, i) => {
       try {
         const response = await safeGenerateContent({
-          model: "gemini-3.1-flash-tts-preview",
+          model: "gemini-2.5-flash",
           contents: [{ parts: [{ text: `Please speak the following text naturally, clearly, and engagingly:
 
 ${chunkText}` }] }],

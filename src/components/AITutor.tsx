@@ -390,120 +390,136 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     return speech.replace(/\s+/g, ' ').trim();
   };
 
-  const speechQueueRef = useRef<{ sentences: string[]; index: number; lang: string }>({ sentences: [], index: 0, lang: 'en-US' });
+  // ====================================================================
+  // VOICE PLAYBACK: SpeechSynthesis-first (instant, works on all devices)
+  // Server cloud TTS is secondary bonus (attempted first, but fast-fails)
+  // ====================================================================
+  const speechQueueRef = useRef<{ sentences: string[]; index: number }>({ sentences: [], index: 0 });
 
-  const playNextSentenceChunk = () => {
-    const queue = speechQueueRef.current;
-    if (!queue || queue.index >= queue.sentences.length) {
-      setIsPlayingAudio(false);
-      setIsLoadingAudio(false);
-      return;
-    }
+  // Ensure voices are loaded (Android WebView loads them async)
+  const getVoicesAsync = (): Promise<SpeechSynthesisVoice[]> => {
+    return new Promise((resolve) => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0) {
+        resolve(voices);
+        return;
+      }
+      // Android WebView: voices load asynchronously
+      const handler = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handler);
+        resolve(window.speechSynthesis.getVoices() || []);
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', handler);
+      // Safety timeout: if voiceschanged never fires, resolve with empty
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handler);
+        resolve(window.speechSynthesis.getVoices() || []);
+      }, 1500);
+    });
+  };
 
-    const chunk = queue.sentences[queue.index].trim();
-    if (!chunk) {
-      queue.index++;
-      playNextSentenceChunk();
-      return;
-    }
-
+  const speakWithSpeechSynthesis = async (text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       setIsPlayingAudio(false);
       setIsLoadingAudio(false);
+      showToast("Voice not available on this device.");
       return;
     }
 
-    let voices: SpeechSynthesisVoice[] = [];
-    try {
-      voices = window.speechSynthesis.getVoices() || [];
-    } catch (_) {}
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
 
+    // Clean text for speech
+    const cleanText = text.replace(/[*#_`]/g, '').replace(/\s+/g, ' ').trim();
+    if (!cleanText) {
+      setIsPlayingAudio(false);
+      setIsLoadingAudio(false);
+      return;
+    }
+
+    // Split into sentences for Android TTS compatibility (max ~200 chars each)
+    const sentences = cleanText.match(/[^.!?\n]{1,200}[.!?\n]+|[^.!?\n]{1,200}$/g) || [cleanText];
+    speechQueueRef.current = { sentences, index: 0 };
+
+    // Get voices (wait for Android async load)
+    const voices = await getVoicesAsync();
     const preferredVoice = voices.find(v =>
       v.lang.toLowerCase().startsWith('en') &&
       (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
     ) || voices.find(v => v.lang.toLowerCase().startsWith('en'));
 
-    const utterance = new SpeechSynthesisUtterance(chunk);
-    if (activePersona === 'cosmo') { utterance.pitch = 1.1; utterance.rate = 1.05; }
-    else if (activePersona === 'wizard') { utterance.pitch = 0.95; utterance.rate = 0.92; }
-    else if (activePersona === 'dino') { utterance.pitch = 1.15; utterance.rate = 1.0; }
-    else { utterance.pitch = 0.95; utterance.rate = 0.95; }
-
-    if (preferredVoice) utterance.voice = preferredVoice;
-
-    utterance.onstart = () => {
-      setIsPlayingAudio(true);
-      setIsLoadingAudio(false);
-    };
-
-    utterance.onend = () => {
-      queue.index++;
-      playNextSentenceChunk();
-    };
-
-    utterance.onerror = (e) => {
-      console.warn("TTS sentence chunk notice:", e);
-      queue.index++;
-      playNextSentenceChunk();
-    };
-
-    try {
-      window.speechSynthesis.resume();
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.warn("SpeechSynthesis speak caught:", e);
-      setIsPlayingAudio(false);
-      setIsLoadingAudio(false);
-    }
-  };
-
-  const fallbackBrowserSpeech = (speechText: string) => {
-    setIsLoadingAudio(false);
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
-
-        const sentences = speechText.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [speechText];
-        const hasHindi = /[\u0900-\u097F]/.test(speechText);
-        const lang = hasHindi ? 'hi-IN' : 'en-US';
-
-        speechQueueRef.current = { sentences, index: 0, lang };
-        setIsPlayingAudio(true);
-        playNextSentenceChunk();
+    const speakNext = () => {
+      const queue = speechQueueRef.current;
+      if (!queue || queue.index >= queue.sentences.length) {
+        setIsPlayingAudio(false);
+        setIsLoadingAudio(false);
         return;
-      } catch (browserErr) {
-        console.warn("Browser speech fallback failed:", browserErr);
       }
-    }
 
-    setIsPlayingAudio(false);
-    showToast("Voice playback unavailable on this device.");
+      const chunk = queue.sentences[queue.index].trim();
+      if (!chunk) {
+        queue.index++;
+        speakNext();
+        return;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      if (activePersona === 'cosmo') { utterance.pitch = 1.1; utterance.rate = 1.05; }
+      else if (activePersona === 'wizard') { utterance.pitch = 0.95; utterance.rate = 0.92; }
+      else if (activePersona === 'dino') { utterance.pitch = 1.15; utterance.rate = 1.0; }
+      else { utterance.pitch = 1.0; utterance.rate = 0.95; }
+
+      utterance.lang = 'en-US';
+      if (preferredVoice) utterance.voice = preferredVoice;
+
+      utterance.onstart = () => {
+        setIsPlayingAudio(true);
+        setIsLoadingAudio(false);
+      };
+      utterance.onend = () => {
+        queue.index++;
+        speakNext();
+      };
+      utterance.onerror = () => {
+        queue.index++;
+        speakNext();
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+        // Android WebView fix: must call resume() after speak() for it to actually play
+        setTimeout(() => {
+          try { window.speechSynthesis.resume(); } catch (_) {}
+        }, 50);
+      } catch (e) {
+        console.warn("speechSynthesis.speak error:", e);
+        queue.index++;
+        speakNext();
+      }
+    };
+
+    setIsPlayingAudio(true);
+    setIsLoadingAudio(false);
+    speakNext();
   };
 
-  // Toggle voice walkthrough with universal HD Cloud TTS and browser fallback
+  // Toggle voice walkthrough
   const handleToggleSpeech = async () => {
     triggerVibration(10);
 
     // If currently playing or loading, stop immediately
     if (isPlayingAudio || isLoadingAudio) {
       if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-        } catch (_) {}
+        try { audioRef.current.pause(); audioRef.current.currentTime = 0; } catch (_) {}
       }
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-        } catch (_) {}
-      }
-      speechQueueRef.current = { sentences: [], index: 0, lang: 'en-US' };
+      try { window.speechSynthesis.cancel(); } catch (_) {}
+      speechQueueRef.current = { sentences: [], index: 0 };
       setIsPlayingAudio(false);
       setIsLoadingAudio(false);
       return;
     }
 
+    // Build explanation text
     let fullExplanation = '';
     if (parsedSolution) {
       if (isConversational) {
@@ -533,50 +549,9 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
 
     setIsLoadingAudio(true);
 
-    // Persona-tuned HD AI voice mapping
-    let voiceName = "Kore";
-    if (activePersona === 'wizard') voiceName = "Fenrir";
-    else if (activePersona === 'cosmo') voiceName = "Puck";
-    else if (activePersona === 'dino') voiceName = "Aoede";
-
-    // 1. Primary Strategy: Server HD AI Voice (Guaranteed on all Android/iOS WebViews)
-    try {
-      const response = await fetch(getApiUrl('/api/tts'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: fullExplanation, voice: voiceName })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.audio) {
-          const audioSrc = data.audio.startsWith('data:') ? data.audio : `data:audio/wav;base64,${data.audio}`;
-          
-          const directSound = new Audio(audioSrc);
-          audioRef.current = directSound;
-          directSound.onplay = () => {
-            setIsLoadingAudio(false);
-            setIsPlayingAudio(true);
-          };
-          directSound.onended = () => {
-            setIsPlayingAudio(false);
-            setIsLoadingAudio(false);
-          };
-          directSound.onerror = () => {
-            setIsPlayingAudio(false);
-            fallbackBrowserSpeech(fullExplanation);
-          };
-
-          await directSound.play();
-          return;
-        }
-      }
-    } catch (cloudErr) {
-      console.warn("Cloud TTS failed, using browser fallback:", cloudErr);
-    }
-
-    // 2. Secondary Strategy: Browser SpeechSynthesis Fallback with sentence queue
-    fallbackBrowserSpeech(fullExplanation);
+    // STRATEGY: Use device speechSynthesis directly (instant, always works)
+    // This is the most reliable approach for Android WebView
+    await speakWithSpeechSynthesis(fullExplanation);
   };
 
   useEffect(() => {

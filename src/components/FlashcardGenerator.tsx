@@ -902,14 +902,14 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                     <div className="flex items-center justify-between w-full">
                       <span className="text-[11px] font-black uppercase tracking-wider text-pink-700 bg-pink-100 border border-pink-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
                         <HelpCircle className="w-3.5 h-3.5 text-pink-600" />
-                        <span>Active Recall Question</span>
+                        <span>Question</span>
                       </span>
                       <span className="text-[11px] font-bold text-zinc-400">
-                        Tap or Space to Flip
+                        Tap to Flip
                       </span>
                     </div>
 
-                    <div className="my-auto py-4 max-h-[250px] overflow-y-auto pr-1 select-text scrollbar-thin flex items-center justify-center">
+                    <div className="my-auto py-4 max-h-[260px] overflow-y-auto pr-1 select-text scrollbar-thin flex items-center justify-center">
                       <div className="text-xl sm:text-2xl md:text-3xl font-black text-zinc-950 leading-snug [&_p]:text-xl sm:[&_p]:text-2xl md:[&_p]:text-3xl [&_p]:font-black [&_p]:leading-snug [&_p]:my-1 [&_.katex]:text-xl sm:[&_.katex]:text-2xl">
                         <GlobalMarkdown>
                           {flashcards[currentIndex]?.question || ''}
@@ -917,9 +917,8 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                       </div>
                     </div>
 
-                    <div className="text-xs font-extrabold text-pink-600 flex items-center justify-center gap-1.5 animate-pulse">
-                      <span>👆</span>
-                      <span>Recall in your mind, then tap to reveal answer</span>
+                    <div className="text-xs font-bold text-pink-500 flex items-center justify-center gap-1">
+                      <span>👆 Tap card to reveal answer</span>
                     </div>
                   </div>
 
@@ -933,14 +932,14 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                     <div className="flex items-center justify-between w-full">
                       <span className="text-[11px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 border border-indigo-200 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
                         <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Concise Answer Key</span>
+                        <span>Answer</span>
                       </span>
                       <span className="text-[11px] font-bold text-indigo-400">
-                        Rate Below 👇
+                        Tap to Flip Back
                       </span>
                     </div>
 
-                    <div className="my-auto py-4 max-h-[250px] overflow-y-auto pr-1 select-text scrollbar-thin flex items-center justify-center">
+                    <div className="my-auto py-4 max-h-[260px] overflow-y-auto pr-1 select-text scrollbar-thin flex items-center justify-center">
                       <div className="text-lg sm:text-xl md:text-2xl font-extrabold text-indigo-950 leading-relaxed text-center [&_p]:text-lg sm:[&_p]:text-xl md:[&_p]:text-2xl [&_p]:font-extrabold [&_p]:leading-relaxed [&_p]:my-1 [&_.katex]:text-lg sm:[&_.katex]:text-xl">
                         <GlobalMarkdown>
                           {flashcards[currentIndex]?.answer || ''}
@@ -948,10 +947,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                       </div>
                     </div>
 
-                    <div className="text-xs font-extrabold text-indigo-600 flex items-center justify-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Rate your active recall below to optimize memory</span>
-                    </div>
+                    <div />
                   </div>
                 </div>
               </div>

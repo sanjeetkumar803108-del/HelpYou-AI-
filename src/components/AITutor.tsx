@@ -390,25 +390,87 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     return speech.replace(/\s+/g, ' ').trim();
   };
 
+  const speechQueueRef = useRef<{ sentences: string[]; index: number; lang: string }>({ sentences: [], index: 0, lang: 'en-US' });
+
+  const playNextSentenceChunk = () => {
+    const queue = speechQueueRef.current;
+    if (!queue || queue.index >= queue.sentences.length) {
+      setIsPlayingAudio(false);
+      setIsLoadingAudio(false);
+      return;
+    }
+
+    const chunk = queue.sentences[queue.index].trim();
+    if (!chunk) {
+      queue.index++;
+      playNextSentenceChunk();
+      return;
+    }
+
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setIsPlayingAudio(false);
+      setIsLoadingAudio(false);
+      return;
+    }
+
+    let voices: SpeechSynthesisVoice[] = [];
+    try {
+      voices = window.speechSynthesis.getVoices() || [];
+    } catch (_) {}
+
+    const preferredVoice = voices.find(v =>
+      v.lang.toLowerCase().startsWith('en') &&
+      (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
+    ) || voices.find(v => v.lang.toLowerCase().startsWith('en'));
+
+    const utterance = new SpeechSynthesisUtterance(chunk);
+    if (activePersona === 'cosmo') { utterance.pitch = 1.1; utterance.rate = 1.05; }
+    else if (activePersona === 'wizard') { utterance.pitch = 0.95; utterance.rate = 0.92; }
+    else if (activePersona === 'dino') { utterance.pitch = 1.15; utterance.rate = 1.0; }
+    else { utterance.pitch = 0.95; utterance.rate = 0.95; }
+
+    if (preferredVoice) utterance.voice = preferredVoice;
+
+    utterance.onstart = () => {
+      setIsPlayingAudio(true);
+      setIsLoadingAudio(false);
+    };
+
+    utterance.onend = () => {
+      queue.index++;
+      playNextSentenceChunk();
+    };
+
+    utterance.onerror = (e) => {
+      console.warn("TTS sentence chunk notice:", e);
+      queue.index++;
+      playNextSentenceChunk();
+    };
+
+    try {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn("SpeechSynthesis speak caught:", e);
+      setIsPlayingAudio(false);
+      setIsLoadingAudio(false);
+    }
+  };
+
   const fallbackBrowserSpeech = (speechText: string) => {
     setIsLoadingAudio(false);
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(speechText);
-        if (activePersona === 'cosmo') { utterance.pitch = 1.1; utterance.rate = 1.05; }
-        else if (activePersona === 'wizard') { utterance.pitch = 0.95; utterance.rate = 0.92; }
-        else if (activePersona === 'dino') { utterance.pitch = 1.15; utterance.rate = 1.0; }
-        else { utterance.pitch = 0.95; utterance.rate = 0.95; }
+        window.speechSynthesis.resume();
 
-        utterance.onstart = () => {
-          setIsPlayingAudio(true);
-          setIsLoadingAudio(false);
-        };
-        utterance.onend = () => setIsPlayingAudio(false);
-        utterance.onerror = () => setIsPlayingAudio(false);
+        const sentences = speechText.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [speechText];
+        const hasHindi = /[\u0900-\u097F]/.test(speechText);
+        const lang = hasHindi ? 'hi-IN' : 'en-US';
 
-        window.speechSynthesis.speak(utterance);
+        speechQueueRef.current = { sentences, index: 0, lang };
+        setIsPlayingAudio(true);
+        playNextSentenceChunk();
         return;
       } catch (browserErr) {
         console.warn("Browser speech fallback failed:", browserErr);
@@ -436,6 +498,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
           window.speechSynthesis.cancel();
         } catch (_) {}
       }
+      speechQueueRef.current = { sentences: [], index: 0, lang: 'en-US' };
       setIsPlayingAudio(false);
       setIsLoadingAudio(false);
       return;
@@ -489,24 +552,22 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
         if (data.audio) {
           const audioSrc = data.audio.startsWith('data:') ? data.audio : `data:audio/wav;base64,${data.audio}`;
           
-          if (!audioRef.current) {
-            audioRef.current = new Audio();
-          }
-          audioRef.current.src = audioSrc;
-          audioRef.current.onplay = () => {
+          const directSound = new Audio(audioSrc);
+          audioRef.current = directSound;
+          directSound.onplay = () => {
             setIsLoadingAudio(false);
             setIsPlayingAudio(true);
           };
-          audioRef.current.onended = () => {
+          directSound.onended = () => {
             setIsPlayingAudio(false);
             setIsLoadingAudio(false);
           };
-          audioRef.current.onerror = () => {
+          directSound.onerror = () => {
             setIsPlayingAudio(false);
             fallbackBrowserSpeech(fullExplanation);
           };
 
-          await audioRef.current.play();
+          await directSound.play();
           return;
         }
       }
@@ -514,7 +575,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
       console.warn("Cloud TTS failed, using browser fallback:", cloudErr);
     }
 
-    // 2. Secondary Strategy: Browser SpeechSynthesis Fallback
+    // 2. Secondary Strategy: Browser SpeechSynthesis Fallback with sentence queue
     fallbackBrowserSpeech(fullExplanation);
   };
 

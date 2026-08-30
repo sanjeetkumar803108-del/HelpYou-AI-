@@ -18,6 +18,9 @@ export const db = getFirestore(app, "ai-studio-studyai-e2e8c241-607b-42ab-aad1-4
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 // Connection test as per firebase-integration skill
 async function testConnection() {

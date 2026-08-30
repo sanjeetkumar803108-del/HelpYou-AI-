@@ -7,6 +7,7 @@ import {
   Loader2, Download, CreditCard, Bell, Share2, Play, Pause, Square
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import html2canvas from 'html2canvas';
@@ -801,6 +802,16 @@ export default function Profile({
     await syncUsageToFirestore();
     setIsVip(false);
     safeClearAll();
+    
+    // Clear Native Capacitor Google Auth session so that Account Chooser is shown on next login
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await FirebaseAuthentication.signOut();
+      } catch (nativeSignOutErr) {
+        console.warn('[Logout] Native FirebaseAuthentication.signOut notice:', nativeSignOutErr);
+      }
+    }
+    
     await signOut(auth);
     setShowSettings(false);
     showToast("👋 Logged out successfully");
@@ -968,6 +979,11 @@ export default function Profile({
         setActiveModal(null);
         setIsVip(false);
         safeClearAll();
+        if (Capacitor.isNativePlatform()) {
+          try {
+            await FirebaseAuthentication.signOut();
+          } catch (_) {}
+        }
         await signOut(auth);
         setShowSettings(false);
       } catch (error: any) {

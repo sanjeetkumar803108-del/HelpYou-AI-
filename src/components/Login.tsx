@@ -317,13 +317,19 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       // NATIVE PATH (Android/iOS): Uses Google Play Services natively
       if (Capacitor.isNativePlatform()) {
         try {
-          console.log('[Google Auth] Starting native Google Sign-In...');
+          console.log('[Google Auth] Starting native Google Sign-In with Account Chooser...');
+          
+          // Clear any cached session so Google Account Selector dialog is ALWAYS displayed
+          try {
+            await FirebaseAuthentication.signOut();
+          } catch (_) {}
+
           let result;
           try {
-            result = await FirebaseAuthentication.signInWithGoogle();
-          } catch (credMgrErr: any) {
-            console.warn('[Native Google Sign-In] Credential Manager fallback to standard Google Sign-In:', credMgrErr?.message);
             result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
+          } catch (credMgrErr: any) {
+            console.warn('[Native Google Sign-In] Credential Manager fallback attempt:', credMgrErr?.message);
+            result = await FirebaseAuthentication.signInWithGoogle();
           }
 
           console.log('[Google Auth] Native result received:', JSON.stringify(result));
@@ -497,6 +503,11 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
   const handleSignOut = async () => {
     try {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await FirebaseAuthentication.signOut();
+        } catch (_) {}
+      }
       await signOut(auth);
       onClose();
     } catch (err: any) {

@@ -622,6 +622,15 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       return;
     }
 
+    // If speech fallback narration is actively playing, toggle pause/resume
+    if (isSpeechFallback && isPlayingFallback) {
+      pauseSpeechFallback();
+      return;
+    } else if (isSpeechFallback && !isPlayingFallback) {
+      resumeSpeechFallback();
+      return;
+    }
+
     // If HTML5 audio is already loaded and ready, just toggle play/pause — NO re-generation
     if (audioRef.current && audioUrl) {
       if (isPlaying) {
@@ -632,12 +641,20 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
           await audioRef.current.play();
           setIsPlaying(true);
         } catch (err: any) {
-          console.error('Audio playback failed:', err);
-          // On Capacitor Android, if HTML5 play fails with NotSupportedError, fall back gracefully
-          if (err?.name === 'NotSupportedError' || err?.name === 'NotAllowedError') {
-            showToast('Could not play audio automatically. Tap again to retry.', 'warning', 3000);
-          } else {
-            showToast('Playback error. Try refreshing the page.', 'error', 3000);
+          console.error('Audio playback failed, attempting direct Audio instance:', err);
+          try {
+            const dynamicAudio = new Audio(audioUrl);
+            audioRef.current = dynamicAudio;
+            dynamicAudio.onplay = () => setIsPlaying(true);
+            dynamicAudio.onpause = () => setIsPlaying(false);
+            dynamicAudio.onended = () => { setIsPlaying(false); setCurrentTime(0); };
+            dynamicAudio.ontimeupdate = () => setCurrentTime(dynamicAudio.currentTime);
+            dynamicAudio.onloadedmetadata = () => setDuration(dynamicAudio.duration);
+            await dynamicAudio.play();
+            setIsPlaying(true);
+          } catch (err2) {
+            console.warn('Direct dynamic audio play failed, using speech narration:', err2);
+            startSpeechFallback();
           }
         }
       }
@@ -650,21 +667,23 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       if (cached) {
         setAudioData(cached);
         setIsSpeechFallback(false);
-        // Give the audio element time to load the new src before playing
-        setTimeout(async () => {
-          if (audioRef.current) {
-            try {
-              await audioRef.current.play();
-              setIsPlaying(true);
-            } catch (e) {
-              console.warn('Cached audio play failed:', e);
-            }
-          }
-        }, 300);
-        return;
+        try {
+          const directSound = new Audio(cached);
+          audioRef.current = directSound;
+          directSound.onplay = () => setIsPlaying(true);
+          directSound.onpause = () => setIsPlaying(false);
+          directSound.onended = () => { setIsPlaying(false); setCurrentTime(0); };
+          directSound.ontimeupdate = () => setCurrentTime(directSound.currentTime);
+          directSound.onloadedmetadata = () => setDuration(directSound.duration);
+          await directSound.play();
+          setIsPlaying(true);
+          return;
+        } catch (e) {
+          console.warn('Cached direct audio play failed:', e);
+        }
       }
 
-      // Nothing cached and not currently generating — trigger on-demand TTS fetch
+      // Nothing cached and not currently generating — trigger on-demand audio synthesis
       startSpeechFallback();
     }
   };
@@ -688,6 +707,9 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     else if (playbackRate === 1.25) nextRate = 1.5;
     else nextRate = 1;
     setPlaybackRate(nextRate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextRate;
+    }
   };
 
   const handleSeekBarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -697,32 +719,13 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
     setCurrentTime(seekTime);
   };
 
-  // Speech Synthesis fallback control handlers with sentence queue for Android WebView
-
   const startSpeechFallback = async () => {
-    if (!result) return;
     triggerVibration(10);
+    if (!result) return;
 
-    // 1. Check if audio is already cached in persistent IndexedDB!
-    const cached = await getAudioCache(currentSavedId, result);
-    if (cached) {
-      setAudioData(cached);
-      setIsSpeechFallback(false);
-      setIsGeneratingAudio(false);
-      setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.play()
-            .then(() => setIsPlaying(true))
-            .catch(e => console.error('Audio play error:', e));
-        }
-      }, 200);
-      return;
-    }
-
-    // 2. Fetch TTS audio and cache it
+    // 1. Attempt on-demand cloud neural audio generation
     setIsGeneratingAudio(true);
     try {
-      showToast('Preparing audio briefing...', 'info', 3000);
       const ttsResponse = await fetch(getApiUrl('/api/tts'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -736,18 +739,22 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
             : `data:audio/wav;base64,${ttsData.audio}`;
           setAudioData(audioDataUrl);
           setIsSpeechFallback(false);
-
-          // Save to IndexedDB so it never needs to generate again!
           await saveAudioCache(currentSavedId, result, audioDataUrl);
 
-          setTimeout(() => {
-            if (audioRef.current) {
-              audioRef.current.play()
-                .then(() => setIsPlaying(true))
-                .catch(e => console.error('Audio play error:', e));
-            }
-          }, 300);
-          return;
+          try {
+            const sound = new Audio(audioDataUrl);
+            audioRef.current = sound;
+            sound.onplay = () => setIsPlaying(true);
+            sound.onpause = () => setIsPlaying(false);
+            sound.onended = () => { setIsPlaying(false); setCurrentTime(0); };
+            sound.ontimeupdate = () => setCurrentTime(sound.currentTime);
+            sound.onloadedmetadata = () => setDuration(sound.duration);
+            await sound.play();
+            setIsPlaying(true);
+            return;
+          } catch (soundErr) {
+            console.warn('Direct WAV playback error, switching to narration:', soundErr);
+          }
         }
       }
     } catch (e) {
@@ -756,28 +763,30 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       setIsGeneratingAudio(false);
     }
 
-    // Fallback to SpeechSynthesis if TTS fails
-    if (!('speechSynthesis' in window)) {
-      showToast('Audio playback is not supported on this device.', 'warning');
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.resume();
-
-    // Clean text to avoid speakable markup & markdown symbols
+    // 2. Secondary fallback: Device SpeechSynthesis narration
     const cleanText = result.replace(/[*#_\-`]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!cleanText) return;
 
-    // Split text into manageable chunks so Android TTS engine doesn't timeout or silence
-    const sentences = cleanText.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [cleanText];
-    const hasHindi = /[\u0900-\u097F]/.test(cleanText);
-    const lang = hasHindi ? 'hi-IN' : 'en-US';
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
 
-    speechQueueRef.current = { sentences, index: 0, lang };
-    setIsPlayingFallback(true);
+        const sentences = cleanText.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [cleanText];
+        const hasHindi = /[\u0900-\u097F]/.test(cleanText);
+        const lang = hasHindi ? 'hi-IN' : 'en-US';
 
-    playNextSentenceChunk();
+        speechQueueRef.current = { sentences, index: 0, lang };
+        setIsSpeechFallback(true);
+        setIsPlayingFallback(true);
+        playNextSentenceChunk();
+        return;
+      } catch (synthErr) {
+        console.warn("speechSynthesis error:", synthErr);
+      }
+    }
+
+    showToast('Audio is preparing, please tap Play in a few moments.', 'info', 3000);
   };
 
   const playNextSentenceChunk = () => {

@@ -212,38 +212,9 @@ RULES:
 - Always include 3 high-value suggestions in the "suggestions" array.`;
 
 // ----------------------------------------------------
-// SPACING & SENTENCE FORMATTING HELPER
-// ----------------------------------------------------
-/**
- * Automatically formats clustered text by separating distinct sentences with double newlines
- * and ensuring block math equations have generous vertical spacing while preserving markdown lists & bullets.
- */
 function formatSpacedContent(text: string): string {
   if (!text) return '';
-  
-  // Protect LaTeX block and inline math first so formulas remain intact
-  const mathBlocks: string[] = [];
-  let protectedText = text.replace(/\$\$[\s\S]*?\$\$/g, (match) => {
-    mathBlocks.push(`\n\n${match.trim()}\n\n`);
-    return `\n\n__MATH_BLOCK_${mathBlocks.length - 1}__\n\n`;
-  });
-  
-  protectedText = protectedText.replace(/\$[^$\n]+\$/g, (match) => {
-    mathBlocks.push(match);
-    return `__MATH_BLOCK_${mathBlocks.length - 1}__`;
-  });
-
-  // Split on sentence boundaries: period/question/exclamation followed by space and uppercase letter or math block
-  // Avoid splitting numbered list items (e.g., 1. 2.) or standard abbreviations
-  protectedText = protectedText.replace(/(?<!\b(?:e\.g|i\.e|etc|vs|dr|mr|mrs|prof|\d+))([.!?])\s+([A-Z0-9__])/g, '$1\n\n$2');
-
-  // Restore LaTeX blocks
-  let restored = protectedText.replace(/__MATH_BLOCK_(\d+)__/g, (_, idx) => {
-    return mathBlocks[parseInt(idx, 10)];
-  });
-
-  // Clean up excessive blank lines (more than 2 consecutive newlines)
-  return restored.replace(/\n{3,}/g, '\n\n').trim();
+  return text.trim();
 }
 
 const AITutorMessageItem = React.memo(function AITutorMessageItem({ 

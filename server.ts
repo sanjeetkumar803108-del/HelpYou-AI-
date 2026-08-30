@@ -265,6 +265,69 @@ function pcmToWav(pcmBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitsPe
   return Buffer.concat([wavHeader, pcmBuffer]);
 }
 
+function cleanTextForSpeech(rawText: string): string {
+  if (!rawText) return "";
+  return rawText
+    .replace(/^#+\s+/gm, '') // Remove markdown headers
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold
+    .replace(/\*([^*]+)\*/g, '$1') // Remove italic
+    .replace(/`([^`]+)`/g, '$1') // Remove inline code
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links
+    .replace(/[-*•]\s+/g, '') // Remove bullets
+    .replace(/\$\$(.*?)\$\$/gs, '$1') // LaTeX display math
+    .replace(/\$(.*?)\$/g, '$1') // LaTeX inline math
+    .replace(/```[\s\S]*?```/g, '') // Remove large code blocks
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function splitTextForTTS(text: string, maxChunkSize = 2200): string[] {
+  const cleaned = cleanTextForSpeech(text);
+  if (!cleaned) return [];
+  if (cleaned.length <= maxChunkSize) return [cleaned];
+
+  const chunks: string[] = [];
+  const paragraphs = cleaned.split(/\n+/);
+  let currentChunk = "";
+
+  for (const para of paragraphs) {
+    const trimmedPara = para.trim();
+    if (!trimmedPara) continue;
+
+    if (currentChunk.length + trimmedPara.length + 1 <= maxChunkSize) {
+      currentChunk = currentChunk ? `${currentChunk}\n${trimmedPara}` : trimmedPara;
+    } else {
+      if (currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = "";
+      }
+
+      if (trimmedPara.length > maxChunkSize) {
+        const sentences = trimmedPara.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) || [trimmedPara];
+        for (const sentence of sentences) {
+          const trimmedSentence = sentence.trim();
+          if (!trimmedSentence) continue;
+
+          if (currentChunk.length + trimmedSentence.length + 1 <= maxChunkSize) {
+            currentChunk = currentChunk ? `${currentChunk} ${trimmedSentence}` : trimmedSentence;
+          } else {
+            if (currentChunk) chunks.push(currentChunk);
+            currentChunk = trimmedSentence;
+          }
+        }
+      } else {
+        currentChunk = trimmedPara;
+      }
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
 let ai: GoogleGenAI | null = null;
 function getAI() {
   if (!ai) {
@@ -1181,18 +1244,17 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     } else if (action === 'flashcards' || action === 'flashcards-json') {
       if (action === 'flashcards-json') {
         responseMimeType = "application/json";
-        promptText = `Act as an expert study coach and cognitive learning specialist. Extract the top 10 to 15 most critical, high-yield concepts from the provided document and format them into comprehensive flashcards.
+        promptText = `Act as an Elite Cognitive Scientist and Active Recall Specialist. Extract the top 10 to 15 most critical high-yield concepts from the provided document into revision flashcards.
         Strict Rules for Flashcards:
-        1. CORE CONCEPTS: Focus on key definitions, dates, formulas, mechanisms, and high-yield takeaways.
-        2. QUESTION: The 'question' should be clear, precise, and direct.
-        3. ANSWER COMPLETION (ZERO TRUNCATION): The 'answer' MUST be 100% complete, fully formulated, and self-contained. NEVER truncate sentences, cut off mid-clause, or leave thoughts incomplete (e.g. NEVER end with '...' or 'compounds like...'). Provide the complete definition and essential context within 2 to 3 crystal-clear, elegant, grammatically complete sentences.
-        4. ESCAPING: If there is code/HTML, wrap it in backticks (e.g., \`<div>\`).
+        1. ACTIVE RECALL QUESTION: The 'question' must be direct, crisp, and test a single conceptual takeaway.
+        2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise and between 15 to 25 words max for rapid active recall. NEVER output long paragraphs.
+        3. 100% COMPLETE THOUGHTS: Complete, self-contained, grammatically finished sentences (no truncated clauses).
+        4. ESCAPING: Code in backticks (\`<div>\`), math in LaTeX ($...$).
         5. OUTPUT FORMAT: Output ONLY a valid JSON array of objects directly parseable by JSON.parse.
         
         Format:
         [
-          {"question": "...", "answer": "..."},
-          ...
+          {"question": "What is ...?", "answer": "..."}
         ]`;
       } else {
         promptText = "Extract the most important facts and concepts from the provided document and format them into 10 high-quality flashcards. Format exactly like this for each:\n\n**Q: [Question]**\n*A: [Answer]*\n\nCRITICAL: If the document contains code tags, HTML, or web development terms (like <div>, <header>, etc.), ALWAYS wrap them in markdown backticks (e.g., `<div>`) so they render as plain text and not formatting. Always provide complete, self-contained sentences for answers.";
@@ -1374,45 +1436,66 @@ IF FORMAT IS "Explain Like I'm 5":
 
 app.post("/api/tts", async (req, res) => {
   try {
-    const { text } = req.body;
-    if (!text) {
+    const { text, voice } = req.body;
+    if (!text || !text.trim()) {
       return res.status(400).json({ error: "No text provided" });
     }
 
-    // Slice text to maximum 1500 characters to make generation fast, avoid timeouts, and preserve low latency.
-    let textToSpeak = text;
-    if (textToSpeak.length > 1500) {
-      textToSpeak = textToSpeak.substring(0, 1500) + "...";
+    const chunks = splitTextForTTS(text, 2200);
+    if (chunks.length === 0) {
+      return res.status(400).json({ error: "Text is empty after cleaning" });
     }
 
-    const response = await safeGenerateContent({
-      model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: `Please generate audio for this text: ${textToSpeak}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } },
-        },
-      },
-    });
+    const selectedVoice = voice || "Kore";
+    const pcmBuffers: Buffer[] = [];
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      // Wrap raw linear 16-bit PCM inside a browser-playable WAV container
-      const rawPcm = Buffer.from(base64Audio, "base64");
-      const wavBuffer = pcmToWav(rawPcm);
-      const base64Wav = wavBuffer.toString("base64");
-      res.json({ audio: base64Wav, mimeType: "audio/wav" });
-    } else {
-      res.status(500).json({ error: "No audio generated" });
+    // Synthesize all chunks in order for full-length, end-to-end audio
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkText = chunks[i];
+      try {
+        const response = await safeGenerateContent({
+          model: "gemini-3.1-flash-tts-preview",
+          contents: [{ parts: [{ text: `Please speak the following text naturally, clearly, and engagingly:\n\n${chunkText}` }] }],
+          config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice } },
+            },
+          },
+        });
+
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (base64Audio) {
+          const rawPcm = Buffer.from(base64Audio, "base64");
+          pcmBuffers.push(rawPcm);
+        } else {
+          console.warn(`TTS: No audio returned for chunk ${i + 1}/${chunks.length}`);
+        }
+      } catch (chunkErr: any) {
+        console.error(`TTS error on chunk ${i + 1}/${chunks.length}:`, chunkErr);
+        if (chunkErr.message === "GEMINI_QUOTA_EXHAUSTED") {
+          throw chunkErr;
+        }
+      }
     }
+
+    if (pcmBuffers.length === 0) {
+      return res.status(500).json({ error: "Failed to synthesize complete audio" });
+    }
+
+    // Seamlessly concatenate all raw linear PCM audio chunks into one complete WAV file
+    const fullPcmBuffer = Buffer.concat(pcmBuffers);
+    const wavBuffer = pcmToWav(fullPcmBuffer);
+    const base64Wav = wavBuffer.toString("base64");
+
+    res.json({ audio: base64Wav, mimeType: "audio/wav" });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("TTS quota exceeded:", error.message);
       return res.status(429).json({ error: "API quota limit exceeded for audio conversion. Please try again in 60 seconds." });
     }
     console.error("TTS error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message || "Failed to generate audio" });
   }
 });
 
@@ -1745,46 +1828,45 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
 
 app.post("/api/generate-flashcards", async (req, res) => {
   try {
-    const { text, gradeLevel, count } = req.body;
+    const text = req.body.text || req.body.topic || req.body.content || "";
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const count = req.body.count;
 
-    const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
-
-
-    if (!text) {
-      return res.status(400).json({ error: "Missing text" });
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "Missing text or topic" });
     }
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const aiClient = getAI();
 
-    const systemInstruction = `Act as an expert study coach, cognitive learning specialist, and master educator. Analyze the provided text. Regardless of the text's length, extract exactly the top ${requestedCount} most critical, high-yield concepts, definitions, chemical mechanisms, mathematical formulas, and core principles. Generate exactly ${requestedCount} flashcards. Prioritize high-yield quality and conceptual depth.
+    const systemInstruction = `Act as an Elite Cognitive Scientist and Active Recall Specialist.
+Your mission is to generate exactly ${requestedCount} high-yield revision flashcards for the provided text or academic topic.
 
-Rules for Flashcards:
-1. Focus on key definitions, dates, formulas, core concepts, mechanisms, and high-yield exam takeaways.
-2. The 'question' should be concise, clear, and direct.
-3. CRITICAL ANSWER COMPLETION (ZERO TRUNCATION): The 'answer' MUST be 100% complete, fully formulated, and self-contained. NEVER truncate sentences, cut off mid-clause, or leave thoughts incomplete (e.g. NEVER end with '...' or 'compounds like...'). Provide the complete scientific definition and essential context within 2 to 3 crystal-clear, elegant, grammatically complete sentences.
-4. CRITICAL: If the topic involves coding, HTML, or web development (like <div>, <header>, <span>), ALWAYS wrap those tags or attributes in markdown backticks (e.g., \`<div>\`) so they are treated as plain text and not rendered as HTML.
-5. Use LaTeX formatting with single dollar signs (e.g., $E = mc^2$) for math or chemical formulas.
+CRITICAL ACTIVE RECALL & CONCISE LENGTH RULES:
+1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept.
+2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise, punchy, and between 15 to 25 words max. It must be an active recall mnemonic, definition, or key formula concept designed for rapid revision. NEVER output long multi-sentence paragraphs.
+3. 100% COMPLETE THOUGHTS: The 15-25 word answer must be grammatically complete and self-contained (no trailing '...', no chopped clauses).
+4. LATEX & CODE: If there are formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in backticks (\`<div>\`).
 
-CRITICAL OUTPUT RULE:
-You must output ONLY a valid JSON array of objects. Do not wrap the JSON in markdown blocks (like \`\`\`json), do not include any introductory or concluding text. The output must be directly parseable by a JSON parser.
+CRITICAL OUTPUT FORMAT:
+You must output ONLY a valid JSON array of objects. Do not wrap in markdown quotes.
 
-Format exactly like this:
+Format:
 [
   {
-    "question": "What is the powerhouse of the cell?",
-    "answer": "The mitochondria is the cellular organelle responsible for generating the majority of chemical energy in the form of ATP through cellular respiration."
+    "question": "What is the primary function of mitochondria in eukaryotic cells?",
+    "answer": "Mitochondria generate cellular energy by converting glucose and oxygen into ATP through oxidative phosphorylation and cellular respiration."
   },
   {
-    "question": "What year did the US declare independence?",
-    "answer": "The United States declared independence in 1776 following the adoption of the Declaration of Independence by the Continental Congress on July 4."
+    "question": "What is the key principle of Newton's Third Law of Motion?",
+    "answer": "Every interacting force creates an equal and opposite reaction acting simultaneously on two distinct interacting physical objects."
   }
 ]`;
 
     const response = await safeGenerateContent({
       gradeLevel,
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Generate exactly ${requestedCount} high-yield, fully complete flashcards from this text:\n\n${text}` }] },
+      contents: { parts: [{ text: `Generate exactly ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic:\n\n${text}` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json",
@@ -2801,7 +2883,7 @@ app.post("/api/generate-quiz", async (req, res) => {
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
 
-    const systemInstruction = `You are an Elite US High School Teacher and SAT/AP Exam Expert. The user will provide a subject or specific topic. 
+    const systemInstruction = `You are an Elite Academic Tutor and Curriculum Exam Expert. The user will provide a subject or specific topic. 
 Your ONLY job is to generate a highly accurate, exam-level Multiple Choice Quiz for that topic.
 
 CRITICAL RULES:
@@ -3190,41 +3272,36 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
 }
 
 app.post("/api/fix-mistake", async (req, res) => {
-  const { question, wrongInput, correctConcept, gradeLevel } = req.body;
   try {
-    if (!question || !wrongInput || !correctConcept) {
-      return res.status(400).json({ error: "Missing required mistake fields: question, wrongInput, or correctConcept" });
-    }
+    const { question, wrongInput, correctConcept, gradeLevel } = req.body;
 
-    const systemInstruction = `You are "Deep Search AI", an elite, highly intelligent educational assistant. Adopt a highly professional, crisp, and direct tone.
+    const safeQuestion = (question || "Academic Problem").slice(0, 3000);
+    const safeWrong = (wrongInput || "Incorrect attempt").slice(0, 1000);
+    const safeCorrect = (correctConcept || "Correct method / concept").slice(0, 2000);
 
-Your job is to analyze a student's academic mistake and provide a structured conceptual correction.
-Adopt a highly professional, crisp, direct, and encouraging academic voice.
-DO NOT use any markdown bolding syntax like "**" or emojis in your final output.
+    const systemInstruction = `You are the Lead Master of Academic Conceptual Clarity & Mistake Correction.
+Your job is to analyze a student's academic mistake and provide a structured 3-part conceptual breakdown.
+Be direct, encouraging, precise, and crystal-clear.
 
-You MUST format your response as a strict JSON object with EXACTLY these three keys:
-1. "why_it_happened": One short, direct sentence explaining the core misunderstanding or why the student made this mistake.
-2. "the_fix": The absolute correct concept explained in extremely simple and clear terms.
-3. "pro_memory_trick": Provide a clever mnemonic, short analogy, or a strict memory rule to help the student easily memorize this.
-
-Example format:
+STRICT JSON OUTPUT FORMAT (Return ONLY a single valid JSON object, NO markdown wrappers):
 {
-  "why_it_happened": "The core misunderstanding is confusing the magnetic poles with geographic directions.",
-  "the_fix": "The magnetic north pole of Earth is actually near the geographic south pole.",
-  "pro_memory_trick": "Remember that opposites attract, so the north compass needle points to where the magnet's south pole lives."
+  "why_it_happened": "One crisp sentence identifying the conceptual trap or reason behind the mistake.",
+  "the_fix": "The absolute correct concept explained in simple, memorable terms.",
+  "pro_memory_trick": "A clever mnemonic, practical rule of thumb, or analogy to never forget this."
 }`;
 
     const prompt = `Student Mistake Context:
-Original Question/Topic: ${question}
-User's Incorrect Answer/Input: ${wrongInput}
-Correct Concept/Answer: ${correctConcept}
+- Problem / Question: ${safeQuestion}
+- Student's Incorrect Input: ${safeWrong}
+- Correct Concept / Solution: ${safeCorrect}
+- Target Grade Level: ${gradeLevel || "High School"}
 
-Please analyze this mistake and output the correction in the strict JSON format specified.`;
+Analyze this mistake and provide the 3-part JSON fix.`;
 
     const response = await safeGenerateContent({
-      gradeLevel,
+      gradeLevel: gradeLevel || "High School",
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: prompt }] },
+      contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
@@ -3232,78 +3309,66 @@ Please analyze this mistake and output the correction in the strict JSON format 
     });
 
     let rawText = response.text || "";
-    let parsedResult: any = null;
-    try {
-      parsedResult = safeParseJSON(rawText, 'object');
-    } catch (parseError) {
-      console.error("Failed to parse JSON response for fix-mistake:", parseError, rawText);
+    let parsedResult = safeParseJSON(rawText, 'object');
+    if (!parsedResult || !parsedResult.the_fix) {
       parsedResult = {
-        why_it_happened: `There was a misunderstanding with the topic or question.`,
-        the_fix: `The correct concept is: ${correctConcept}`,
-        pro_memory_trick: "Review this topic carefully to prevent making this mistake again!"
+        why_it_happened: `There was a confusion with the underlying problem setup.`,
+        the_fix: `The correct concept is: ${safeCorrect}`,
+        pro_memory_trick: "💡 Memory Rule: Always double check the core formula and units before answering!"
       };
     }
 
     res.json(parsedResult);
   } catch (error: any) {
-    console.error("Fix mistake endpoint failed:", error);
-    res.status(500).json({
-      error: "Failed to generate AI correction for this mistake.",
-      details: error.message
+    console.error("Fix mistake endpoint error:", error);
+    res.json({
+      why_it_happened: "A common misunderstanding of the fundamental concept.",
+      the_fix: req.body?.correctConcept ? `The correct concept is: ${req.body.correctConcept}` : "Review the key formula and step-by-step logic.",
+      pro_memory_trick: "💡 Pro Tip: Write down the given values and formula first to avoid calculation traps!"
     });
   }
 });
 
 app.post("/api/generate-practice", async (req, res) => {
-  const { question, wrongInput, correctConcept, sourceFeature, gradeLevel } = req.body;
   try {
-    if (!question || !correctConcept) {
-      return res.status(400).json({ error: "Missing required fields: question or correctConcept" });
-    }
+    const { question, wrongInput, correctConcept, sourceFeature, gradeLevel } = req.body;
 
-    const systemInstruction = `You are "Magic AI Tutor", an elite, highly intelligent educational assistant.
-Adopt an encouraging, patient, precise, and crisp tone.
-Your task is to analyze the student's mistake and generate exactly 3 interactive practice questions in a similar domain or testing the exact same conceptual gap, but with different numbers, words, or contexts so they can master the concept.
+    const safeQuestion = (question || "Academic Concept").slice(0, 3000);
+    const safeWrong = (wrongInput || "Incorrect attempt").slice(0, 1000);
+    const safeCorrect = (correctConcept || "Correct concept").slice(0, 2000);
 
-Each question MUST be a multiple-choice question with exactly 4 options.
-The questions should vary in difficulty (Easy, Medium, Hard).
-DO NOT use any markdown bolding syntax like "**" or emojis in your questions, options, or explanations. Use clean line breaks for readability.
+    const systemInstruction = `You are an Elite Academic Practice Coach.
+Your task is to generate exactly 3 multiple-choice practice questions that test the SAME core concept as the student's mistake, but with fresh numbers, contexts, or scenarios.
 
-You MUST format your response as a strict JSON array containing exactly 3 objects.
-Each object MUST have the following keys:
-1. "question": The practice question text (e.g. "If a triangle has sides of length 3 and 4, and the angle between them is 90 degrees, what is the length of the hypotenuse?").
-2. "options": An array of exactly 4 strings representing the choices.
-3. "correctIndex": The 0-based index of the correct option in the options array (integer 0, 1, 2, or 3).
-4. "explanation": A helpful, encouraging explanation of why that option is correct and how to solve it step-by-step. Keep it friendly and educational.
+RULES:
+1. Generate exactly 3 questions with increasing mastery (Easy, Medium, Mastery).
+2. Each question MUST have exactly 4 distinct options.
+3. "correctIndex" MUST be an integer (0, 1, 2, or 3).
+4. "explanation" MUST be 1-2 concise, encouraging sentences.
 
-Example format:
+STRICT JSON OUTPUT (Return ONLY a JSON array with 3 question objects):
 [
   {
-    "question": "What is the magnetic polarity of Earth's geographic North Pole?",
-    "options": [
-      "Magnetic North Polarity",
-      "Magnetic South Polarity",
-      "It has no magnetic polarity",
-      "It fluctuates every hour"
-    ],
-    "correctIndex": 1,
-    "explanation": "Earth's geographic North Pole actually behaves like a magnetic South Pole, which is why the north-seeking end of a compass needle points towards it! Opposites attract."
+    "question": "Clear, concise practice question text?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctIndex": 0,
+    "explanation": "Clear explanation of why Option A is correct."
   }
 ]`;
 
     const prompt = `Student Mistake Context:
-Subject/Category: ${sourceFeature || 'General Study'}
-Original Question/Concept: ${question}
-User's Incorrect Response: ${wrongInput || 'Incorrect response'}
-Correct Explanation: ${correctConcept}
+- Source Area: ${sourceFeature || "General"}
+- Original Question: ${safeQuestion}
+- Incorrect Input: ${safeWrong}
+- Correct Principle: ${safeCorrect}
+- Target Grade: ${gradeLevel || "High School"}
 
-Please generate exactly 3 similar practice questions to help the student test and master this specific concept. Avoid exact repetition, instead create original similar problems.
-Return the response in the strict JSON array format specified.`;
+Generate 3 fresh similar practice questions to help the student master this concept.`;
 
     const response = await safeGenerateContent({
-      gradeLevel,
+      gradeLevel: gradeLevel || "High School",
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: prompt }] },
+      contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
@@ -3311,33 +3376,96 @@ Return the response in the strict JSON array format specified.`;
     });
 
     let rawText = response.text || "";
-    let parsedResult: any = null;
-    try {
-      parsedResult = safeParseJSON(rawText, 'array');
-    } catch (parseError) {
-      console.error("Failed to parse JSON response for generate-practice:", parseError, rawText);
+    let parsedResult = safeParseJSON(rawText, 'array');
+
+    // Handle when AI returns wrapped object { questions: [...] }
+    if (!Array.isArray(parsedResult)) {
+      const obj = safeParseJSON(rawText, 'object');
+      if (obj && Array.isArray(obj.questions)) {
+        parsedResult = obj.questions;
+      } else if (obj && Array.isArray(obj.practice_questions)) {
+        parsedResult = obj.practice_questions;
+      } else if (obj && Array.isArray(obj.practiceQuestions)) {
+        parsedResult = obj.practiceQuestions;
+      }
+    }
+
+    if (!Array.isArray(parsedResult) || parsedResult.length === 0) {
       parsedResult = [
         {
-          "question": `Based on your previous mistake about "${question}", which of the following represents the correct understanding?`,
-          "options": [
-            `${correctConcept}`,
+          question: `Regarding the concept from "${safeQuestion.slice(0, 120)}...", which statement is accurate?`,
+          options: [
+            safeCorrect.slice(0, 80) || "The formal rule applies directly",
             "An alternative incorrect interpretation",
-            "A common misconception on the same topic",
-            "None of the above options are true"
+            "The variables are mutually exclusive",
+            "None of the above are valid"
           ],
-          "correctIndex": 0,
-          "explanation": `The correct concept is: ${correctConcept}. This practice question helps reinforce it.`
+          correctIndex: 0,
+          explanation: `The correct principle is: ${safeCorrect.slice(0, 200)}.`
+        },
+        {
+          question: `What is the most effective approach when solving problems on this topic?`,
+          options: [
+            "Apply the standard formula and verify given constraints",
+            "Assume the first intuitive guess without verification",
+            "Disregard intermediate calculations",
+            "Skip unit checks"
+          ],
+          correctIndex: 0,
+          explanation: "Always apply the formal definition and check your given values step-by-step."
+        },
+        {
+          question: `Which key takeaway ensures full mastery of this question in future exams?`,
+          options: [
+            "Mastering the underlying formula and its assumptions",
+            "Memorizing only final answers",
+            "Relying on elimination alone",
+            "Ignoring edge cases"
+          ],
+          correctIndex: 0,
+          explanation: "Mastering the underlying formula and assumptions ensures you can solve any variation!"
         }
       ];
     }
 
     res.json(parsedResult);
   } catch (error: any) {
-    console.error("Generate practice endpoint failed:", error);
-    res.status(500).json({
-      error: "Failed to generate practice questions.",
-      details: error.message
-    });
+    console.error("Generate practice endpoint error:", error);
+    res.json([
+      {
+        question: `Based on your mistake, which statement accurately reflects the correct concept?`,
+        options: [
+          req.body?.correctConcept ? req.body.correctConcept.slice(0, 80) : "The formal rule applies directly",
+          "An alternative incorrect assumption",
+          "The inverse relationship holds true",
+          "Cannot be determined from given data"
+        ],
+        correctIndex: 0,
+        explanation: req.body?.correctConcept ? `The correct concept is: ${req.body.correctConcept}` : "Review the correct concept to ensure full mastery."
+      },
+      {
+        question: "What is the best strategy to verify your answer when solving similar problems?",
+        options: [
+          "Cross-verify using the fundamental formula and units",
+          "Guess based on option lengths",
+          "Ignore edge conditions",
+          "Skip intermediate algebraic steps"
+        ],
+        correctIndex: 0,
+        explanation: "Cross-verifying with the core formula and checking units guarantees full accuracy!"
+      },
+      {
+        question: "Which of the following is a classic trap to avoid in this category?",
+        options: [
+          "Confusing similar-sounding terms or opposite signs",
+          "Reading the entire question carefully",
+          "Writing down given information clearly",
+          "Checking the final units"
+        ],
+        correctIndex: 0,
+        explanation: "Watch out for sign errors and term confusions—that is where most marks are lost!"
+      }
+    ]);
   }
 });
 
@@ -3583,7 +3711,7 @@ Conduct an elite, point-wise, structured academic research report with small mar
 
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const { gradeLevel, academicStream, topic, excludeQuestions, country } = req.body;
+    const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country } = req.body;
 
     const aiClient = getAI();
     const normalizeStr = (s: string) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
@@ -3596,52 +3724,55 @@ app.post("/api/generate-trivia", async (req, res) => {
     while (attempts < 3) {
       attempts++;
 
-      let promptText = `Generate a single, unique, highly engaging educational trivia question tailored for:
-- Student Academic Grade: ${gradeLevel || "11th Grade (Junior)"}
-- Academic Track/Stream: ${academicStream || "STEM / Engineering"}
-- Student's Country: ${country || "United States"}`;
+      let promptText = `Generate a single short, brain-engaging Common Sense / Presence of Mind trivia question for:
+- Student Academic Grade/Level: ${gradeLevel || studyLevel || "High School"}
+- Academic Stream/Interest: ${academicStream || "General Science & Logic"}
+- Student's Country & Context: ${country || "Global"}`;
 
       if (country && country.trim().length > 0) {
-        promptText += `\n- Country-Specific Customization: Design a question that relates to, is contextualised for, or is based on the school curriculum, general knowledge, history, geography, science, famous figures, or academic themes of ${country}.`;
+        promptText += `\n- Country Context: Use everyday observations, relatable logic, or cultural common sense relevant to ${country}.`;
       }
 
       if (topic && topic.trim().length > 0) {
-        promptText += `\n- Specific Topic/Subject Focus: ${topic}`;
+        promptText += `\n- Specific Category Focus: ${topic}`;
+      } else {
+        promptText += `\n- Category Focus: Common sense, presence of mind, lateral thinking riddle, everyday physics paradox, or practical logic teaser.`;
       }
 
       if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
-        // Send a larger slice of history to prevent repetition
-        promptText += `\n- EXCLUDE the following questions (do NOT generate them or anything similar): ${JSON.stringify(excludeQuestions.slice(-120))}`;
+        promptText += `\n- EXCLUDE the following questions (do NOT repeat them): ${JSON.stringify(excludeQuestions.slice(-120))}`;
       }
 
       if (extraAvoidInstruction) {
         promptText += `\n${extraAvoidInstruction}`;
       }
 
-      const systemInstruction = `You are an Elite Interactive Quiz and Trivia Game Creator.
-Generate a single multiple-choice trivia question that is highly informative, accurate, and customized.
+      const systemInstruction = `You are the Master of Brain Workout, Common Sense, Presence of Mind & Cognitive Trivia for Students.
 
-GAME-PLAY & UNIQUE QUESTION STYLE:
-- Design "Thinking Questions" (conceptual puzzles, scientific anomalies, real-world educational paradoxes, or reasoning riddles) rather than standard factual memorization.
-- Make it highly gamified, interactive, and stimulating to think about. It should feel like a premium educational mind game!
+MISSION:
+Generate a single, ultra-short, mind-bending multiple choice brain booster question tailored STRICTLY to the student's profile (Grade level, Stream, and Country).
 
-CRITICAL RULES:
-1. STRICT JSON OUTPUT: You must output ONLY a valid JSON object matching the schema below. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. CORRECT INDEX: The "correctIndex" field must be a valid 0-based index of the correct option in the "options" array.
-3. FACT: Provide an interesting, educational, and fun "fact" explaining the background or context of the answer. Include emojis!
-4. OPTIONS: Provide exactly 3 or 4 engaging options. Options should be clearly distinct.
+QUESTION PHILOSOPHY (COMMON SENSE & PRESENCE OF MIND):
+1. Focus on COMMON SENSE, PRESENCE OF MIND, LATERAL THINKING, INTUITIVE SCIENCE/PHYSICS PARADOXES, CLEVER LOGIC RIDDLES, or DAILY LIFE OBSERVATIONS. Avoid boring long textbook memorization questions!
+2. The question must trigger an instant "Aha!" moment or test how alert the student is.
+3. STRICT SHORT LENGTH CONSTRAINTS:
+   - "question": STRICTLY SHORT & PUNCHY — 15 to 25 words maximum! (1 or 2 crisp sentences). NEVER output long wordy paragraphs.
+   - "options": EXACTLY 3 or 4 short options (1 to 4 words each).
+   - "fact": STRICTLY 15 to 25 words max explaining the clever logic, common sense catch, or mind-blowing reality with an emoji (e.g. "💡 Common Sense Catch: ...").
+4. SUBJECT TAG: 2-3 words with an appropriate emoji (e.g. "🧠 Common Sense Logic", "⚡ Everyday Physics", "💡 Presence of Mind", "🔢 Mental Math Paradox", "🌍 Nature Riddle").
 
-Required JSON Structure:
+STRICT JSON OUTPUT FORMAT:
+Output ONLY a valid JSON object matching this exact schema:
 {
-  "subjectTag": "🧬 AP Biology Trivia",
-  "question": "What is the primary role of the Golgi apparatus in a eukaryotic cell?",
-  "options": ["A) Packaging and sorting proteins", "B) Synthesizing ribosomes", "C) ATP production", "D) Storing calcium ions"],
-  "correctIndex": 0,
-  "fact": "The Golgi apparatus acts like the post office of the cell, sorting and shipping proteins! 📦"
+  "subjectTag": "💡 Presence of Mind",
+  "question": "If an electric train moves North at 60mph and wind blows West at 20mph, which way does the smoke blow?",
+  "options": ["North", "West", "South-West", "No smoke (Electric)"],
+  "correctIndex": 3,
+  "fact": "⚡ Presence of mind test! Electric trains do not produce smoke! 🚂"
 }`;
 
       const response = await safeGenerateContent({
-        gradeLevel: gradeLevel || "11th Grade (Junior)",
+        gradeLevel: gradeLevel || "High School",
         model: "gemini-3.5-flash-lite",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
@@ -3672,42 +3803,42 @@ Required JSON Structure:
     throw new Error("Failed to parse or generate a unique trivia response after multiple attempts");
   } catch (error: any) {
     console.error("Trivia generation error:", error);
-    // Fallback to a random hardcoded trivia
+    // Fallback to punchy presence of mind / common sense trivia
     const fallbacks = [
       {
-        subjectTag: "🏛️ AP World History",
-        question: "Which edible substance found in ancient Egyptian tombs is famous for never spoiling?",
-        options: ["Olive Oil", "Honey", "Barley Wine"],
-        correctIndex: 1,
-        fact: "Honey never spoils! Its low moisture and high acidity create an environment where bacteria cannot grow. Archaeologists have found 3,000-year-old honey that is still perfectly edible! 🍯"
-      },
-      {
-        subjectTag: "🪐 AP Astronomy & Physics",
-        question: "Which planet in our solar system has a day that is longer than its entire orbital year?",
-        options: ["Mars", "Venus", "Mercury"],
-        correctIndex: 1,
-        fact: "A day on Venus is longer than its year! It takes Venus 243 Earth days to rotate once on its axis, but only 225 Earth days to complete one orbit around the Sun. 🪐"
-      },
-      {
-        subjectTag: "🦖 AP Environmental Science",
-        question: "Which of these prehistoric creatures actually lived closer in time to modern humans?",
-        options: ["Tyrannosaurus Rex", "Stegosaurus", "Triceratops"],
-        correctIndex: 0,
-        fact: "Tyrannosaurus Rex lived closer to us! T-Rex roamed 66 million years ago, whereas the Stegosaurus lived 150 million years ago—an 84 million year gap! 🦖"
-      },
-      {
-        subjectTag: "🧬 AP Biology Trivia",
-        question: "How many hearts does an octopus have to pump blood through its body?",
-        options: ["2 Hearts", "3 Hearts", "9 Hearts"],
-        correctIndex: 1,
-        fact: "Octopuses have three hearts, nine brains, and blue blood! Two hearts pump blood to the gills, while a third pumps it to the rest of the body. 🐙"
-      },
-      {
-        subjectTag: "⚡ AP Physics Trivia",
-        question: "Approximately how many slices of bread can a single bolt of lightning toast?",
-        options: ["1,000 slices", "10,000 slices", "100,000 slices"],
+        subjectTag: "💡 Presence of Mind",
+        question: "If an electric train travels North at 60 mph and wind blows West at 20 mph, which way does the smoke blow?",
+        options: ["North", "West", "No smoke (Electric)"],
         correctIndex: 2,
-        fact: "A single lightning bolt contains enough energy to toast over 100,000 slices of bread! 🍞"
+        fact: "⚡ Presence of mind! Electric trains don't produce any smoke! 🚂"
+      },
+      {
+        subjectTag: "🧠 Logic & Common Sense",
+        question: "A bat and ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much is the ball?",
+        options: ["$0.10", "$0.05", "$0.01"],
+        correctIndex: 1,
+        fact: "💡 Common sense trap! If the ball were $0.10, the bat would be $1.10, making the total $1.20! 🎾"
+      },
+      {
+        subjectTag: "⚡ Everyday Physics",
+        question: "Why can birds sit safely on uninsulated high-voltage power lines without getting an electric shock?",
+        options: ["Insulated feet", "Zero voltage difference", "Feathers absorb charge"],
+        correctIndex: 1,
+        fact: "🦅 Both feet are on the exact same wire, creating zero voltage difference so no current flows! ⚡"
+      },
+      {
+        subjectTag: "🧪 Kitchen Science",
+        question: "Which freezes faster in a home freezer under certain conditions: hot water or cold water?",
+        options: ["Cold Water", "Hot Water (Mpemba Effect)", "Both at same rate"],
+        correctIndex: 1,
+        fact: "❄️ Known as the Mpemba Effect, hot water can sometimes freeze faster due to rapid surface evaporation! 🧊"
+      },
+      {
+        subjectTag: "🧩 Mind Teaser",
+        question: "A rooster lays an egg on the very top of a slanted triangular barn roof. Which side does it roll down?",
+        options: ["Left side", "Right side", "Roosters don't lay eggs"],
+        correctIndex: 2,
+        fact: "🐔 Classic presence of mind riddle! Roosters are male and do not lay eggs! 🥚"
       }
     ];
     const randomIndex = Math.floor(Math.random() * fallbacks.length);

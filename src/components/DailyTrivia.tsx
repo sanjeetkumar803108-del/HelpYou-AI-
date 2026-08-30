@@ -5,11 +5,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
 import { saveMistakeToVault } from '../utils/mistakes';
-import { safeGetItem } from '../utils/storage';
+import { getUserProfileData } from '../utils/profile';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Network } from '@capacitor/network';
-import { auth } from '../lib/firebase';
 import { getCoins, deductCoins, isProUser } from '../utils/coins';
 
 interface DailyTriviaProps {
@@ -51,6 +50,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
       onBack();
     }
   };
+
   const [trivia, setTrivia] = useState<TriviaQuestion | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -67,20 +67,20 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     }
   });
 
-  const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-  const academicStream = safeGetItem('academic_stream') || 'STEM / Engineering';
-  const uid = auth.currentUser?.uid;
-  const country = safeGetItem('academic_country') || (uid ? safeGetItem(`academic_country_${uid}`) : null) || 'United States';
+  const userProfile = getUserProfileData();
+  const gradeLevel = userProfile.gradeLevel || 'High School';
+  const academicStream = userProfile.stream || 'STEM / Engineering';
+  const country = userProfile.country || 'India';
+  const studyLevel = userProfile.studyLevel || 'High School';
 
   const getStreamSuggestions = () => {
-    if (academicStream.includes('STEM')) {
-      return ["AP Physics", "AP Biology", "AP Chemistry", "Computer Science", "Algebra & Calculus"];
-    } else if (academicStream.includes('Humanities') || academicStream.includes('Arts')) {
-      return ["AP US History", "World Literature", "Political Science", "Greek Mythology", "Famous Philosophers"];
-    } else if (academicStream.includes('Business') || academicStream.includes('Commerce')) {
-      return ["Macroeconomics", "Financial Markets", "Game Theory", "Tech Startups", "Famous Entrepreneurs"];
-    }
-    return ["General Science", "World History", "Geography", "English Idioms", "Space Exploration"];
+    return [
+      "💡 Common Sense Logic",
+      "⚡ Everyday Physics & Science",
+      "🧠 Mind Teasers & Riddles",
+      "🔢 Mental Math Paradox",
+      "🌍 Real-World Curiosities"
+    ];
   };
 
   const [triviaError, setTriviaError] = useState<string | null>(null);
@@ -117,6 +117,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
         body: JSON.stringify({
           gradeLevel,
           academicStream,
+          studyLevel,
           topic: activeTopic,
           excludeQuestions: excludeList,
           country,
@@ -318,7 +319,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
                     <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-400" />
                     <input
                       type="text"
-                      placeholder="Type custom topic (e.g. DNA, Calculus)..."
+                      placeholder="Type custom topic (e.g. Brain Teasers, Physics)..."
                       value={customTopic}
                       onChange={(e) => setCustomTopic(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs font-bold text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:bg-white transition-all"
@@ -337,7 +338,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
 
                 <div className="mt-3">
                   <p className="text-[10px] text-zinc-400 font-extrabold uppercase mb-2 flex items-center gap-1">
-                    <Compass className="w-3.5 h-3.5 text-zinc-500" /> Suggested for your stream:
+                    <Compass className="w-3.5 h-3.5 text-zinc-500" /> Suggested categories:
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {getStreamSuggestions().map((sug) => (
@@ -417,8 +418,8 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
               />
               <Sparkles className="absolute w-4 h-4 text-purple-600" />
             </div>
-            <p className="text-sm font-black text-zinc-800 text-center">Consulting AI Trivia Master...</p>
-            <p className="text-xs text-zinc-400 text-center mt-1.5 px-6 font-medium">Generating a completely fresh, high-yield quiz optimized for your grade level! 🧠🚀</p>
+            <p className="text-sm font-black text-zinc-800 text-center">Consulting AI Brain Coach...</p>
+            <p className="text-xs text-zinc-400 text-center mt-1.5 px-6 font-medium">Generating a short, mind-bending presence of mind teaser tailored for you! 🧠💡</p>
           </div>
         ) : (
           trivia && (
@@ -430,10 +431,10 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
               <div className="flex flex-col items-center text-center mb-4">
                 {/* Curriculum Context Tag */}
                 <span className="text-[10px] bg-indigo-50 border border-indigo-100/60 text-indigo-600 px-3 py-1 rounded-full font-black tracking-wide uppercase select-none mb-2 flex items-center gap-1">
-                  <BookOpen className="w-3 h-3" /> {trivia.subjectTag || "Daily Trivia"}
+                  <BookOpen className="w-3 h-3" /> {trivia.subjectTag || "Brain Booster"}
                 </span>
                 
-                <h3 className="text-lg font-black text-zinc-900 mt-1 leading-tight">Daily Micro-Quiz</h3>
+                <h3 className="text-lg font-black text-zinc-900 mt-1 leading-tight">Presence of Mind Challenge</h3>
                 
                 {hasAnswered && (
                   <p className={`text-[10px] px-3 py-1 rounded-full inline-block font-extrabold mt-2 ${
@@ -442,8 +443,8 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
                       : "bg-red-500/10 text-red-700 border border-red-500/10"
                   }`}>
                     {answerCorrect 
-                      ? "🎉 Correct! Excellent job! 🌟" 
-                      : "❌ Incorrect! Review the fact below. 💡"}
+                      ? "🎉 Sharp Mind! You nailed the catch! 🌟" 
+                      : "💡 Tricky one! Check the reasoning below."}
                   </p>
                 )}
               </div>
@@ -496,7 +497,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
                     exit={{ opacity: 0, height: 0 }}
                     className="bg-indigo-50/50 border border-indigo-100/50 p-4 rounded-2xl text-xs font-semibold text-zinc-700 leading-relaxed mb-4 overflow-hidden"
                   >
-                    <p className="font-extrabold text-indigo-950 mb-1 uppercase tracking-wide text-[10px]">💡 Explanation & context:</p>
+                    <p className="font-extrabold text-indigo-950 mb-1 uppercase tracking-wide text-[10px]">💡 The Clever Reasoning:</p>
                     {cleanText(trivia.fact)}
                   </motion.div>
                 )}
@@ -509,7 +510,7 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
                 className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-xs py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-98 disabled:opacity-50"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>{hasAnswered ? "Next Question" : "Skip Quiz"}</span>
+                <span>{hasAnswered ? "Next Teaser" : "Skip Teaser"}</span>
               </button>
             </motion.div>
           )

@@ -1,5 +1,5 @@
 import { getApiUrl } from '../utils/api';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Sparkles, ArrowLeft, Loader2, Globe, CheckCircle2, 
   Lightbulb, FileText, Check, ChevronRight, History, X, Trash2, 
@@ -39,11 +39,55 @@ interface SearchResult {
   text?: string;
 }
 
+const getCleanDomain = (url: string) => {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+};
+
+const getSourceBadgeInfo = (source: DetailedSource, link: string) => {
+  const domain = getCleanDomain(link).toLowerCase();
+  const name = (source.sourceName || '').toLowerCase();
+  const title = (source.title || '').toLowerCase();
+
+  if (domain.includes('.edu') || name.includes('university') || domain.includes('harvard') || domain.includes('mit.edu') || domain.includes('stanford.edu') || domain.includes('ox.ac.uk') || domain.includes('cam.ac.uk')) {
+    return { label: '🏛️ University Research (.edu)', color: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
+  }
+  if (domain.includes('.gov') || domain.includes('.nic.in') || domain.includes('gov.uk') || domain.includes('canada.ca') || domain.includes('nih.gov') || domain.includes('nasa.gov') || domain.includes('ed.gov') || domain.includes('pib.gov.in') || domain.includes('nta.ac.in') || domain.includes('ncert.nic.in')) {
+    return { label: '🏛️ Official Government / Registry (.gov)', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+  }
+  if (domain.includes('doi.org') || domain.includes('nature.com') || domain.includes('science.org') || domain.includes('ieee.org') || domain.includes('jstor.org') || domain.includes('springer.com') || domain.includes('sciencedirect.com') || domain.includes('plos.org') || name.includes('peer-reviewed') || name.includes('journal')) {
+    return { label: '🔬 Peer-Reviewed Academic Journal', color: 'bg-purple-50 text-purple-800 border-purple-200' };
+  }
+  if (domain.includes('britannica.com')) {
+    return { label: '📚 Peer-Edited Encyclopaedia Britannica', color: 'bg-amber-50 text-amber-800 border-amber-200' };
+  }
+  if (domain.includes('news.google') || domain.includes('reuters.com') || domain.includes('apnews.com') || domain.includes('bbc.com') || domain.includes('thehindu.com') || domain.includes('indianexpress.com')) {
+    return { label: '📰 Verified Press Wire', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+  }
+  if (domain.includes('collegeboard.org') || domain.includes('ucas.com') || domain.includes('allen') || domain.includes('pw.live')) {
+    return { label: '🎓 Official Academic Portal', color: 'bg-teal-50 text-teal-800 border-teal-200' };
+  }
+  return { label: source.sourceName || getCleanDomain(link), color: 'bg-slate-50 text-slate-800 border-slate-200' };
+};
+
 const parseSavedSearch = (text: string, title: string, rawData?: string): SearchResult => {
   if (rawData) {
     try {
       const parsed = JSON.parse(rawData);
       if (parsed && (parsed.topic_title || parsed.live_updates)) {
+        const source_links = Array.isArray(parsed.source_links) ? parsed.source_links : [];
+        const detailed_sources = Array.isArray(parsed.detailed_sources) && parsed.detailed_sources.length > 0
+          ? parsed.detailed_sources
+          : (source_links.length > 0 ? source_links.map((l: string, i: number) => ({
+              title: `Academic Verified Reference #${i + 1}`,
+              uri: l,
+              sourceName: getCleanDomain(l)
+            })) : undefined);
+
         return {
           topic_title: parsed.topic_title || title.replace(/🔍|Deep Search:/g, '').trim(),
           live_updates: parsed.live_updates || "Saved search updates loaded from history.",
@@ -51,8 +95,8 @@ const parseSavedSearch = (text: string, title: string, rawData?: string): Search
           action_steps: Array.isArray(parsed.action_steps) ? parsed.action_steps : [],
           pro_tips: parsed.pro_tips || '',
           related_queries: Array.isArray(parsed.related_queries) ? parsed.related_queries : [],
-          source_links: Array.isArray(parsed.source_links) ? parsed.source_links : [],
-          detailed_sources: Array.isArray(parsed.detailed_sources) ? parsed.detailed_sources : undefined
+          source_links,
+          detailed_sources
         };
       }
     } catch (e) {
@@ -116,13 +160,20 @@ const parseSavedSearch = (text: string, title: string, rawData?: string): Search
     });
   }
 
+  const detailed_sources = source_links.map((link, idx) => ({
+    title: `Academic Verified Reference #${idx + 1}`,
+    uri: link,
+    sourceName: getCleanDomain(link)
+  }));
+
   return {
     topic_title,
     live_updates,
     match_score,
     action_steps,
     pro_tips,
-    source_links
+    source_links,
+    detailed_sources: detailed_sources.length > 0 ? detailed_sources : undefined
   };
 };
 
@@ -217,13 +268,28 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const [searchResponse, setSearchResponse] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
-const [showNotesBlending, setShowNotesBlending] = useState(false);
+  const [showNotesBlending, setShowNotesBlending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [highlightedSourceIdx, setHighlightedSourceIdx] = useState<number | null>(null);
+  const [activeCitationSource, setActiveCitationSource] = useState<{ index: number; source: DetailedSource } | null>(null);
 
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const effectiveDetailedSources = useMemo<DetailedSource[]>(() => {
+    if (searchResponse?.detailed_sources && searchResponse.detailed_sources.length > 0) {
+      return searchResponse.detailed_sources;
+    }
+    if (searchResponse?.source_links && searchResponse.source_links.length > 0) {
+      return searchResponse.source_links.map((link, idx) => ({
+        title: `Academic Verified Reference #${idx + 1}`,
+        uri: link,
+        sourceName: getCleanDomain(link)
+      }));
+    }
+    return [];
+  }, [searchResponse]);
 
   // Dynamic search loading steps animation
   const searchSteps = [
@@ -459,59 +525,60 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
     }
   };
 
-  const getCleanDomain = (url: string) => {
-    try {
-      const u = new URL(url);
-      return u.hostname.replace(/^www\./, '');
-    } catch {
-      return url;
-    }
-  };
-
-  const getSourceBadgeInfo = (source: DetailedSource, link: string) => {
-    const domain = getCleanDomain(link).toLowerCase();
-    const name = (source.sourceName || '').toLowerCase();
-    const title = (source.title || '').toLowerCase();
-
-    if (domain.includes('.edu') || name.includes('university') || domain.includes('harvard') || domain.includes('mit.edu') || domain.includes('stanford.edu') || domain.includes('ox.ac.uk') || domain.includes('cam.ac.uk')) {
-      return { label: '🏛️ University Research (.edu)', color: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
-    }
-    if (domain.includes('.gov') || domain.includes('.nic.in') || domain.includes('gov.uk') || domain.includes('canada.ca') || domain.includes('nih.gov') || domain.includes('nasa.gov') || domain.includes('ed.gov') || domain.includes('pib.gov.in') || domain.includes('nta.ac.in') || domain.includes('ncert.nic.in')) {
-      return { label: '🏛️ Official Government / Registry (.gov)', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
-    }
-    if (domain.includes('doi.org') || domain.includes('nature.com') || domain.includes('science.org') || domain.includes('ieee.org') || domain.includes('jstor.org') || domain.includes('springer.com') || domain.includes('sciencedirect.com') || domain.includes('plos.org') || name.includes('peer-reviewed') || name.includes('journal')) {
-      return { label: '🔬 Peer-Reviewed Academic Journal', color: 'bg-purple-50 text-purple-800 border-purple-200' };
-    }
-    if (domain.includes('britannica.com')) {
-      return { label: '📚 Peer-Edited Encyclopaedia Britannica', color: 'bg-amber-50 text-amber-800 border-amber-200' };
-    }
-    if (domain.includes('news.google') || domain.includes('reuters.com') || domain.includes('apnews.com') || domain.includes('bbc.com') || domain.includes('thehindu.com') || domain.includes('indianexpress.com')) {
-      return { label: '📰 Verified Press Wire', color: 'bg-blue-50 text-blue-700 border-blue-200' };
-    }
-    if (domain.includes('collegeboard.org') || domain.includes('ucas.com') || domain.includes('allen') || domain.includes('pw.live')) {
-      return { label: '🎓 Official Academic Portal', color: 'bg-teal-50 text-teal-800 border-teal-200' };
-    }
-    return { label: source.sourceName || getCleanDomain(link), color: 'bg-slate-50 text-slate-800 border-slate-200' };
-  };
-
   const scrollToSource = (index1Based: number) => {
-    triggerVibration(10);
+    triggerVibration(15);
     const zeroIdx = index1Based - 1;
-    setHighlightedSourceIdx(zeroIdx);
-    const elem = document.getElementById(`academic-source-${index1Based}`);
+    const sources = effectiveDetailedSources;
+    const targetSource = (zeroIdx >= 0 && zeroIdx < sources.length) ? sources[zeroIdx] : (sources[0] || null);
+
+    if (targetSource) {
+      setActiveCitationSource({ index: index1Based, source: targetSource });
+    }
+
+    setHighlightedSourceIdx(zeroIdx < sources.length ? zeroIdx : 0);
+
+    const targetId = zeroIdx < sources.length ? `academic-source-${index1Based}` : `academic-source-1`;
+    const elem = document.getElementById(targetId) || document.getElementById('academic-sources-container');
     if (elem) {
       elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+
     setTimeout(() => {
       setHighlightedSourceIdx(null);
-    }, 3000);
+    }, 3500);
   };
 
-  const formatUpdatesWithInteractiveCitations = (content: string) => {
+  const formatCitationsWithInteractiveBadges = (content: string) => {
     if (!content) return '';
-    return content.replace(/\[(\d+)\]/g, (match, p1) => {
-      return `<a href="#academic-source-${p1}" class="inline-citation-badge inline-flex items-center justify-center px-1.5 py-0.2 text-[10px] font-black text-blue-700 bg-blue-100/90 hover:bg-blue-200 rounded-md mx-0.5 border border-blue-300/60 no-underline shadow-2xs cursor-pointer align-super" data-source-id="${p1}">[${p1}]</a>`;
+    let result = String(content);
+
+    // 1. Expand range citations like [1-3], [1–3], [1—3] -> [1] [2] [3]
+    result = result.replace(/\[\s*(\d+)\s*[-–—]\s*(\d+)\s*\]/g, (_, start, end) => {
+      const s = parseInt(start, 10);
+      const e = parseInt(end, 10);
+      if (s <= e && e - s < 8) {
+        const expanded = [];
+        for (let i = s; i <= e; i++) expanded.push(`[${i}]`);
+        return expanded.join(' ');
+      }
+      return `[${start}]`;
     });
+
+    // 2. Expand multiple comma or semicolon separated numbers: [1, 2, 3] or [1,2] -> [1] [2] [3]
+    result = result.replace(/\[\s*(\d+(?:\s*[,;]\s*\d+)+)\s*\]/g, (_, group) => {
+      const nums = group.split(/[,;]/).map((n: string) => n.trim()).filter(Boolean);
+      return nums.map((n: string) => `[${n}]`).join(' ');
+    });
+
+    // 3. Normalize variations: [Source 1], [Source: 1], [Ref 1], [ref: 1], [Citation 1] -> [1]
+    result = result.replace(/\[(?:Source|Ref|Reference|Citation|Src)[:\s]+(\d+)\]/gi, '[$1]');
+
+    // 4. Convert all [X] into vibrant, interactive clickable badge buttons (Bold Blue Pill)
+    result = result.replace(/\[\s*(\d+)\s*\]/g, (_, p1) => {
+      return `<button type="button" class="inline-citation-badge inline-flex items-center justify-center px-1.5 py-0.2 text-[10.5px] font-black text-blue-700 hover:text-white bg-blue-100/95 hover:bg-blue-600 active:scale-90 rounded-md mx-0.5 border border-blue-300/80 hover:border-blue-600 transition-all cursor-pointer select-none align-baseline shadow-2xs font-sans tracking-tight" data-source-id="${p1}" title="Tap to view verified Source #${p1}">[${p1}]</button>`;
+    });
+
+    return result;
   };
 
   const openSourceUrl = (url: string) => {
@@ -534,13 +601,14 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
         const citationBadge = target.closest('[data-source-id]') as HTMLElement;
         if (citationBadge) {
           e.preventDefault();
+          e.stopPropagation();
           const sourceId = citationBadge.getAttribute('data-source-id');
           if (sourceId) {
             scrollToSource(Number(sourceId));
           }
         }
       }}
-      className="flex flex-col h-full bg-[#FAF9F6] font-sans overflow-hidden select-none"
+      className="flex flex-col h-full bg-[#FAF9F6] font-sans overflow-hidden select-none relative"
     >
       {/* Ultra-Luxury Glassmorphic Header */}
       <header className="px-5 py-4 border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl flex justify-between items-center shrink-0 z-10 shadow-xs">
@@ -933,11 +1001,11 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
                         {Array.isArray(searchResponse.live_updates) ? (
                           searchResponse.live_updates.map((update, idx) => (
                             <div key={idx} className="space-y-1.5 border-b border-zinc-200/40 pb-3 last:border-b-0 last:pb-0">
-                              <GlobalMarkdown>{formatUpdatesWithInteractiveCitations(update)}</GlobalMarkdown>
+                              <GlobalMarkdown>{formatCitationsWithInteractiveBadges(update)}</GlobalMarkdown>
                             </div>
                           ))
                         ) : (
-                          <GlobalMarkdown>{formatUpdatesWithInteractiveCitations(searchResponse.live_updates)}</GlobalMarkdown>
+                          <GlobalMarkdown>{formatCitationsWithInteractiveBadges(searchResponse.live_updates)}</GlobalMarkdown>
                         )}
                       </div>
                     </div>
@@ -975,7 +1043,7 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
                               {checkedSteps[idx] && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                             </div>
                             <div className={`text-xs font-bold leading-relaxed flex-1 select-text ${checkedSteps[idx] ? 'line-through decoration-emerald-500/50 decoration-2' : ''}`}>
-                              <GlobalMarkdown>{step}</GlobalMarkdown>
+                              <GlobalMarkdown>{formatCitationsWithInteractiveBadges(step)}</GlobalMarkdown>
                             </div>
                           </div>
                         ))}
@@ -995,19 +1063,19 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
                           Expert Educator Insight & Exam Traps
                         </span>
                         <div className="text-zinc-800 text-xs font-bold leading-relaxed select-text">
-                          <GlobalMarkdown>{searchResponse.pro_tips}</GlobalMarkdown>
+                          <GlobalMarkdown>{formatCitationsWithInteractiveBadges(searchResponse.pro_tips)}</GlobalMarkdown>
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* 100% Real Clickable Source Cards (Wikipedia Blacklisted) */}
-                  {searchResponse.detailed_sources && searchResponse.detailed_sources.length > 0 && (
-                    <div className="space-y-3">
+                  {effectiveDetailedSources.length > 0 && (
+                    <div id="academic-sources-container" className="space-y-3">
                       <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider px-1 text-zinc-500">
                         <span className="flex items-center gap-1.5">
                           <Globe className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Verified Academic Citations ({searchResponse.detailed_sources.length})</span>
+                          <span>Verified Academic Citations ({effectiveDetailedSources.length})</span>
                         </span>
                         <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                           100% Verified URLs
@@ -1015,7 +1083,7 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
                       </div>
 
                       <div className="grid grid-cols-1 gap-2.5">
-                        {searchResponse.detailed_sources.map((src, idx) => {
+                        {effectiveDetailedSources.map((src, idx) => {
                           const badgeInfo = getSourceBadgeInfo(src, src.uri);
                           const isHighlighted = highlightedSourceIdx === idx;
                           return (
@@ -1025,12 +1093,14 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
                               onClick={() => openSourceUrl(src.uri)}
                               className={`flex items-center justify-between p-4 bg-white hover:bg-zinc-50 rounded-2xl border transition-all hover:translate-x-1 active:scale-[0.99] cursor-pointer group ${
                                 isHighlighted 
-                                  ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-50/50 shadow-md scale-[1.01]' 
+                                  ? 'border-blue-500 ring-4 ring-blue-500/40 bg-blue-50/70 shadow-md scale-[1.01]' 
                                   : 'border-zinc-200/80 shadow-xs hover:shadow-md'
                               }`}
                             >
                               <div className="flex items-center gap-3.5 min-w-0 pr-2">
-                                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors relative ${
+                                  isHighlighted ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+                                }`}>
                                   <Newspaper className="w-5 h-5" />
                                   <span className="absolute -top-1.5 -left-1.5 w-4.5 h-4.5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs">
                                     {idx + 1}
@@ -1187,6 +1257,57 @@ const [showNotesBlending, setShowNotesBlending] = useState(false);
           </>
         )}
       </div>
+
+      {/* Floating Interactive Citation Quick-Preview Capsule */}
+      <AnimatePresence>
+        {activeCitationSource && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            className="fixed bottom-6 left-4 right-4 max-w-md mx-auto bg-zinc-900/95 backdrop-blur-xl text-white p-4 rounded-3xl shadow-2xl border border-white/10 z-50 flex items-center justify-between gap-3 select-none"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-md shadow-blue-500/30">
+                [{activeCitationSource.index}]
+              </div>
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-black uppercase tracking-wider text-blue-400 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-blue-400" />
+                  <span>Verified Citation Link</span>
+                </p>
+                <h5 className="text-xs font-bold text-zinc-100 truncate">
+                  {activeCitationSource.source.title}
+                </h5>
+                <p className="text-[10px] text-zinc-400 truncate">
+                  {getCleanDomain(activeCitationSource.source.uri)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerVibration(15);
+                  openSourceUrl(activeCitationSource.source.uri);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black shadow-md shadow-blue-600/30 flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer border-none"
+              >
+                <span>Open</span>
+                <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCitationSource(null)}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-zinc-400 hover:text-white flex items-center justify-center transition-all cursor-pointer border-none"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

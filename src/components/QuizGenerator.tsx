@@ -1061,22 +1061,53 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
     fetchHistory();
   }, [activeTab, uid]);
 
-  React.useEffect(() => {
+  const toggleListening = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
+
       const rec = new SpeechRecognition();
       rec.continuous = true;
       rec.interimResults = true;
-      rec.lang = 'en-US';
+      rec.lang = 'en-IN';
+
+      baseTextRef.current = topic.trim();
 
       rec.onresult = (event: any) => {
-        let sessionTranscript = '';
+        let finalTranscript = '';
+        let interimTranscript = '';
+
         for (let i = 0; i < event.results.length; ++i) {
-          sessionTranscript += event.results[i][0].transcript;
+          const result = event.results[i];
+          const text = result[0]?.transcript || '';
+          if (result.isFinal) {
+            finalTranscript += text + ' ';
+          } else {
+            interimTranscript += text;
+          }
         }
-        
+
+        const currentSpeech = (finalTranscript + interimTranscript).trim();
         const base = baseTextRef.current;
-        setTopic(base + (base && sessionTranscript ? ' ' : '') + sessionTranscript);
+        
+        if (currentSpeech) {
+          setTopic(base ? `${base} ${currentSpeech}` : currentSpeech);
+        }
       };
 
       rec.onerror = (e: any) => {
@@ -1089,31 +1120,24 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       };
 
       recognitionRef.current = rec;
-      setSpeechSupported(true);
-    } else {
-      setSpeechSupported(false);
-    }
-  }, []);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      alert("Speech recognition is not supported in this browser.");
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
+      setIsListening(true);
+      rec.start();
+      triggerVibration(20);
+    } catch (e) {
+      console.error("Error starting speech recognition:", e);
       setIsListening(false);
-    } else {
-      try {
-        baseTextRef.current = topic;
-        setIsListening(true);
-        recognitionRef.current.start();
-      } catch (e) {
-        console.error(e);
-      }
     }
   };
+
+  React.useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setSpeechSupported(!!SpeechRecognition);
+    return () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
+    };
+  }, []);
 
   const toggleSubject = (id: string) => {
     triggerVibration(15);
@@ -2732,7 +2756,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                 : 'Great Effort! 📚'}
             </h3>
             <p className="text-sm font-bold text-zinc-500 mb-6 max-w-xs leading-relaxed">
-              You scored <span className="text-indigo-600 font-extrabold">{score} out of {quiz.length}</span> correct on this custom high school curriculum assessment.
+              You scored <span className="text-indigo-600 font-extrabold">{score} out of {quiz.length}</span> correct on this {topic ? `${topic} assessment` : 'custom curriculum assessment'}.
             </p>
 
             {/* Quota info for free users */}

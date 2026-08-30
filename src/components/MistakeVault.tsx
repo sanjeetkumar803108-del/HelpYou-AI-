@@ -39,15 +39,6 @@ interface PracticeQuestion {
 }
 
 export default function MistakeVault({ onBack }: MistakeVaultProps) {
-  const handleHeaderBack = () => {
-    triggerVibration(10);
-    if (practicingId) {
-      setPracticingId(null);
-      setPracticeQuestions([]);
-    } else {
-      onBack();
-    }
-  };
   const [mistakes, setMistakes] = useState<MistakeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [fixingId, setFixingId] = useState<string | null>(null);
@@ -62,6 +53,16 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [correctAnswersCount, setCorrectAnswersCount] = useState(0);
   const [practiceComplete, setPracticeComplete] = useState(false);
+
+  const handleHeaderBack = () => {
+    triggerVibration(10);
+    if (practicingId) {
+      setPracticingId(null);
+      setPracticeQuestions([]);
+    } else {
+      onBack();
+    }
+  };
 
   useEffect(() => {
     const handleBackButton = (e: Event) => {
@@ -161,9 +162,9 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: item.question,
-          wrongInput: item.wrongInput,
-          correctConcept: item.correctConcept,
+          question: item.question || 'Academic problem',
+          wrongInput: item.wrongInput || 'Incorrect attempt',
+          correctConcept: item.correctConcept || 'Correct principle',
           gradeLevel
         })
       });
@@ -176,7 +177,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
       const formattedFix = {
         why_it_happened: aiFixData.why_it_happened || "Analyzing the conceptual gap...",
         the_fix: aiFixData.the_fix || aiFixData.fix || "Applying the correct logic...",
-        pro_memory_trick: aiFixData.pro_memory_trick || aiFixData.memory_trick || "Keep practicing this concept!"
+        pro_memory_trick: aiFixData.pro_memory_trick || aiFixData.memory_trick || "💡 Memory Rule: Write down given values and check units carefully!"
       };
 
       // Save fix to state
@@ -206,8 +207,15 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
 
       setExpandedFixId(item.id);
     } catch (err) {
-      console.error("AI correction failed:", err);
-      // Optional: show a temporary toast or error state
+      console.error("AI correction failed, using instant fallback fix:", err);
+      // Fallback local fix so user is never blocked
+      const fallbackFix = {
+        why_it_happened: "A common misunderstanding of the fundamental concept or problem setup.",
+        the_fix: item.correctConcept || "Apply the fundamental rule and step-by-step formula.",
+        pro_memory_trick: "💡 Pro Tip: Re-read the problem carefully and verify each calculation step!"
+      };
+      setMistakes(prev => prev.map(m => m.id === item.id ? { ...m, aiFix: fallbackFix } : m));
+      setExpandedFixId(item.id);
     } finally {
       setFixingId(null);
     }
@@ -226,22 +234,26 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
     setPracticeComplete(false);
 
     try {
+      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
       const response = await fetch(getApiUrl('/api/generate-practice'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: item.question,
-          wrongInput: item.wrongInput,
-          correctConcept: item.correctConcept,
-          sourceFeature: item.sourceFeature
+          question: item.question || 'Academic problem',
+          wrongInput: item.wrongInput || 'Incorrect response',
+          correctConcept: item.correctConcept || 'Correct principle',
+          sourceFeature: item.sourceFeature || 'General Study',
+          gradeLevel
         })
       });
 
       if (!response.ok) throw new Error("Failed to generate practice questions");
       const data = await response.json();
       
-      // Handle both object with questions array and direct array
-      const questionsArray = Array.isArray(data) ? data : (data.questions || []);
+      // Handle array, wrapped questions, or practice_questions
+      const questionsArray = Array.isArray(data) 
+        ? data 
+        : (data.questions || data.practice_questions || data.practiceQuestions || []);
       
       if (questionsArray.length === 0) {
         throw new Error("No questions generated");
@@ -249,8 +261,44 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
       
       setPracticeQuestions(questionsArray);
     } catch (err) {
-      console.error("Practice generation failed:", err);
-      setPracticeQuestions([]); // Ensure it's handled as error state in UI
+      console.error("Practice generation failed, using instant fallback questions:", err);
+      // Seamless fallback so the user always gets 3 practice questions to master the concept
+      const cleanConcept = item.correctConcept ? item.correctConcept.slice(0, 100) : "The fundamental concept";
+      setPracticeQuestions([
+        {
+          question: `Regarding the concept from "${(item.question || 'the problem').slice(0, 100)}...", which of the following is correct?`,
+          options: [
+            cleanConcept,
+            "An alternative incorrect interpretation",
+            "The inverse relationship holds true",
+            "None of the above are valid"
+          ],
+          correctIndex: 0,
+          explanation: `The correct principle is: ${item.correctConcept || 'apply the standard rule'}.`
+        },
+        {
+          question: "What is the best strategy to verify your answer when solving similar problems?",
+          options: [
+            "Cross-verify using the fundamental formula and units",
+            "Guess based on option length",
+            "Ignore edge conditions",
+            "Skip intermediate algebraic steps"
+          ],
+          correctIndex: 0,
+          explanation: "Cross-verifying with the core formula and checking units guarantees full accuracy!"
+        },
+        {
+          question: "Which of the following is a classic trap to avoid in this category?",
+          options: [
+            "Confusing similar-sounding terms or opposite signs",
+            "Reading the entire question carefully",
+            "Writing down given information clearly",
+            "Checking the final units"
+          ],
+          correctIndex: 0,
+          explanation: "Watch out for sign errors and term confusions—that is where most marks are lost!"
+        }
+      ]);
     } finally {
       setPracticeLoading(false);
     }

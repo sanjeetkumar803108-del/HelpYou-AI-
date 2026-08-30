@@ -379,6 +379,8 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Clean LaTeX and math markdown for natural audio speech synthesis
   const cleanMathForSpeech = (text: string): string => {
@@ -417,20 +419,57 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     return speech.replace(/\s+/g, ' ').trim();
   };
 
-  // Toggle voice walkthrough with persona-tuned acoustics
-  const handleToggleSpeech = () => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      showToast("Text-to-speech not supported on this device");
-      return;
+  const fallbackBrowserSpeech = (speechText: string) => {
+    setIsLoadingAudio(false);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(speechText);
+        if (activePersona === 'cosmo') { utterance.pitch = 1.1; utterance.rate = 1.05; }
+        else if (activePersona === 'wizard') { utterance.pitch = 0.95; utterance.rate = 0.92; }
+        else if (activePersona === 'dino') { utterance.pitch = 1.15; utterance.rate = 1.0; }
+        else { utterance.pitch = 0.95; utterance.rate = 0.95; }
+
+        utterance.onstart = () => {
+          setIsPlayingAudio(true);
+          setIsLoadingAudio(false);
+        };
+        utterance.onend = () => setIsPlayingAudio(false);
+        utterance.onerror = () => setIsPlayingAudio(false);
+
+        window.speechSynthesis.speak(utterance);
+        return;
+      } catch (browserErr) {
+        console.warn("Browser speech fallback failed:", browserErr);
+      }
     }
-    if (isPlayingAudio) {
-      window.speechSynthesis.cancel();
+
+    setIsPlayingAudio(false);
+    showToast("Voice playback unavailable on this device.");
+  };
+
+  // Toggle voice walkthrough with universal HD Cloud TTS and browser fallback
+  const handleToggleSpeech = async () => {
+    triggerVibration(10);
+
+    // If currently playing or loading, stop immediately
+    if (isPlayingAudio || isLoadingAudio) {
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        } catch (_) {}
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch (_) {}
+      }
       setIsPlayingAudio(false);
+      setIsLoadingAudio(false);
       return;
     }
 
-    window.speechSynthesis.cancel();
-    
     let fullExplanation = '';
     if (parsedSolution) {
       if (isConversational) {
@@ -453,35 +492,73 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
       fullExplanation = cleanMathForSpeech(cleanText);
     }
 
-    const utterance = new SpeechSynthesisUtterance(fullExplanation);
-    
-    // Set persona voice pitch & rate
-    if (activePersona === 'cosmo') {
-      utterance.pitch = 1.1;
-      utterance.rate = 1.05;
-    } else if (activePersona === 'wizard') {
-      utterance.pitch = 1.0;
-      utterance.rate = 0.92;
-    } else if (activePersona === 'dino') {
-      utterance.pitch = 1.15;
-      utterance.rate = 1.0;
-    } else {
-      // owl (Professor Owl)
-      utterance.pitch = 0.95;
-      utterance.rate = 0.95;
+    if (!fullExplanation.trim()) {
+      showToast("No text available to read.");
+      return;
     }
 
-    utterance.onend = () => setIsPlayingAudio(false);
-    utterance.onerror = () => setIsPlayingAudio(false);
-    
-    setIsPlayingAudio(true);
-    window.speechSynthesis.speak(utterance);
+    setIsLoadingAudio(true);
+
+    // Persona-tuned HD AI voice mapping
+    let voiceName = "Kore";
+    if (activePersona === 'wizard') voiceName = "Fenrir";
+    else if (activePersona === 'cosmo') voiceName = "Puck";
+    else if (activePersona === 'dino') voiceName = "Aoede";
+
+    // 1. Primary Strategy: Server HD AI Voice (Guaranteed on all Android/iOS WebViews)
+    try {
+      const response = await fetch(getApiUrl('/api/tts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: fullExplanation, voice: voiceName })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.audio) {
+          const audioSrc = data.audio.startsWith('data:') ? data.audio : `data:audio/wav;base64,${data.audio}`;
+          
+          if (!audioRef.current) {
+            audioRef.current = new Audio();
+          }
+          audioRef.current.src = audioSrc;
+          audioRef.current.onplay = () => {
+            setIsLoadingAudio(false);
+            setIsPlayingAudio(true);
+          };
+          audioRef.current.onended = () => {
+            setIsPlayingAudio(false);
+            setIsLoadingAudio(false);
+          };
+          audioRef.current.onerror = () => {
+            setIsPlayingAudio(false);
+            fallbackBrowserSpeech(fullExplanation);
+          };
+
+          await audioRef.current.play();
+          return;
+        }
+      }
+    } catch (cloudErr) {
+      console.warn("Cloud TTS failed, using browser fallback:", cloudErr);
+    }
+
+    // 2. Secondary Strategy: Browser SpeechSynthesis Fallback
+    fallbackBrowserSpeech(fullExplanation);
   };
 
   useEffect(() => {
     return () => {
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.removeAttribute('src');
+        } catch (_) {}
+      }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+        try {
+          window.speechSynthesis.cancel();
+        } catch (_) {}
       }
     };
   }, []);
@@ -751,14 +828,22 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
           <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-zinc-150 text-zinc-400">
             <button 
               onClick={handleToggleSpeech}
+              disabled={isLoadingAudio}
               className={`p-1.5 rounded-lg transition-all active:scale-95 flex items-center gap-1.5 text-[11px] font-bold ${
                 isPlayingAudio 
                   ? 'bg-purple-100 text-purple-700 border border-purple-200 shadow-sm' 
-                  : 'hover:bg-zinc-100 hover:text-zinc-700 text-zinc-500'
+                  : isLoadingAudio
+                    ? 'bg-purple-50 text-purple-600 border border-purple-100 animate-pulse cursor-wait'
+                    : 'hover:bg-zinc-100 hover:text-zinc-700 text-zinc-500'
               }`}
-              title={isPlayingAudio ? "Stop Audio" : "Listen to audio explanation"}
+              title={isPlayingAudio ? "Stop Audio" : isLoadingAudio ? "Loading voice..." : "Listen to audio explanation"}
             >
-              {isPlayingAudio ? (
+              {isLoadingAudio ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />
+                  <span>Loading Voice...</span>
+                </>
+              ) : isPlayingAudio ? (
                 <>
                   <VolumeX className="w-3.5 h-3.5 text-purple-600 animate-pulse" />
                   <span>Stop Voice</span>
@@ -1268,22 +1353,61 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
     };
   }, []);
 
-  useEffect(() => {
+  const toggleListening = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    // JIT PERMISSION: Microphone permission requested strictly when user taps the mic button
+    const micGranted = await requestMicrophonePermission();
+    if (!micGranted) {
+      alert("Microphone Permission Required\n\nPlease allow microphone access to use voice typing.");
+      return;
+    }
+
+    try {
+      // Abort any existing instance cleanly
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
+
       const rec = new SpeechRecognition();
       rec.continuous = true;
       rec.interimResults = true;
-      rec.lang = 'en-US';
+      rec.lang = 'en-IN'; // Highly accurate for English, Hinglish, & Indian names (e.g. Sangam)
+
+      baseTextRef.current = chatInput.trim();
 
       rec.onresult = (event: any) => {
-        let sessionTranscript = '';
+        let finalTranscript = '';
+        let interimTranscript = '';
+
         for (let i = 0; i < event.results.length; ++i) {
-          sessionTranscript += event.results[i][0].transcript;
+          const result = event.results[i];
+          const text = result[0]?.transcript || '';
+          if (result.isFinal) {
+            finalTranscript += text + ' ';
+          } else {
+            interimTranscript += text;
+          }
         }
-        
+
+        const currentSpeech = (finalTranscript + interimTranscript).trim();
         const base = baseTextRef.current;
-        setChatInput(base + (base && sessionTranscript ? ' ' : '') + sessionTranscript);
+        
+        if (currentSpeech) {
+          setChatInput(base ? `${base} ${currentSpeech}` : currentSpeech);
+        }
       };
 
       rec.onerror = (e: any) => {
@@ -1296,34 +1420,22 @@ export default function AITutor({ isVip }: { isVip: boolean }) {
       };
 
       recognitionRef.current = rec;
-    }
-  }, []);
-
-  const toggleListening = async () => {
-    if (!recognitionRef.current) {
-      alert("Speech recognition is not supported in this browser.");
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
+      setIsListening(true);
+      rec.start();
+      triggerVibration(20);
+    } catch (e) {
+      console.error("Error starting speech recognition:", e);
       setIsListening(false);
-    } else {
-      // JIT PERMISSION: Microphone permission requested strictly when user taps the mic button
-      const micGranted = await requestMicrophonePermission();
-      if (!micGranted) {
-        alert("Microphone Permission Required\n\nPlease allow microphone access to use voice typing.");
-        return;
-      }
-      try {
-        baseTextRef.current = chatInput;
-        setIsListening(true);
-        recognitionRef.current.start();
-      } catch (e) {
-        console.error(e);
-      }
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
+    };
+  }, []);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

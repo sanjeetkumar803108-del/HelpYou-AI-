@@ -718,24 +718,24 @@ function ToolsDashboard({
             </motion.div>
           )}
 
-          {/* Card 6: AI Audio Summary */}
-          {!archivedToolIds.includes('notemaker') && (
+          {/* Card 6: Grammar & Flow */}
+          {!archivedToolIds.includes('grammar') && (
             <motion.div 
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('notemaker', true, e)}
-              onTouchStart={(e) => handleStartPress('notemaker', true, e)}
+              onMouseDown={(e) => handleStartPress('grammar', true, e)}
+              onTouchStart={(e) => handleStartPress('grammar', true, e)}
               onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('notemaker'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('notemaker'))}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
               onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#E0E7FF] border border-indigo-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+              className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
-              {renderLockIndicator('notemaker')}
-              <span className="text-4xl filter drop-shadow-sm select-none">🎙️</span>
-              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">AI Audio Summary</h3>
+              {renderLockIndicator('grammar')}
+              <span className="text-4xl filter drop-shadow-sm select-none">✍️</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Grammar & Flow</h3>
             </motion.div>
           )}
 
@@ -852,31 +852,7 @@ function ToolsDashboard({
 
 
 
-                  {/* Grammar Enhancer */}
-                  {!archivedToolIds.includes('grammar') && (
-                    <motion.div 
-                      variants={itemVariants}
-                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
-                      whileTap={{ scale: 0.98 }}
-                      onMouseDown={(e) => handleStartPress('grammar', true, e)}
-                      onTouchStart={(e) => handleStartPress('grammar', true, e)}
-                      onMouseMove={handleMovePress}
-                      onTouchMove={handleMovePress}
-                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
-                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
-                      onMouseLeave={handleCancelPress}
-                      className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
-                    >
-                      {renderLockIndicator('grammar', "rounded-3xl")}
-                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
-                        ✍️
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Grammar & Flow</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Fix sentence errors</p>
-                      </div>
-                    </motion.div>
-                  )}
+
 
 
 

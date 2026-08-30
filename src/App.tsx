@@ -50,7 +50,6 @@ const ToolsDashboard = lazyWithRetry(() => import('./components/ToolsDashboard')
 const ImageToPDF = lazyWithRetry(() => import('./components/ImageToPDF'));
 const PdfHistoryScreen = lazyWithRetry(() => import('./components/PdfHistoryScreen'));
 const MagicScanner = lazyWithRetry(() => import('./components/MagicScanner'));
-const NoteMaker = lazyWithRetry(() => import('./components/NoteMaker'));
 const EssayGrader = lazyWithRetry(() => import('./components/EssayGrader'));
 const FlashcardGenerator = lazyWithRetry(() => import('./components/FlashcardGenerator'));
 const ContentGenerator = lazyWithRetry(() => import('./components/ContentGenerator'));
@@ -941,13 +940,6 @@ export default function App() {
           </div>
           {/* Active Tool Rendering */}
           <Suspense fallback={<FullPageSkeleton />}>
-            {activeTool === 'notemaker' && (
-              <ErrorBoundary>
-                <LockedFeature cost={5} featureName="AI Audio Summary" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                  <NoteMaker onBack={() => setActiveTool(null)} />
-                </LockedFeature>
-              </ErrorBoundary>
-            )}
             {activeTool === 'essaygrader' && (
               <ErrorBoundary>
                 <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>

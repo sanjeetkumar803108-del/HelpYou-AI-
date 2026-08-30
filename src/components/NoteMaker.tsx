@@ -209,47 +209,24 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    let createdBlobUrl: string | null = null;
+    // On Capacitor Android, blob URLs created from base64 may not play.
+    // Use the base64 dataURL directly — it works reliably across all WebViews.
+    let directUrl: string;
     if (audioData.startsWith('data:')) {
-      try {
-        const parts = audioData.split(',');
-        const mime = parts[0].match(/:(.*?);/)?.[1] || 'audio/wav';
-        const base64 = parts[1];
-
-        const byteCharacters = atob(base64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mime });
-
-        createdBlobUrl = URL.createObjectURL(blob);
-        if (isMountedRef.current) {
-          setAudioUrl(createdBlobUrl);
-        }
-      } catch (e) {
-        console.error("Failed to parse base64 audio:", e);
-        if (isMountedRef.current) {
-          setAudioUrl(audioData);
-        }
-      }
+      directUrl = audioData;
     } else {
-      if (isMountedRef.current) {
-        setAudioUrl(audioData);
-      }
+      directUrl = `data:audio/wav;base64,${audioData}`;
+    }
+
+    if (isMountedRef.current) {
+      setAudioUrl(directUrl);
     }
 
     return () => {
-      if (createdBlobUrl) {
-        if (audioRef.current && audioRef.current.src === createdBlobUrl) {
-          try {
-            audioRef.current.pause();
-            audioRef.current.removeAttribute('src');
-          } catch (_) {}
-        }
+      // On base64 URLs there is nothing to revoke, but we pause the audio element to clean up
+      if (audioRef.current) {
         try {
-          URL.revokeObjectURL(createdBlobUrl);
+          audioRef.current.pause();
         } catch (_) {}
       }
     };
@@ -637,36 +614,56 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
   // HTML5 Audio element control handlers
   const togglePlay = async () => {
     triggerVibration(10);
-    // If HTML5 audio is ready, toggle play/pause directly without re-generation
+
+    // Guard: Do nothing if audio is actively being generated in background
+    if (isGeneratingAudio) {
+      showToast('Audio is being prepared, please wait a moment...', 'info', 2000);
+      return;
+    }
+
+    // If HTML5 audio is already loaded and ready, just toggle play/pause — NO re-generation
     if (audioRef.current && audioUrl) {
       if (isPlaying) {
         audioRef.current.pause();
         setIsPlaying(false);
       } else {
-        audioRef.current.play().then(() => {
+        try {
+          await audioRef.current.play();
           setIsPlaying(true);
-        }).catch(err => {
-          console.error("Audio playback failed", err);
-        });
+        } catch (err: any) {
+          console.error('Audio playback failed:', err);
+          // On Capacitor Android, if HTML5 play fails with NotSupportedError, fall back gracefully
+          if (err?.name === 'NotSupportedError' || err?.name === 'NotAllowedError') {
+            showToast('Could not play audio automatically. Tap again to retry.', 'warning', 3000);
+          } else {
+            showToast('Playback error. Try refreshing the page.', 'error', 3000);
+          }
+        }
       }
       return;
     }
 
-    // If audio is not yet in state, check persistent IndexedDB cache
+    // Audio is not yet in state — check the persistent IndexedDB cache before any TTS call
     if (result) {
       const cached = await getAudioCache(currentSavedId, result);
       if (cached) {
         setAudioData(cached);
         setIsSpeechFallback(false);
-        setTimeout(() => {
+        // Give the audio element time to load the new src before playing
+        setTimeout(async () => {
           if (audioRef.current) {
-            audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
+            try {
+              await audioRef.current.play();
+              setIsPlaying(true);
+            } catch (e) {
+              console.warn('Cached audio play failed:', e);
+            }
           }
-        }, 200);
+        }, 300);
         return;
       }
 
-      // If not in cache, load via TTS or speech synthesis
+      // Nothing cached and not currently generating — trigger on-demand TTS fetch
       startSpeechFallback();
     }
   };
@@ -1252,6 +1249,7 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                     <audio
                       ref={audioRef}
                       src={audioUrl}
+                      preload="auto"
                       onPlay={() => setIsPlaying(true)}
                       onPause={() => setIsPlaying(false)}
                       onLoadedMetadata={() => {
@@ -1263,6 +1261,17 @@ export default function NoteMaker({ onBack }: { onBack: () => void }) {
                       onEnded={() => {
                         setIsPlaying(false);
                         setCurrentTime(0);
+                      }}
+                      onError={(e: any) => {
+                        const code = e?.target?.error?.code;
+                        console.warn('Audio element error, code:', code);
+                        // MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) on Android WebView
+                        // This can happen if the src format isn't natively decoded.
+                        // We don't fall back to TTS here — just show a hint.
+                        setIsPlaying(false);
+                        if (code === 4) {
+                          showToast('Audio format not supported on this device. Try downloading the file.', 'warning', 4000);
+                        }
                       }}
                       className="hidden"
                     />

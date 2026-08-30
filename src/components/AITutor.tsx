@@ -1046,19 +1046,7 @@ export default function AITutor({ isVip, isActive = true }: { isVip: boolean; is
     };
   }, []);
 
-  // Stop all speech synthesis and audio playback immediately when navigating away or switching tabs
-  useEffect(() => {
-    if (isActive === false) {
-      window.dispatchEvent(new CustomEvent('helpyou:stop-all-tutor-audio'));
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try { window.speechSynthesis.cancel(); } catch (_) {}
-      }
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (_) {}
-      }
-      setIsListening(false);
-    }
-  }, [isActive]);
+  // NOTE: isActive stop-audio effect is registered BELOW after recognitionRef and setIsListening are declared
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [samplePrompts, setSamplePrompts] = useState<any[]>([]);
@@ -1343,6 +1331,19 @@ export default function AITutor({ isVip, isActive = true }: { isVip: boolean; is
       }
     };
   }, []);
+
+  // Stop all speech synthesis and audio playback when switching away from Tutor tab
+  // Must be declared AFTER recognitionRef (line 1173) and setIsListening (line 1081) to avoid crash
+  useEffect(() => {
+    if (isActive === false) {
+      window.dispatchEvent(new CustomEvent('helpyou:stop-all-tutor-audio'));
+      try { window.speechSynthesis.cancel(); } catch (_) {}
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (_) {}
+      }
+      setIsListening(false);
+    }
+  }, [isActive]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -96,17 +96,17 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       }
     },
     {
-      topicIcon: <Phone className="w-2.5 h-2.5 text-indigo-500" />,
+      topicIcon: <ShieldCheck className="w-2.5 h-2.5 text-indigo-500" />,
       helpyou: {
-        title: "Call with",
-        desc: "AI Tutor",
-        icon: <PhoneCall className="w-3.5 h-3.5 text-indigo-600" />,
-        highlight: "AI Tutor"
+        title: "100% Ad-Free",
+        desc: "Zero Distractions",
+        icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />,
+        highlight: "Ad-Free"
       },
       other: {
-        title: "No AI",
-        desc: "Voice Calling",
-        icon: <MicOff className="w-3.5 h-3.5 text-zinc-400" />
+        title: "Annoying Ads",
+        desc: "Popups & Distractions",
+        icon: <ShieldAlert className="w-3.5 h-3.5 text-zinc-400" />
       }
     },
     {
@@ -590,7 +590,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100/50 px-3 py-1 rounded-full flex items-center gap-1">
                       <Sparkles className="w-2.5 h-2.5 text-indigo-600 fill-indigo-200" />
                       <span className="text-[8px] font-extrabold tracking-wide text-indigo-950">
-                        Includes <span className="text-indigo-600 font-black">AI Voice Calls</span> & Live Homework Scanner
+                        Includes <span className="text-indigo-600 font-black">100% Ad-Free Learning</span> & Live Homework Scanner
                       </span>
                     </div>
                   </div>

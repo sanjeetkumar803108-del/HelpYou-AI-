@@ -326,10 +326,10 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
           let result;
           try {
-            result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
+            result = await FirebaseAuthentication.signInWithGoogle();
           } catch (credMgrErr: any) {
             console.warn('[Native Google Sign-In] Credential Manager fallback attempt:', credMgrErr?.message);
-            result = await FirebaseAuthentication.signInWithGoogle();
+            result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
           }
 
           console.log('[Google Auth] Native result received:', JSON.stringify(result));
@@ -374,14 +374,15 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
           throw new Error(errMsg || 'Google Sign-In failed on this device. Please check Google Play Services.');
         }
       } else {
-        // WEB BROWSER PATH ONLY
-        googleProvider.setCustomParameters({ prompt: 'select_account' });
+        // WEB BROWSER PATH ONLY - Force Google Account Chooser
+        const freshProvider = new GoogleAuthProvider();
+        freshProvider.setCustomParameters({ prompt: 'select_account' });
         try {
-          const userCredential = await signInWithPopup(auth, googleProvider);
+          const userCredential = await signInWithPopup(auth, freshProvider);
           loggedUser = userCredential.user;
         } catch (popupErr: any) {
           if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
-            await signInWithRedirect(auth, googleProvider);
+            await signInWithRedirect(auth, freshProvider);
             return;
           }
           throw popupErr;

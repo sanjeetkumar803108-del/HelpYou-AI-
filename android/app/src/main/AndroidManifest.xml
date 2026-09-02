@@ -20,7 +20,8 @@
 
     <!-- 4. STORAGE: Required strictly for file picker — PDFs and images (Android 13+ split permissions) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- 5. GOOGLE PLAY BILLING: Required for RevenueCat In-App Purchases / VIP Subscriptions -->
+    <uses-permission android:name="com.android.vending.BILLING" />
 
     <application
         android:allowBackup="true"

@@ -21,6 +21,7 @@ import { Purchases } from '@revenuecat/purchases-capacitor';
 import { safeGetItem, safeSetItem, safeClearAll } from './utils/storage';
 import { refillDailyCoins } from './utils/coins';
 import { showToast } from './utils/toast';
+import { setupDailyLocalNotifications } from './utils/notifications';
 import confetti from 'canvas-confetti';
 
 function retryImport<T>(fn: () => Promise<T>, retriesLeft = 3, interval = 1000): Promise<T> {
@@ -359,6 +360,16 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [mobileToast]);
+
+  // Schedule EXACTLY 2 engaging daily study & homework notifications (5:00 PM & 7:30 PM)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setupDailyLocalNotifications(true).catch(err => {
+        console.warn('[Notifications Startup] Schedule notice:', err);
+      });
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {

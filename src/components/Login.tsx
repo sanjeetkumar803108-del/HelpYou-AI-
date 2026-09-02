@@ -80,6 +80,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const [forgotMessage, setForgotMessage] = useState<string | null>(null);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const isRoutingRef = React.useRef(false);
+  // Gate flag: only allow onAuthStateChanged to route user if THEY actively initiated sign-in
+  const userInitiatedAuth = React.useRef(false);
 
   const routeUserAfterAuth = async (currentUser: User) => {
     if (isRoutingRef.current) return;
@@ -141,10 +143,29 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   };
 
   useEffect(() => {
+    // On mount: if Firebase still has a cached/persisted user (stale session after logout),
+    // immediately sign them out so the Login page is shown clean without auto-routing.
+    const clearStaleSession = async () => {
+      try {
+        if (auth.currentUser) {
+          console.log('[Login Mount] Stale Firebase session detected, clearing it...');
+          if (Capacitor.isNativePlatform()) {
+            try { await FirebaseAuthentication.signOut(); } catch (_) {}
+          }
+          await signOut(auth);
+          console.log('[Login Mount] Stale session cleared.');
+        }
+      } catch (e) {
+        console.warn('[Login Mount] Error clearing stale session:', e);
+      }
+    };
+    clearStaleSession();
+
     // 1. Check for pending redirect sign-in result from Google OAuth
+    //    Only honour this if user actually triggered a redirect sign-in
     getRedirectResult(auth)
       .then((result) => {
-        if (result?.user) {
+        if (result?.user && userInitiatedAuth.current) {
           routeUserAfterAuth(result.user);
         }
       })
@@ -152,10 +173,11 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         console.warn('[Google Redirect Auth Notice]', redirectErr);
       });
 
-    // 2. Listen for active auth state changes
+    // 2. Listen for active auth state changes — GATED by userInitiatedAuth flag
+    //    This prevents the listener from auto-routing on mount with stale cached sessions.
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
+      if (currentUser && userInitiatedAuth.current) {
         const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
         if (currentUser.emailVerified || isGoogle) {
           routeUserAfterAuth(currentUser);
@@ -168,6 +190,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    // Mark that the user actively initiated authentication
+    userInitiatedAuth.current = true;
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
@@ -307,6 +331,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const handleGoogleSignIn = async () => {
     setError(null);
     setLoading(true);
+    // Mark that the user actively initiated authentication before any async call
+    userInitiatedAuth.current = true;
     const googleLoadingTimer = setTimeout(() => {
       setLoading(false);
     }, 15000);

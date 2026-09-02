@@ -343,19 +343,22 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       // NATIVE PATH (Android/iOS): Uses Google Play Services natively
       if (Capacitor.isNativePlatform()) {
         try {
-          console.log('[Google Auth] Starting native Google Sign-In with Account Chooser...');
+          console.log('[Google Auth] Starting native Google Sign-In with forced Account Chooser...');
           
-          // Clear any cached session so Google Account Selector dialog is ALWAYS displayed
-          try {
-            await FirebaseAuthentication.signOut();
-          } catch (_) {}
+          // STEP 1: Clear Firebase JS SDK + native session tokens
+          try { await FirebaseAuthentication.signOut(); } catch (_) {}
 
           let result;
+          // PRIMARY: Use legacy Google Sign-In (NOT Credential Manager).
+          // Legacy flow ALWAYS shows the account picker dialog — Credential Manager
+          // auto-selects a cached account silently, which is what caused the bug.
           try {
-            result = await FirebaseAuthentication.signInWithGoogle();
-          } catch (credMgrErr: any) {
-            console.warn('[Native Google Sign-In] Credential Manager fallback attempt:', credMgrErr?.message);
+            console.log('[Google Auth] Attempting legacy sign-in (account picker guaranteed)...');
             result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
+          } catch (legacyErr: any) {
+            // FALLBACK: If legacy is unavailable on this device, try Credential Manager
+            console.warn('[Google Auth] Legacy sign-in unavailable, trying Credential Manager:', legacyErr?.message);
+            result = await FirebaseAuthentication.signInWithGoogle();
           }
 
           console.log('[Google Auth] Native result received:', JSON.stringify(result));

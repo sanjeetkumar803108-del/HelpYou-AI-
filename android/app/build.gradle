@@ -88,6 +88,11 @@ dependencies {
 
     // Google Sign-In support
     implementation 'com.google.android.gms:play-services-auth:21.2.0'
+
+    // Credential Manager - needed to clear the "authorized account" state on logout
+    // so the Google account picker shows again on next sign-in
+    implementation 'androidx.credentials:credentials:1.3.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
 }
 
 apply from: 'capacitor.build.gradle'

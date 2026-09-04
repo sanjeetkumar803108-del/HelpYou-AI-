@@ -16,10 +16,6 @@ const GRADES = [
   { id: '10th Grade (Sophomore)', label: '10th Grade', desc: 'Sophomore High School', isCollege: false },
   { id: '11th Grade (Junior)', label: '11th Grade', desc: 'Junior High School', isCollege: false },
   { id: '12th Grade (Senior)', label: '12th Grade', desc: 'Senior High School', isCollege: false },
-  { id: 'College Freshman', label: 'College Year 1', desc: 'Freshman Undergrad', isCollege: true },
-  { id: 'College Sophomore', label: 'College Year 2', desc: 'Sophomore Undergrad', isCollege: true },
-  { id: 'College Junior', label: 'College Year 3', desc: 'Junior Undergrad', isCollege: true },
-  { id: 'College Senior', label: 'College Year 4', desc: 'Senior Undergrad', isCollege: true },
 ];
 
 export const COUNTRIES = [
@@ -33,11 +29,48 @@ export const COUNTRIES = [
 // Dynamic tracks dictionary mapped by Country Name
 export const REGIONAL_TRACKS: Record<string, Array<{ id: string; title: string; subtitle: string; icon: React.ReactNode; color: string }>> = {
   'United States': [
-    { id: 'STEM / Engineering', title: 'STEM / Engineering', subtitle: 'Tailored for AP Calculus & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / AP Sciences', title: 'Pre-Med / AP Sciences', subtitle: 'Tailored for AP Bio, Chem & Anatomy', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
-    { id: 'Business / Economics', title: 'Business / Economics', subtitle: 'Tailored for AP Micro, Macro & Finance', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
-    { id: 'Humanities / Liberal Arts', title: 'Humanities / Liberal Arts', subtitle: 'Tailored for AP US Gov & World History', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
-    { id: 'Computer Science', title: 'Computer Science & AI', subtitle: 'Tailored for AP CS A & Principles', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+    { 
+      id: 'STEM / Engineering', 
+      title: 'STEM & Engineering', 
+      subtitle: 'AP Calculus AB/BC, AP Physics (1/2/C) & Advanced Math', 
+      icon: <Rocket className="w-5 h-5" />, 
+      color: 'from-purple-500 to-indigo-500' 
+    },
+    { 
+      id: 'Pre-Med / AP Sciences', 
+      title: 'Biomedical & Pre-Health', 
+      subtitle: 'AP Biology, AP Chemistry, Anatomy & Life Sciences', 
+      icon: <HeartPulse className="w-5 h-5" />, 
+      color: 'from-pink-500 to-rose-500' 
+    },
+    { 
+      id: 'Business / Economics', 
+      title: 'Business & Economics', 
+      subtitle: 'AP Macro/Microeconomics, AP Statistics & Finance', 
+      icon: <BarChart3 className="w-5 h-5" />, 
+      color: 'from-amber-500 to-orange-500' 
+    },
+    { 
+      id: 'Humanities / Liberal Arts', 
+      title: 'Humanities & Pre-Law', 
+      subtitle: 'AP US History, AP Gov, AP Psychology & Lit', 
+      icon: <Palette className="w-5 h-5" />, 
+      color: 'from-emerald-500 to-teal-500' 
+    },
+    { 
+      id: 'Computer Science', 
+      title: 'Computer Science & AI', 
+      subtitle: 'AP CS A (Java), AP CS Principles & Cybersecurity', 
+      icon: <Cpu className="w-5 h-5" />, 
+      color: 'from-blue-500 to-cyan-500' 
+    },
+    { 
+      id: 'AP Capstone / Honors', 
+      title: 'AP Capstone & College Prep', 
+      subtitle: 'AP Seminar, AP Research & Dual Enrollment Rigor', 
+      icon: <GraduationCap className="w-5 h-5" />, 
+      color: 'from-indigo-500 to-violet-500' 
+    },
   ],
   'United Kingdom': [
     { id: 'STEM / Engineering', title: 'STEM & Mathematics', subtitle: 'Tailored for A-Level Maths & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },

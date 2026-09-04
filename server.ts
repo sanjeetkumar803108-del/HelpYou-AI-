@@ -468,6 +468,11 @@ MANDATORY ADAPTATION RULES:
         ...parts.slice(1)
       ];
     }
+    // ⚡ SPEED OPTIMIZATION: Disable internal "thinking" mode on Gemini flash models.
+    // thinkingBudget=0 skips the extended reasoning phase which adds 5-15s of latency.
+    if (!clonedParams.config.thinkingConfig) {
+      clonedParams.config.thinkingConfig = { thinkingBudget: 0 };
+    }
   }
 
   const query = extractUserQuery(clonedParams);
@@ -489,16 +494,18 @@ MANDATORY ADAPTATION RULES:
 
   let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash") : params.model;
   let modelsToTry = isAudioModel 
-    ? [requestedModel, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp"].filter((v, i, a) => a.indexOf(v) === i)
+    ? [requestedModel, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp"].filter(Boolean)
     : isSpecialtyModel 
       ? [requestedModel] 
       : [
-          requestedModel || "gemini-3.5-flash-lite",
-          "gemini-3.5-flash-lite",
-          "gemini-3.5-flash",
-          "gemini-flash-lite-latest",
-          "gemini-flash-latest",
-          "gemini-3.6-flash"
+          requestedModel || "gemini-2.5-flash",
+          "gemini-2.5-flash",
+          "gemini-2.0-flash",
+          "gemini-1.5-flash",
+          "gemini-2.0-flash-lite",
+          "gemini-2.5-pro",
+          "gemini-1.5-pro",
+          "gemini-3.1-flash-lite"
         ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -508,8 +515,8 @@ MANDATORY ADAPTATION RULES:
 
     for (const m of modelsToTry) {
       const lastLimited = rateLimitedModels[m] || 0;
-      // Keep on backburner for 1 hour to handle daily/frequent free-tier limits
-      if (now - lastLimited < 3600000) {
+      // Keep on backburner for 1 minute to allow quick recovery
+      if (now - lastLimited < 60000) {
         backburnerModels.push(m);
       } else {
         activeModels.push(m);
@@ -546,7 +553,11 @@ MANDATORY ADAPTATION RULES:
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const aiClient = getAI();
-        const response = await aiClient.models.generateContent(currentParams);
+        const generatePromise = aiClient.models.generateContent(currentParams);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout: Model ${model} took longer than 60000ms`)), 60000)
+        );
+        const response: any = await Promise.race([generatePromise, timeoutPromise]);
         return response;
       } catch (error: any) {
         lastError = error;
@@ -559,7 +570,10 @@ MANDATORY ADAPTATION RULES:
           errorStr.includes("resource_exhausted") ||
           errorStr.includes("unavailable") ||
           errorStr.includes("overloaded") ||
-          errorStr.includes("demand");
+          errorStr.includes("demand") ||
+          errorStr.includes("timeout") ||
+          errorStr.includes("not_found") ||
+          errorStr.includes("404");
 
         if (isRateLimitOrOverloaded) {
           console.warn(`[ai-client] Model ${model} (attempt ${attempt}/${retries}) hit rate-limit or quota constraint:`, errorStr);
@@ -595,6 +609,9 @@ MANDATORY ADAPTATION RULES:
             errorStr.includes("unavailable") ||
             errorStr.includes("overloaded") ||
             errorStr.includes("demand") ||
+            errorStr.includes("timeout") ||
+            errorStr.includes("not_found") ||
+            errorStr.includes("404") ||
             (errorStr.includes("429") && !errorStr.includes("overloaded"));
 
           if (isHardQuotaLimit) {
@@ -2833,6 +2850,467 @@ Use this exact JSON structure:
   }
 });
 
+function getCollegeBoardSubjectGuidelines(subject: string, questionType: 'objective' | 'subjective'): string {
+  const s = (subject || '').toLowerCase();
+  
+  if (s.includes('human geography') || s.includes('aphg')) {
+    if (questionType === 'objective') {
+      return `AP HUMAN GEOGRAPHY (APHG) EXAM SPECIFICATIONS (College Board CED - #1 Grade 9 AP):
+- Target Audience: Grade 9 (Freshman) High School Students. Stimulus-based, testing spatial perspective, geographic patterns, and real-world regional connections across Units 1–7.
+- Core Topics:
+  1. Thinking Geographically (Geospatial tech [GIS, GPS, remote sensing], scales of analysis [local, regional, national, global], formal/functional/perceptual regions).
+  2. Population & Migration (Demographic Transition Model [DTM Stages 1-5], population pyramids, dependency ratios, Malthusian theory, push/pull factors, Ravenstein's laws, refugees/IDPs).
+  3. Cultural Patterns & Processes (Hearths, spatial diffusion [contagious, hierarchical, stimulus, relocation], acculturation, assimilation, language families, universalizing vs ethnic religions).
+  4. Political Patterns & Processes (Sovereignty, nation-states, stateless nations, supranationalism [UN, EU, NATO], devolution, gerrymandering, boundaries/UNCLOS).
+  5. Agriculture & Rural Land-Use (Von Thünen model, Green Revolution, subsistence vs commercial agriculture, intensive vs extensive farming, global supply chains).
+  6. Cities & Urban Land-Use (Burgess Concentric Zone, Hoyt Sector, Harris-Ullman Multiple Nuclei, Galactic model, Christaller's Central Place Theory, rank-size rule, primate cities, gentrification, New Urbanism).
+  7. Industrial & Economic Development (Wallerstein World Systems [Core/Periphery], Rostow 5 Stages of Economic Growth, Weber Least Cost Theory, HDI, UN SDGs).
+- Stimulus Requirement: Ground questions in realistic geographic stimuli (demographic data charts, regional map descriptions, population pyramid profiles, or geographic case studies).
+- Distractors: Plausible 9th-grade misconceptions (e.g., confusing environmental determinism with possibilism, confusing hierarchical with contagious diffusion, or misidentifying DTM stages).`;
+    } else {
+      return `AP HUMAN GEOGRAPHY FREE RESPONSE STANDARDS (College Board CED - 7-Part FRQ):
+- Format: Real 7-PART College Board Free Response Questions with parts (A), (B), (C), (D), (E), (F), and (G). Total Points: Exactly 7 Points (1 point per part).
+- Official FRQ Types:
+  1. Question 1 (No Stimulus): Tests geographic concepts, spatial models, and processes.
+  2. Question 2 (One Stimulus): Anchored to a thematic map, demographic chart, or spatial model.
+  3. Question 3 (Two Stimuli): Comparative synthesis between two geographic datasets or regions.
+- Command Verbs & Scaffolding:
+  - "Identify" / "Define" (1-2 sentences stating the specific concept or pattern).
+  - "Describe" (Provide relevant characteristics or spatial trends).
+  - "Explain" (Must clearly establish cause-and-effect line of reasoning: 'how' or 'why' X causes Y in geographic context).
+- Rubric: Exactly 7 points (+1 pt for each part A through G) with crystal-clear scoring criteria and model responses.`;
+    }
+  }
+
+  if (s.includes('environmental') || s.includes('apes')) {
+    if (questionType === 'objective') {
+      return `AP ENVIRONMENTAL SCIENCE (APES) EXAM SPECIFICATIONS (College Board CED):
+- Target Level: Grade 9-10 introductory environmental lab science. High conceptual clarity, data interpretation, and environmental problem-solving across Units 1–9.
+- Core Units:
+  1-3. Ecosystems, biogeochemical cycles (carbon, nitrogen, phosphorus, water), trophic cascades, 10% rule, biodiversity, ecosystem services, population ecology (r/K selection, survivorship curves, carrying capacity).
+  4-6. Earth systems (soil texture triangle, atmosphere, El Niño), land & water use (Tragedy of the Commons, Green Revolution, irrigation, IPM, CAFOs, mining), energy resources (fossil fuels, nuclear, solar, wind, efficiency).
+  7-9. Atmospheric pollution (photochemical smog, acid deposition, thermal inversions), aquatic/terrestrial pollution (eutrophication, biomagnification, LD50, landfills), global change (stratospheric ozone depletion, ocean acidification, climate mitigation).
+- Quantitative Reasoning: Include realistic environmental math (Rule of 70, LD50 toxicity, percent change, metric conversions).
+- Distractors: Represent common student traps (confusing ozone depletion with global warming, confusing point vs nonpoint pollution).`;
+    } else {
+      return `AP ENVIRONMENTAL SCIENCE FREE RESPONSE STANDARDS (College Board CED):
+- Format: Real 10-POINT multi-part questions with sub-parts (a), (b), (c), (d), (e). Total Points: Exactly 10 Points.
+- Official FRQ Archetypes:
+  1. Design an Investigation: Hypothesis, independent/dependent/control variables, data collection procedures, and experimental validity.
+  2. Analyze an Environmental Problem & Propose a Solution: Ecological impacts, identifying root causes, and proposing realistic, sustainable solutions with environmental or economic justifications.
+  3. Quantitative Environmental Problem & Solution: Multi-step mathematical calculations (with units and dimensional analysis) paired with an environmental mitigation recommendation.
+- Rubric: Exactly 10 points breakdown with step-by-step partial-credit criteria.`;
+    }
+  }
+
+  if (s.includes('principles') || s.includes('csp')) {
+    if (questionType === 'objective') {
+      return `AP COMPUTER SCIENCE PRINCIPLES (CSP) EXAM SPECIFICATIONS (College Board CED):
+- Target Level: Grade 9-10 foundational computing. Focus on computational thinking, algorithm logic, data representation, and societal impacts (Units 1–5).
+- Scope: Creative development, binary/hex numbers, data compression (lossy vs lossless), pseudocode algorithms (robot grid traversal, conditional iteration, list filtering), Internet architecture (IP, TCP/IP, packet routing, fault tolerance), cybersecurity (public-key encryption, phishing, DDoS), and computing ethics.
+- Distractors: Represent algorithmic off-by-one errors, Boolean logic inversion (AND vs OR), or confusing lossy vs lossless compression.`;
+    } else {
+      return `AP COMPUTER SCIENCE PRINCIPLES WRITTEN RESPONSE / PERFORMANCE TASK STANDARDS:
+- Format: 4-Part Written Response (6 Points Total) based on computational artifacts and program development:
+  - Part (a): Program Function and Purpose (explaining user inputs, outputs, and overall functionality).
+  - Part (b): Data Abstraction (identifying list/collection name, data represented, and how complexity is managed).
+  - Part (c): Algorithmic Logic & Sequencing (explaining iteration, selection, sequencing, and algorithmic outcome).
+  - Part (d): Testing & Parameter Behavior (describing two different calls/inputs, expected conditions, and resulting outputs).
+- Rubric: Precise College Board CED 6-point scoring criteria.`;
+    }
+  }
+
+  if (s.includes('calculus bc')) {
+    if (questionType === 'objective') {
+      return `AP CALCULUS BC EXAM SPECIFICATIONS (College Board CED):
+- Coverage: Full AB curriculum PLUS BC-exclusive topics: Parametric equations, vector motion in 2D (velocity/acceleration vectors, speed = sqrt((x')^2 + (y')^2)), polar functions (polar area = (1/2)*integral(r^2 dTheta)), integration by parts, partial fractions, improper integrals, Euler's method, logistic differential equations (dP/dt = kP(1 - P/M)), and Infinite Series.
+- Infinite Series focus: Geometric series, Taylor/Maclaurin polynomial approximations, nth-term divergence, Ratio test for radius & interval of convergence, Alternating Series Test.
+- Distractors must represent classic student misconceptions: omitting chain rule in parametric derivatives, sign errors in integration by parts, forgetting to check endpoints in interval of convergence.
+- Format all math expressions cleanly using LaTeX ($...$).`;
+    } else {
+      return `AP CALCULUS BC FREE RESPONSE STANDARDS (College Board CED):
+- Format: Real 9-POINT multi-part questions with sub-parts (a), (b), (c), (d).
+- Priority Archetypes:
+  1. Infinite Series (Taylor/Maclaurin series, finding general term, computing radius/interval of convergence using Ratio Test, Alternating Series Error Bound or Lagrange Error Bound).
+  2. Parametric / Polar Motion (position vector, velocity, total distance traveled / arc length integral, polar area enclosed between curves).
+  3. Logistic Differential Equations & Euler's Method step-by-step approximation.
+  4. Area & Volume of solids of revolution (disk/washer/cross sections) or Rate In / Rate Out Accumulation.
+- Total Points MUST be 9 points. Rubric must award partial points step-by-step (+1 pt for setup/derivative, +1 pt for antiderivative, +1 pt for justification/units).`;
+    }
+  }
+
+  if (s.includes('calculus ab') || s.includes('calculus')) {
+    if (questionType === 'objective') {
+      return `AP CALCULUS AB EXAM SPECIFICATIONS (College Board CED):
+- Coverage: Limits & Continuity (including L'Hopital's Rule), Derivatives (Chain rule, Product/Quotient rule, Implicit differentiation), Mean Value Theorem, Particle Motion in 1D (position, velocity, acceleration, speed increasing/decreasing), Definite & Indefinite Integrals, Fundamental Theorem of Calculus, Riemann Sums, Differential Equations (separable).
+- Distractors must reflect real student math traps: forgetting chain rule factors, arithmetic sign slips, forgetting '+ C', confusing velocity with acceleration.
+- Format all equations cleanly in LaTeX ($...$).`;
+    } else {
+      return `AP CALCULUS AB FREE RESPONSE STANDARDS (College Board CED):
+- Format: Real 9-POINT multi-part questions with sub-parts (a), (b), (c), (d).
+- Classic AP FRQ Archetypes:
+  1. Rate In / Rate Out Accumulation: Net change integral formula integral(R_in(t) - R_out(t))dt, checking critical times.
+  2. Particle Motion: Analyzing velocity v(t), determining when speed is increasing/decreasing, total distance traveled integral(|v(t)|dt).
+  3. Graph Analysis of f'(x): Identifying relative extrema, points of inflection, justifying with First/Second Derivative Test, EVT.
+  4. Area & Volume: Area between two curves, volume of solid of revolution (disk/washer), volume with known cross sections (squares/semicircles).
+  5. Differential Equations: Slope fields, separation of variables to find particular solution y = f(x) with initial condition.
+  6. Riemann Sums & Tables: Estimating definite integrals using Trapezoidal rule or Left/Right sums with physical units.
+- Total Points MUST be 9 points. Rubric must assign exact points per sub-part.`;
+    }
+  }
+
+  if (s.includes('biology')) {
+    if (questionType === 'objective') {
+      return `AP BIOLOGY EXAM SPECIFICATIONS (College Board CED):
+- Stimulus-Based Design: Base questions on realistic biological experiments, data tables, gel electrophoresis diagrams, pedigrees, cladograms, or enzyme kinetics graphs.
+- Core Themes: Chemistry of life, cell structure & energetics (photosynthesis/respiration), cell communication & cell cycle, heredity & genetics, gene expression & regulation, natural selection, ecology.
+- Question Style: Questions must require students to analyze data, make scientific claims, identify controls, or predict the biological consequence of a mutation or inhibitor. Avoid simple rote memorization.`;
+    } else {
+      return `AP BIOLOGY FREE RESPONSE STANDARDS (College Board CED):
+- Formats:
+  1. Long FRQ (8-10 points): Interpreting & Evaluating Experimental Results. Includes experimental design, specifying independent/dependent variables, graphing with standard error bars (±2 SEM), calculating means, and Null Hypothesis / Chi-Square testing.
+  2. Short FRQ (4 points): Scientific Investigation (identifying negative/positive controls), Conceptual Analysis (predicting effects of disruption/mutation), or Model Analysis (analyzing cell signaling cascades).
+- Rubric: Precise point allocation (+1 pt for identifying control, +1 pt for calculating rate, +1 pt for biological justification).`;
+    }
+  }
+
+  if (s.includes('chemistry')) {
+    if (questionType === 'objective') {
+      return `AP CHEMISTRY EXAM SPECIFICATIONS (College Board CED):
+- Content: Atomic structure & PES spectra, molecular bonding & Lewis/VSEPR, intermolecular forces & properties, chemical reactions & stoichiometry, kinetics rate laws, thermodynamics (Delta H, Delta S, Delta G = -RT ln K), equilibrium & Le Chatelier's principle, acids & bases (titration curves, buffers), electrochemistry.
+- Visuals & Diagrams: Include particulate representations (drawings of atoms/molecules in a container), molecular geometry descriptions, and reaction energy profiles.
+- Distractors: Represent stoichiometry mole-ratio errors, confusing Delta H with Delta G, or inverted equilibrium expressions.`;
+    } else {
+      return `AP CHEMISTRY FREE RESPONSE STANDARDS (College Board CED):
+- Formats:
+  1. Long FRQ (10 points): Multi-part problem covering multi-step stoichiometry, net ionic equations, thermodynamics calculations, electrochemistry cell potentials (E_cell = E_cathode - E_anode), and acid-base buffer calculations (Henderson-Hasselbalch equation).
+  2. Short FRQ (4 points): Lewis structures & resonance, VSEPR molecular geometry and bond angles, intermolecular forces comparing boiling points, or Beer-Lambert Law spectrophotometry (A = epsilon * b * c).
+- Rubric: Must break down exact points (+1 pt for balanced net ionic equation, +1 pt for ICE table setup, +1 pt for final answer with correct significant figures and units).`;
+    }
+  }
+
+  if (s.includes('physics 1')) {
+    if (questionType === 'objective') {
+      return `AP PHYSICS 1: ALGEBRA-BASED EXAM SPECIFICATIONS (Updated College Board CED):
+- Format: Strictly 4 answer choices (A-D, single-select).
+- Scope: Kinematics, Newton's Laws, Work/Energy/Power, Linear Momentum, Torque & Rotational Motion, Simple Harmonic Motion, AND newly integrated FLUIDS (density, pressure, buoyant force, Archimedes principle, continuity equation, Bernoulli's equation).
+- Cognitive Focus: Qualitative proportional reasoning (e.g. 'If radius doubles and angular velocity is halved, what happens to centripetal acceleration?'), force diagrams, and conservation laws.`;
+    } else {
+      return `AP PHYSICS 1 FREE RESPONSE STANDARDS (College Board CED):
+- Four Official FRQ Types:
+  1. Mathematical Routines (algebraic derivations, energy/momentum conservation).
+  2. Translation Between Representations (connecting equations to graphs like Force vs Time or Velocity vs Time).
+  3. Experimental Design (outlining a lab setup, list of apparatus, step-by-step procedure to reduce uncertainty, and data analysis plan).
+  4. Qualitative / Quantitative Translation (QQT) (explaining a physical phenomenon in clear conceptual prose without equations first, then deriving the algebraic formula to prove it).
+- Total points: 7 to 12 points with explicit point-by-point rubric.`;
+    }
+  }
+
+  if (s.includes('computer science a')) {
+    if (questionType === 'objective') {
+      return `AP COMPUTER SCIENCE A EXAM SPECIFICATIONS (College Board Java Subset):
+- Java Syntax: Code snippets strictly following the official Java Quick Reference (String, Math, ArrayList, 1D/2D arrays, OOP inheritance, polymorphism).
+- Concepts: Loop bounds, tracing variable mutations, Boolean logic (De Morgan's laws), recursion execution traces, class design, and searching/sorting algorithms (binary search, selection/insertion/merge sort).
+- Distractors: Off-by-one errors (e.g., '< arr.length' vs '<= arr.length'), NullPointerException triggers, confusing '=' with '==', integer division truncation.`;
+    } else {
+      return `AP COMPUTER SCIENCE A FREE RESPONSE STANDARDS (College Board CED):
+- Format: 4 Authentic Java Coding Questions (9 Points Each):
+  - Question 1: Methods and Control Structures (loops, conditionals, helper methods).
+  - Question 2: Class Design (writing a complete Java class with private instance variables, constructor, getters/setters, and specified methods).
+  - Question 3: Array / ArrayList (traversing, filtering, or modifying elements, avoiding ConcurrentModificationException and index errors).
+  - Question 4: 2D Array (nested row/column loops, grid manipulation).
+- Rubric: Strict 9-point rubric awarding points for method header, loops, conditionals, accessing elements, returning correct value.`;
+    }
+  }
+
+  if (s.includes('u.s. history') || s.includes('us history') || s.includes('apush')) {
+    if (questionType === 'objective') {
+      return `AP U.S. HISTORY (APUSH) EXAM SPECIFICATIONS (College Board CED):
+- Stimulus-Based: Every single question set MUST be anchored to a primary source excerpt (presidential speech, newspaper editorial, letter, treaty, colonial document) or secondary historical analysis from Periods 1-9 (1491-Present).
+- Historical Thinking Skills: Contextualization, causation, continuity and change over time (CCOT), comparison.
+- Distractors: Factually true statements from a DIFFERENT historical era or claims that mischaracterize the author's argument.`;
+    } else {
+      return `AP U.S. HISTORY (APUSH) FREE RESPONSE STANDARDS (College Board CED):
+- Formats:
+  1. DBQ (Document-Based Question, 7-Point Rubric): Provide 7 distinct historical source documents (Author, Source, Year, Excerpt). Rubric: Thesis (1 pt), Contextualization (1 pt), Evidence from 3+ docs (1 pt) or 6+ docs (2 pts), Outside Evidence (1 pt), Sourcing/HIPP analysis (1 pt), Historical Complexity (1 pt).
+  2. LEQ (Long Essay Question, 6-Point Rubric): Historical prompt testing Causation, CCOT, or Comparison without documents.
+  3. SAQ (Short Answer Question): 3 parts (a), (b), (c) strictly requiring the ACE format (Answer, Cite specific evidence, Explain connection).`;
+    }
+  }
+
+  if (s.includes('world history')) {
+    if (questionType === 'objective') {
+      return `AP WORLD HISTORY: MODERN EXAM SPECIFICATIONS (College Board CED):
+- Time Period: 1200 CE to the Present.
+- Stimulus-Based: Provide primary excerpts from historical travelers (Ibn Battuta, Marco Polo), imperial edicts (Mongol, Ottoman, Ming), colonial treaties, or Cold War declarations.
+- Themes: Global Tapestry, Networks of Exchange, Land-Based Empires, Transoceanic Interconnections, Revolutions, Industrialization, Global Conflicts, Decolonization, and Globalization.`;
+    } else {
+      return `AP WORLD HISTORY: MODERN FREE RESPONSE STANDARDS (College Board CED):
+- Formats:
+  1. DBQ (Document-Based Question, 7-Point Rubric): 7 historical documents from world history.
+  2. LEQ (Long Essay Question, 6-Point Rubric): Global historical causation, comparison, or CCOT.
+  3. SAQ (Short Answer Question): 3 distinct parts (a), (b), (c) in ACE format.
+- Rubrics must strictly follow the official College Board historical rubrics.`;
+    }
+  }
+
+  if (s.includes('english') || s.includes('lang')) {
+    if (questionType === 'objective') {
+      return `AP ENGLISH LANGUAGE & COMPOSITION EXAM SPECIFICATIONS (College Board CED):
+- Reading Questions: Non-fiction rhetorical analysis passage (speech, essay, letter). Analyze author's purpose, claims, line of reasoning, rhetorical choices (diction, syntax, appeals to ethos/pathos/logos), and tone.
+- Writing Questions: Excerpt from a draft student essay. Ask how to revise thesis statements, enhance sentence variety, improve transitional phrases, or integrate evidence cohesively.`;
+    } else {
+      return `AP ENGLISH LANGUAGE FREE RESPONSE STANDARDS (College Board CED):
+- 3 Authentic AP Lang Essay Types (Each scored on the official 6-Point Analytic Rubric):
+  1. Synthesis Essay: Present a prompt and 6 diverse sources (articles, statistics, visual data). Students must synthesize at least 3 sources to support an argument.
+  2. Rhetorical Analysis Essay: Provide an authentic non-fiction speech/letter and ask students to analyze how the author uses rhetorical choices to convey their message.
+  3. Argument Essay: Present a philosophical, cultural, or social claim to defend, challenge, or qualify with evidence from history, literature, or personal observation.
+- Rubric: 1 pt Thesis, 4 pts Evidence & Commentary, 1 pt Sophistication.`;
+    }
+  }
+
+  if (s.includes('psychology')) {
+    if (questionType === 'objective') {
+      return `AP PSYCHOLOGY EXAM SPECIFICATIONS (Updated College Board CED):
+- Format: Scenario-based questions applying psychological principles to real-world behavioral situations.
+- Content: Biological bases of behavior (neurotransmitters, brain structures, nervous system), sensation & perception, learning (operant/classical conditioning), cognitive psychology (memory, biases), developmental psychology, personality theories, social psychology, clinical psychology (DSM-5 diagnostic criteria).`;
+    } else {
+      return `AP PSYCHOLOGY FREE RESPONSE STANDARDS (Updated College Board CED):
+- 2 Official FRQ Types:
+  1. Article Analysis Question (AAQ): Provide an empirical psychological research study abstract. Students must identify independent/dependent variables, confounding variables, assess statistical significance (p < 0.05), and evaluate APA ethical guidelines (informed consent, debriefing, confidentiality).
+  2. Evidence-Based Question (EBQ): Students synthesize psychological concepts to construct a defensible claim supported by empirical evidence.
+- Rubric: Clearly specify which psychological concepts earn points and required justifications.`;
+    }
+  }
+
+  if (s.includes('economic')) {
+    if (questionType === 'objective') {
+      return `AP MICRO & MACROECONOMICS EXAM SPECIFICATIONS (College Board CED):
+- Microeconomics: Supply & demand elasticity, consumer/producer surplus, market structures (perfect competition, monopoly, oligopoly), externalities, marginal cost/revenue, factor markets.
+- Macroeconomics: GDP, inflation, unemployment, Aggregate Demand / Aggregate Supply (AD-AS), fiscal policy, monetary policy (Federal Reserve tools), Money Market, Loanable Funds, Phillips Curve, Foreign Exchange.
+- Distractors: Confusing shifts of a curve with movements along a curve, or miscalculating tax incidence / multiplier effects.`;
+    } else {
+      return `AP ECONOMICS FREE RESPONSE STANDARDS (College Board CED):
+- Formats:
+  1. Long FRQ (10 points, ~30 min): Multi-part scenario with explicit graphing instructions (e.g., 'Draw a correctly labeled graph of the money market and show the effect of an open market purchase of bonds on the nominal interest rate').
+  2. Short FRQ (5 points, ~15 min): Targeted calculations (elasticity, spending multiplier, balance of payments) and directional explanations.
+- Rubric: Explicit points for graph labeling, curve shift directions, and numerical calculations.`;
+    }
+  }
+
+  // Fallback for general AP Subjects
+  return `College Board AP Course and Exam Description standards for ${subject}. High rigor, analytical thinking, stimulus-based.`;
+}
+
+app.post("/api/generate-ap-questions", async (req, res) => {
+  try {
+    const { subject, unit, topic, questionType, count, gradeLevel } = req.body;
+    if (!subject) {
+      return res.status(400).json({ error: "Missing AP Subject" });
+    }
+
+    const type = questionType === 'subjective' ? 'subjective' : 'objective';
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
+    const targetTopic = [topic, unit, subject].filter(Boolean).join(" - ");
+    const subjectGuidelines = getCollegeBoardSubjectGuidelines(subject, type);
+
+    const s = (subject || '').toLowerCase();
+    const g = (gradeLevel || '').toLowerCase();
+
+    let gradeCalibrationInstruction = '';
+
+    if (g.includes('9th') || g.includes('freshman') || s.includes('human geography') || s.includes('aphg') || s.includes('principles') || s.includes('csp')) {
+      gradeCalibrationInstruction = `
+OFFICIAL GRADE-LEVEL PEDAGOGICAL CALIBRATION: GRADE 9 (FRESHMAN AP TRACK - AGE ~14-15):
+- Cognitive Profile: High school freshmen embarking on their foundational AP coursework.
+- Question Scaffolding: Anchor every question in clear, accessible real-world stimuli, spatial maps, demographic profiles (DTM), or intuitive algorithmic logic. Avoid confusing academic trick wording.
+- Official Command Verbs: Strictly train the student on College Board foundational verbs: "Identify", "Define", "Describe" (observable trends/features), and "Explain" (clear cause-and-effect 'how' or 'why' X leads to Y).
+- Explanations & Model Solutions: Break down reasoning step-by-step with supportive educational scaffolding, explaining why the correct choice is true and how to avoid classic 9th-grade misconceptions.`;
+    } else if (g.includes('10th') || g.includes('sophomore')) {
+      gradeCalibrationInstruction = `
+OFFICIAL GRADE-LEVEL PEDAGOGICAL CALIBRATION: GRADE 10 (SOPHOMORE AP TRACK - AGE ~15-16):
+- Cognitive Profile: Intermediate high school rigor, expanding analytical essay writing, historical reasoning, and multi-concept scientific/computing problems (e.g. AP World History, AP Psychology, AP CSA).
+- Question Scaffolding: Integrate comparative analysis, contextualization across historical eras/systems, and structured application of theories (e.g. operant conditioning, OOP inheritance, transoceanic networks).
+- Official Command Verbs: Train students on "Compare and contrast", "Explain the historical/conceptual connection", "Analyze the relationship", and "Evaluate the consequence".
+- Explanations & Model Solutions: Teach historical continuity and change over time (CCOT), causation, and analytical justification using structured ACE format.`;
+    } else if (g.includes('11th') || g.includes('junior')) {
+      gradeCalibrationInstruction = `
+OFFICIAL GRADE-LEVEL PEDAGOGICAL CALIBRATION: GRADE 11 (JUNIOR AP TRACK - AGE ~16-17 - CRITICAL AP ADMISSIONS YEAR):
+- Cognitive Profile: Peak AP rigor aligned with university introductory sequences (AP Calculus AB, APUSH, AP English Language, AP Chemistry, AP Biology, AP Physics 1).
+- Question Scaffolding: Multi-layered, stimulus-driven questions featuring primary historical source excerpts, multi-step calculus problems (related rates, accumulation integrals), and authentic laboratory experimental data sets.
+- Official Command Verbs: Rigorous testing of "Justify using mathematical/scientific principles", "Synthesize multiple conflicting viewpoints", "Formulate a defensible thesis statement", and "Calculate with appropriate physical units".
+- Explanations & Model Solutions: Deep College Board Chief Reader breakdown with rigorous criteria, addressing subtle distractor traps and common AP exam score-losing pitfalls.`;
+    } else if (g.includes('12th') || g.includes('senior') || g.includes('college')) {
+      gradeCalibrationInstruction = `
+OFFICIAL GRADE-LEVEL PEDAGOGICAL CALIBRATION: GRADE 12 (SENIOR AP / UNIVERSITY CREDIT TRACK - AGE ~17-18):
+- Cognitive Profile: Advanced college-level mastery (AP Calculus BC, AP Physics C, AP English Literature, AP Gov & Econ, AP Statistics).
+- Question Scaffolding: High-speed synthesis, multi-variable calculus proofs, complex chemical thermodynamics, macroeconomic AD-AS modeling, and sophisticated literary analysis.
+- Official Command Verbs: "Evaluate the extent to which...", "Derive the mathematical relationship", "Demonstrate using graphical models", and "Provide comprehensive empirical justification".
+- Explanations & Model Solutions: Direct college-level grading standard analysis with exact point-by-point scoring guidelines matching university freshman course equivalence.`;
+    } else {
+      gradeCalibrationInstruction = `
+OFFICIAL GRADE-LEVEL PEDAGOGICAL CALIBRATION: ADVANCED PLACEMENT (HIGH SCHOOL TO COLLEGE):
+- Rigor: Standard College Board AP Course and Exam Description (CED) college-level rigor.
+- Explanations: Clear, authoritative step-by-step breakdown according to official College Board scoring rubrics.`;
+    }
+
+    if (type === 'objective') {
+      const systemInstruction = `You are a Senior College Board AP Exam Chief Examiner and Master Test Developer.
+The student is preparing for the AP ${subject} Exam.
+Your task is to generate exactly ${requestedCount} authentic, high-caliber AP Exam MULTIPLE CHOICE QUESTIONS (MCQs) for: "${targetTopic}".
+
+CRITICAL COLLEGE BOARD AP EXAM STANDARDS:
+1. RIGOR & DEPTH: Every question must test deep conceptual understanding, analytical thinking, or multi-step problem solving as defined in the official College Board AP Course and Exam Description (CED). Avoid trivial recall or surface-level trivia.
+2. MANDATORY PRE-SOLVE & OPTION VERIFICATION (CRITICAL):
+   - Before outputting options, you MUST solve the question step-by-step to arrive at the definite, mathematically and scientifically verified answer.
+   - EXACTLY ONE OF THE 4 OPTIONS (A, B, C, or D) MUST BE 100% CORRECT. Under no circumstances should all 4 options be wrong, and under no circumstances should the true answer be missing from the options list!
+   - "correctAnswer" MUST BE VERBATIM IDENTICAL: The "correctAnswer" property MUST be an exact character-for-character match to the corresponding option in the "options" array.
+3. AUTHENTIC 4 OPTIONS: Exactly 4 options labeled "A) ...", "B) ...", "C) ...", "D) ...". Distractors must represent plausible, authentic student misconceptions, calculation slips, or conceptual confusions (not random nonsense).
+4. STIMULUS-BASED WHEN APPLICABLE: Provide real AP-style contextual stimulus (e.g. data tables, experimental setups, code segments, or historical/rhetorical excerpts) if appropriate for the subject.
+5. DETAILED AP EXPLANATION: Explain WHY the correct option is right with step-by-step logic, and explicitly break down why each distractor is incorrect. Use LaTeX ($...$ or $$...$$) for mathematical expressions or chemical reactions.
+6. AP EXAM SKILL/UNIT TAG: Label the relevant AP Unit or Skill practiced.
+
+${subjectGuidelines}
+${gradeCalibrationInstruction}
+
+STRICT JSON OUTPUT:
+Return ONLY a valid JSON array of objects with this exact structure:
+[
+  {
+    "id": 1,
+    "question": "Question text with clear formatting...",
+    "stimulus": "Optional contextual text, data table, or scenario if applicable (or empty string)",
+    "options": [
+      "A) Option 1",
+      "B) Option 2",
+      "C) Option 3",
+      "D) Option 4"
+    ],
+    "correctAnswer": "A) Option 1",
+    "explanation": "Detailed College Board explanation breaking down why A is correct and why B, C, D are common traps.",
+    "skill": "Relevant AP Unit / Skill Tag"
+  }
+]`;
+
+      let generatedText = "";
+      try {
+        const response = await safeGenerateContent({
+          gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
+          model: "gemini-2.5-flash",
+          contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Generate exactly ${requestedCount} authentic College Board AP Exam Multiple Choice Questions (MCQs) now adhering to official CED specifications.` }] },
+          config: {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            responseMimeType: "application/json",
+            temperature: 0.2,
+            thinkingConfig: { thinkingBudget: 0 }
+          }
+        });
+        generatedText = response.text || "";
+      } catch (apiError: any) {
+        console.warn("API Error during AP objective questions generation:", apiError);
+        throw apiError;
+      }
+
+      const parsed = safeParseJSON(generatedText, 'none');
+      let questionsList: any[] = [];
+      if (Array.isArray(parsed)) {
+        questionsList = parsed;
+      } else if (parsed && Array.isArray(parsed.questions)) {
+        questionsList = parsed.questions;
+      } else if (parsed && typeof parsed === 'object') {
+        const found = Object.values(parsed).find(v => Array.isArray(v));
+        if (found) questionsList = found as any[];
+      }
+
+      if (questionsList.length > 0) {
+        return res.json({ questions: questionsList, questionType: 'objective', subject, count: questionsList.length });
+      }
+      throw new Error("Failed to generate a valid AP objective questions structure.");
+    } else {
+      // Subjective (FRQ / DBQ / LEQ / SAQ)
+      const systemInstruction = `You are an AP Exam Chief Reader and Author of official College Board Scoring Guidelines.
+The student is preparing for the AP ${subject} Exam.
+Your task is to generate exactly ${requestedCount} authentic, high-yield AP Exam FREE RESPONSE / SUBJECTIVE QUESTIONS for: "${targetTopic}".
+
+CRITICAL COLLEGE BOARD AP EXAM STANDARDS:
+1. AUTHENTIC MULTI-PART STRUCTURE: AP Free Response Questions always consist of clearly delineated sub-parts: (a), (b), (c) (and optionally (d)). Each sub-part must clearly test specific College Board cognitive skills (e.g., Identify, Calculate, Justify, Explain, Describe, Graph, Show).
+2. CLEAR LINE BREAKS: Separate each part with a double newline '\\n\\n' so each part starts clearly on a new line.
+3. OFFICIAL SCORING GUIDELINES & POINT BREAKDOWN: Provide a precise, point-by-point College Board Reader rubric in an array 'scoringRubric'. Each item should state what earns the point (e.g., '+1 pt for applying product rule', '+1 pt for correctly stating units', '+1 pt for citing historical document').
+4. HIGH-SCORING MODEL ANSWER: Provide a complete, maximum-points exemplary student response in 'modelAnswer' addressing each part (a), (b), (c) with clear steps and LaTeX formatting.
+5. TOTAL POINTS: Total point value for this problem (e.g. 9 points for Calculus/CSA, 10 points for Chem, 7 points for DBQ, 4 points for Short FRQ).
+
+${subjectGuidelines}
+${gradeCalibrationInstruction}
+
+STRICT JSON OUTPUT:
+Return ONLY a valid JSON object with key "questions" containing an array of objects:
+{
+  "questions": [
+    {
+      "id": 1,
+      "title": "FRQ 1: Multi-Part Analytical Problem",
+      "prompt": "Scenario/stimulus followed by:\\n\\n(a) Sub-part A prompt...\\n\\n(b) Sub-part B prompt...\\n\\n(c) Sub-part C prompt...",
+      "totalPoints": 9,
+      "modelAnswer": "(a) Full exemplary solution for part a...\\n\\n(b) Full exemplary solution for part b...\\n\\n(c) Full exemplary solution for part c...",
+      "scoringRubric": [
+        "1 point for correct formula/setup",
+        "1 point for accurate mathematical/conceptual justification",
+        "1 point for final answer with correct units or specific terminology"
+      ],
+      "skill": "Relevant AP Unit / Skill Tag"
+    }
+  ]
+}
+NEVER include multiple-choice options A/B/C/D in subjective output.`;
+
+      let generatedText = "";
+      try {
+        const response = await safeGenerateContent({
+          gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
+          model: "gemini-2.5-flash",
+          contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Generate exactly ${requestedCount} authentic College Board AP Exam Free Response / Subjective Questions with official scoring rubrics and model answers now.` }] },
+          config: {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            responseMimeType: "application/json",
+            maxOutputTokens: 8192,
+            temperature: 0.2,
+            thinkingConfig: { thinkingBudget: 0 }
+          }
+        });
+        generatedText = response.text || "";
+      } catch (apiError: any) {
+        console.warn("API Error during AP subjective questions generation:", apiError);
+        throw apiError;
+      }
+
+      const parsed = safeParseJSON(generatedText, 'none');
+      let questionsList: any[] = [];
+      if (parsed && Array.isArray(parsed.questions)) {
+        questionsList = parsed.questions;
+      } else if (Array.isArray(parsed)) {
+        questionsList = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        const found = Object.values(parsed).find(v => Array.isArray(v));
+        if (found) questionsList = found as any[];
+      }
+
+      if (questionsList.length > 0) {
+        return res.json({ questions: questionsList, questionType: 'subjective', subject, count: questionsList.length });
+      }
+      throw new Error("Failed to generate a valid AP subjective questions structure.");
+    }
+  } catch (error: any) {
+    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
+      return res.status(429).json({ 
+        error: "QUOTA_EXCEEDED",
+        text: `⚠️ AP Prep Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits. Please try again in 60 seconds.`
+      });
+    }
+    console.error("AP Question generation endpoint error:", error);
+    res.status(500).json({ error: error.message || "Failed to generate AP questions" });
+  }
+});
+
 app.post("/api/evaluate-answer", async (req, res) => {
   try {
     const questionText = req.body.questionText || req.body.question || "";
@@ -2840,14 +3318,65 @@ app.post("/api/evaluate-answer", async (req, res) => {
     const userGrade = req.body.userGrade || req.body.gradeLevel;
     const curriculum = req.body.curriculum;
     const subject = req.body.subject;
+    const image = req.body.image || req.body.imageBase64 || "";
+
     if (!questionText) {
       return res.status(400).json({ error: "Missing questionText" });
     }
-    if (!userAnswer || !userAnswer.trim()) {
-      return res.status(400).json({ error: "Please write an answer before submitting for evaluation!" });
+    if ((!userAnswer || !userAnswer.trim()) && !image) {
+      return res.status(400).json({ error: "Please write an answer or attach a photo of your work before submitting for evaluation!" });
     }
 
-    const systemInstruction = `You are a strict academic examiner. DO NOT act as a standard tutor. Your SOLE purpose is to grade the student's answer based on their grade level. YOU MUST output strictly using this format:
+    const isApExam = userGrade === 'AP High School Exam Standard' || (typeof userGrade === 'string' && userGrade.includes('AP')) || Boolean(subject && subject.includes('AP'));
+
+    const systemInstruction = isApExam 
+      ? `You are an official College Board AP Exam Chief Reader, Senior AP Table Leader, and Master AP High School Educator.
+Your role is to rigorously assess, grade, and coach the student on their Free Response / Subjective submission with the authentic discipline, precision, and pedagogical standard of the College Board.
+
+GRADING & SCORING RULES:
+1. RIGOROUS AP RUBRIC POINT-BY-POINT BREAKDOWN:
+   - For every sub-part (e.g. Part (a), Part (b), Part (c), Part (d)):
+     - Award exact points: [X / Y Points].
+     - Provide unambiguous justification citing the student's exact mathematical work, equations, units, or evidence.
+     - Cite official AP grading conventions (e.g. "+1 point for correct chain rule derivative; +1 point for equating f'(x)=0; 0 points for sign chart alone without concluding sentence").
+2. TOTAL OFFICIAL AP SCORE & PERCENTAGE:
+   - Tally the total points earned (e.g., Score: 7 / 9 Points, 78%).
+3. AUTHENTIC COLLEGE BOARD AP SCALE CONVERSION (1 to 5):
+   - Translate their performance on this standard into the official 1-5 AP scale:
+     - 5: Extremely Well Qualified (Top 10-15% caliber)
+     - 4: Well Qualified (College Credit Ready)
+     - 3: Qualified (Passing Standard)
+     - 2: Possibly Qualified (Foundational Gaps)
+     - 1: No Recommendation
+4. PROFESSIONAL TEACHER COACHING:
+   - What was done brilliantly (proper AP notation, clear justification).
+   - Costly AP Traps to avoid (missing units, incomplete theorem hypotheses like continuity/differentiability).
+   - High-Scoring Exemplary Revision (how to write it on exam day to guarantee 100% full credit).
+
+OUTPUT FORMAT: Output strictly using this clean Markdown structure:
+
+# 🎓 AP® Chief Reader & Teacher Evaluation
+
+### 📊 Official Scorecard
+- **Total AP Points**: **[Earned Points] / [Total Rubric Points] Points ([Percentage]%)**
+- **Projected AP Exam Score**: **AP Score [1-5] • [Extremely Well Qualified / Well Qualified / Qualified / Needs Review]**
+- **Teacher Verdict**: [Brief, professional, encouraging teacher verdict]
+
+---
+
+### 📋 Official Rubric Point-by-Point Breakdown
+- **Part (a) [[Earned]/[Total] pts]**: [Specific College Board justification referencing student's work]
+- **Part (b) [[Earned]/[Total] pts]**: [Specific College Board justification referencing student's work]
+- **Part (c) [[Earned]/[Total] pts]**: [Specific College Board justification referencing student's work]
+(include Part (d) if present)
+
+---
+
+### 👨‍🏫 Professional Teacher Feedback & AP Exam Fixes
+- **🌟 Key Strengths**: [What was done accurately with proper terminology/notation]
+- **⚠️ Costly Traps & Where Points Were Lost**: [Specific slips, missing conditions, or flawed notation]
+- **🎯 Full-Credit College Board Standard**: [How to write or format this on the actual May AP exam to guarantee full credit]`
+      : `You are a strict academic examiner. DO NOT act as a standard tutor. Your SOLE purpose is to grade the student's answer based on their grade level. YOU MUST output strictly using this format:
 
 ## Grade-Level Assessment
 [Pass/Fail/Needs Improvement for this grade level]
@@ -2863,17 +3392,43 @@ app.post("/api/evaluate-answer", async (req, res) => {
 ## Examiner Feedback & Ideal Solution
 [Explain mistakes and provide the perfect 10/10 mathematical solution]`;
 
+    const parts: any[] = [];
+    if (image) {
+      let mimeType = "image/jpeg";
+      let cleanBase64 = image;
+      if (image.startsWith("data:")) {
+        const matches = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (matches) {
+          mimeType = matches[1];
+          cleanBase64 = matches[2];
+        }
+      }
+      parts.push({
+        inlineData: {
+          mimeType,
+          data: cleanBase64
+        }
+      });
+    }
+
+    parts.push({
+      text: `Evaluate the student's answer for: "${questionText}".
+Student's Written/Typed Answer: "${userAnswer || 'No typed text provided; student submitted handwritten work in the attached image.'}".
+${image ? 'IMPORTANT: The student has provided an attached photo containing their handwritten calculations, work, or steps. Thoroughly inspect and evaluate the handwritten solution in the image against the scoring rubric.' : ''}`
+    });
+
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Evaluate the student's answer for: "${questionText}". Student's Answer is: "${userAnswer}".` }] },
+      model: "gemini-2.5-flash",
+      contents: { parts },
       config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] }
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        thinkingConfig: { thinkingBudget: 0 }
       }
     });
 
     const text = response.text || "Failed to evaluate response.";
-    res.json({ evaluation: text });
+    res.json({ evaluation: text, feedback: text });
 
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
@@ -2884,6 +3439,59 @@ app.post("/api/evaluate-answer", async (req, res) => {
     }
     console.error("Evaluation endpoint error:", error);
     res.status(500).json({ error: error.message || "Failed to evaluate answer" });
+  }
+});
+
+app.post("/api/ap-tutor-explain", async (req, res) => {
+  try {
+    const { questionText, stimulus, options, questionType, subject, unit, followUpQuestion } = req.body;
+
+    if (!questionText) {
+      return res.status(400).json({ error: "Missing questionText" });
+    }
+
+    const systemInstruction = `You are the AI Magic Tutor for College Board AP ${subject || 'Exams'}.
+A high-school student is practicing an AP exam question and has clicked "Ask with AI".
+Your mission is to act as their world-class AP teacher: break down the question thoroughly, explain the core concepts, and provide strategic hints so they can solve it THEMSELVES.
+
+CRITICAL SOCRATIC AP TUTORING PRINCIPLES:
+1. NEVER GIVE AWAY THE DIRECT ANSWER:
+   - For Multiple Choice: DO NOT reveal which letter option (A, B, C, or D) is correct.
+   - For Free Response / Subjective: DO NOT provide the final numerical answer or finished proof.
+   - If the student explicitly asks "what is the answer?", politely refuse and say: "As your AP Magic Tutor, my goal is to help you crush the real AP Exam in May! Let me guide your thinking so you can solve it yourself."
+2. EXPLAIN WHAT THE QUESTION IS REALLY ASKING:
+   - Translate dense or intimidating College Board language into clear, intuitive concepts.
+   - Clarify what each given value, graph, table, or passage excerpt represents.
+3. CORE AP CONCEPTS & THEOREMS:
+   - Identify the exact AP Unit and theoretical principle (e.g. Mean Value Theorem, First Law of Thermodynamics, Le Chatelier's Principle, Supply/Demand shifts, Synthesis evidence).
+   - Write relevant formulas in clean LaTeX ($...$).
+4. PROGRESSIVE STEP-BY-STEP HINTS:
+   - 💡 **Hint 1 (Starting Point)**: What to observe, identify, or set up first.
+   - 💡 **Hint 2 (Connecting the Pieces)**: How the given data fits into the formula or concept without doing the final computation.
+   - 💡 **Hint 3 (Self-Reflection Check)**: A targeted question or sanity check for the student to verify their final step.
+5. TONE & FORMAT:
+   - Warm, empowering, brilliant high-school AP teacher tone.
+   - Format cleanly in Markdown with bold headers and clear spacing.`;
+
+    const userPrompt = followUpQuestion 
+      ? `Original Question: ${questionText}\n${stimulus ? `Stimulus: ${stimulus}\n` : ''}${options && options.length > 0 ? `Options:\n${options.join('\n')}\n` : ''}\nStudent's Follow-up Question to Tutor: "${followUpQuestion}"`
+      : `AP Subject: ${subject || 'AP Course'}\nUnit: ${unit || 'Curriculum Unit'}\nQuestion Type: ${questionType || 'objective'}\nQuestion:\n${questionText}\n${stimulus ? `Stimulus / Context:\n${stimulus}\n` : ''}${options && options.length > 0 ? `Multiple Choice Options:\n${options.join('\n')}\n` : ''}\n\nPlease thoroughly explain this question to me, decode what College Board is asking, explain the core AP concept and formulas, and give me strategic hints to solve it without spoiling the answer!`;
+
+    const response = await safeGenerateContent({
+      gradeLevel: "AP High School (Advanced Placement)",
+      model: "gemini-2.5-flash",
+      contents: { parts: [{ text: userPrompt }] },
+      config: {
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        temperature: 0.3,
+        thinkingConfig: { thinkingBudget: 0 }
+      }
+    });
+
+    return res.json({ explanation: response.text || "Here is a breakdown to help you understand and solve this AP question." });
+  } catch (error: any) {
+    console.error("AP Tutor Explain Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to explain AP question" });
   }
 });
 

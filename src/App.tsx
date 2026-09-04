@@ -79,7 +79,6 @@ import AuthGuard from './components/AuthGuard';
 import ErrorBoundary from './components/ErrorBoundary';
 import ToastProvider from './components/ToastProvider';
 import './utils/toast';
-import { setupDailyLocalNotifications } from './utils/notifications';
 import { requestCameraPermission, requestMicrophonePermission, requestNotificationPermission } from './utils/nativePermissions';
 
 function WidgetSkeleton() {
@@ -960,9 +959,15 @@ export default function App() {
             )}
             {activeTool === 'testprep' && (
               <ErrorBoundary>
-                <LockedFeature cost={2} featureName="Test Prep Hub" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                  <TestPrep onBack={() => setActiveTool(null)} />
-                </LockedFeature>
+                <TestPrep 
+                  onBack={() => setActiveTool(null)} 
+                  isVip={isVip}
+                  onOpenVip={() => setShowVipModal(true)}
+                  onNavigateToTab={(tab) => {
+                    setActiveTool(null);
+                    setActiveTab(tab);
+                  }}
+                />
               </ErrorBoundary>
             )}
             {activeTool === 'image2pdf' && (

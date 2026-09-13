@@ -1,7 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=JetBrains+Mono:wght@400;500&display=swap');
-@import url('https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.css');
+@import "katex/dist/katex.min.css";
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+/* Force Tailwind v4 dark: variant to ONLY trigger via .dark class, never OS prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
@@ -15,7 +18,8 @@
     overflow-x: hidden;
   }
   body {
-    @apply bg-[#121212] text-gray-100;
+    background-color: #FAF9F6;
+    color: #18181b;
   }
 }
 
@@ -120,6 +124,115 @@
   }
 }
 
+/* ----------------------------------------------------
+   GLOBAL HIGH-CONTRAST LIGHT SURFACE & KATEX SYSTEM
+   Guarantees that ANY white/light container (including
+   quiz option buttons, selected/correct cards, explanations,
+   badges, question cards, and KaTeX formulas) ALWAYS has
+   pitch-black, bold, high-contrast text, math, subscripts & superscripts.
+---------------------------------------------------- */
+.light-surface,
+.dark .light-surface,
+[data-theme="light"],
+.dark [data-theme="light"],
+.bg-white,
+.bg-zinc-50,
+.bg-emerald-50, .dark .bg-emerald-50,
+.bg-rose-50, .dark .bg-rose-50,
+.bg-amber-50, .dark .bg-amber-50,
+.bg-amber-100, .dark .bg-amber-100 {
+  color: #09090b !important;
+}
+
+/* Ensure all text & markdown inside ANY light card is pitch-black and high-contrast */
+.light-surface h1, .dark .light-surface h1,
+.light-surface h2, .dark .light-surface h2,
+.light-surface h3, .dark .light-surface h3,
+.light-surface h4, .dark .light-surface h4,
+.light-surface p, .dark .light-surface p,
+.bg-white p, .dark .bg-white p,
+.bg-zinc-50 p, .dark .bg-zinc-50 p,
+.bg-emerald-50 p, .dark .bg-emerald-50 p,
+.bg-rose-50 p, .dark .bg-rose-50 p,
+.bg-amber-50 p, .dark .bg-amber-50 p,
+.bg-amber-100 p, .dark .bg-amber-100 p,
+.light-surface li, .dark .light-surface li,
+.light-surface div, .dark .light-surface div,
+.light-surface strong, .dark .light-surface strong,
+.light-surface em, .dark .light-surface em,
+.light-surface .markdown-body, .dark .light-surface .markdown-body,
+.bg-white .markdown-body, .dark .bg-white .markdown-body,
+.bg-zinc-50 .markdown-body, .dark .bg-zinc-50 .markdown-body,
+.bg-emerald-50 .markdown-body, .dark .bg-emerald-50 .markdown-body,
+.bg-rose-50 .markdown-body, .dark .bg-rose-50 .markdown-body,
+.bg-amber-50 .markdown-body, .dark .bg-amber-50 .markdown-body,
+.light-surface .markdown-body p, .dark .light-surface .markdown-body p,
+.bg-white .markdown-body p, .dark .bg-white .markdown-body p,
+.bg-zinc-50 .markdown-body p, .dark .bg-zinc-50 .markdown-body p,
+.bg-emerald-50 .markdown-body p, .dark .bg-emerald-50 .markdown-body p,
+.bg-rose-50 .markdown-body p, .dark .bg-rose-50 .markdown-body p,
+.bg-amber-50 .markdown-body p, .dark .bg-amber-50 .markdown-body p,
+.light-surface .markdown-body span, .dark .light-surface .markdown-body span,
+.bg-white .markdown-body span, .dark .bg-white .markdown-body span,
+.bg-zinc-50 .markdown-body span, .dark .bg-zinc-50 .markdown-body span,
+.bg-emerald-50 .markdown-body span, .dark .bg-emerald-50 .markdown-body span,
+.bg-rose-50 .markdown-body span, .dark .bg-rose-50 .markdown-body span,
+.bg-amber-50 .markdown-body span, .dark .bg-amber-50 .markdown-body span,
+.bg-amber-100 .markdown-body span, .dark .bg-amber-100 .markdown-body span {
+  color: #09090b !important;
+}
+
+/* Explicit KaTeX Math High Contrast inside light surfaces & option cards */
+.light-surface .katex, .dark .light-surface .katex,
+.bg-white .katex, .dark .bg-white .katex,
+.bg-zinc-50 .katex, .dark .bg-zinc-50 .katex,
+.bg-emerald-50 .katex, .dark .bg-emerald-50 .katex,
+.bg-rose-50 .katex, .dark .bg-rose-50 .katex,
+.bg-amber-50 .katex, .dark .bg-amber-50 .katex,
+.bg-amber-100 .katex, .dark .bg-amber-100 .katex,
+.light-surface .katex *, .dark .light-surface .katex *,
+.bg-white .katex *, .dark .bg-white .katex *,
+.bg-zinc-50 .katex *, .dark .bg-zinc-50 .katex *,
+.bg-emerald-50 .katex *, .dark .bg-emerald-50 .katex *,
+.bg-rose-50 .katex *, .dark .bg-rose-50 .katex *,
+.bg-amber-50 .katex *, .dark .bg-amber-50 .katex *,
+.bg-amber-100 .katex *, .dark .bg-amber-100 .katex * {
+  color: #09090b !important;
+  opacity: 1 !important;
+}
+
+/* Subscript & Superscript perfection across all KaTeX and HTML */
+sub, sup {
+  font-size: 75% !important;
+  line-height: 0 !important;
+  position: relative !important;
+  vertical-align: baseline !important;
+}
+sup {
+  top: -0.5em !important;
+}
+sub {
+  bottom: -0.25em !important;
+}
+
+.katex .vlist-t, .katex .vlist-r, .katex .vlist {
+  color: inherit !important;
+}
+
+/* KaTeX Math Fallback and System Font Safeguard (prevents blank/invisible math on Android) */
+.katex {
+  font-display: swap !important;
+}
+.katex .mathnormal, .katex .mathit {
+  font-family: KaTeX_Math, 'KaTeX_Main', 'Times New Roman', 'Cambria Math', 'Noto Serif', serif, sans-serif !important;
+  font-style: italic !important;
+  color: inherit !important;
+}
+.katex .mord, .katex .mbin, .katex .mrel, .katex .mopen, .katex .mclose, .katex .mpunct {
+  font-family: KaTeX_Main, 'KaTeX_Math', 'Times New Roman', 'Noto Serif', serif, sans-serif !important;
+  color: inherit !important;
+}
+
 /* Dark Mode Overrides */
 .dark, .dark .bg-\[\#FAF9F6\], .dark .bg-\[\#faf9f6\] {
   background-color: #09090b !important;
@@ -203,21 +316,21 @@
   background-color: #27272a !important;
 }
 
-.dark .text-zinc-950,
-.dark .text-zinc-900,
-.dark .text-zinc-850,
-.dark .text-zinc-800,
-.dark .text-zinc-750,
-.dark .text-zinc-700,
-.dark .text-zinc-650,
-.dark .text-zinc-600 {
-  color: #f4f4f5 !important;
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-950,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-900,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-850,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-800,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-750,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-700,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-650,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-600 {
+  color: #f4f4f5;
 }
 
-.dark .text-zinc-500,
-.dark .text-zinc-450,
-.dark .text-zinc-400 {
-  color: #a1a1aa !important;
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-500,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-450,
+.dark :not(.light-surface):not(.light-surface *):not([data-theme="light"]):not([data-theme="light"] *) > .text-zinc-400 {
+  color: #a1a1aa;
 }
 
 .dark input, 
@@ -394,4 +507,102 @@
   stop-color: #e4e4e7 !important;
 }
 
+/* 4. Graceful KaTeX Error Fallback - never show ugly red error text to students */
+.katex-error {
+  color: inherit !important;
+  background: transparent !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  white-space: normal !important;
+  border: none !important;
+}
 
+
+
+
+
+/* =========================================================================
+   GOOGLE GEMINI ANIMATED COSMIC GRADIENT (BLUE, RED, WHITE, PURPLE)
+   ========================================================================= */
+@keyframes gemini-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes gemini-glow-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.99);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes gemini-orb-1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(35px, -15px) scale(1.25);
+    opacity: 0.85;
+  }
+}
+
+@keyframes gemini-orb-2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(-35px, 15px) scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+@keyframes gemini-sparkle {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.9) rotate(0deg);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.15) rotate(180deg);
+  }
+}
+
+.gemini-animated-border {
+  background: linear-gradient(
+    115deg,
+    #1d4ed8 0%,
+    #ef4444 24%,
+    #ffffff 48%,
+    #3b82f6 70%,
+    #f43f5e 88%,
+    #1d4ed8 100%
+  );
+  background-size: 300% 300%;
+  animation: gemini-shift 6s ease infinite;
+}
+
+.gemini-glow-backdrop {
+  background: linear-gradient(
+    115deg,
+    rgba(29, 78, 216, 0.7) 0%,
+    rgba(239, 68, 68, 0.7) 32%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(59, 130, 246, 0.7) 72%,
+    rgba(244, 63, 94, 0.7) 100%
+  );
+  background-size: 300% 300%;
+  animation: gemini-shift 6s ease infinite, gemini-glow-pulse 4s ease-in-out infinite;
+}

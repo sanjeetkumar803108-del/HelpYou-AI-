@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, ArrowRight, BookOpen, Layers, Youtube, FileText, FileImage, Wand2, ChevronDown, ChevronUp, Calculator, UserCircle, Search, Lock, Brain, Crown, Share2, Archive, Trash2, Calendar, HelpCircle, Check, Undo, Zap } from 'lucide-react';
+import { Sparkles, ArrowRight, Swords, BookOpen, Layers, Youtube, FileText, FileImage, Wand2, ChevronDown, ChevronUp, Calculator, UserCircle, Search, Lock, Brain, Crown, Share2, Archive, Trash2, Calendar, HelpCircle, Check, Undo, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Capacitor } from '@capacitor/core';
-import appLogo from '../assets/logo.svg';
+import appLogo from '../assets/logo.png';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getCoins, isUserLoggedIn } from '../utils/coins';
@@ -31,15 +31,19 @@ const FEATURE_COSTS: Record<string, number> = {
   'grammar': 1,
   'summariser': 1,
   'calculator': 0,
-  'image2pdf': 0,
-  'pdfhistory': 0,
-  'livetutorsearch': 0
+  'livetutorsearch': 0,
+  'apnotes': 0,
+  'apsamplepapers': 0,
+  'trapradar': 0,
+  'mindmap': 0,
+  'frqgrader': 0,
+  'quizbattle': 0
 };
 
 const HeaderLogo = React.memo(() => (
   <div className="flex items-center gap-2 font-bold text-lg text-zinc-900 select-none">
-    <img src={appLogo} alt="HelpYou AI Logo" className="w-7 h-7" referrerPolicy="no-referrer" loading="lazy" />
-    <span className="font-black tracking-tight text-zinc-950">HelpYou AI</span>
+    <img src={appLogo} alt="AP Exam Logo" className="w-7 h-7 rounded-lg object-contain" referrerPolicy="no-referrer" loading="lazy" />
+    <span className="font-black tracking-tight text-zinc-950">AP Exam</span>
   </div>
 ));
 HeaderLogo.displayName = 'HeaderLogo';
@@ -80,6 +84,7 @@ function ToolsDashboard({
   onForceSync
 }: ToolsDashboardProps) {
   const [showAllTools, setShowAllTools] = useState(false);
+
   const loggedIn = isUserLoggedIn();
   const { deepFocus } = useSettings();
 
@@ -260,7 +265,7 @@ function ToolsDashboard({
 
   const handleShareTool = (toolId: string) => {
     const cleanId = toolId.startsWith('tab:') ? toolId.substring(4) : toolId;
-    const shareText = `📚 Check out the AI Tool - "${cleanId.toUpperCase()}" on HelpYou AI! It supercharges your learning! 🚀`;
+    const shareText = `📚 Check out the AI Tool - "${cleanId.toUpperCase()}" on AP Exam App! It supercharges your learning! 🚀`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(shareText);
       setShowToastMessage(`📋 Share text copied to clipboard!`);
@@ -515,8 +520,60 @@ function ToolsDashboard({
           </button>
         </div>
       </div>
-      {/* Exclusive Single Hero Feature Card: Test Prep */}
-      <div className="flex-1 flex flex-col justify-center my-auto pb-10">
+      {/* Hero Feature Cards: Test Prep & AP Notes */}
+      <div className="flex-1 flex flex-col justify-center my-auto pb-10 gap-4">
+        {/* 1v1 AP Quiz Battle Google Gemini Animated Hero Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          whileHover={{ scale: 1.015, y: -2 }}
+          whileTap={{ scale: 0.985 }}
+          onClick={() => handleSelectTool('quizbattle')}
+          className="relative group cursor-pointer select-none"
+        >
+          {/* 1. Ambient Google Gemini Glowing Aura (Blue, Red, White) */}
+          <div className="absolute -inset-1 rounded-[2.8rem] gemini-glow-backdrop opacity-70 blur-xl group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+
+          {/* 2. Outer Gemini Animated Multi-Color Border Frame (2.5px) */}
+          <div className="rounded-[2.7rem] p-[2.5px] gemini-animated-border shadow-2xl">
+            {/* 3. Inner Dark Cosmic Surface with Floating Animated Gemini Orbs */}
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 p-6 sm:p-7 flex items-center justify-between">
+              
+              {/* Animated Floating Gemini Light Orbs (Blue, Red, White) */}
+              <div className="absolute -left-12 -top-12 w-48 h-48 rounded-full bg-blue-600/35 blur-2xl pointer-events-none animate-[gemini-orb-1_7s_ease-in-out_infinite]" />
+              <div className="absolute right-8 -bottom-12 w-48 h-48 rounded-full bg-rose-600/30 blur-2xl pointer-events-none animate-[gemini-orb-2_6s_ease-in-out_infinite]" />
+              <div className="absolute left-1/3 top-1/4 w-36 h-36 rounded-full bg-white/20 blur-xl pointer-events-none animate-[gemini-sparkle_5s_ease-in-out_infinite]" />
+
+              {/* Card Left: Swords Icon + Dynamic Gradient Typography */}
+              <div className="flex items-center gap-4 sm:gap-5 min-w-0 z-10">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-600/30 via-zinc-900 to-rose-600/30 border border-white/25 flex items-center justify-center text-3xl shrink-0 group-hover:scale-105 transition-transform duration-300 shadow-inner">
+                  <Swords className="w-7 h-7 sm:w-8 sm:h-8 text-white drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-rose-100 tracking-tight truncate">
+                      1v1 Quiz Battle
+                    </h2>
+                    <span className="flex h-2.5 w-2.5 relative shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gradient-to-r from-blue-400 to-rose-400 shadow-sm"></span>
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-zinc-300 mt-0.5 flex items-center gap-1.5">
+                    <span className="text-blue-300 font-bold">Live PvP Showdown</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Card Right: Glowing Action Button */}
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-zinc-900 border border-white/20 group-hover:border-white/60 group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-rose-600 flex items-center justify-center text-white shrink-0 transition-all duration-300 shadow-lg z-10 ml-3">
+                <ArrowRight className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -534,6 +591,9 @@ function ToolsDashboard({
               <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
                 Test Prep
               </h2>
+              <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+                AI Exam Drills
+              </p>
             </div>
           </div>
           
@@ -541,6 +601,182 @@ function ToolsDashboard({
             <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
           </div>
         </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.08, ease: "easeOut" }}
+          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleSelectTool('apnotes')}
+          className="relative overflow-hidden bg-white border border-zinc-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-purple-300 hover:shadow-lg"
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
+              📚
+            </div>
+            <div>
+              <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
+                AP Notes
+              </h2>
+              <p className="text-xs font-semibold text-purple-600 mt-0.5">
+                Smart Revision Guides
+              </p>
+            </div>
+          </div>
+          
+          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-purple-600 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
+            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.16, ease: "easeOut" }}
+          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleSelectTool('apsamplepapers')}
+          className="relative overflow-hidden bg-white border border-zinc-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-emerald-300 hover:shadow-lg"
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+              📑
+            </div>
+            <div>
+              <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
+                AP Sample Papers Set
+              </h2>
+              <p className="text-xs font-semibold text-emerald-600 mt-0.5">
+                Official Mock Tests
+              </p>
+            </div>
+          </div>
+          
+          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
+            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.24, ease: "easeOut" }}
+          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleSelectTool('learningisland')}
+          className="relative overflow-hidden bg-white border border-amber-300 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-amber-500 hover:shadow-lg ring-1 ring-amber-400/20"
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-amber-500 group-hover:to-yellow-500 group-hover:text-white transition-all duration-300 shadow-xs">
+              🏝️
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
+                  Learning Island™
+                </h2>
+              </div>
+              <p className="text-xs font-semibold text-amber-700 mt-0.5">
+                Gamified Quest Maps
+              </p>
+            </div>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
+            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.24, ease: "easeOut" }}
+          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleSelectTool('trapradar')}
+          className="relative overflow-hidden bg-white border border-amber-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-amber-400 hover:shadow-lg"
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-amber-500 group-hover:to-emerald-600 group-hover:text-white transition-all duration-300">
+              🪤
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
+                  AP Trap Radar™
+                </h2>
+              </div>
+              <p className="text-xs font-semibold text-amber-600 mt-0.5">
+                Bust Exam Traps
+              </p>
+            </div>
+          </div>
+          
+          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
+            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.32, ease: "easeOut" }}
+          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleSelectTool('mindmap')}
+          className="relative overflow-hidden bg-white border border-teal-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-teal-400 hover:shadow-lg"
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-teal-500 group-hover:to-cyan-600 group-hover:text-white transition-all duration-300">
+              🧠
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
+                  Mind Map Revision
+                </h2>
+              </div>
+              <p className="text-xs font-semibold text-teal-600 mt-0.5">
+                Visual Concept Trees
+              </p>
+            </div>
+          </div>
+          
+          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-teal-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
+            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.28, ease: "easeOut" }}
+          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => handleSelectTool('frqgrader')}
+          className="relative overflow-hidden bg-white border border-emerald-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-emerald-400 hover:shadow-lg"
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-teal-600 group-hover:text-white transition-all duration-300">
+              📝
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
+                  AP FRQ Grader™
+                </h2>
+              </div>
+              <p className="text-xs font-semibold text-emerald-600 mt-0.5">
+                Instant Rubric Grading
+              </p>
+            </div>
+          </div>
+          
+          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-emerald-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
+            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </motion.div>
+
       </div>
 
       {/* Premium Long-Press Context Menu Overlay */}

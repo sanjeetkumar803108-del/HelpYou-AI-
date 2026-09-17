@@ -21,9 +21,18 @@ export function sanitizeLaTeXInJSON(raw: string): string {
         // We are right after a backslash
         isEscaped = false;
         
-        // Standard JSON escape characters: ", \, /, b, f, n, r, t, u
-        if (char === '"' || char === '\\' || char === '/' || char === 'b' || char === 'f' || char === 'n' || char === 'r' || char === 't') {
+        const nextChar = raw[i + 1];
+        // Standard JSON escape characters: ", \, /
+        if (char === '"' || char === '\\' || char === '/') {
           out += '\\' + char;
+        } else if (char === 'b' || char === 'f' || char === 'n' || char === 'r' || char === 't') {
+          // If followed immediately by an ASCII letter (e.g. \frac, \text, \times, \theta, \right, \beta, \boxed, \neq)
+          // it's a LaTeX command, NOT a JSON control escape. Double-escape it so JSON.parse preserves the LaTeX string!
+          if (nextChar && /^[a-zA-Z]/.test(nextChar)) {
+            out += '\\\\' + char;
+          } else {
+            out += '\\' + char;
+          }
         } else if (char === 'u') {
           // Check if followed by 4 hex digits
           const next4 = raw.slice(i + 1, i + 5);

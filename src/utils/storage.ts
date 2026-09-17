@@ -40,4 +40,21 @@ export const safeJsonParse = <T>(jsonStr: string | null | undefined, fallback: T
   }
 };
 
+export const safeRemoveItem = (key: string): void => {
+  try {
+    window.localStorage.removeItem(key);
+  } catch (e) {
+    delete memoryStorage[key];
+  }
+};
+
+export const safePurgeKeysByPrefix = (prefix: string): void => {
+  try {
+    const keys = Object.keys(window.localStorage).filter(k => k.startsWith(prefix));
+    keys.forEach(k => window.localStorage.removeItem(k));
+  } catch (e) {
+    Object.keys(memoryStorage).filter(k => k.startsWith(prefix)).forEach(k => delete memoryStorage[k]);
+  }
+};
+
 const memoryStorage: Record<string, string> = {};

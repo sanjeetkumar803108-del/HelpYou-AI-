@@ -5,8 +5,9 @@ import {
   RotateCcw, HelpCircle, Coins, ChevronDown, ChevronUp,
   TrendingUp, Timer, Percent, Clipboard, Target, ListChecks, Calendar,
   UploadCloud, FileText, Mic, MicOff, Camera, Image, Sparkles,
-  Share2, Download, Copy, Check, X
+  Share2, Download, Copy, Check, X, Lightbulb
 } from 'lucide-react';
+import GlobalMarkdown, { formatQuizMath } from './GlobalMarkdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -694,6 +695,101 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   };
   const [topic, setTopic] = useState('');
   const [isOffline, setIsOffline] = useState(false);
+
+  // --- ASK AI QUESTION TUTOR STATES ---
+  const [showAskAIModal, setShowAskAIModal] = useState(false);
+  const [askAIMode, setAskAIMode] = useState<'choose' | 'hint' | 'step_by_step'>('choose');
+  const [askAILoading, setAskAILoading] = useState(false);
+  const [askAICache, setAskAICache] = useState<Record<number, { hint?: string; step_by_step?: string }>>({});
+  const [copiedAiHelp, setCopiedAiHelp] = useState(false);
+
+  const handleOpenAskAI = (currentQ?: Question) => {
+    triggerVibration(15);
+    setCopiedAiHelp(false);
+    const cached = askAICache[currentIndex];
+    if (cached?.step_by_step || cached?.hint) {
+      setAskAIMode(cached.step_by_step ? 'step_by_step' : 'hint');
+    } else {
+      setAskAIMode('choose');
+    }
+    setShowAskAIModal(true);
+  };
+
+  const handleRequestAIHelp = async (targetMode: 'hint' | 'step_by_step') => {
+    triggerVibration(15);
+    setAskAIMode(targetMode);
+    setCopiedAiHelp(false);
+
+    if (askAICache[currentIndex]?.[targetMode]) {
+      return;
+    }
+
+    setAskAILoading(true);
+    const curQ = quiz[currentIndex];
+    if (!curQ) {
+      setAskAILoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(getApiUrl('/api/quiz-ai-help'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          question: curQ.question,
+          options: curQ.options,
+          correctAnswer: curQ.correctAnswer,
+          explanation: curQ.explanation,
+          mode: targetMode
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server returned status ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (data && data.explanation) {
+        setAskAICache(prev => ({
+          ...prev,
+          [currentIndex]: {
+            ...prev[currentIndex],
+            [targetMode]: data.explanation
+          }
+        }));
+      } else {
+        throw new Error("No explanation returned");
+      }
+    } catch (err) {
+      console.warn("Error fetching AI Help, using structured fallback:", err);
+      const fallbackText = targetMode === 'hint'
+        ? `### 🎯 What This Question Is Asking\n- Focus on the core relationship between the given values and what you are solving for.\n\n### 🔑 Key Concept & Formula\n- Review the governing principle for this specific question type.\n\n### 💡 Guided Clue\n- Double check the initial vs. final states and identify the appropriate formula to use.`
+        : `### 🎯 Step-by-Step Solution\n- **Correct Answer:** ${curQ.correctAnswer || 'Identified in options'}\n\n### 📝 Step 1: Breakdown\n- ${curQ.explanation || 'Apply the fundamental equation to substitute values and calculate the final result.'}\n\n### 💡 Key Takeaway\n- Always verify your units and signs before submitting your answer on exam day!`;
+
+      setAskAICache(prev => ({
+        ...prev,
+        [currentIndex]: {
+          ...prev[currentIndex],
+          [targetMode]: fallbackText
+        }
+      }));
+    } finally {
+      setAskAILoading(false);
+    }
+  };
+
+  const handleCopyAIHelp = () => {
+    const text = askAICache[currentIndex]?.[askAIMode === 'hint' ? 'hint' : 'step_by_step'];
+    if (text && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      triggerVibration(15);
+      setCopiedAiHelp(true);
+      showToast('📋 AI explanation copied to clipboard!', 'success');
+      setTimeout(() => setCopiedAiHelp(false), 2000);
+    }
+  };
 
   useEffect(() => {
     Network.getStatus().then((status) => {
@@ -1446,8 +1542,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       setScore((prev) => prev + 1);
     } else {
       // Auto-save incorrect answer to MistakeVault
-      saveMistakeToVault(
-        'Quizzes',
+      saveMistakeToVault('AI Quizzes',
         currentQuestion.question,
         option,
         currentQuestion.explanation || `The correct answer is ${correctAnswer}.`
@@ -1502,15 +1597,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       // Filter incorrect questions
       const mistakes = quizData.questions.filter(q => !q.isCorrect);
 
-      // Append mistakes to MistakeVault
-      mistakes.forEach((m) => {
-        saveMistakeToVault(
-          'Quizzes',
-          m.question,
-          m.userAnswer || "No Answer",
-          `The correct answer is "${m.correctAnswer}". ${m.explanation}`
-        ).catch(err => console.error("Failed to log mistake to MistakeVault:", err));
-      });
+      // Mistakes are already saved in real-time to MistakeVault on option selection
 
       if (auth.currentUser) {
         try {
@@ -2522,8 +2609,10 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                                   <span className="w-5 h-5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-black flex items-center justify-center shrink-0">
                                     {idx + 1}
                                   </span>
-                                  <h5 className="text-xs font-black text-zinc-800 pt-0.5 leading-relaxed">
-                                    {q.question}
+                                  <h5 className="text-xs font-black text-zinc-800 pt-0.5 leading-relaxed flex-1">
+                                    <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-black text-zinc-800">
+                                      {formatQuizMath(q.question)}
+                                    </GlobalMarkdown>
                                   </h5>
                                 </div>
 
@@ -2548,7 +2637,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                                         <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[8px] font-black shrink-0">
                                           {String.fromCharCode(65 + oIdx)}
                                         </span>
-                                        <span className="flex-1">{option}</span>
+                                        <span className="flex-1">
+                                          <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-semibold">
+                                            {formatQuizMath(option)}
+                                          </GlobalMarkdown>
+                                        </span>
                                         {isOptionCorrect && (
                                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                                         )}
@@ -2568,9 +2661,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                                         <Sparkles className="w-3 h-3" />
                                         <span>AI Tutor Explanation</span>
                                       </span>
-                                      <p className="text-[10px] font-bold text-zinc-600 leading-relaxed">
-                                        {q.explanation}
-                                      </p>
+                                      <div className="text-[10px] font-bold text-zinc-600 leading-relaxed">
+                                        <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-[10px] font-bold text-zinc-600">
+                                          {formatQuizMath(q.explanation)}
+                                        </GlobalMarkdown>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
@@ -2662,9 +2757,31 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
               className="bg-white border border-zinc-200 rounded-[2rem] p-6 mb-6 relative overflow-hidden shadow-sm"
             >
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
-              <p className="text-base md:text-lg font-extrabold leading-relaxed text-zinc-800">
-                {quiz[currentIndex].question}
-              </p>
+              
+              {/* Question Top Bar: Pill and Top-Right Ask AI Button */}
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50/90 px-3 py-1 rounded-full border border-indigo-100/80 shadow-xs flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                  Question {currentIndex + 1}
+                </span>
+
+                {/* Top-Right Ask AI Button */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenAskAI(quiz[currentIndex])}
+                  className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-xs px-3.5 py-1.5 rounded-full shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer border border-indigo-400/30 select-none shrink-0"
+                  title="Ask AI for Question Hint or Step-by-Step Answer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                  <span>Ask AI</span>
+                </button>
+              </div>
+
+              <div className="text-base md:text-lg font-extrabold leading-relaxed text-zinc-800">
+                <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-base md:text-lg font-extrabold text-zinc-800">
+                  {formatQuizMath(quiz[currentIndex].question)}
+                </GlobalMarkdown>
+              </div>
             </motion.div>
 
             {/* Options List */}
@@ -2694,7 +2811,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                     onClick={() => handleOptionSelect(option)}
                     className={`p-4 rounded-2xl border text-left font-bold text-sm transition-all duration-300 active:scale-[0.99] flex items-center justify-between shadow-sm ${btnStyle}`}
                   >
-                    <span className="pr-4">{option}</span>
+                    <span className="pr-4 flex-1">
+                      <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-sm font-bold">
+                        {formatQuizMath(option)}
+                      </GlobalMarkdown>
+                    </span>
                     {isAnswered && isCorrectAnswer && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
                     {isAnswered && isSelected && !isCorrectAnswer && <XCircle className="w-5 h-5 text-rose-600 shrink-0" />}
                   </button>
@@ -2715,9 +2836,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                     <HelpCircle className="w-4 h-4 text-indigo-600" />
                     <span>Explanation</span>
                   </h4>
-                  <p className="text-xs font-bold text-zinc-700 leading-relaxed">
-                    {quiz[currentIndex].explanation}
-                  </p>
+                  <div className="text-xs font-bold text-zinc-700 leading-relaxed">
+                    <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-bold text-zinc-700">
+                      {formatQuizMath(quiz[currentIndex].explanation)}
+                    </GlobalMarkdown>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -3010,8 +3133,10 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                         <span className="w-6 h-6 rounded-lg bg-zinc-100 text-zinc-600 text-xs font-black flex items-center justify-center shrink-0">
                           {idx + 1}
                         </span>
-                        <h4 className="text-xs font-black text-zinc-900 pt-0.5 leading-relaxed">
-                          {q.question}
+                        <h4 className="text-xs font-black text-zinc-900 pt-0.5 leading-relaxed flex-1">
+                          <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-black text-zinc-900">
+                            {formatQuizMath(q.question)}
+                          </GlobalMarkdown>
                         </h4>
                       </div>
 
@@ -3036,7 +3161,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                               <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-black shrink-0">
                                 {String.fromCharCode(65 + oIdx)}
                               </span>
-                              <span className="flex-1">{option}</span>
+                              <span className="flex-1">
+                                <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-bold">
+                                  {formatQuizMath(option)}
+                                </GlobalMarkdown>
+                              </span>
                               {isOptionCorrect && (
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                               )}
@@ -3056,9 +3185,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                               <Sparkles className="w-3 h-3" />
                               <span>AI Explanation</span>
                             </span>
-                            <p className="text-[10px] font-bold text-zinc-600 leading-relaxed">
-                              {q.explanation}
-                            </p>
+                            <div className="text-[10px] font-bold text-zinc-600 leading-relaxed">
+                              <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-[10px] font-bold text-zinc-600">
+                                {formatQuizMath(q.explanation)}
+                              </GlobalMarkdown>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -3081,6 +3212,242 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================= */}
+      {/* ASK AI MODAL / PAGE SHEET */}
+      {/* ========================================================= */}
+      <AnimatePresence>
+        {showAskAIModal && quiz[currentIndex] && (
+          <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAskAIModal(false)}
+              className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm"
+            />
+
+            {/* Modal Container */}
+            <motion.div
+              initial={{ opacity: 0, y: "100%" }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: "100%" }}
+              transition={{ type: "spring", damping: 26, stiffness: 280 }}
+              className="bg-white rounded-t-[2.5rem] sm:rounded-[2rem] w-full max-w-lg max-h-[88vh] flex flex-col shadow-2xl border border-zinc-200/80 relative z-10 overflow-hidden font-sans"
+            >
+              {/* Header */}
+              <div className="px-6 pt-5 pb-4 border-b border-zinc-100 flex items-center justify-between bg-gradient-to-b from-indigo-50/40 to-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                    <Sparkles className="w-5 h-5 text-amber-300" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-zinc-900 tracking-tight flex items-center gap-2">
+                      Ask AI Tutor
+                      <span className="text-[9px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                        LIVE ASSIST
+                      </span>
+                    </h3>
+                    <p className="text-xs text-zinc-500 font-bold">
+                      Smart Explanations & Step-by-Step Hints
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAskAIModal(false)}
+                  className="w-9 h-9 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Question Context Pill / Preview */}
+              {/* Question Context Pill / Preview */}
+              <div className="px-6 py-3 bg-zinc-50/70 border-b border-zinc-100">
+                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block mb-1">
+                  Question {currentIndex + 1} of {quiz.length}
+                </span>
+                <div className="text-xs font-bold text-zinc-700 leading-relaxed">
+                  <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-bold text-zinc-700">
+                    {formatQuizMath(quiz[currentIndex].question)}
+                  </GlobalMarkdown>
+                </div>
+              </div>
+
+              {/* Content Area */}
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                {/* Mode = 'choose' : Show the 2 Big Options */}
+                {askAIMode === 'choose' && (
+                  <div className="space-y-4 py-2">
+                    <div className="text-center mb-5">
+                      <span className="text-3xl filter drop-shadow-sm select-none">✨</span>
+                      <h4 className="text-lg font-black text-zinc-900 mt-1">How can AI help you?</h4>
+                      <p className="text-xs text-zinc-500 font-bold mt-0.5">Select an option below to guide your learning</p>
+                    </div>
+
+                    {/* OPTION 1: Explain Question & Hint */}
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleRequestAIHelp('hint')}
+                      className="w-full bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 hover:border-amber-500 rounded-3xl p-5 text-left transition-all shadow-sm flex items-start gap-4 cursor-pointer group"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shrink-0 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
+                        <Lightbulb className="w-6 h-6 stroke-[2.5]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                            Option 1 • Concept & Clue
+                          </span>
+                        </div>
+                        <h4 className="text-sm md:text-base font-black text-zinc-900 leading-snug">
+                          Explain Question & Hint by AI
+                        </h4>
+                        <p className="text-xs text-zinc-600 font-medium mt-1 leading-relaxed">
+                          Understand what the question is really asking, key variables, and get a guided hint without revealing the answer immediately.
+                        </p>
+                      </div>
+                    </motion.button>
+
+                    {/* OPTION 2: Explain Step-by-Step Answer */}
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleRequestAIHelp('step_by_step')}
+                      className="w-full bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border-2 border-indigo-400/40 hover:border-indigo-500 rounded-3xl p-5 text-left transition-all shadow-sm flex items-start gap-4 cursor-pointer group"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                        <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
+                            Option 2 • Full Walkthrough
+                          </span>
+                        </div>
+                        <h4 className="text-sm md:text-base font-black text-zinc-900 leading-snug">
+                          Explain Step-by-Step Answer by AI
+                        </h4>
+                        <p className="text-xs text-zinc-600 font-medium mt-1 leading-relaxed">
+                          Get a complete step-by-step mathematical & conceptual explanation leading directly to the correct answer.
+                        </p>
+                      </div>
+                    </motion.button>
+                  </div>
+                )}
+
+                {/* Mode = 'hint' or 'step_by_step' */}
+                {askAIMode !== 'choose' && (
+                  <div className="space-y-4">
+                    {/* Segmented Switcher between Hint & Step-by-Step */}
+                    <div className="flex bg-zinc-100 p-1 rounded-2xl border border-zinc-200">
+                      <button
+                        type="button"
+                        onClick={() => handleRequestAIHelp('hint')}
+                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                          askAIMode === 'hint'
+                            ? 'bg-white text-amber-700 shadow-sm border border-amber-200/50'
+                            : 'text-zinc-500 hover:text-zinc-800'
+                        }`}
+                      >
+                        <Lightbulb className="w-3.5 h-3.5" />
+                        <span>Question & Hint</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRequestAIHelp('step_by_step')}
+                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                          askAIMode === 'step_by_step'
+                            ? 'bg-white text-indigo-700 shadow-sm border border-indigo-200/50'
+                            : 'text-zinc-500 hover:text-zinc-800'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Step-by-Step Answer</span>
+                      </button>
+                    </div>
+
+                    {/* Loading State */}
+                    {askAILoading && (
+                      <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="relative">
+                          <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
+                          <Sparkles className="w-6 h-6 text-amber-400 absolute inset-0 m-auto animate-pulse" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-zinc-800">
+                            {askAIMode === 'hint' ? 'Analyzing Question & Formulating Hint...' : 'Computing Step-by-Step Solution...'}
+                          </h4>
+                          <p className="text-xs text-zinc-400 font-bold mt-1">
+                            Generating crystal-clear explanations with formulas
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Content Render */}
+                    {!askAILoading && askAICache[currentIndex]?.[askAIMode] && (
+                      <div className="bg-zinc-50/80 border border-zinc-200/80 rounded-2xl p-4 md:p-5 shadow-xs">
+                        <GlobalMarkdown className="text-xs md:text-sm text-zinc-800 leading-relaxed space-y-3 font-medium">
+                          {formatQuizMath(askAICache[currentIndex][askAIMode] || '')}
+                        </GlobalMarkdown>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Toolbar */}
+              <div className="px-6 py-4 border-t border-zinc-100 bg-white flex items-center justify-between gap-3">
+                {askAIMode !== 'choose' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setAskAIMode('choose')}
+                      className="px-4 py-2.5 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <span>Change Mode</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyAIHelp}
+                        disabled={askAILoading || !askAICache[currentIndex]?.[askAIMode]}
+                        className="px-3.5 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 hover:bg-zinc-50 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-40"
+                        title="Copy Explanation"
+                      >
+                        {copiedAiHelp ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedAiHelp ? 'Copied' : 'Copy'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowAskAIModal(false)}
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition-all shadow-md shadow-indigo-600/15 cursor-pointer active:scale-95"
+                      >
+                        Back to Quiz
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowAskAIModal(false)}
+                    className="w-full py-3 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                  >
+                    Close & Resume Quiz
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

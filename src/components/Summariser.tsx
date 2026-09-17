@@ -645,22 +645,13 @@ export default function Summariser({ onBack }: SummariserProps) {
                 {copied ? 'Copied to Clipboard!' : '📋 Copy Summary'}
               </button>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={handleExportPDF}
-                  className="py-3.5 px-4 rounded-xl font-bold text-sm bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200 shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  <Download className="w-4 h-4 text-emerald-600" />
-                  <span>Export to PDF</span>
-                </button>
-                <button
-                  onClick={handleSharePDF}
-                  className="py-3.5 px-4 rounded-xl font-bold text-sm bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200 shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  <Share2 className="w-4 h-4 text-emerald-600" />
-                  <span>Share PDF</span>
-                </button>
-              </div>
+              <button
+                onClick={handleSharePDF}
+                className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200 shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <Share2 className="w-4 h-4 text-emerald-600" />
+                <span>Share PDF</span>
+              </button>
               
               <button 
                 onClick={() => {

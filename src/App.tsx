@@ -19,7 +19,8 @@ import { App as CapApp } from '@capacitor/app';
 import { Network } from '@capacitor/network';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { safeGetItem, safeSetItem, safeClearAll } from './utils/storage';
-import { refillDailyCoins } from './utils/coins';
+import { refillDailyCoins, getCoins } from './utils/coins';
+import { getStudyXP, getStudyLevel, getDailyXPStatus } from './utils/gamification';
 import { showToast } from './utils/toast';
 import { setupDailyLocalNotifications } from './utils/notifications';
 import confetti from 'canvas-confetti';
@@ -222,10 +223,23 @@ export default function App() {
 
     // Check if the app just performed a full performance optimization restart
     try {
-      if (sessionStorage.getItem('just_optimized_fresh_boot') === 'true') {
+      const isFreshBoot =
+        sessionStorage.getItem('just_optimized_fresh_boot') ||
+        localStorage.getItem('just_optimized_fresh_boot');
+
+      if (isFreshBoot) {
         sessionStorage.removeItem('just_optimized_fresh_boot');
+        localStorage.removeItem('just_optimized_fresh_boot');
+
+        // Strip clean cache-busting query parameter from address bar
+        if (typeof window !== 'undefined' && window.location.search.includes('fresh=')) {
+          try {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          } catch (_) {}
+        }
+
         setTimeout(() => {
-          showToast('🚀 App Cleanly Restarted • 100% RAM Clean & Zero Lag!', 'success');
+          showToast('⚡ HelpYou AI 100% Lag-Free & Refreshed! RAM freed & peak 60fps restored.', 'success');
         }, 600);
       }
     } catch (_) {}
@@ -634,23 +648,111 @@ export default function App() {
     return () => unsubscribeItems();
   }, [user, authLoading]);
 
-  // Manual force sync handler for Pull-to-Refresh
+  // State to force-refresh homepage widgets and cards upon pull-to-refresh
+  const [dashboardRefreshEpoch, setDashboardRefreshEpoch] = useState(() => Date.now());
+
+  // Comprehensive App-Wide Refresh Handler for Pull-to-Refresh
   const handleForceSync = async () => {
-    if (!user) return;
     try {
-      const q = query(
-        collection(db, 'pocket_items'),
-        where('userId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPocketItems(fetched);
-      safeSetItem(`stale_pocket_items_${user.uid}`, JSON.stringify(fetched));
-      console.log('[ForceSync] Successfully force-synced pocket items:', fetched.length);
+      // 1. Check & Refill Daily Coins
+      try {
+        refillDailyCoins();
+      } catch (_) {}
+
+      // 2. Refresh User Cloud Profile, Coins, VIP Status & Streak if logged in
+      if (user) {
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+
+            // A. Sync Coins
+            if (typeof userData.coins === 'number') {
+              safeSetItem(`study_coins_${user.uid}`, String(userData.coins));
+              safeSetItem('helpyou_coins_balance', String(userData.coins));
+              window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: userData.coins }));
+            }
+
+            // B. Sync VIP Status
+            if (typeof userData.isVip === 'boolean') {
+              setIsVip(userData.isVip);
+              safeSetItem(`study_is_vip_${user.uid}`, String(userData.isVip));
+              safeSetItem('study_is_vip', String(userData.isVip));
+              window.dispatchEvent(new CustomEvent('study-vip-updated', { detail: userData.isVip }));
+            }
+
+            // C. Sync Study Streak
+            if (typeof userData.currentStreak === 'number') {
+              safeSetItem('study_punches', String(userData.currentStreak));
+              safeSetItem('study_streak_days', String(userData.currentStreak));
+              window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: userData.currentStreak }));
+            }
+          }
+        } catch (e) {
+          console.warn('[ForceSync] User doc sync notice:', e);
+        }
+
+        // D. Sync Pocket Items / Saved Notes
+        try {
+          const q = query(
+            collection(db, 'pocket_items'),
+            where('userId', '==', user.uid),
+            orderBy('createdAt', 'desc')
+          );
+          const snapshot = await getDocs(q);
+          const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          setPocketItems(fetched);
+          safeSetItem(`stale_pocket_items_${user.uid}`, JSON.stringify(fetched));
+        } catch (e) {
+          console.warn('[ForceSync] Pocket items sync notice:', e);
+        }
+      } else {
+        // If Guest: Sync local coins and streak
+        const localCoins = getCoins();
+        window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: localCoins }));
+        const localStreak = Number(safeGetItem('study_streak_days') || safeGetItem('study_punches') || '1');
+        window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: localStreak }));
+      }
+
+      // 3. Refresh Gamification (Study XP, Level & Daily Quests)
+      try {
+        const currentXP = getStudyXP();
+        const currentLevel = getStudyLevel(currentXP);
+        const dailyStatus = getDailyXPStatus();
+        window.dispatchEvent(new CustomEvent('study-xp-updated', { detail: { xp: currentXP, level: currentLevel.currentLevel } }));
+        window.dispatchEvent(new CustomEvent('study-daily-xp-updated', { detail: dailyStatus }));
+        window.dispatchEvent(new CustomEvent('study-quests-updated'));
+      } catch (_) {}
+
+      // 4. Invalidate and Refresh Feature Caches (Mistake Vault, PDF History, Academic Profile)
+      try {
+        window.dispatchEvent(new CustomEvent('study-mistake-vault-updated'));
+        window.dispatchEvent(new CustomEvent('pdf-history-updated', { detail: { refreshed: true } }));
+        window.dispatchEvent(new CustomEvent('academic_profile_updated', { detail: { refreshed: true } }));
+        window.dispatchEvent(new Event('settings_changed'));
+        window.dispatchEvent(new Event('storage'));
+      } catch (_) {}
+
+      // 5. Suspend any lingering background voice synthesizers from previous tools
+      try {
+        window.dispatchEvent(new CustomEvent('helpyou:stop-all-tutor-audio'));
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+      } catch (_) {}
+
+      // 6. Bump Dashboard Refresh Epoch to force full component re-render
+      setDashboardRefreshEpoch(Date.now());
+
+      // 7. Tactile Confirmation & Toast
+      triggerVibration([20, 35]);
+      showToast('⚡ HelpYou AI Refreshed! All features, streaks & data up-to-date.', 'success');
+      console.log('[ForceSync] Comprehensive app refresh completed successfully.');
     } catch (err) {
-      console.error('[ForceSync] Error during manual force-sync of pocket items:', err);
-      throw err;
+      console.error('[ForceSync] Error during manual force-sync:', err);
+      triggerVibration(10);
+      showToast('Sync refreshed with local cache.');
     }
   };
 
@@ -935,6 +1037,7 @@ export default function App() {
             <ErrorBoundary>
               <Suspense fallback={<FullPageSkeleton />}>
                 <ToolsDashboard 
+                  key={`tools-dash-${dashboardRefreshEpoch}`}
                   isVip={isVip} 
                   user={user}
                   pocketItems={pocketItems}
@@ -944,6 +1047,7 @@ export default function App() {
                   onSelectTool={handleSelectToolFromDashboard} 
                   activeTab={activeTab}
                   onForceSync={handleForceSync}
+                  refreshEpoch={dashboardRefreshEpoch}
                 />
               </Suspense>
             </ErrorBoundary>

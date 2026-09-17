@@ -320,8 +320,8 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Please upload a chapter or notes file under 10MB for rapid flashcards.");
+    if (file.size > 35 * 1024 * 1024) {
+      setError("Please upload a PDF or document under 35MB.");
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -358,23 +358,30 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
 
       const formData = new FormData();
       formData.append('pdf', file);
+      formData.append('count', '15');
       formData.append('action', 'flashcards-json');
 
       try {
-        const response = await fetch(getApiUrl('/api/summarize'), {
+        let response = await fetch(getApiUrl('/api/generate-pdf-flashcards'), {
           method: 'POST',
           body: formData
         });
 
-        if (!response.ok) throw new Error("Failed to process document on server.");
+        // Fallback to /api/summarize if /api/generate-pdf-flashcards is not reachable
+        if (!response.ok && response.status === 404) {
+          response = await fetch(getApiUrl('/api/summarize'), {
+            method: 'POST',
+            body: formData
+          });
+        }
 
-        const contentType = response.headers.get("content-type") || "";
-        if (!contentType.includes("application/json")) {
-          throw new Error("Server returned invalid response format");
+        if (!response.ok) {
+          const errJson = await response.json().catch(() => null);
+          throw new Error(errJson?.error || "Failed to process PDF on server.");
         }
 
         const data = await response.json();
-        if (data.flashcards && Array.isArray(data.flashcards)) {
+        if (data.flashcards && Array.isArray(data.flashcards) && data.flashcards.length > 0) {
           deductCoins(2, "AI Flashcards (PDF)");
           setFlashcards(data.flashcards);
           setSourceText("");
@@ -402,11 +409,11 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
           setSourceText(data.text);
           triggerVibration(30);
         } else {
-          setError("No study material could be extracted from this document.");
+          setError("AI could not generate flashcards from this document. Please try another PDF.");
         }
       } catch (err: any) {
         console.error("Document processing error:", err);
-        setError("Failed to process PDF. Please try a cleaner document or paste text directly.");
+        setError(err.message || "Failed to process PDF. Please try again.");
       } finally {
         setIsParsingFile(false);
       }
@@ -800,7 +807,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
                 {isParsingFile ? (
                   <div className="flex items-center gap-2 text-pink-600">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Parsing Document...</span>
+                    <span>AI Reading Document...</span>
                   </div>
                 ) : (
                   <>

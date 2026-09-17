@@ -1444,6 +1444,283 @@ Instructions for AI Magic Tutor:
     }
   };
 
+  // Share PDF directly via native share sheet (no in-app preview)
+  const handleSharePDF = async (
+    customQuestions?: { type: 'objective'; items: APObjectiveQuestion[] } | { type: 'subjective'; items: APSubjectiveQuestion[] },
+    customSubject?: { name: string; shortCode: string },
+    customUnitTitle?: string
+  ) => {
+    triggerVibration(15);
+    try {
+      const qType = customQuestions ? customQuestions.type : questionType;
+      const subj = customSubject || { name: selectedSubject.name, shortCode: selectedSubject.shortCode };
+      const uTitle = customUnitTitle || (selectedUnit ? selectedUnit.title : 'All Curriculum Units');
+      const objQs = customQuestions && customQuestions.type === 'objective' ? customQuestions.items : objectiveQuestions;
+      const subQs = customQuestions && customQuestions.type === 'subjective' ? customQuestions.items : subjectiveQuestions;
+
+      if (qType === 'objective' && (!objQs || objQs.length === 0)) {
+        alert("No objective questions available to share.");
+        return;
+      }
+      if (qType === 'subjective' && (!subQs || subQs.length === 0)) {
+        alert("No free response questions available to share.");
+        return;
+      }
+
+      // Reuse the same PDF generation logic from handleExportPDF
+      const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 36;
+      const contentWidth = pageWidth - (margin * 2);
+      let currentY = 0;
+      let currentPage = 1;
+
+      const drawHeader = (isFirstPage: boolean) => {
+        if (isFirstPage) {
+          doc.setFillColor(30, 27, 75);
+          doc.rect(0, 0, pageWidth, 74, 'F');
+          doc.setFillColor(99, 102, 241);
+          doc.rect(0, 74, pageWidth, 3, 'F');
+          doc.setTextColor(251, 191, 36);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          doc.text('HELPYOU AI  |  ADVANCED PLACEMENT® EXAM PREPARATION', margin, 24);
+          doc.setTextColor(255, 255, 255);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(15);
+          doc.text(`AP® ${sanitizePdfText(subj.name)} Practice Set`, margin, 45);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(226, 232, 240);
+          const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+          doc.text(`Format: ${qType === 'objective' ? 'Section I (Multiple Choice)' : 'Section II (Free Response)'}   |   Unit: ${sanitizePdfText(uTitle)}   |   ${dateStr}`, margin, 62);
+          currentY = 96;
+        } else {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(0, 0, pageWidth, 28, 'F');
+          doc.setDrawColor(226, 232, 240);
+          doc.line(0, 28, pageWidth, 28);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.setTextColor(100, 116, 139);
+          doc.text(`AP® ${sanitizePdfText(subj.shortCode)} - ${qType === 'objective' ? 'Multiple Choice' : 'Free Response'}`, margin, 18);
+          doc.text('HelpYou AI Practice Engine', pageWidth - margin, 18, { align: 'right' });
+          currentY = 46;
+        }
+      };
+
+      const drawFooter = (pageNum: number) => {
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.5);
+        doc.line(margin, pageHeight - 24, pageWidth - margin, pageHeight - 24);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text('Confidential & Educational • Prepared with HelpYou AI Mobile Tutor', margin, pageHeight - 12);
+        doc.text(`Page ${pageNum}`, pageWidth - margin, pageHeight - 12, { align: 'right' });
+      };
+
+      drawHeader(true);
+      drawFooter(currentPage);
+
+      const checkPageBreak = (neededHeight: number) => {
+        if (currentY + neededHeight > pageHeight - 40) {
+          doc.addPage();
+          currentPage++;
+          drawHeader(false);
+          drawFooter(currentPage);
+        }
+      };
+
+      if (qType === 'objective') {
+        objQs.forEach((q, idx) => {
+          checkPageBreak(75);
+          doc.setFillColor(241, 245, 249);
+          doc.roundedRect(margin, currentY, contentWidth, 20, 3, 3, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9.5);
+          doc.setTextColor(30, 41, 59);
+          doc.text(`QUESTION ${idx + 1} OF ${objQs.length}`, margin + 8, currentY + 13.5);
+          if (q.skill) {
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(8);
+            doc.setTextColor(99, 102, 241);
+            doc.text(sanitizePdfText(q.skill), pageWidth - margin - 8, currentY + 13.5, { align: 'right' });
+          }
+          currentY += 28;
+          if (q.stimulus && q.stimulus.trim()) {
+            const cleanStim = sanitizePdfText(q.stimulus.trim());
+            const stimLines = doc.splitTextToSize(cleanStim, contentWidth - 20);
+            const stimBoxH = (stimLines.length * 11) + 14;
+            checkPageBreak(stimBoxH + 30);
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(203, 213, 225);
+            doc.roundedRect(margin, currentY, contentWidth, stimBoxH, 4, 4, 'FD');
+            doc.setFont('times', 'italic');
+            doc.setFontSize(9);
+            doc.setTextColor(51, 65, 85);
+            doc.text(stimLines, margin + 10, currentY + 13);
+            currentY += stimBoxH + 10;
+          }
+          const cleanQ = sanitizePdfText(q.question);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10.5);
+          doc.setTextColor(15, 23, 42);
+          const qLines = doc.splitTextToSize(cleanQ, contentWidth);
+          checkPageBreak(qLines.length * 13 + 30);
+          doc.text(qLines, margin, currentY);
+          currentY += (qLines.length * 13) + 8;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9.5);
+          doc.setTextColor(30, 41, 59);
+          q.options.forEach(opt => {
+            const cleanOpt = sanitizePdfText(opt);
+            const optLines = doc.splitTextToSize(cleanOpt, contentWidth - 24);
+            const optH = optLines.length * 12 + 6;
+            checkPageBreak(optH + 15);
+            doc.setFillColor(241, 245, 249);
+            doc.circle(margin + 6, currentY + 4, 3, 'F');
+            doc.text(optLines, margin + 16, currentY + 6);
+            currentY += optH;
+          });
+          currentY += 10;
+          if (idx < objQs.length - 1) {
+            doc.setDrawColor(226, 232, 240);
+            doc.line(margin, currentY, pageWidth - margin, currentY);
+            currentY += 16;
+          }
+        });
+
+        doc.addPage();
+        currentPage++;
+        drawHeader(false);
+        drawFooter(currentPage);
+        doc.setFillColor(240, 253, 244);
+        doc.setDrawColor(187, 247, 208);
+        doc.roundedRect(margin, currentY, contentWidth, 24, 4, 4, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10.5);
+        doc.setTextColor(21, 128, 61);
+        doc.text('OFFICIAL AP® EXAM ANSWER KEY & DETAILED EXPLANATIONS', margin + 10, currentY + 16);
+        currentY += 34;
+        objQs.forEach((q, idx) => {
+          const cleanAns = sanitizePdfText(q.correctAnswer);
+          const cleanExp = sanitizePdfText(q.explanation);
+          const expLines = doc.splitTextToSize(`Explanation: ${cleanExp}`, contentWidth - 20);
+          const ansBoxH = 20 + (expLines.length * 11) + 12;
+          checkPageBreak(ansBoxH + 18);
+          doc.setFillColor(248, 250, 252);
+          doc.setDrawColor(226, 232, 240);
+          doc.roundedRect(margin, currentY, contentWidth, ansBoxH, 4, 4, 'FD');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9.5);
+          doc.setTextColor(21, 128, 61);
+          doc.text(`QUESTION ${idx + 1} • [✓ Correct Answer]:  ${cleanAns}`, margin + 10, currentY + 14);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(55, 65, 81);
+          doc.text(expLines, margin + 10, currentY + 28);
+          currentY += ansBoxH + 12;
+        });
+      } else {
+        subQs.forEach((q, idx) => {
+          checkPageBreak(85);
+          doc.setFillColor(243, 232, 255);
+          doc.roundedRect(margin, currentY, contentWidth, 22, 3, 3, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(107, 33, 168);
+          doc.text(`FREE RESPONSE QUESTION ${idx + 1}  [${q.totalPoints || 6} POINTS]`, margin + 8, currentY + 15);
+          if (q.skill) {
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(8);
+            doc.setTextColor(126, 34, 206);
+            doc.text(sanitizePdfText(q.skill), pageWidth - margin - 8, currentY + 15, { align: 'right' });
+          }
+          currentY += 30;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10.5);
+          doc.setTextColor(15, 23, 42);
+          const promptLines = doc.splitTextToSize(sanitizePdfText(q.prompt), contentWidth);
+          checkPageBreak(promptLines.length * 13 + 30);
+          doc.text(promptLines, margin, currentY);
+          currentY += (promptLines.length * 13) + 16;
+          if (idx < subQs.length - 1) {
+            doc.setDrawColor(226, 232, 240);
+            doc.line(margin, currentY, pageWidth - margin, currentY);
+            currentY += 16;
+          }
+        });
+
+        doc.addPage();
+        currentPage++;
+        drawHeader(false);
+        drawFooter(currentPage);
+        doc.setFillColor(238, 242, 255);
+        doc.setDrawColor(199, 210, 254);
+        doc.roundedRect(margin, currentY, contentWidth, 24, 4, 4, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10.5);
+        doc.setTextColor(67, 56, 202);
+        doc.text('OFFICIAL COLLEGE BOARD SCORING GUIDELINES & MODEL SOLUTIONS', margin + 10, currentY + 16);
+        currentY += 34;
+        subQs.forEach((q, idx) => {
+          checkPageBreak(85);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(88, 28, 135);
+          doc.text(`QUESTION ${idx + 1} SCORING RUBRIC & EXEMPLARY SOLUTION`, margin, currentY);
+          currentY += 14;
+          const cleanModel = sanitizePdfText(q.modelAnswer);
+          const modelLines = doc.splitTextToSize(cleanModel, contentWidth - 20);
+          const modelBoxH = 20 + (modelLines.length * 11) + 10;
+          checkPageBreak(modelBoxH + 30);
+          doc.setFillColor(248, 250, 252);
+          doc.setDrawColor(203, 213, 225);
+          doc.roundedRect(margin, currentY, contentWidth, modelBoxH, 4, 4, 'FD');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.setTextColor(67, 56, 202);
+          doc.text('Exemplary Model Solution (Maximum Score):', margin + 10, currentY + 14);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(30, 41, 59);
+          doc.text(modelLines, margin + 10, currentY + 28);
+          currentY += modelBoxH + 12;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.setTextColor(5, 150, 105);
+          doc.text('Official Reader Scoring Guidelines & Criteria:', margin, currentY);
+          currentY += 12;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(51, 65, 85);
+          q.scoringRubric.forEach(rubricItem => {
+            const cleanRubric = sanitizePdfText(`• ${rubricItem}`);
+            const rLines = doc.splitTextToSize(cleanRubric, contentWidth - 12);
+            checkPageBreak(rLines.length * 11 + 6);
+            doc.text(rLines, margin + 6, currentY);
+            currentY += (rLines.length * 11) + 4;
+          });
+          currentY += 16;
+          if (idx < subQs.length - 1) {
+            doc.setDrawColor(226, 232, 240);
+            doc.line(margin, currentY, pageWidth - margin, currentY);
+            currentY += 16;
+          }
+        });
+      }
+
+      const filename = `AP_${subj.shortCode.replace(/\s+/g, '_')}_${qType.toUpperCase()}_Practice.pdf`;
+      const pdfBlob = doc.output('blob');
+      await sharePDFMobile(pdfBlob, filename);
+    } catch (err: any) {
+      console.error("PDF Share Error:", err);
+      alert("Failed to share PDF: " + err.message);
+    }
+  };
+
   // Resume practice session from History
   const handleResumeHistory = (item: APTestPrepHistoryItem) => {
     triggerVibration(15);
@@ -2191,14 +2468,14 @@ Instructions for AI Magic Tutor:
                   )}
                 </div>
 
-                {/* Prominent Export to PDF Action (Available during practice) */}
+                {/* Share PDF Action (Available during practice) */}
                 <div className="pt-2">
                   <button
-                    onClick={() => handleExportPDF()}
+                    onClick={() => handleSharePDF()}
                     className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-[0.99] transition-all hover:brightness-105 cursor-pointer"
                   >
-                    <FileText className="w-4 h-4 text-purple-200" />
-                    <span>Export to PDF</span>
+                    <Share2 className="w-4 h-4 text-purple-200" />
+                    <span>Share PDF</span>
                   </button>
                 </div>
               </>
@@ -2686,14 +2963,14 @@ Instructions for AI Magic Tutor:
                         </div>
                       )}
 
-                      {/* Prominent Export to PDF Action (Available during practice) */}
+                      {/* Share PDF Action (Available during practice) */}
                       <div className="pt-2 pb-2">
                         <button
-                          onClick={() => handleExportPDF()}
+                          onClick={() => handleSharePDF()}
                           className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-600 to-purple-800 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-[0.99] transition-all hover:brightness-105 cursor-pointer"
                         >
-                          <FileText className="w-4 h-4 text-purple-200" />
-                          <span>Export to PDF</span>
+                          <Share2 className="w-4 h-4 text-purple-200" />
+                          <span>Share PDF</span>
                         </button>
                       </div>
                     </div>
@@ -3195,7 +3472,7 @@ Instructions for AI Magic Tutor:
                       </div>
                       <h4 className="font-black text-zinc-800 text-sm">No Practice History Yet</h4>
                       <p className="text-xs text-zinc-500 max-w-xs mt-1">
-                        Generated questions will automatically appear here line-wise so you can practice again or export to PDF anytime.
+                        Generated questions will automatically appear here line-wise so you can practice again or share as PDF anytime.
                       </p>
                     </div>
                   ) : (

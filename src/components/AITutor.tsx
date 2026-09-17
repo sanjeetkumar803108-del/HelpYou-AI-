@@ -9,11 +9,12 @@ import {
   Sparkles, Send, Mic, MicOff, Loader2, RefreshCw, Compass, Brain, 
   ArrowRight, Copy, Check, Share2, ThumbsUp, ThumbsDown, Pause, Play,
   Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock, Square,
-  AlertTriangle
+  AlertTriangle, Flag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parsePartialJSON } from '../utils/partialJson';
-import GlobalMarkdown from './GlobalMarkdown';
+import GlobalMarkdown, { formatSuggestionMath } from './GlobalMarkdown';
+import ReportAIModal from './ReportAIModal';
 import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -133,7 +134,8 @@ FORMAT:
 
 RULES:
 - Always populate "suggestions" with 3 context-aware study follow-up ideas.
-- Whenever using LaTeX for formulas, wrap in $$ or $ and double-escape backslashes in JSON (\\\\frac, \\\\sqrt, \\\\text).`;
+- Whenever using LaTeX for formulas, wrap in $$ or $ and double-escape backslashes in JSON (\\\\frac, \\\\sqrt, \\\\text).
+- In the "suggestions" array: Wrap all mathematical formulas, variables with superscripts/exponents (e.g. $x^2$), or subscripts (e.g. $x_1$, $H_2O$) in single dollar signs ($...$). NEVER output raw un-delimited LaTeX or block ($$) math in suggestions.`;
 
 // Used when the student types a question/message WITHOUT an image
 const SYSTEM_INSTRUCTION_TEXT_CHAT = `You are an elite, polyglot AI Master Educator and Academic Tutor for HelpYou AI. You are intellectually brilliant, deeply empathetic, and dynamically adaptive to student needs.
@@ -209,7 +211,8 @@ Use this for greetings, conceptual questions, bullet-point lists, comparison tab
 RULES:
 - The JSON object must be valid raw JSON.
 - Double-escape backslashes for all LaTeX inside JSON (\\\\frac, \\\\sqrt, \\\\sin, \\\\boxed).
-- Always include 3 high-value suggestions in the "suggestions" array.`;
+- Always include 3 high-value suggestions in the "suggestions" array.
+- In "suggestions", wrap all math, exponents (e.g. $x^2$), subscripts (e.g. $x_1$, $H_2O$), and formulas in single dollar signs ($...$).`;
 
 // ----------------------------------------------------
 function formatSpacedContent(text: string): string {
@@ -226,6 +229,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
   onToggleDislike,
   onSuggestionClick,
   onAskDoubt,
+  onReportMessage,
   activePersona = 'owl'
 }: { 
   msg: ChatMessage; 
@@ -236,6 +240,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
   onToggleDislike: () => void;
   onSuggestionClick?: (text: string) => void;
   onAskDoubt?: (stepId: number, title: string, content: string) => void;
+  onReportMessage?: (text: string) => void;
   activePersona?: 'owl' | 'cosmo' | 'wizard' | 'dino';
 }) {
   const cleanText = useMemo(() => {
@@ -601,7 +606,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
                 >
                   <Sparkles className="w-3 h-3 text-purple-500 shrink-0" />
                   <span className="[&_.katex]:text-xs [&_.katex-display]:my-0 [&_p]:inline [&_p]:m-0">
-                    <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{sug}</GlobalMarkdown>
+                    <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{formatSuggestionMath(sug)}</GlobalMarkdown>
                   </span>
                 </button>
               ))}
@@ -648,6 +653,15 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
               title="Dislike"
             >
               <ThumbsDown className={`w-3.5 h-3.5 ${msg.isDisliked ? 'fill-current' : ''}`} />
+            </button>
+
+            <button 
+              onClick={() => onReportMessage?.(textToShareOrCopy)}
+              className="p-1.5 rounded-lg hover:bg-rose-50 hover:text-rose-600 text-zinc-400 transition-all active:scale-90 flex items-center gap-1 text-[11px] font-bold"
+              title="Report Inaccurate or Inappropriate Content"
+            >
+              <Flag className="w-3.5 h-3.5 text-rose-500" />
+              <span className="text-[10px]">Report</span>
             </button>
           </div>
         )}
@@ -850,6 +864,10 @@ export default function AITutor({ isVip, isActive = true }: { isVip: boolean; is
 
   const [contextualDoubt, setContextualDoubt] = useState<{ stepId: number; content: string; title: string } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // AI Content Safety Report Modal state
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
 
   // Auto-grow height of the chat input textarea (caps at max 144px, roughly 6 lines)
   useEffect(() => {
@@ -2189,6 +2207,10 @@ Please evaluate this answer strictly according to your system rubric.`;
                       inputRef.current?.focus();
                     }, 50);
                   }}
+                  onReportMessage={(text) => {
+                    setReportSnippet(text);
+                    setReportModalOpen(true);
+                  }}
                 />
               ))}
 
@@ -2570,6 +2592,13 @@ Please evaluate this answer strictly according to your system rubric.`;
             </button>
           )}
         </div>
+
+        {/* Google Play Mandatory AI Safety Disclaimer */}
+        <div className="text-center pt-1.5 pb-0.5 px-3">
+          <p className="text-[10px] text-zinc-400 font-medium select-none tracking-tight">
+            HelpYou AI can make mistakes. Please double check important information.
+          </p>
+        </div>
       </div>
 
       {/* Full-Screen Image Preview Modal */}
@@ -2609,6 +2638,17 @@ Please evaluate this answer strictly according to your system rubric.`;
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={reportSnippet}
+        sourceFeature="AI Tutor"
+        onClose={() => {
+          setReportModalOpen(false);
+          setReportSnippet('');
+        }}
+      />
 
     </div>
   );

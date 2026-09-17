@@ -1,15 +1,126 @@
 /**
  * Universal PDF Text Sanitizer for jsPDF Standard Fonts (Helvetica, Times, Courier).
  * 
- * Maps Unicode emojis, surrogate pairs, IPA pronunciation symbols, Greek math glyphs,
+ * Step 0: LaTeX/KaTeX math sanitizer — converts all math notation to readable plain text.
+ * Step 1+: Maps Unicode emojis, surrogate pairs, IPA pronunciation symbols, Greek math glyphs,
  * smart quotes, and unprintable glyphs into clean, universally renderable PDF symbols 
- * so exported PDFs never display garbled symbols (like âœ¨, ðŸ“š, ï¿½, ???) or excessive spacing.
+ * so exported PDFs never display garbled symbols (like â€™, ðŸ"š, ï¿½, ???) or excessive spacing.
  */
 
 export function sanitizePdfText(text: string): string {
   if (!text) return '';
 
   let str = text;
+
+  // 0. LaTeX / KaTeX Sanitizer — convert math to readable plain text FIRST
+  //    so downstream steps never see raw LaTeX commands as garbled output.
+
+  // 0a. Strip display-math delimiters: $$...$$ and \[...\]
+  str = str.replace(/\$\$([\s\S]*?)\$\$/g, function(_m, inner) { return inner.trim(); });
+  str = str.replace(/\\\[([\s\S]*?)\\\]/g, function(_m, inner) { return inner.trim(); });
+
+  // 0b. Strip inline-math delimiters: $...$ and \(...\)
+  str = str.replace(/\$(.*?)\$/g, function(_m, inner) { return inner.trim(); });
+  str = str.replace(/\\\(([\s\S]*?)\\\)/g, function(_m, inner) { return inner.trim(); });
+
+  // 0c. Structural LaTeX: fractions, roots, superscripts, subscripts
+  // Fractions: \frac{a}{b} -> (a)/(b)  [two passes for nested]
+  str = str.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)');
+  str = str.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)');
+  // Square root
+  str = str.replace(/\\sqrt\{([^{}]*)\}/g, 'sqrt($1)');
+  str = str.replace(/\\sqrt\s+(\S+)/g, 'sqrt($1)');
+  // Superscript/subscript braces
+  str = str.replace(/\^\{([^{}]*)\}/g, '^$1');
+  str = str.replace(/_\{([^{}]*)\}/g, '_$1');
+
+  // 0d. Bracket/delimiter commands
+  str = str
+    .replace(/\\left\|/g, '|').replace(/\\right\|/g, '|')
+    .replace(/\\left\(/g, '(').replace(/\\right\)/g, ')')
+    .replace(/\\left\[/g, '[').replace(/\\right\]/g, ']')
+    .replace(/\\left\\{/g, '{').replace(/\\right\\}/g, '}')
+    .replace(/\\left\{/g, '{').replace(/\\right\}/g, '}');
+
+  // 0e. Arrows & relations
+  str = str
+    .replace(/\\rightarrow/g, '->').replace(/\\leftarrow/g, '<-')
+    .replace(/\\Rightarrow/g, '=>').replace(/\\Leftarrow/g, '<=')
+    .replace(/\\leftrightarrow/g, '<->').replace(/\\Leftrightarrow/g, '<=>')
+    .replace(/\\to\b/g, '->').replace(/\\gets\b/g, '<-')
+    .replace(/\\leq\b/g, '<=').replace(/\\geq\b/g, '>=')
+    .replace(/\\neq\b/g, '!=').replace(/\\approx\b/g, '~=')
+    .replace(/\\equiv\b/g, '=').replace(/\\propto\b/g, 'proportional to')
+    .replace(/\\infty\b/g, 'infinity');
+
+  // 0f. Operators
+  str = str
+    .replace(/\\times\b/g, 'x').replace(/\\cdot\b/g, '.')
+    .replace(/\\div\b/g, '/').replace(/\\pm\b/g, '+/-').replace(/\\mp\b/g, '-/+')
+    .replace(/\\int\b/g, 'integral').replace(/\\sum\b/g, 'sum').replace(/\\prod\b/g, 'product')
+    .replace(/\\partial\b/g, 'd').replace(/\\nabla\b/g, 'del');
+
+  // 0g. Math functions
+  str = str
+    .replace(/\\lim\b/g, 'lim').replace(/\\ln\b/g, 'ln').replace(/\\log\b/g, 'log')
+    .replace(/\\exp\b/g, 'exp').replace(/\\det\b/g, 'det').replace(/\\max\b/g, 'max')
+    .replace(/\\min\b/g, 'min').replace(/\\sup\b/g, 'sup').replace(/\\inf\b/g, 'inf')
+    .replace(/\\sin\b/g, 'sin').replace(/\\cos\b/g, 'cos').replace(/\\tan\b/g, 'tan')
+    .replace(/\\csc\b/g, 'csc').replace(/\\sec\b/g, 'sec').replace(/\\cot\b/g, 'cot')
+    .replace(/\\arcsin\b/g, 'arcsin').replace(/\\arccos\b/g, 'arccos').replace(/\\arctan\b/g, 'arctan');
+
+  // 0h. Greek letters (lowercase)
+  str = str
+    .replace(/\\alpha\b/g, 'alpha').replace(/\\beta\b/g, 'beta').replace(/\\gamma\b/g, 'gamma')
+    .replace(/\\delta\b/g, 'delta').replace(/\\epsilon\b/g, 'epsilon').replace(/\\varepsilon\b/g, 'epsilon')
+    .replace(/\\zeta\b/g, 'zeta').replace(/\\eta\b/g, 'eta').replace(/\\theta\b/g, 'theta')
+    .replace(/\\vartheta\b/g, 'theta').replace(/\\iota\b/g, 'iota').replace(/\\kappa\b/g, 'kappa')
+    .replace(/\\lambda\b/g, 'lambda').replace(/\\mu\b/g, 'mu').replace(/\\nu\b/g, 'nu')
+    .replace(/\\xi\b/g, 'xi').replace(/\\pi\b/g, 'pi').replace(/\\varpi\b/g, 'pi')
+    .replace(/\\rho\b/g, 'rho').replace(/\\varrho\b/g, 'rho').replace(/\\sigma\b/g, 'sigma')
+    .replace(/\\varsigma\b/g, 'sigma').replace(/\\tau\b/g, 'tau').replace(/\\upsilon\b/g, 'upsilon')
+    .replace(/\\phi\b/g, 'phi').replace(/\\varphi\b/g, 'phi').replace(/\\chi\b/g, 'chi')
+    .replace(/\\psi\b/g, 'psi').replace(/\\omega\b/g, 'omega');
+
+  // 0i. Greek letters (uppercase)
+  str = str
+    .replace(/\\Gamma\b/g, 'Gamma').replace(/\\Delta\b/g, 'Delta').replace(/\\Theta\b/g, 'Theta')
+    .replace(/\\Lambda\b/g, 'Lambda').replace(/\\Xi\b/g, 'Xi').replace(/\\Pi\b/g, 'Pi')
+    .replace(/\\Sigma\b/g, 'Sigma').replace(/\\Upsilon\b/g, 'Upsilon').replace(/\\Phi\b/g, 'Phi')
+    .replace(/\\Psi\b/g, 'Psi').replace(/\\Omega\b/g, 'Omega');
+
+  // 0j. Text formatting commands (extract content)
+  str = str
+    .replace(/\\textbf\{([^{}]*)\}/g, '$1')
+    .replace(/\\textit\{([^{}]*)\}/g, '$1')
+    .replace(/\\text\{([^{}]*)\}/g, '$1')
+    .replace(/\\mathrm\{([^{}]*)\}/g, '$1')
+    .replace(/\\mathbf\{([^{}]*)\}/g, '$1')
+    .replace(/\\mathit\{([^{}]*)\}/g, '$1')
+    .replace(/\\boldsymbol\{([^{}]*)\}/g, '$1')
+    .replace(/\\overline\{([^{}]*)\}/g, '$1')
+    .replace(/\\underline\{([^{}]*)\}/g, '$1')
+    .replace(/\\hat\{([^{}]*)\}/g, '$1-hat')
+    .replace(/\\vec\{([^{}]*)\}/g, '$1-vec')
+    .replace(/\\bar\{([^{}]*)\}/g, '$1-bar')
+    .replace(/\\tilde\{([^{}]*)\}/g, '$1~')
+    .replace(/\\dot\{([^{}]*)\}/g, '$1.')
+    .replace(/\\ddot\{([^{}]*)\}/g, '$1..');
+
+  // 0k. Spacing commands
+  str = str
+    .replace(/\\quad\b/g, '  ').replace(/\\qquad\b/g, '    ')
+    .replace(/\\,/g, ' ').replace(/\\;/g, ' ').replace(/\\:/g, ' ').replace(/\\!/g, '')
+    .replace(/\\\\/g, ' ');
+
+  // 0l. Strip LaTeX environments: \begin{...} ... \end{...}
+  str = str.replace(/\\begin\{[^{}]*\}/g, '').replace(/\\end\{[^{}]*\}/g, '');
+
+  // 0m. Strip any remaining unknown \command or \command{...} patterns
+  str = str.replace(/\\[a-zA-Z]+(?:\{[^{}]*\})?/g, ' ');
+
+  // 0n. Remove lone curly braces left from LaTeX grouping
+  str = str.replace(/\{([^{}]*)\}/g, '$1').replace(/[{}]/g, '');
 
   // 1. Normalize Unicode IPA Pronunciation & Phonetic Symbols to readable Latin typography
   const phoneticMap: Record<string, string> = {
@@ -31,11 +142,11 @@ export function sanitizePdfText(text: string): string {
     .replace(/[\u2705\u2714\u2611\u{1F5F8}]/gu, '✓ ')
     .replace(/[\u274C\u274E\u2716\u2718\u{1F5D9}]/gu, '✗ ')
     .replace(/[\u26A0\u{1F6A8}]/gu, '[!] ')
-    .replace(/[\u27A1\u{1F449}\u25B6\u2794\u279C]/gu, '→ ')
-    .replace(/[\u2B05\u{1F448}\u25C0]/gu, '← ')
-    .replace(/[\u2B06\u{1F53C}\u25B2]/gu, '↑ ')
-    .replace(/[\u2B07\u{1F53D}\u25BC]/gu, '↓ ')
-    .replace(/[\u2B50\u{1F31F}\u2728\u2734]/gu, '★ ')
+    .replace(/[\u27A1\u{1F449}\u25B6\u2794\u279C]/gu, '-> ')
+    .replace(/[\u2B05\u{1F448}\u25C0]/gu, '<- ')
+    .replace(/[\u2B06\u{1F53C}\u25B2]/gu, '^ ')
+    .replace(/[\u2B07\u{1F53D}\u25BC]/gu, 'v ')
+    .replace(/[\u2B50\u{1F31F}\u2728\u2734]/gu, '* ')
     .replace(/[\u{1F4A1}]/gu, '[Tip] ')
     .replace(/[\u{1F511}]/gu, '[Key] ')
     .replace(/[\u{1F4CC}\u{1F4CD}]/gu, '• ')
@@ -73,7 +184,7 @@ export function sanitizePdfText(text: string): string {
     .replace(/≤/g, '<=')
     .replace(/≥/g, '>=')
     .replace(/±/g, '+/-')
-    .replace(/×/g, '*')
+    .replace(/×/g, 'x')
     .replace(/÷/g, '/')
     .replace(/√/g, 'sqrt')
     .replace(/∫/g, 'integral');

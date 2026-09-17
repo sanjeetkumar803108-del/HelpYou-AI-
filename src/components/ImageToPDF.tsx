@@ -18,6 +18,8 @@ interface ImageItem {
 export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => void; onOpenHistory?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importCount, setImportCount] = useState<number | null>(null);
   const [compilingPage, setCompilingPage] = useState(0);
   const [fileName, setFileName] = useState('');
   const [quality, setQuality] = useState<'standard' | 'high'>('standard');
@@ -96,16 +98,62 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
     if (e) {
       e.stopPropagation();
     }
+    if (isImporting || loading) {
+      return;
+    }
     // Prevent synthetic ghost click from previous screen tap
     if (Date.now() - mountTimeRef.current < 450) {
       return;
     }
     triggerVibration(10);
+
     if (Capacitor.isNativePlatform()) {
-      const picked = await pickNativeFiles({ types: 'image', multiple: true });
-      if (picked && picked.length > 0) {
-        const newItems: ImageItem[] = picked.map(p => {
-          const blobUrl = URL.createObjectURL(p.blob);
+      try {
+        setIsImporting(true);
+        setImportCount(null);
+        await new Promise(r => setTimeout(r, 60));
+
+        const picked = await pickNativeFiles({ types: 'image', multiple: true });
+        if (picked && picked.length > 0) {
+          setImportCount(picked.length);
+          await new Promise(r => setTimeout(r, 60));
+
+          const newItems: ImageItem[] = picked.map(p => {
+            const blobUrl = URL.createObjectURL(p.blob);
+            activeBlobUrlsRef.current.add(blobUrl);
+            return {
+              id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+              src: blobUrl,
+              isBlobUrl: true
+            };
+          });
+          setImages(prev => [...prev, ...newItems]);
+          triggerVibration([15, 30]);
+        }
+      } catch (err) {
+        console.error('Failed to pick native files:', err);
+      } finally {
+        setTimeout(() => {
+          setIsImporting(false);
+          setImportCount(null);
+        }, 250);
+      }
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      setIsImporting(true);
+      setImportCount(files.length);
+      triggerVibration(15);
+      await new Promise(r => setTimeout(r, 80));
+
+      try {
+        const newItems: ImageItem[] = files.map(file => {
+          const blobUrl = URL.createObjectURL(file);
           activeBlobUrlsRef.current.add(blobUrl);
           return {
             id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -114,26 +162,51 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
           };
         });
         setImages(prev => [...prev, ...newItems]);
+        triggerVibration([15, 30]);
+      } catch (err) {
+        console.error('Error importing files:', err);
+      } finally {
+        setTimeout(() => {
+          setIsImporting(false);
+          setImportCount(null);
+        }, 300);
+        e.target.value = '';
       }
-    } else {
-      fileInputRef.current?.click();
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      const newItems: ImageItem[] = files.map(file => {
-        const blobUrl = URL.createObjectURL(file);
-        activeBlobUrlsRef.current.add(blobUrl);
-        return {
-          id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-          src: blobUrl,
-          isBlobUrl: true
-        };
-      });
-      setImages(prev => [...prev, ...newItems]);
-      e.target.value = '';
+  const handleDropFiles = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isImporting || loading) return;
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      if (files.length > 0) {
+        setIsImporting(true);
+        setImportCount(files.length);
+        triggerVibration(15);
+        await new Promise(r => setTimeout(r, 80));
+        try {
+          const newItems: ImageItem[] = files.map(file => {
+            const blobUrl = URL.createObjectURL(file);
+            activeBlobUrlsRef.current.add(blobUrl);
+            return {
+              id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+              src: blobUrl,
+              isBlobUrl: true
+            };
+          });
+          setImages(prev => [...prev, ...newItems]);
+          triggerVibration([15, 30]);
+        } catch (err) {
+          console.error('Error dropping files:', err);
+        } finally {
+          setTimeout(() => {
+            setIsImporting(false);
+            setImportCount(null);
+          }, 300);
+        }
+      }
     }
   };
 
@@ -471,6 +544,96 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   return (
     <div className="h-full flex flex-col relative text-zinc-900 bg-[#FAF9F6] overflow-hidden">
       <AnimatePresence>
+        {isImporting && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950/80 backdrop-blur-md p-6 text-center select-none"
+          >
+            <motion.div
+              initial={{ scale: 0.85, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 10 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-7 rounded-3xl shadow-2xl max-w-xs w-full flex flex-col items-center"
+            >
+              {/* Glowing Orb Animation behind icon */}
+              <div className="relative mb-5 flex items-center justify-center">
+                <motion.div
+                  animate={{ 
+                    scale: [1, 1.25, 1],
+                    opacity: [0.3, 0.7, 0.3],
+                    rotate: [0, 180, 360]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute -inset-3 bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 rounded-full blur-xl"
+                />
+
+                {/* Dual spinning rings */}
+                <div className="relative w-20 h-20 flex items-center justify-center">
+                  <motion.div
+                    className="absolute w-20 h-20 rounded-full border-[3.5px] border-blue-100 dark:border-zinc-800"
+                    style={{
+                      borderTopColor: '#2563eb',
+                      borderRightColor: '#6366f1',
+                      filter: 'drop-shadow(0 0 6px rgba(37, 99, 235, 0.5))'
+                    }}
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1.1, ease: "linear" }}
+                  />
+                  <motion.div
+                    className="absolute w-14 h-14 rounded-full border-[3px] border-blue-50 dark:border-zinc-850"
+                    style={{
+                      borderBottomColor: '#06b6d4',
+                      borderLeftColor: '#3b82f6',
+                      filter: 'drop-shadow(0 0 5px rgba(6, 182, 212, 0.4))'
+                    }}
+                    animate={{ rotate: -360 }}
+                    transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
+                  />
+
+                  {/* Center Animated Icon */}
+                  <motion.div
+                    animate={{ scale: [0.92, 1.08, 0.92] }}
+                    transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
+                    className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30"
+                  >
+                    <Upload className="w-5 h-5 animate-bounce" />
+                  </motion.div>
+                </div>
+              </div>
+
+              {/* Text and badges */}
+              <h4 className="text-zinc-900 dark:text-white font-extrabold text-base tracking-tight mb-1">
+                {importCount ? `Uploading ${importCount} ${importCount === 1 ? 'Image' : 'Images'}...` : 'Uploading Images...'}
+              </h4>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium max-w-[210px] leading-relaxed mb-4">
+                Preparing high-resolution previews for your PDF document
+              </p>
+
+              {/* Shimmering Progress Bar */}
+              <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden border border-zinc-200/60 dark:border-zinc-700/60 relative">
+                <motion.div
+                  className="absolute inset-y-0 bg-gradient-to-r from-blue-600 via-cyan-500 to-indigo-600 rounded-full"
+                  initial={{ left: "-40%", width: "40%" }}
+                  animate={{ left: "100%", width: "40%" }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 1.2,
+                    ease: "easeInOut"
+                  }}
+                />
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 animate-ping" />
+                <span>Processing photos...</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {loading && (
           <motion.div 
             initial={{ opacity: 0 }}
@@ -561,7 +724,9 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-6 z-10 relative">
         {images.length === 0 ? (
           <div 
-            className="flex flex-col items-center justify-center min-h-[300px] p-6 bg-white border-2 border-dashed border-blue-200 rounded-[2rem] shadow-sm text-center"
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={handleDropFiles}
+            className="flex flex-col items-center justify-center min-h-[300px] p-6 bg-white border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-[2rem] shadow-sm text-center transition-colors"
           >
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 border border-blue-100 shadow-xs">
               <Upload className="w-8 h-8" />
@@ -572,11 +737,12 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
             </p>
             <button
               type="button"
+              disabled={isImporting}
               onClick={(e) => handlePickImages(e)}
-              className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+              className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <Upload className="w-4 h-4" />
-              <span>Upload Images</span>
+              <span>{isImporting ? 'Uploading...' : 'Upload Images'}</span>
             </button>
           </div>
         ) : (
@@ -588,10 +754,11 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
                 <span>Drag images to reorder pages ({images.length} pages)</span>
               </div>
               <button
+                disabled={isImporting}
                 onClick={handlePickImages}
-                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-extrabold shadow-xs transition-all cursor-pointer shrink-0"
+                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-extrabold shadow-xs transition-all cursor-pointer shrink-0 disabled:opacity-50"
               >
-                + Add More
+                {isImporting ? 'Uploading...' : '+ Add More'}
               </button>
             </div>
 
@@ -654,14 +821,24 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
 
               {/* Add Images Card */}
               <div 
-                onClick={handlePickImages}
-                className="relative aspect-[3/4] bg-white border-2 border-dashed border-zinc-300 hover:border-blue-400 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50/20 transition-all shadow-sm group text-center p-3"
+                onClick={(e) => {
+                  if (!isImporting) handlePickImages(e);
+                }}
+                className={`relative aspect-[3/4] bg-white border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all shadow-sm group text-center p-3 ${
+                  isImporting 
+                    ? 'border-blue-400 bg-blue-50/20 cursor-wait' 
+                    : 'border-zinc-300 hover:border-blue-400 cursor-pointer hover:bg-blue-50/20'
+                }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                <div className={`w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 transition-transform ${isImporting ? 'animate-spin' : 'group-hover:scale-110'}`}>
                   <Upload className="w-5 h-5" />
                 </div>
-                <span className="text-xs text-zinc-900 font-extrabold block">Add More</span>
-                <span className="text-[10px] text-zinc-400 font-semibold block">Select Images</span>
+                <span className="text-xs text-zinc-900 font-extrabold block">
+                  {isImporting ? 'Adding...' : 'Add More'}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-semibold block">
+                  {isImporting ? 'Please wait' : 'Select Images'}
+                </span>
               </div>
             </div>
           </div>

@@ -1309,6 +1309,13 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
         )}
       </div>
 
+      {/* Google Play Mandatory AI Safety Disclaimer */}
+      <div className="text-center py-2 px-4 bg-[#FAF9F6] border-t border-zinc-200/60 shrink-0 z-10 select-none">
+        <p className="text-[10px] text-zinc-400 font-medium tracking-tight">
+          HelpYou AI can make mistakes. Please double check important information.
+        </p>
+      </div>
+
       {/* Floating Interactive Citation Quick-Preview Capsule */}
       <AnimatePresence>
         {activeCitationSource && (

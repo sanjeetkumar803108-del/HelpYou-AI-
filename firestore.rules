@@ -72,5 +72,13 @@ service cloud.firestore {
         (resource != null && resource.data.userId == request.auth.uid)
       );
     }
+
+    // 8. AI Content Reports (Google Play Generative AI Safety Compliance)
+    // Allows any authenticated or unauthenticated app user to submit safety/inaccuracy reports.
+    // Reading, modifying, and deleting reports is strictly prohibited from the client side.
+    match /ai_content_reports/{reportId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
   }
 }

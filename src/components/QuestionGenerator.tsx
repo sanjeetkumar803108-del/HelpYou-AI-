@@ -520,7 +520,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
           topic: customTopic, 
           count: questionCount, 
           gradeLevel, 
-          stream 
+          stream,
+          country
         })
       });
 
@@ -1687,35 +1688,15 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                 </div>
               )}
 
-              {/* CARD: COIN GENERATION BUTTON */}
-              <div className="bg-white border border-zinc-200 rounded-[2rem] p-6 shadow-sm space-y-4">
-                <div className="flex items-center justify-between text-left">
-                  <div className="space-y-0.5">
-                    <h4 className="font-extrabold text-xs text-zinc-400 uppercase tracking-widest">
-                      Ready to start?
-                    </h4>
-                    <p className="text-xs font-black text-zinc-800 leading-none">
-                      Generates ONLY subjective questions • No answers
-                    </p>
-                  </div>
-                  {!isPro ? (
-                    <div className="bg-purple-50 border border-purple-150 text-purple-700 font-black text-xs px-3.5 py-1.5 rounded-full flex items-center gap-1 shrink-0">
-                      <span>🪙 2 Coins</span>
-                    </div>
-                  ) : (
-                    <div className="bg-amber-50 border border-amber-200 text-amber-700 font-black text-[10px] uppercase tracking-wider px-3.5 py-1.5 rounded-full flex items-center gap-1 shrink-0 shadow-sm">
-                      <span>⭐ PRO UNLIMITED</span>
-                    </div>
-                  )}
-                </div>
-
+              {/* CARD: GENERATION BUTTON */}
+              <div className="bg-white border border-zinc-200 rounded-[2rem] p-4 sm:p-5 shadow-sm">
                 <button
                   type="button"
                   onClick={handleGenerate}
                   className="w-full py-4.5 bg-zinc-950 hover:bg-zinc-800 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300 fill-amber-300" />
-                  Generate Practice Questions
+                  Generate Questions
                 </button>
               </div>
 

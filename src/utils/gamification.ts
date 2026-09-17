@@ -33,6 +33,7 @@ export interface AchievementBadge {
   requiredXP: number;
   unlocked: boolean;
   claimed: boolean;
+  specialReward?: string;
 }
 
 export const STUDY_LEVELS: StudyLevel[] = [
@@ -42,7 +43,8 @@ export const STUDY_LEVELS: StudyLevel[] = [
   { level: 4, title: "AI Prodigy", badge: "⚡", minXP: 1000, maxXP: 2000, color: "from-amber-500 to-orange-500" },
   { level: 5, title: "Study Monk", badge: "🧘", minXP: 2000, maxXP: 3500, color: "from-rose-500 to-pink-500" },
   { level: 6, title: "Exam Conqueror", badge: "🏆", minXP: 3500, maxXP: 6000, color: "from-cyan-500 to-blue-600" },
-  { level: 7, title: "Grandmaster Genius", badge: "🌟", minXP: 6000, maxXP: 10000, color: "from-violet-600 to-fuchsia-600" }
+  { level: 7, title: "Study Master", badge: "👑", minXP: 6000, maxXP: 10000, color: "from-violet-600 to-fuchsia-600" },
+  { level: 8, title: "Grandmaster Legend", badge: "🌟", minXP: 10000, maxXP: 25000, color: "from-amber-500 via-purple-600 to-indigo-600" }
 ];
 
 export const ALL_BADGES: AchievementBadge[] = [
@@ -51,7 +53,8 @@ export const ALL_BADGES: AchievementBadge[] = [
   { id: 'streak_warrior', title: 'Streak Warrior', icon: '🔥', description: 'Maintain high study discipline', requiredXP: 600, unlocked: false, claimed: false },
   { id: 'pdf_compiler', title: 'PDF Master', icon: '📄', description: 'Generate study documents & formula sheets', requiredXP: 1200, unlocked: false, claimed: false },
   { id: 'ai_tutor_fan', title: 'AI Prodigy', icon: '🧠', description: 'Master complex academic topics', requiredXP: 2500, unlocked: false, claimed: false },
-  { id: 'grandmaster', title: 'Grandmaster', icon: '👑', description: 'Achieve legendary study mastery', requiredXP: 5000, unlocked: false, claimed: false }
+  { id: 'master', title: 'Master', icon: '👑', description: 'Achieve legendary study mastery', requiredXP: 5000, unlocked: false, claimed: false },
+  { id: 'grandmaster', title: 'Grandmaster', icon: '🌟', description: 'Complete 10,000 XP to unlock elite Grandmaster status and claim your surprise email reward', requiredXP: 10000, unlocked: false, claimed: false, specialReward: 'SUPRISED EMAIL' }
 ];
 
 /**

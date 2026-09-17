@@ -5,7 +5,7 @@ import { safeGetItem } from "../utils/storage";
 import React, { useState, useRef, useEffect } from 'react';
 import { Image as ImageIcon, Zap, Calculator, X, Loader2, Send, Mic, MicOff, Check, Languages, HelpCircle, GraduationCap, BookOpen, PenLine, Type, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import GlobalMarkdown from './GlobalMarkdown';
+import GlobalMarkdown, { formatSuggestionMath } from './GlobalMarkdown';
 import { parsePartialJSON } from '../utils/partialJson';
 import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -829,7 +829,9 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                                       className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-all duration-200 active:scale-95 text-left flex items-center gap-1.5 font-bold"
                                     >
                                       <span>✨</span>
-                                      <span>{sug}</span>
+                                      <span className="[&_.katex]:text-xs [&_.katex-display]:my-0 [&_p]:inline [&_p]:m-0">
+                                        <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{formatSuggestionMath(sug)}</GlobalMarkdown>
+                                      </span>
                                     </button>
                                   ))}
                                 </div>
@@ -852,7 +854,9 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                                     className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-all duration-200 active:scale-95 text-left flex items-center gap-1.5 font-bold"
                                   >
                                     <span>✨</span>
-                                    <span>{sug}</span>
+                                    <span className="[&_.katex]:text-xs [&_.katex-display]:my-0 [&_p]:inline [&_p]:m-0">
+                                      <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{formatSuggestionMath(sug)}</GlobalMarkdown>
+                                    </span>
                                   </button>
                                 ))}
                               </div>

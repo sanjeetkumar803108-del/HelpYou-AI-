@@ -1240,20 +1240,25 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     let useRawFile = false;
 
     if (req.file) {
-      try {
-        const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
-        const pdfData = await pdf(req.file.buffer, { max: 100 });
-        
-        extractedText = pdfData.text || "";
-        // If extracted text is too short, it might be a scanned PDF or images
-        if (extractedText.trim().length < 50) {
+      if (action === 'flashcards-json' || action === 'flashcards') {
+        // Direct PDF upload without any local text extraction or parsing
+        useRawFile = true;
+      } else {
+        try {
+          const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
+          const pdfData = await pdf(req.file.buffer, { max: 100 });
+          
+          extractedText = pdfData.text || "";
+          // If extracted text is too short, it might be a scanned PDF or images
+          if (extractedText.trim().length < 50) {
+            useRawFile = true;
+          }
+          
+          if (extractedText && extractedText.length > 200000) { extractedText = extractedText.slice(0, 200000); }
+        } catch (parseError) {
+          console.warn("Failed to parse PDF locally with pdf-parse, will fallback to raw bytes:", parseError);
           useRawFile = true;
         }
-        
-        if (extractedText && extractedText.length > 200000) { extractedText = extractedText.slice(0, 200000); }
-      } catch (parseError) {
-        console.warn("Failed to parse PDF locally with pdf-parse, will fallback to raw bytes:", parseError);
-        useRawFile = true;
       }
     } else {
       extractedText = textInput;
@@ -1899,6 +1904,98 @@ Format:
     res.status(500).json({ error: error.message || "Failed to generate flashcards" });
   }
 });
+
+app.post("/api/generate-pdf-flashcards", upload.single("pdf"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No PDF file uploaded" });
+    }
+
+    if (req.file.size > 35 * 1024 * 1024) {
+      return res.status(400).json({ error: "File too large. Maximum PDF size is 35MB." });
+    }
+
+    const count = req.body.count || 15;
+    const gradeLevel = req.body.gradeLevel;
+    const requestedCount = Math.min(Math.max(parseInt(count) || 15, 5), 30);
+
+    const cacheKey = crypto.createHash("sha256").update(req.file.buffer).digest("hex") + `_pdf_flashcards_${requestedCount}`;
+    if (summaryCache.has(cacheKey)) {
+      return res.json({ flashcards: summaryCache.get(cacheKey) });
+    }
+
+    const systemInstruction = `Act as an Elite Cognitive Scientist and Active Recall Specialist.
+Your mission is to thoroughly read, analyze, and comprehend the attached complete PDF document across all its pages, chapters, diagrams, formulas, tables, and sections.
+Generate exactly ${requestedCount} high-yield, comprehensive active recall revision flashcards covering the most critical concepts throughout the ENTIRE document from beginning to end.
+
+CRITICAL ACTIVE RECALL RULES:
+1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept from the document.
+2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise, punchy, and between 15 to 25 words max. It must be an active recall mnemonic, definition, or key formula concept designed for rapid revision. NEVER output long multi-sentence paragraphs.
+3. 100% COMPLETE THOUGHTS: The 15-25 word answer must be grammatically complete and self-contained (no trailing '...', no chopped clauses).
+4. LATEX & CODE: If there are mathematical formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in backticks (\`<div>\`).
+5. FULL DOCUMENT COVERAGE: Distribute questions across the entire document (beginning, middle, and end), not just the first few pages.
+
+CRITICAL OUTPUT FORMAT:
+Output ONLY a valid JSON array of objects directly parseable by JSON.parse.
+
+Format:
+[
+  {
+    "question": "What is ...?",
+    "answer": "..."
+  }
+]`;
+
+    // Direct PDF multimodal upload without any local text extraction or pdf-parse
+    const pdfPart = {
+      inlineData: {
+        mimeType: req.file.mimetype || "application/pdf",
+        data: req.file.buffer.toString("base64"),
+      },
+    };
+
+    const response = await safeGenerateContent({
+      gradeLevel,
+      model: "gemini-3.5-flash-lite",
+      contents: [{
+        parts: [
+          pdfPart,
+          { text: `Thoroughly analyze all pages of this complete attached PDF document and generate exactly ${requestedCount} high-yield active recall flashcards in the specified JSON array format.` }
+        ]
+      }],
+      config: {
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+        temperature: 0.2
+      }
+    });
+
+    const outputText = response.text || "[]";
+    let cards = safeParseJSON(outputText, 'array');
+    if (!Array.isArray(cards) || cards.length === 0) {
+      const objParsed = safeParseJSON(outputText, 'object');
+      if (objParsed && Array.isArray(objParsed.flashcards)) {
+        cards = objParsed.flashcards;
+      }
+    }
+
+    if (!Array.isArray(cards) || cards.length === 0) {
+      return res.status(500).json({ error: "Failed to parse flashcards from PDF content." });
+    }
+
+    summaryCache.set(cacheKey, cards);
+    return res.json({ flashcards: cards });
+  } catch (error: any) {
+    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
+      console.warn("PDF Flashcards quota exceeded:", error.message);
+      return res.status(429).json({ error: "API quota limit exceeded. Please try again in 60 seconds." });
+    }
+    console.error("PDF Flashcards Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to generate flashcards from PDF" });
+  }
+});
+
 
 async function robustFetchYoutubeTranscript(videoId: string): Promise<any[]> {
   console.log(`[robustFetchYoutubeTranscript] Fetching transcript for video: ${videoId}`);
@@ -2719,52 +2816,122 @@ How to resolve this:
 app.post("/api/generate-questions", async (req, res) => {
   try {
     const topic = req.body.topic || req.body.prompt || req.body.text || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const gradeLevel = req.body.gradeLevel || req.body.userGrade || "10th Grade / Secondary";
     const count = req.body.count;
     const stream = req.body.stream;
+    const country = req.body.country;
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
-    const topicText = topic && topic.trim() ? topic.trim() : `general concepts in ${stream || 'academic subjects'}`;
+    const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || 'academic curriculum'}`;
 
-    const aiClient = getAI();
-    
-    const systemInstruction = `You are an Elite Academic Advisor, Senior Examiner, and Master Educator.
-The user wants to generate high-yield, level-appropriate SUBJECTIVE (open-ended/essay) practice questions along with comprehensive expected answers and examiner marking rubrics for self-evaluation.
-Your job is to generate exactly ${requestedCount} subjective practice questions based on the topic and the user's profile.
+    const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
+Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-ended) practice questions along with standard examiner expected model answers and official marking rubrics.
 
-CRITICAL RULES:
-1. STRICT SUBJECTIVE FOCUS: Every single question must be an open-ended, subjective, conceptual, or analytical inquiry. They must require deep explanation, structured essay responses, mathematical proofs, or architectural coding plans.
-2. SUB-PART FORMATTING (MANDATORY LINE BREAKS): If a question has sub-parts (e.g., Part A, Part B, (i), (ii)), you MUST separate each sub-part with a double newline '\\n\\n' so each part starts on its own line. NEVER merge multiple parts onto a single continuous line.
-3. EXPECTED ANSWER: For each question, provide a complete, high-scoring model answer ('expectedAnswer') in 2-4 comprehensive, elegant, grammatically complete sentences. Use LaTeX ($formula$) for any math or chemical formulas.
-4. GRADING RUBRIC / KEYWORDS: For each question, provide an array of 3-5 essential keywords or marking criteria ('keyRubricPoints') that examiners require to award full marks.
-5. STRICT JSON OUTPUT: You must output ONLY a valid JSON object containing an array in a key named "questions". Do not wrap the JSON in markdown code blocks like \`\`\`json.
+CRITICAL ARCHITECTURE RULES:
+
+1. SUBJECT & DOMAIN INTEGRITY (ABSOLUTE RULE - ZERO CROSS-CONTAMINATION):
+   - Automatically detect the true academic subject of the given topic:
+     * LITERATURE & LANGUAGES (e.g., English, Hindi, Stories, Poems, Plays, Fiction, Authors like Lencho / "A Letter to God", Shakespeare, Nelson Mandela, etc.):
+       - Format questions strictly as authentic literature board exam questions: Character sketches, thematic analysis, irony, narrative conflict, moral dilemma, author's message, contextual significance, or poetic devices.
+       - NEVER inject science, mathematics, statistics, or engineering jargon (NEVER use words like "stochastic modeling", "data-driven systems", "algorithmic", "variables") into literature! Questions must be 100% grounded in the text, characters, and literary analysis.
+     * SCIENCES (Physics, Chemistry, Biology):
+       - Focus on scientific mechanisms, "Give scientific reasons why...", experimental observations, cause-and-effect, balanced chemical reactions, and real-world scientific applications.
+     * MATHEMATICS:
+       - Focus on analytical problem-solving, step-by-step proofs, derivations, and conceptual theorems. Use clean LaTeX ($...$) for equations.
+     * SOCIAL SCIENCES & HUMANITIES (History, Civics, Geography, Economics, Psychology):
+       - Focus on historical consequences, constitutional provisions, socio-economic factors, spatial patterns, and critical evaluations.
+     * COMMERCE & MANAGEMENT (Business, Accountancy, Economics):
+       - Focus on market dynamics, financial principles, policy impacts, and case study evaluations.
+     * COMPUTER SCIENCE / CODING:
+       - Focus on logic design, algorithmic efficiency, data structures, and software principles.
+
+2. REAL EXAM QUESTION VARIETY (DO NOT FORCE PART A / PART B):
+   - In real board and university exams, questions are VARIED and NATURAL. They are NOT robotically split into Part A / Part B for every question!
+   - Provide a realistic, diverse blend across the ${requestedCount} questions:
+     * Standalone Short/Medium Conceptual Questions (2–3 Marks): Clear, focused single questions testing understanding, cause, or definition (e.g., "Why did Lencho write a letter to God, and why was he displeased upon receiving the money?").
+     * Standalone Long Analytical / Essay / Evaluative Questions (5–6 Marks): Comprehensive questions testing Higher Order Thinking Skills (HOTS), character sketches, thematic critique, or deep derivations (e.g., "Analyze the irony in the story 'A Letter to God'. How did the postmaster's kindness lead to an unexpected reaction from Lencho?").
+     * Structured Multi-Part Questions (e.g., (a) and (b)): Use sub-parts ONLY when naturally appropriate (e.g., in a multi-step science problem or when asking for a definition followed by an application). When sub-parts are used, format them cleanly with double line breaks: "(a) ... \\n\\n(b) ...".
+   - Under NO circumstances should all questions have "Part A:" and "Part B:". Most questions in an authentic exam paper are standalone, direct subjective questions!
+
+3. GRADE & CURRICULUM CALIBRATION:
+   - Target Grade: ${gradeLevel}.
+   - The vocabulary, conceptual depth, and mark expectations must strictly match this academic level. Do NOT make secondary/high school questions into graduate-level research papers.
+
+4. EXPECTED MODEL ANSWER ('expectedAnswer'):
+   - Provide a complete, high-scoring model answer (2-4 well-structured sentences or clear breakdown) that demonstrates how a student achieves full marks according to official board standards.
+   - For mathematical and scientific formulas, always use valid LaTeX ($...$).
+
+5. ESSENTIAL MARKING RUBRIC ('keyRubricPoints'):
+   - Provide an array of 3-5 real grading criteria or key conceptual points that an examiner looks for when awarding marks.
+   - Points must be strictly subject-relevant (e.g., for literature: specific character traits, quotes, plot points, emotional states; for science: specific laws, keywords, reaction names, units).
+
+6. STRICT JSON OUTPUT FORMAT:
+   - Return ONLY a valid JSON object with the key "questions".
+   - Do NOT wrap in markdown backticks or include conversational text.
 
 Use this exact JSON structure:
 {
   "questions": [
     {
-      "question": "Part A: State Le Chatelier's Principle regarding dynamic chemical equilibrium.\\n\\nPart B: Predict the directional shift when temperature is increased in an exothermic synthesis reaction.",
-      "expectedAnswer": "Part A: Le Chatelier's Principle states that when a system at chemical equilibrium is disturbed by a change in temperature, pressure, or concentration, the system shifts in a direction that opposes the disturbance to re-establish equilibrium.\\n\\nPart B: In an exothermic reaction ($\\\\Delta H < 0$), heat is released as a product. Raising temperature adds heat, causing the equilibrium to shift in the reverse (endothermic) direction toward reactants, decreasing product yield.",
+      "question": "Why did Lencho describe the falling raindrops as 'new coins'? How did his feelings change when the weather took a turn for the worse?",
+      "expectedAnswer": "Lencho compared the raindrops to new coins because a good downpour promised a bountiful harvest of ripe corn, which would bring wealth and prosperity to his family. However, his joy quickly turned to despair when a violent hailstorm destroyed his entire crop, leaving his family facing potential starvation.",
       "keyRubricPoints": [
-        "Accurate statement of Le Chatelier's Principle",
-        "Heat treated as product in exothermic reaction ($\\\\Delta H < 0$)",
-        "Shift towards reverse / reactant direction",
-        "Decrease in product concentration and equilibrium constant $K_{eq}$"
+        "Comparison of big drops to 10-cent pieces and small drops to 5-cent pieces",
+        "Expectation of a rich harvest and financial security",
+        "Destructive hailstorm lasting an hour that stripped the fields bare",
+        "Lencho's profound despair and sorrow for his family's survival"
+      ]
+    },
+    {
+      "question": "How does the story 'A Letter to God' highlight the irony in human nature through the postmaster's kind gesture and Lencho's reaction?",
+      "expectedAnswer": "The supreme irony lies in Lencho's unquestioning faith in God contrasted with his complete mistrust of humanity. While the compassionate postmaster and his staff sacrificed part of their salaries to collect 70 pesos to help Lencho, Lencho suspected them of stealing the missing 30 pesos and branded them a 'bunch of crooks'.",
+      "keyRubricPoints": [
+        "Postmaster's selfless act of charity to preserve Lencho's faith",
+        "Lencho's absolute, unwavering conviction that God could not make a mistake",
+        "Accusation that the postal employees stole 30 pesos ('bunch of crooks')",
+        "Irony of suspecting the very benefactors who helped him"
+      ]
+    },
+    {
+      "question": "(a) State Ohm's Law and write its mathematical formula.\\n\\n(b) Explain why an electric bulb's filament is made of tungsten and why inert gases are filled inside the bulb.",
+      "expectedAnswer": "(a) Ohm's Law states that electric current through a conductor is directly proportional to the potential difference across its ends ($V = IR$), provided temperature remains constant.\\n\\n(b) Tungsten has a very high melting point ($3380^\\circ\\\\text{C}$) and high resistivity, allowing it to glow white-hot without melting. The bulb is filled with inert gases like argon or nitrogen to prevent oxidation and prolong filament life.",
+      "keyRubricPoints": [
+        "Correct statement and formula of Ohm's Law ($V = IR$)",
+        "Tungsten's extremely high melting point and high resistivity",
+        "Inert gases prevent oxidation of the glowing filament",
+        "Prolongation of the bulb's operational lifespan"
       ]
     }
   ]
 }`;
 
+    const avoidList = Array.isArray(req.body.avoidPrompts) ? req.body.avoidPrompts.filter(Boolean).slice(0, 10) : [];
+    const avoidDirective = avoidList.length > 0
+      ? `\nSTRICT ANTI-REPETITION: Do NOT generate questions similar to these previously answered prompts:\n${avoidList.map((p: string, i: number) => `  [${i+1}] ${p.slice(0, 100)}`).join('\n')}`
+      : '';
+
+    const userStreamDirective = stream && stream.trim() ? `Academic Track / Context: ${stream}.` : '';
+    const userCountryDirective = country && country.trim() ? `Education Board / Region: ${country}.` : '';
+
+    const userPrompt = `Topic: "${topicText}".
+Target Grade: ${gradeLevel}.
+${userStreamDirective}
+${userCountryDirective}
+Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic and grade.
+Ensure questions match real exam standards (short conceptual, long analytical, and multi-part only where natural). Ground all questions, expected answers, and rubric points strictly in the authentic subject domain of "${topicText}".${avoidDirective}`;
+
     let generatedText = "";
     try {
       const response = await safeGenerateContent({
         gradeLevel,
+        stream,
+        country,
         model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Topic: ${topicText}. Grade Level: ${gradeLevel || '11th Grade (Junior)'}. Academic Stream: ${stream || 'STEM / Engineering'}. Count: Generate exactly ${requestedCount} questions with expected answers and rubrics now.` }] },
+        contents: { parts: [{ text: userPrompt }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           maxOutputTokens: 8192,
-          temperature: 0.2
+          temperature: 0.65
         }
       });
       generatedText = response.text || "";
@@ -2776,8 +2943,11 @@ Use this exact JSON structure:
     const parsed = safeParseJSON(generatedText, 'object');
     if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
       return res.json({ questions: parsed.questions });
-    } else if (Array.isArray(parsed)) {
+    } else if (Array.isArray(parsed) && parsed.length > 0) {
       return res.json({ questions: parsed });
+    } else if (parsed && typeof parsed === 'object') {
+      const found = Object.values(parsed).find(v => Array.isArray(v) && v.length > 0);
+      if (found) return res.json({ questions: found });
     }
 
     throw new Error("Failed to generate a valid subjective questions structure.");
@@ -3462,6 +3632,12 @@ CRITICAL RULES:
 2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array. Do not return an array of multiple correct answers.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
+   - Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
+   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\frac{d}{dx}[u \cdot v] = u'v + uv'$.
+   - In options, write: "A) $3x^2 \cdot e^x$", "B) $3x^2 \cdot e^x + x^3 \cdot e^x$".
+   - NEVER output raw carets (^) or raw asterisks (*) for math without LaTeX delimiters (NEVER write 'x^3 * e^x').
+   - For chemistry and subscripts, write $H_2O$, $CO_2$, $x_1$, $x_2$.
 
 Use this exact JSON structure:
 [
@@ -3551,6 +3727,12 @@ CRITICAL RULES:
 2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
+   - Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
+   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\frac{d}{dx}[u \cdot v] = u'v + uv'$.
+   - In options, write: "A) $3x^2 \cdot e^x$", "B) $3x^2 \cdot e^x + x^3 \cdot e^x$".
+   - NEVER output raw carets (^) or raw asterisks (*) for math without LaTeX delimiters (NEVER write 'x^3 * e^x').
+   - For chemistry and subscripts, write $H_2O$, $CO_2$, $x_1$, $x_2$.
 
 Use this exact JSON structure:
 [
@@ -3650,6 +3832,12 @@ CRITICAL RULES:
 2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with A), B), C), D)) and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
+   - Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
+   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\frac{d}{dx}[u \cdot v] = u'v + uv'$.
+   - In options, write: "A) $3x^2 \cdot e^x$", "B) $3x^2 \cdot e^x + x^3 \cdot e^x$".
+   - NEVER output raw carets (^) or raw asterisks (*) for math without LaTeX delimiters (NEVER write 'x^3 * e^x').
+   - For chemistry and subscripts, write $H_2O$, $CO_2$, $x_1$, $x_2$.
 
 Use this exact JSON structure:
 [
@@ -3898,6 +4086,54 @@ Analyze this mistake and provide the 3-part JSON fix.`;
   }
 });
 
+app.post("/api/quiz-ai-help", async (req, res) => {
+  try {
+    const { question, options, correctAnswer, explanation, mode } = req.body;
+    if (!question) {
+      return res.status(400).json({ error: "Missing question" });
+    }
+
+    const isHint = mode === 'hint';
+    const systemInstruction = `You are the AI Magic Tutor & Live Study Coach.
+A student is answering a multiple-choice question and clicked ${isHint ? '"Explain Question & Hint by AI"' : '"Explain Step-by-Step Answer by AI"'}.
+
+CRITICAL PEDAGOGICAL & MATH RULES:
+1. ${isHint 
+     ? 'DO NOT give away the final correct option or direct answer! Instead, break down what the question is asking in clear and friendly terms, define key variables, explain the governing concept or theorem, and provide 2-3 progressive hints so the student can think through and solve it themselves.'
+     : 'Deliver a clear, step-by-step walkthrough explaining why the correct answer is right, the exact mathematical or conceptual derivation, and why common wrong distractors fail.'}
+2. MATHEMATICAL FORMULAS & LATEX:
+   - ALL math expressions, numbers with units, formulas, and equations MUST be wrapped in standard LaTeX inline delimiters ($...$).
+   - Use standard exponents like $x^2$, $e^x$, $10^{-5}$.
+   - Use \\cdot for multiplication ($3x^2 \\cdot e^x$), never bare asterisks (*).
+   - Use standard subscripts for chemical formulas like $H_2O$, $CO_2$, $H_2SO_4$.
+3. STRUCTURE & FORMATTING:
+   - Use clean Markdown with bold headers and bullet points.
+   - Keep the tone encouraging, crystal-clear, and academic.`;
+
+    const userPrompt = `Question:
+${question}
+
+${options && options.length > 0 ? `Options:\n${options.join('\n')}\n` : ''}${correctAnswer ? `Official Correct Answer: ${correctAnswer}\n` : ''}${explanation ? `Context/Explanation: ${explanation}\n` : ''}
+
+Goal: Provide ${isHint ? 'a guided conceptual breakdown and progressive hints without spoiling the final answer' : 'a full step-by-step solution and mathematical breakdown'}.`;
+
+    const response = await safeGenerateContent({
+      gradeLevel: "High School / College",
+      model: "gemini-3.5-flash-lite",
+      contents: { parts: [{ text: userPrompt }] },
+      config: {
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        temperature: 0.3
+      }
+    });
+
+    return res.json({ explanation: response.text || "Here is a breakdown to help you with this question." });
+  } catch (error: any) {
+    console.error("Quiz AI Help Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to generate AI help" });
+  }
+});
+
 app.post("/api/generate-practice", async (req, res) => {
   try {
     const { question, wrongInput, correctConcept, sourceFeature, gradeLevel } = req.body;
@@ -3914,6 +4150,7 @@ RULES:
 2. Each question MUST have exactly 4 distinct options.
 3. "correctIndex" MUST be an integer (0, 1, 2, or 3).
 4. "explanation" MUST be 1-2 concise, encouraging sentences.
+5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX): Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...). Always format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$. NEVER output raw carets (^) without LaTeX delimiters. For chemistry and subscripts, write $H_2O$, $CO_2$.
 
 STRICT JSON OUTPUT (Return ONLY a JSON array with 3 question objects):
 [
@@ -4435,6 +4672,180 @@ app.post("/api/verify-subscription", (req, res) => {
 // Server-time validation endpoint
 app.get("/api/time", (req, res) => {
   res.json({ timestamp: Date.now() });
+});
+
+// ============================================================================
+// AI CONTENT SAFETY REPORTING ENDPOINT (Google Play GenAI Policy & Direct Dev Alert)
+// ============================================================================
+app.post("/api/report-ai-content", async (req, res) => {
+  try {
+    const { userId, userEmail, sourceFeature, snippet, reason, comments, timestamp } = req.body || {};
+
+    const reportTime = timestamp || new Date().toISOString();
+    const developerEmail = process.env.DEV_REPORT_EMAIL || "helpyou.ai.support@gmail.com";
+    const userIdentifier = userEmail || userId || "Anonymous User";
+    const reportReason = reason || "Unspecified safety / quality issue";
+    const featureName = sourceFeature || "AI Feature";
+
+    console.log("================================================================================");
+    console.log(`🚨 [AI CONTENT SAFETY REPORT] Received from ${userIdentifier} in [${featureName}]`);
+    console.log(`Reason: ${reportReason}`);
+    console.log(`Comments: ${comments || "None provided"}`);
+    console.log(`Snippet: ${snippet ? snippet.slice(0, 200) : "No snippet"}`);
+    console.log(`Timestamp: ${reportTime}`);
+    console.log("================================================================================");
+
+    // Build rich HTML email content
+    const emailSubject = `🚨 [HelpYou AI Alert] AI Content Reported: ${reportReason} (${featureName})`;
+    const emailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <div style="background: linear-gradient(135deg, #e11d48, #be123c); padding: 24px; color: #ffffff;">
+          <h2 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.025em;">🚨 AI Content Safety Alert</h2>
+          <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.9;">A user flagged an AI output in HelpYou AI</p>
+        </div>
+        <div style="padding: 24px; color: #1e293b; font-size: 14px; line-height: 1.6;">
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px 0; font-weight: bold; color: #64748b; width: 140px;">Source Feature:</td>
+              <td style="padding: 10px 0; font-weight: 600; color: #0f172a;">${featureName}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px 0; font-weight: bold; color: #64748b;">Report Reason:</td>
+              <td style="padding: 10px 0; font-weight: 700; color: #e11d48;">${reportReason}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px 0; font-weight: bold; color: #64748b;">User Email:</td>
+              <td style="padding: 10px 0; color: #0f172a;">${userEmail || 'Anonymous / Not logged in'}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px 0; font-weight: bold; color: #64748b;">User ID:</td>
+              <td style="padding: 10px 0; font-family: monospace; font-size: 12px; color: #475569;">${userId || 'anonymous'}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px 0; color: #475569;">${reportTime}</td>
+            </tr>
+          </table>
+
+          ${comments ? `
+            <div style="margin-bottom: 20px;">
+              <div style="font-weight: bold; color: #64748b; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">User Notes / Feedback:</div>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; color: #334155; font-style: italic;">
+                "${comments}"
+              </div>
+            </div>
+          ` : ''}
+
+          ${snippet ? `
+            <div style="margin-bottom: 20px;">
+              <div style="font-weight: bold; color: #64748b; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Flagged AI Content Snippet:</div>
+              <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 10px; padding: 14px 16px; color: #9f1239; font-family: monospace; font-size: 12px; max-height: 250px; overflow-y: auto; white-space: pre-wrap;">${snippet}</div>
+            </div>
+          ` : ''}
+
+          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; text-align: center;">
+            This is an automated safety alert dispatched by HelpYou AI backend to maintain Google Play Generative AI compliance.
+          </div>
+        </div>
+      </div>
+    `;
+
+    let emailSent = false;
+    let dispatchMethod = "none";
+
+    // 1. Dispatch via Resend REST API if RESEND_API_KEY is configured
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resendRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM_EMAIL || "HelpYou AI Safety <onboarding@resend.dev>",
+            to: [developerEmail],
+            subject: emailSubject,
+            html: emailHtml,
+          }),
+        });
+        if (resendRes.ok) {
+          emailSent = true;
+          dispatchMethod = "resend";
+          console.log(`[AI Content Safety] Direct report email delivered via Resend to ${developerEmail}`);
+        } else {
+          const errData = await resendRes.text();
+          console.warn(`[AI Content Safety] Resend dispatch returned error:`, errData);
+        }
+      } catch (e) {
+        console.warn(`[AI Content Safety] Resend dispatch failed:`, e);
+      }
+    }
+
+    // 2. Dispatch via Webhook (Discord / Slack / Formspree / Zapier / Make) if REPORT_WEBHOOK_URL is configured
+    const webhookUrl = process.env.REPORT_WEBHOOK_URL || process.env.DISCORD_REPORT_WEBHOOK;
+    if (!emailSent && webhookUrl) {
+      try {
+        const webhookRes = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: `🚨 **[AI Safety Alert]** User reported an AI response in **${featureName}**!\n**Reason:** ${reportReason}\n**User:** ${userIdentifier}\n**Comment:** ${comments || "None"}\n\`\`\`${(snippet || '').slice(0, 500)}\`\`\``,
+            username: "HelpYou AI Safety Bot"
+          }),
+        });
+        if (webhookRes.ok) {
+          emailSent = true;
+          dispatchMethod = "webhook";
+          console.log(`[AI Content Safety] Alert delivered to webhook`);
+        }
+      } catch (e) {
+        console.warn(`[AI Content Safety] Webhook dispatch failed:`, e);
+      }
+    }
+
+    // 3. Dispatch via Formspree API if configured
+    const formspreeUrl = process.env.FORMSPREE_ENDPOINT || (process.env.FORMSPREE_ID ? `https://formspree.io/f/${process.env.FORMSPREE_ID}` : null);
+    if (!emailSent && formspreeUrl) {
+      try {
+        const formspreeRes = await fetch(formspreeUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            email: developerEmail,
+            subject: emailSubject,
+            feature: featureName,
+            reason: reportReason,
+            userEmail: userEmail || "Anonymous",
+            userId: userId || "Anonymous",
+            comments: comments || "None",
+            snippet: snippet || "",
+            timestamp: reportTime,
+          }),
+        });
+        if (formspreeRes.ok) {
+          emailSent = true;
+          dispatchMethod = "formspree";
+          console.log(`[AI Content Safety] Alert delivered via Formspree to ${developerEmail}`);
+        }
+      } catch (e) {
+        console.warn(`[AI Content Safety] Formspree dispatch failed:`, e);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: "Report processed and recorded successfully.",
+      emailSent,
+      dispatchMethod,
+      timestamp: reportTime
+    });
+  } catch (error: any) {
+    console.error("[AI Content Safety] Error processing report:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to process AI content report"
+    });
+  }
 });
 
 const isServerless = Boolean(

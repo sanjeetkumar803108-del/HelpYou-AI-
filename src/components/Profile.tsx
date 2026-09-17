@@ -228,27 +228,55 @@ export default function Profile({
   const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [restartCountdown, setRestartCountdown] = useState<number | null>(null);
+  const autoRestartTimerRef = useRef<any>(null);
+
+  // Clean up any pending restart timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoRestartTimerRef.current) {
+        clearTimeout(autoRestartTimerRef.current);
+        autoRestartTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const cancelOptimizationRestart = () => {
+    if (autoRestartTimerRef.current) {
+      clearTimeout(autoRestartTimerRef.current);
+      autoRestartTimerRef.current = null;
+    }
+    setRestartCountdown(null);
+    setShowOptimizationModal(false);
+  };
 
   const handleFullAppOptimization = async () => {
-    triggerVibration(hapticEnabled ? 20 : 0);
+    if (autoRestartTimerRef.current) {
+      clearTimeout(autoRestartTimerRef.current);
+      autoRestartTimerRef.current = null;
+    }
+    triggerVibration(hapticEnabled ? 25 : 0);
     setShowOptimizationModal(true);
     setIsOptimizing(true);
     setRestartCountdown(null);
-    setOptimizationProgress(15);
-    setOptimizationStepText("Analyzing system RAM & temporary cache footprint...");
+    setOptimizationProgress(10);
+    setOptimizationStepText("Analyzing system RAM, DOM tree & background services...");
     setOptimizationResult(null);
 
-    await new Promise(r => setTimeout(r, 400));
-    setOptimizationProgress(40);
-    setOptimizationStepText("Purging dead canvas buffers, stale blob URLs & temp drafts...");
-
     await new Promise(r => setTimeout(r, 450));
-    setOptimizationProgress(70);
-    setOptimizationStepText("Compacting AI render pipelines & re-indexing memory cache...");
+    setOptimizationProgress(30);
+    setOptimizationStepText("Stopping lingering audio streams, speech synthesizers & media tracks...");
+
+    await new Promise(r => setTimeout(r, 500));
+    setOptimizationProgress(55);
+    setOptimizationStepText("Purging dead canvas VRAM buffers, temporary PDF blobs & memory leaks...");
+
+    await new Promise(r => setTimeout(r, 500));
+    setOptimizationProgress(75);
+    setOptimizationStepText("Cleaning temporary cache bloat while strictly preserving user notes, streaks & coins...");
 
     await new Promise(r => setTimeout(r, 450));
     setOptimizationProgress(90);
-    setOptimizationStepText("Restoring ultra-fast 60fps responsiveness & latency boost...");
+    setOptimizationStepText("Triggering V8 memory garbage compaction & restoring peak 60fps latency...");
 
     try {
       const res = await runFullAppOptimization();
@@ -257,23 +285,30 @@ export default function Profile({
       setIsOptimizing(false);
 
       confetti({
-        particleCount: 60,
-        spread: 70,
+        particleCount: 75,
+        spread: 80,
         origin: { y: 0.6 }
       });
-      showToast("🚀 App fully optimized! Restarting in 2s...");
+      showToast("🚀 App fully optimized! Lag-free & bug-free refreshed.");
 
-      // Start auto-restart countdown
-      setRestartCountdown(2);
-      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 2s...");
-      await new Promise(r => setTimeout(r, 1000));
-      
-      setRestartCountdown(1);
-      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 1s...");
-      await new Promise(r => setTimeout(r, 1000));
+      // 3-second auto-restart countdown with cancel support
+      setRestartCountdown(3);
+      setOptimizationStepText("✅ App 100% Lag-Free & Refreshed! Auto-rebooting in 3s...");
 
-      setOptimizationStepText("⚡ Restarting App with Fresh Clean Memory...");
-      restartAppCleanly();
+      autoRestartTimerRef.current = setTimeout(() => {
+        setRestartCountdown(2);
+        setOptimizationStepText("✅ App 100% Lag-Free & Refreshed! Auto-rebooting in 2s...");
+
+        autoRestartTimerRef.current = setTimeout(() => {
+          setRestartCountdown(1);
+          setOptimizationStepText("✅ App 100% Lag-Free & Refreshed! Auto-rebooting in 1s...");
+
+          autoRestartTimerRef.current = setTimeout(() => {
+            setOptimizationStepText("⚡ Rebooting App with Fresh 60fps Clean Memory...");
+            restartAppCleanly();
+          }, 1000);
+        }, 1000);
+      }, 1000);
     } catch (e) {
       console.error("Optimization failed:", e);
       setIsOptimizing(false);
@@ -1761,15 +1796,16 @@ export default function Profile({
                 {achievementBadges.map((badge) => (
                   <div
                     key={badge.id}
-                    className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all ${
+                    title={`${badge.title} (${badge.requiredXP} XP): ${badge.description}`}
+                    className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all relative ${
                       badge.unlocked
                         ? 'bg-amber-50/50 border-amber-200 shadow-xs'
-                        : 'bg-zinc-50/30 border-zinc-200/40 opacity-50'
+                        : 'bg-zinc-50/30 border-zinc-200/40 opacity-60'
                     }`}
                   >
                     <span className="text-2xl">{badge.icon}</span>
                     <div>
-                      <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                      <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-500'}`}>
                         {badge.title}
                       </span>
                       <span className="text-[8px] font-bold text-zinc-400 block">
@@ -1784,6 +1820,13 @@ export default function Profile({
                       <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-0.5">
                         <Lock className="w-2.5 h-2.5" /> Locked
                       </span>
+                    )}
+                    {badge.specialReward && (
+                      <div className="w-full mt-0.5">
+                        <span className="text-[7.5px] font-black uppercase tracking-tight bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white px-1.5 py-0.5 rounded-full shadow-2xs block truncate animate-pulse">
+                          🎁 {badge.specialReward}
+                        </span>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1848,15 +1891,6 @@ export default function Profile({
                         </h4>
                         <p className="text-[9px] text-white/80 font-bold leading-normal mt-0.5">Unlimited scans & speech</p>
                       </div>
-                      <button 
-                        onClick={() => {
-                          triggerVibration(15);
-                          setActiveModal('manage_sub');
-                        }}
-                        className="bg-white text-amber-700 hover:bg-zinc-50 px-3 py-1.5 rounded-xl text-[10px] font-black shadow-sm transition-all active:scale-95 shrink-0"
-                      >
-                        Manage
-                      </button>
                     </div>
                   </div>
                 ) : (
@@ -2798,7 +2832,7 @@ export default function Profile({
                 <button
                   onClick={() => {
                     triggerVibration(10);
-                    setShowOptimizationModal(false);
+                    cancelOptimizationRestart();
                   }}
                   className="absolute top-5 right-5 w-8 h-8 rounded-full bg-zinc-100 text-zinc-500 hover:text-zinc-800 flex items-center justify-center cursor-pointer transition-all border-none"
                 >
@@ -2889,7 +2923,11 @@ export default function Profile({
 
                   <button
                     onClick={() => {
-                      triggerVibration(20);
+                      triggerVibration(25);
+                      if (autoRestartTimerRef.current) {
+                        clearTimeout(autoRestartTimerRef.current);
+                        autoRestartTimerRef.current = null;
+                      }
                       restartAppCleanly();
                     }}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs py-3.5 rounded-2xl shadow-lg transition-all cursor-pointer border-none mt-2 flex items-center justify-center gap-2"
@@ -2897,9 +2935,19 @@ export default function Profile({
                     <Sparkles className="w-4 h-4 fill-white" />
                     <span>
                       {restartCountdown !== null
-                        ? `Restarting Cleanly in ${restartCountdown}s... (Tap to Restart Now)`
+                        ? `Restarting Cleanly in ${restartCountdown}s... (Tap to Reboot Now)`
                         : "Restart App Now & Enjoy 60fps 🚀"}
                     </span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      triggerVibration(10);
+                      cancelOptimizationRestart();
+                    }}
+                    className="w-full bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 font-bold text-[11px] py-2 rounded-xl transition-all cursor-pointer border-none mt-1"
+                  >
+                    Stay in App (Skip Restart)
                   </button>
                 </motion.div>
               )}

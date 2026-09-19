@@ -2,9 +2,10 @@ import { getApiUrl } from '../utils/api';
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, 
-  Trash2, Calendar, Camera, X, FileText, Share2, Download, Eye 
+  Trash2, Calendar, Camera, X, FileText, Share2, Download, Eye, Flag 
 } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
+import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
@@ -27,6 +28,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -738,6 +740,18 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
               <span>Export PDF</span>
             </button>
           </div>
+
+          <button
+            onClick={() => {
+              triggerVibration(15);
+              setReportModalOpen(true);
+            }}
+            className="w-full mb-2.5 py-3 px-3 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-rose-200/60 bg-rose-50 hover:bg-rose-100 text-rose-700 active:scale-95 shadow-xs cursor-pointer"
+            title="Report Inaccurate or Inappropriate Content"
+          >
+            <Flag className="w-3.5 h-3.5 text-rose-500" />
+            <span>Report AI Output</span>
+          </button>
           
           <button 
             onClick={() => {
@@ -752,6 +766,14 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
           </button>
         </motion.div>
       )}
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={result || ''}
+        sourceFeature="Grammar Enhancer"
+        onClose={() => setReportModalOpen(false)}
+      />
       </div>
 
       <AnimatePresence>

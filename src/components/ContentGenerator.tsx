@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Loader2, Save, PenTool, Type, FileText, Feather, 
   Edit3, Copy, FileDown, Check, History, Trash2, Calendar, Share2, 
-  Sparkles, ExternalLink, Eye, Download
+  Sparkles, ExternalLink, Eye, Download, Flag
 } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
+import ReportAIModal from './ReportAIModal';
 import { motion } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -213,6 +214,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   const [selectedFormat, setSelectedFormat] = useState('Standard');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -924,6 +926,19 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                 )}
               </button>
             </div>
+
+            {/* [🚩 Report AI Content] */}
+            <button
+              onClick={() => {
+                triggerVibration(15);
+                setReportModalOpen(true);
+              }}
+              className="w-full mb-3 py-3 px-3 bg-rose-50 hover:bg-rose-100 active:scale-95 border border-rose-200/60 rounded-xl font-bold text-xs text-rose-700 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none"
+              title="Report Inaccurate or Inappropriate Content"
+            >
+              <Flag className="w-3.5 h-3.5 text-rose-500" />
+              <span>Report Generated Content</span>
+            </button>
             
             <button 
               onClick={() => {
@@ -936,6 +951,14 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
           </motion.div>
         )}
       </div>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={result || ''}
+        sourceFeature="Content Generator"
+        onClose={() => setReportModalOpen(false)}
+      />
     </div>
   );
 }

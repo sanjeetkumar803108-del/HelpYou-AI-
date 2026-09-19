@@ -3,9 +3,10 @@ import { detectAndLogMistake } from "../utils/mistakes";
 import { triggerVibration } from "../utils/vibrate";
 import { safeGetItem } from "../utils/storage";
 import React, { useState, useRef, useEffect } from 'react';
-import { Image as ImageIcon, Zap, Calculator, X, Loader2, Send, Mic, MicOff, Check, Languages, HelpCircle, GraduationCap, BookOpen, PenLine, Type, Brain } from 'lucide-react';
+import { Image as ImageIcon, Zap, Calculator, X, Loader2, Send, Mic, MicOff, Check, Languages, HelpCircle, GraduationCap, BookOpen, PenLine, Type, Brain, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import GlobalMarkdown, { formatSuggestionMath } from './GlobalMarkdown';
+import ReportAIModal from './ReportAIModal';
 import { parsePartialJSON } from '../utils/partialJson';
 import 'katex/dist/katex.min.css';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -108,6 +109,8 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
   const [chatLoading, setChatLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [chatDocId, setChatDocId] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
 
   const [viewportBottomOffset, setViewportBottomOffset] = useState(0);
 
@@ -800,6 +803,23 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
                         </div>
                       );
                     })()}
+
+                    {msg.role === 'model' && !msg.isError && msg.text && (
+                      <div className="mt-2.5 pt-2 border-t border-zinc-100 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReportSnippet(msg.text || '');
+                            setReportModalOpen(true);
+                          }}
+                          className="px-2 py-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center gap-1 text-[10.5px] font-bold active:scale-95 cursor-pointer"
+                          title="Report Inaccurate or Inappropriate Content"
+                        >
+                          <Flag className="w-3.5 h-3.5 text-rose-500" />
+                          <span>Report</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -870,6 +890,17 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
             </button>
           </div>
         </div>
+
+        {/* Google Play GenAI Safety Report Modal */}
+        <ReportAIModal
+          isOpen={reportModalOpen}
+          messageText={reportSnippet}
+          sourceFeature="Magic Scanner"
+          onClose={() => {
+            setReportModalOpen(false);
+            setReportSnippet('');
+          }}
+        />
       </div>
     );
   }

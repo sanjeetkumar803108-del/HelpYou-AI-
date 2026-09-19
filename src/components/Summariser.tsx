@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Loader2, Save, FileText, Upload, Copy, Check, History, Trash2, Calendar, Share2, Download } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, FileText, Upload, Copy, Check, History, Trash2, Calendar, Share2, Download, Flag } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
+import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
@@ -43,6 +44,7 @@ export default function Summariser({ onBack }: SummariserProps) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [format, setFormat] = useState<'bullet' | 'tldr' | 'eli5'>('bullet');
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
   const [previewPdfUri, setPreviewPdfUri] = useState<string | null>(null);
@@ -640,6 +642,18 @@ export default function Summariser({ onBack }: SummariserProps) {
                 <Share2 className="w-4 h-4 text-emerald-600" />
                 <span>Share PDF</span>
               </button>
+
+              <button
+                onClick={() => {
+                  triggerVibration(15);
+                  setReportModalOpen(true);
+                }}
+                className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                title="Report Inaccurate or Inappropriate Content"
+              >
+                <Flag className="w-3.5 h-3.5 text-rose-500" />
+                <span>Report AI Summary</span>
+              </button>
               
               <button 
                 onClick={() => {
@@ -653,6 +667,14 @@ export default function Summariser({ onBack }: SummariserProps) {
           </motion.div>
         )}
       </div>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={result || ''}
+        sourceFeature="Summariser"
+        onClose={() => setReportModalOpen(false)}
+      />
 
       {previewPdfUri && (
         <div className="fixed inset-0 bg-zinc-950 z-50 flex flex-col">

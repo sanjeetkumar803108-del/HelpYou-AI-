@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { PenTool, Loader2, ArrowLeft, Save, AlertCircle, Camera, History, Trash2, Calendar, X } from 'lucide-react';
+import { PenTool, Loader2, ArrowLeft, Save, AlertCircle, Camera, History, Trash2, Calendar, X, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import ReportAIModal from './ReportAIModal';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import GlobalMarkdown from './GlobalMarkdown';
@@ -48,6 +49,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
   const [isCurriculumOpen, setIsCurriculumOpen] = useState(false);
   const [isSubjectOpen, setIsSubjectOpen] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -785,6 +787,18 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
             <>
               <button 
                 onClick={() => {
+                  triggerVibration(15);
+                  setReportModalOpen(true);
+                }}
+                className="w-full mb-3 py-3 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                title="Report Inaccurate or Inappropriate Content"
+              >
+                <Flag className="w-3.5 h-3.5 text-rose-500" />
+                <span>Report AI Feedback</span>
+              </button>
+
+              <button 
+                onClick={() => {
                   setResult(null);
                   setEssayText('');
                 }}
@@ -796,6 +810,14 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
           )}
         </motion.div>
       )}
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={result || ''}
+        sourceFeature="Essay Grader"
+        onClose={() => setReportModalOpen(false)}
+      />
       </div>
 
       <AnimatePresence>

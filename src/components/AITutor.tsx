@@ -1380,7 +1380,7 @@ Please evaluate this answer strictly according to your system rubric.`;
           }
           throw new Error("Quota exceeded");
         }
-        let serverErrorMsg = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.";
+        let serverErrorMsg = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please wait a moment and send your question again.";
         try {
           const errData = await response.json();
           if (errData && errData.error) {
@@ -1640,11 +1640,11 @@ Please evaluate this answer strictly according to your system rubric.`;
         setFailedAttachmentType(activeAttachedType);
       }
 
-      let errorMessage = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.";
+      let errorMessage = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please wait a moment and send your question again.";
       if (err instanceof Error) {
         if (err.message === "Quota exceeded") {
           errorMessage = "Service quota exceeded. Please wait a few moments before retrying your request.";
-        } else if (err.message && (err.message.includes("breather") || err.message.includes("Oops") || err.message.includes("Try Again"))) {
+        } else if (err.message && (err.message.includes("breather") || err.message.includes("Oops"))) {
           errorMessage = err.message;
         }
       }
@@ -2208,29 +2208,16 @@ Please evaluate this answer strictly according to your system rubric.`;
               {messages.length > 0 && messages[messages.length - 1].role === 'model' && !messages[messages.length - 1].isTyping && !loading && (() => {
                 const lastMsg = messages[messages.length - 1];
                 const isErrorState = lastMsg && (lastMsg.isError || lastMsg.text.includes("hiccup") || lastMsg.text.includes("network"));
-                return (
-                  <div className="flex flex-col gap-2 pt-2 justify-start pl-2">
-                    {isErrorState ? (
-                      <div className="flex flex-col items-start gap-1.5">
-                        <button
-                          onClick={handleRetryMessage}
-                          className="text-xs bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border border-purple-500/30 px-4 py-2 rounded-full transition-all flex items-center gap-1.5 font-bold shadow-md shadow-purple-500/20 active:scale-95"
-                        >
-                          <span>🔄</span> Try Again
-                        </button>
-                        {failedAttachment && (
-                          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 rounded-xl px-3 py-1.5 flex items-center gap-1.5 animate-pulse">
-                            <span>📎</span> <strong>Preserved Image:</strong> {failedAttachment.name} (Ready to retry)
-                          </div>
-                        )}
+                if (isErrorState && failedAttachment) {
+                  return (
+                    <div className="flex flex-col gap-2 pt-2 justify-start pl-2">
+                      <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 rounded-xl px-3 py-1.5 flex items-center gap-1.5 animate-pulse">
+                        <span>📎</span> <strong>Preserved Image:</strong> {failedAttachment.name}
                       </div>
-                    ) : (
-                      <>
-                         <></>
-                      </>
-                    )}
-                  </div>
-                );
+                    </div>
+                  );
+                }
+                return null;
               })()}
 
               {/* Premium Brain Thinking Wave Animation (Requirement 6) */}

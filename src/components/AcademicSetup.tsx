@@ -16,6 +16,10 @@ const GRADES = [
   { id: '10th Grade (Sophomore)', label: '10th Grade', desc: 'Sophomore High School', isCollege: false },
   { id: '11th Grade (Junior)', label: '11th Grade', desc: 'Junior High School', isCollege: false },
   { id: '12th Grade (Senior)', label: '12th Grade', desc: 'Senior High School', isCollege: false },
+  { id: 'College Freshman', label: 'College Year 1', desc: 'Freshman Undergrad', isCollege: true },
+  { id: 'College Sophomore', label: 'College Year 2', desc: 'Sophomore Undergrad', isCollege: true },
+  { id: 'College Junior', label: 'College Year 3', desc: 'Junior Undergrad', isCollege: true },
+  { id: 'College Senior', label: 'College Year 4', desc: 'Senior Undergrad', isCollege: true },
 ];
 
 export const COUNTRIES = [
@@ -32,73 +36,73 @@ export const REGIONAL_TRACKS: Record<string, Array<{ id: string; title: string; 
     { 
       id: 'STEM / Engineering', 
       title: 'STEM & Engineering', 
-      subtitle: 'AP Calculus AB/BC, AP Physics (1/2/C) & Advanced Math', 
+      subtitle: 'Calculus, Physics & Advanced Mathematics', 
       icon: <Rocket className="w-5 h-5" />, 
       color: 'from-purple-500 to-indigo-500' 
     },
     { 
-      id: 'Pre-Med / AP Sciences', 
+      id: 'Pre-Med / Life Sciences', 
       title: 'Biomedical & Pre-Health', 
-      subtitle: 'AP Biology, AP Chemistry, Anatomy & Life Sciences', 
+      subtitle: 'Biology, Chemistry, Anatomy & Life Sciences', 
       icon: <HeartPulse className="w-5 h-5" />, 
       color: 'from-pink-500 to-rose-500' 
     },
     { 
       id: 'Business / Economics', 
       title: 'Business & Economics', 
-      subtitle: 'AP Macro/Microeconomics, AP Statistics & Finance', 
+      subtitle: 'Macro/Microeconomics, Statistics & Finance', 
       icon: <BarChart3 className="w-5 h-5" />, 
       color: 'from-amber-500 to-orange-500' 
     },
     { 
       id: 'Humanities / Liberal Arts', 
       title: 'Humanities & Pre-Law', 
-      subtitle: 'AP US History, AP Gov, AP Psychology & Lit', 
+      subtitle: 'History, Government, Psychology & Literature', 
       icon: <Palette className="w-5 h-5" />, 
       color: 'from-emerald-500 to-teal-500' 
     },
     { 
       id: 'Computer Science', 
       title: 'Computer Science & AI', 
-      subtitle: 'AP CS A (Java), AP CS Principles & Cybersecurity', 
+      subtitle: 'Coding, Data Structures & AI Principles', 
       icon: <Cpu className="w-5 h-5" />, 
       color: 'from-blue-500 to-cyan-500' 
     },
     { 
-      id: 'AP Capstone / Honors', 
-      title: 'AP Capstone & College Prep', 
-      subtitle: 'AP Seminar, AP Research & Dual Enrollment Rigor', 
+      id: 'Honors / College Prep', 
+      title: 'Honors & College Prep', 
+      subtitle: 'Academic Research, Seminar & Advanced Rigor', 
       icon: <GraduationCap className="w-5 h-5" />, 
       color: 'from-indigo-500 to-violet-500' 
     },
   ],
   'United Kingdom': [
     { id: 'STEM / Engineering', title: 'STEM & Mathematics', subtitle: 'Tailored for A-Level Maths & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / AP Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for A-Level Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Pre-Med / Life Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for A-Level Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
     { id: 'Business / Economics', title: 'Economics & Business Studies', subtitle: 'Tailored for GCSE & A-Level Economics', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
     { id: 'Humanities / Liberal Arts', title: 'Humanities & Social Sciences', subtitle: 'Tailored for A-Level History & Literature', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
     { id: 'Computer Science', title: 'Computer Science & Software', subtitle: 'Tailored for GCSE & A-Level Computer Science', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
   ],
   'Canada': [
     { id: 'STEM / Engineering', title: 'Engineering & Math (University Prep)', subtitle: 'Tailored for Grade 12 Calculus & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / AP Sciences', title: 'Health Sciences (University Prep)', subtitle: 'Tailored for Grade 12 Bio & Chem', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Pre-Med / Life Sciences', title: 'Health Sciences (University Prep)', subtitle: 'Tailored for Grade 12 Bio & Chem', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
     { id: 'Business / Economics', title: 'Commerce & Economics Prep', subtitle: 'Tailored for Grade 12 Business & Financial Math', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
     { id: 'Humanities / Liberal Arts', title: 'Humanities & Social Studies', subtitle: 'Tailored for Grade 12 Canadian History & English', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
     { id: 'Computer Science', title: 'Computer Science & Tech', subtitle: 'Tailored for Grade 12 Computer & Data Science', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
   ],
   'Australia': [
     { id: 'STEM / Engineering', title: 'Engineering & Mathematical Sciences', subtitle: 'Tailored for HSC Specialist Maths & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / AP Sciences', title: 'Biomedical & Medical Sciences', subtitle: 'Tailored for HSC / VCE Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'Pre-Med / Life Sciences', title: 'Biomedical & Medical Sciences', subtitle: 'Tailored for HSC / VCE Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
     { id: 'Business / Economics', title: 'Commerce & Financial Studies', subtitle: 'Tailored for HSC / VCE Economics & Commerce', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
     { id: 'Humanities / Liberal Arts', title: 'Humanities & Legal Studies', subtitle: 'Tailored for HSC Modern History & Legal Studies', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
     { id: 'Computer Science', title: 'Information & Software Technology', subtitle: 'Tailored for HSC Software Design & Development', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
   ],
   'Others / International': [
-    { id: 'STEM / Engineering', title: 'STEM & Engineering', subtitle: 'Tailored for IB Physics & Advanced Mathematics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / AP Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for IB Biology, Chemistry & Health Sciences', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
+    { id: 'STEM / Engineering', title: 'STEM & Engineering', subtitle: 'Tailored for Physics & Advanced Mathematics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
+    { id: 'Pre-Med / Life Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for Biology, Chemistry & Health Sciences', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
     { id: 'Business / Economics', title: 'Business, Economics & Finance', subtitle: 'Tailored for Global Economics & Business Management', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
     { id: 'Humanities / Liberal Arts', title: 'Humanities & Liberal Arts', subtitle: 'Tailored for Global History, Literature & Social Sciences', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
-    { id: 'Computer Science', title: 'Computer Science & Software', subtitle: 'Tailored for IB Computer Science HL/SL', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
+    { id: 'Computer Science', title: 'Computer Science & Software', subtitle: 'Tailored for Computer Science & Coding', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
   ],
 };
 

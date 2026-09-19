@@ -16,6 +16,7 @@ import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getCoins, addCoins, isProUser } from '../utils/coins';
+import { generateStreakCalendar } from '../utils/gamification';
 
 interface StreakDetailsPageProps {
   onBack: () => void;
@@ -77,47 +78,7 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
     }
   };
 
-  const generateStreakCalendar = () => {
-    const days = [];
-    const today = new Date();
-    const lastPunchDate = safeGetItem('study_last_punch_date');
-    const todayString = today.toDateString();
-
-    for (let i = 27; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(today.getDate() - i);
-      const dateString = date.toDateString();
-      
-      let isActive = false;
-      if (lastPunchDate) {
-        const parts = lastPunchDate.split('-');
-        const lastDateObj = parts.length === 3 
-          ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
-          : new Date(lastPunchDate);
-        lastDateObj.setHours(0, 0, 0, 0);
-        
-        const currentCheckDateObj = new Date(dateString);
-        currentCheckDateObj.setHours(0, 0, 0, 0);
-
-        const diffTime = lastDateObj.getTime() - currentCheckDateObj.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays >= 0 && diffDays < studyStreak) {
-          isActive = true;
-        }
-      }
-
-      days.push({
-        dateLabel: date.getDate(),
-        monthLabel: date.toLocaleString('default', { month: 'short' }),
-        dayName: date.toLocaleString('default', { weekday: 'narrow' }),
-        isToday: dateString === todayString,
-        isActive,
-        dateString,
-      });
-    }
-    return days;
-  };
+  const streakCalendarDays = generateStreakCalendar(studyStreak);
 
   const today = new Date().toDateString();
   const lastPunchDate = safeGetItem('study_last_punch_date');
@@ -222,7 +183,7 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
               <Calendar className="w-4 h-4" /> Last 28 Days Check-In
             </h4>
             <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
-              {generateStreakCalendar().filter(d => d.isActive).length} Completed
+              {streakCalendarDays.filter(d => d.isActive).length} Completed
             </span>
           </div>
 
@@ -235,7 +196,7 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
             ))}
 
             {/* Date Boxes */}
-            {generateStreakCalendar().map((day, idx) => (
+            {streakCalendarDays.map((day, idx) => (
               <div 
                 key={`day-box-${idx}`}
                 className={`relative aspect-square rounded-xl flex flex-col items-center justify-center border transition-all ${

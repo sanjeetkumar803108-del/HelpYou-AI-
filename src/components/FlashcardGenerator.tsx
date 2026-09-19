@@ -316,6 +316,23 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const autoSaveFlashcardsToPocket = async (cards: any[], customTitle?: string) => {
+    if (!auth.currentUser || !Array.isArray(cards) || cards.length === 0) return;
+    try {
+      const textContent = cards.map((f: any, i: number) => `**Q${i+1}**: ${f?.question || ''}\n**A${i+1}**: ${f?.answer || ''}`).join('\n\n');
+      await addDoc(collection(db, 'pocket_items'), {
+        userId: auth.currentUser.uid,
+        type: 'note', 
+        text: `**Flashcards Study Set**\n\n${textContent}`,
+        title: customTitle || 'Flashcards',
+        createdAt: serverTimestamp()
+      });
+      setSaved(true);
+    } catch (e) {
+      console.error("Auto-save failed", e);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -388,22 +405,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
           setCurrentIndex(0);
           setFlipped(false);
           setSaved(false);
-          
-          if (auth.currentUser) {
-            try {
-              const textContent = (data?.flashcards || []).map((f: any, i: number) => `**Q${i+1}**: ${f?.question || ''}\n**A${i+1}**: ${f?.answer || ''}`).join('\n\n');
-              await addDoc(collection(db, 'pocket_items'), {
-                userId: auth.currentUser.uid,
-                type: 'note', 
-                text: `**Flashcards Study Set**\n\n${textContent}`,
-                title: 'Flashcards',
-                createdAt: serverTimestamp()
-              });
-              setSaved(true);
-            } catch (e) {
-              console.error("Auto-save failed", e);
-            }
-          }
+          await autoSaveFlashcardsToPocket(data?.flashcards, 'Flashcards');
           triggerVibration([30, 50, 30]);
         } else if (data.text) {
           setSourceText(data.text);
@@ -471,22 +473,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       if (data.flashcards && Array.isArray(data.flashcards)) {
         deductCoins(2, "AI Flashcards");
         setFlashcards(data.flashcards);
-
-        if (auth.currentUser) {
-          try {
-            const textContent = (data?.flashcards || []).map((f: any, i: number) => `**Q${i+1}**: ${f?.question || ''}\n**A${i+1}**: ${f?.answer || ''}`).join('\n\n');
-            await addDoc(collection(db, 'pocket_items'), {
-              userId: auth.currentUser.uid,
-              type: 'note', 
-              text: `**Flashcards Study Set**\n\n${textContent}`,
-              title: sourceText.length < 35 ? sourceText : 'Flashcards',
-              createdAt: serverTimestamp()
-            });
-            setSaved(true);
-          } catch (e) {
-            console.error("Auto-save failed", e);
-          }
-        }
+        await autoSaveFlashcardsToPocket(data.flashcards, sourceText.length < 35 ? sourceText : 'Flashcards');
       } else {
         setError(`Error: ${data.error || 'Failed to generate flashcards'}`);
       }

@@ -50,6 +50,21 @@ export async function pickNativeFiles(options: {
         return msg.includes('cancel') || msg.includes('dismiss') || msg.includes('closed') || msg.includes('abort');
       };
 
+      const mapFilesToPicked = (files: any[]): MobilePickedFile[] => {
+        const output: MobilePickedFile[] = [];
+        for (const file of files) {
+          if (!file.data) continue;
+          const mimeType = file.mimeType || 'image/jpeg';
+          const name = file.name || `gallery_${Date.now()}_${output.length}.jpg`;
+          const base64 = file.data;
+          const dataUrl = `data:${mimeType};base64,${base64}`;
+          const blob = base64ToBlob(base64, mimeType);
+          const fileObj = blobToFile(blob, name);
+          output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
+        }
+        return output;
+      };
+
       if (multiple) {
         // 1. Try FilePicker.pickImages for multi-image gallery selection without limits
         try {
@@ -58,17 +73,7 @@ export async function pickNativeFiles(options: {
             readData: true,
           } as any);
           if (result && result.files && result.files.length > 0) {
-            const output: MobilePickedFile[] = [];
-            for (const file of result.files) {
-              if (!file.data) continue;
-              const mimeType = file.mimeType || 'image/jpeg';
-              const name = file.name || `gallery_${Date.now()}_${output.length}.jpg`;
-              const base64 = file.data;
-              const dataUrl = `data:${mimeType};base64,${base64}`;
-              const blob = base64ToBlob(base64, mimeType);
-              const fileObj = blobToFile(blob, name);
-              output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
-            }
+            const output = mapFilesToPicked(result.files);
             if (output.length > 0) return output;
           }
           return [];
@@ -87,17 +92,7 @@ export async function pickNativeFiles(options: {
             readData: true,
           } as any);
           if (result && result.files && result.files.length > 0) {
-            const output: MobilePickedFile[] = [];
-            for (const file of result.files) {
-              if (!file.data) continue;
-              const mimeType = file.mimeType || 'image/jpeg';
-              const name = file.name || `gallery_${Date.now()}_${output.length}.jpg`;
-              const base64 = file.data;
-              const dataUrl = `data:${mimeType};base64,${base64}`;
-              const blob = base64ToBlob(base64, mimeType);
-              const fileObj = blobToFile(blob, name);
-              output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
-            }
+            const output = mapFilesToPicked(result.files);
             if (output.length > 0) return output;
           }
           return [];

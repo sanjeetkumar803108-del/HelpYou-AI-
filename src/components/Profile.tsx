@@ -26,7 +26,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
 import { safeGetItem, safeSetItem, safeClearAll } from '../utils/storage';
-import { getCoins, addCoins } from '../utils/coins';
+import { clearLocalSessionId } from '../utils/sessionManager';
+import { getCoins, addCoins, isProUser } from '../utils/coins';
+import { clear as clearIndexedDB } from 'idb-keyval';
 import { useSettings } from '../hooks/useSettings';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { billingService } from '../services/BillingService';
@@ -38,6 +40,7 @@ import {
   claimQuestReward, 
   getBadgesStatus,
   getDailyXPStatus, 
+  generateStreakCalendar,
   Quest, 
   AchievementBadge 
 } from '../utils/gamification';
@@ -228,55 +231,27 @@ export default function Profile({
   const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [restartCountdown, setRestartCountdown] = useState<number | null>(null);
-  const autoRestartTimerRef = useRef<any>(null);
-
-  // Clean up any pending restart timer on unmount
-  useEffect(() => {
-    return () => {
-      if (autoRestartTimerRef.current) {
-        clearTimeout(autoRestartTimerRef.current);
-        autoRestartTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  const cancelOptimizationRestart = () => {
-    if (autoRestartTimerRef.current) {
-      clearTimeout(autoRestartTimerRef.current);
-      autoRestartTimerRef.current = null;
-    }
-    setRestartCountdown(null);
-    setShowOptimizationModal(false);
-  };
 
   const handleFullAppOptimization = async () => {
-    if (autoRestartTimerRef.current) {
-      clearTimeout(autoRestartTimerRef.current);
-      autoRestartTimerRef.current = null;
-    }
-    triggerVibration(hapticEnabled ? 25 : 0);
+    triggerVibration(hapticEnabled ? 20 : 0);
     setShowOptimizationModal(true);
     setIsOptimizing(true);
     setRestartCountdown(null);
-    setOptimizationProgress(10);
-    setOptimizationStepText("Analyzing system RAM, DOM tree & background services...");
+    setOptimizationProgress(15);
+    setOptimizationStepText("Analyzing system RAM & temporary cache footprint...");
     setOptimizationResult(null);
 
+    await new Promise(r => setTimeout(r, 400));
+    setOptimizationProgress(40);
+    setOptimizationStepText("Purging dead canvas buffers, stale blob URLs & temp drafts...");
+
     await new Promise(r => setTimeout(r, 450));
-    setOptimizationProgress(30);
-    setOptimizationStepText("Stopping lingering audio streams, speech synthesizers & media tracks...");
-
-    await new Promise(r => setTimeout(r, 500));
-    setOptimizationProgress(55);
-    setOptimizationStepText("Purging dead canvas VRAM buffers, temporary PDF blobs & memory leaks...");
-
-    await new Promise(r => setTimeout(r, 500));
-    setOptimizationProgress(75);
-    setOptimizationStepText("Cleaning temporary cache bloat while strictly preserving user notes, streaks & coins...");
+    setOptimizationProgress(70);
+    setOptimizationStepText("Compacting AI render pipelines & re-indexing memory cache...");
 
     await new Promise(r => setTimeout(r, 450));
     setOptimizationProgress(90);
-    setOptimizationStepText("Triggering V8 memory garbage compaction & restoring peak 60fps latency...");
+    setOptimizationStepText("Restoring ultra-fast 60fps responsiveness & latency boost...");
 
     try {
       const res = await runFullAppOptimization();
@@ -285,30 +260,23 @@ export default function Profile({
       setIsOptimizing(false);
 
       confetti({
-        particleCount: 75,
-        spread: 80,
+        particleCount: 60,
+        spread: 70,
         origin: { y: 0.6 }
       });
-      showToast("🚀 App fully optimized! Lag-free & bug-free refreshed.");
+      showToast("🚀 App fully optimized! Restarting in 2s...");
 
-      // 3-second auto-restart countdown with cancel support
-      setRestartCountdown(3);
-      setOptimizationStepText("✅ App 100% Lag-Free & Refreshed! Auto-rebooting in 3s...");
+      // Start auto-restart countdown
+      setRestartCountdown(2);
+      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 2s...");
+      await new Promise(r => setTimeout(r, 1000));
+      
+      setRestartCountdown(1);
+      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 1s...");
+      await new Promise(r => setTimeout(r, 1000));
 
-      autoRestartTimerRef.current = setTimeout(() => {
-        setRestartCountdown(2);
-        setOptimizationStepText("✅ App 100% Lag-Free & Refreshed! Auto-rebooting in 2s...");
-
-        autoRestartTimerRef.current = setTimeout(() => {
-          setRestartCountdown(1);
-          setOptimizationStepText("✅ App 100% Lag-Free & Refreshed! Auto-rebooting in 1s...");
-
-          autoRestartTimerRef.current = setTimeout(() => {
-            setOptimizationStepText("⚡ Rebooting App with Fresh 60fps Clean Memory...");
-            restartAppCleanly();
-          }, 1000);
-        }, 1000);
-      }, 1000);
+      setOptimizationStepText("⚡ Restarting App with Fresh Clean Memory...");
+      restartAppCleanly();
     } catch (e) {
       console.error("Optimization failed:", e);
       setIsOptimizing(false);
@@ -339,8 +307,12 @@ export default function Profile({
     if (isFoundational) return 'Core / Foundation';
     return safeGetItem('academic_stream') || 'STEM / Engineering';
   });
+  const [selectedCountryName, setSelectedCountryName] = useState(() => {
+    return safeGetItem('academic_country') || 'United States';
+  });
   const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
   const [isTrackDropdownOpen, setIsTrackDropdownOpen] = useState(false);
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
 
   const { visualLearner, setVisualLearner, deepFocus, setDeepFocus } = useSettings();
 
@@ -548,7 +520,7 @@ export default function Profile({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (appStateListener) {
-        appStateListener.remove();
+        appStateListener.then((l: any) => l?.remove?.()).catch(() => {});
       }
     };
   }, []);
@@ -573,47 +545,7 @@ export default function Profile({
     };
   }, []);
 
-  const generateStreakCalendar = () => {
-    const days = [];
-    const today = new Date();
-    const lastPunchDate = safeGetItem('study_last_punch_date');
-    const todayString = today.toDateString();
-
-    for (let i = 27; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(today.getDate() - i);
-      const dateString = date.toDateString();
-      
-      let isActive = false;
-      if (lastPunchDate) {
-        const parts = lastPunchDate.split('-');
-        const lastDateObj = parts.length === 3 
-          ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
-          : new Date(lastPunchDate);
-        lastDateObj.setHours(0, 0, 0, 0);
-        
-        const currentCheckDateObj = new Date(dateString);
-        currentCheckDateObj.setHours(0, 0, 0, 0);
-
-        const diffTime = lastDateObj.getTime() - currentCheckDateObj.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays >= 0 && diffDays < studyStreak) {
-          isActive = true;
-        }
-      }
-
-      days.push({
-        dateLabel: date.getDate(),
-        monthLabel: date.toLocaleString('default', { month: 'short' }),
-        dayName: date.toLocaleString('default', { weekday: 'narrow' }),
-        isToday: dateString === todayString,
-        isActive,
-        dateString,
-      });
-    }
-    return days;
-  };
+  const streakCalendarDays = generateStreakCalendar(studyStreak);
 
   // Sync state to local storage
   useEffect(() => {
@@ -834,6 +766,7 @@ export default function Profile({
     await syncUsageToFirestore();
     setIsVip(false);
     safeClearAll();
+    clearLocalSessionId(auth.currentUser?.uid);
     
     // Clear Native Capacitor Google Auth session so that Account Chooser is shown on next login
     if (Capacitor.isNativePlatform()) {
@@ -959,86 +892,99 @@ export default function Profile({
       return;
     }
     
-    const proceedWithDeletion = async () => {
-      setLoading(true);
-      setIsDeleting(true);
-      triggerVibration([30, 50, 30]);
-      
-      try {
-        const uid = user.uid;
-        
-        // 1. Wipe user document from the primary "users" collection
-        try {
-          await deleteDoc(doc(db, 'users', uid));
-        } catch (err) {
-          console.error("Error deleting user doc:", err);
-        }
-        
-        // List of all collections where userId maps to uid
-        const collectionsToWipe = [
-          'pocket_items',
-          'ai_tutor_chats',
-          'quiz_results',
-          'generated_questions',
-          'MistakeVault',
-          'pdf_history'
-        ];
-        
-        // 2. Query and delete all user documents across all related collections
-        for (const colName of collectionsToWipe) {
-          try {
-            const q = query(collection(db, colName), where('userId', '==', uid));
-            const querySnapshot = await getDocs(q);
-            const deletePromises = querySnapshot.docs.map(docSnap => deleteDoc(docSnap.ref));
-            await Promise.all(deletePromises);
-          } catch (err) {
-            console.error(`Error wiping collection ${colName}:`, err);
-          }
-        }
-        
-        // 3. Delete the Authentication record permanently
-        let authDeleted = false;
-        try {
-          await user.delete();
-          authDeleted = true;
-        } catch (authErr: any) {
-          console.warn("Auth delete failed (may require recent login):", authErr);
-        }
-        
-        if (authDeleted) {
-          showToast("🗑️ Account and data permanently deleted.");
-        } else {
-          showToast("🧹 Data wiped! Log out and in again to fully delete account login.");
-        }
-        
-        setActiveModal(null);
-        setIsVip(false);
-        safeClearAll();
-        if (Capacitor.isNativePlatform()) {
-          try {
-            await FirebaseAuthentication.signOut();
-          } catch (_) {}
-          await clearGoogleCredentialState();
-        }
-        await signOut(auth);
-        setShowSettings(false);
-      } catch (error: any) {
-        console.error("Error during account deletion:", error);
-        showToast("❌ Failed to complete data deletion.");
-      } finally {
-        setLoading(false);
-        setIsDeleting(false);
-      }
-    };
+    setLoading(true);
+    setIsDeleting(true);
+    triggerVibration([40, 60, 40]);
 
-    Alert.alert(
-      "Confirm Deletion",
-      "Are you sure? This will permanently wipe your data.\n\n⚠️ WARNING: Deleting your account does NOT cancel your active Pro Subscription. You must manually cancel it in your device's App Store settings to avoid future charges.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: proceedWithDeletion }
-      ]
-    );
+    try {
+      const uid = user.uid;
+
+      // 1. Check whether the user currently holds an active subscription
+      const wasPro = isProUser() || isVip || safeGetItem('study_is_vip') === 'true' || safeGetItem(`study_is_vip_${uid}`) === 'true';
+
+      // 2. Collections where userId maps to uid
+      const collectionsToWipe = [
+        'pocket_items',
+        'ai_tutor_chats',
+        'quiz_results',
+        'generated_questions',
+        'MistakeVault',
+        'pdf_history'
+      ];
+
+      // Concurrently query and delete all related documents across all collections in parallel
+      const wipePromises = collectionsToWipe.map(async (colName) => {
+        try {
+          const q = query(collection(db, colName), where('userId', '==', uid));
+          const querySnapshot = await getDocs(q);
+          const deletePromises = querySnapshot.docs.map(docSnap => deleteDoc(docSnap.ref));
+          await Promise.all(deletePromises);
+        } catch (err) {
+          console.warn(`Error wiping collection ${colName}:`, err);
+        }
+      });
+
+      // 3. Execute all Firestore wipes concurrently with a fast safety timeout so it never hangs
+      await Promise.race([
+        Promise.allSettled([
+          deleteDoc(doc(db, 'users', uid)).catch(e => console.warn("Error deleting user doc:", e)),
+          ...wipePromises
+        ]),
+        new Promise(resolve => setTimeout(resolve, 3500))
+      ]);
+
+      // 4. Wipe local IndexedDB cache (cached PDFs, offline audios, etc.)
+      try {
+        await clearIndexedDB();
+      } catch (idbErr) {
+        console.warn("IndexedDB clear failed:", idbErr);
+      }
+
+      // 5. Delete Firebase Authentication record
+      let authDeleted = false;
+      try {
+        await user.delete();
+        authDeleted = true;
+      } catch (authErr: any) {
+        console.warn("Auth user.delete() requires re-authentication, proceeding with clean sign out:", authErr);
+      }
+
+      // 6. Wipe all local study data, stats, coins, chat history, mistake vaults, streaks
+      safeClearAll();
+      clearLocalSessionId(uid);
+
+      // 7. PRESERVE ACTIVE PURCHASED SUBSCRIPTION:
+      // If the user bought a subscription, preserve their Pro entitlement on this device!
+      if (wasPro) {
+        safeSetItem('study_is_vip', 'true');
+        safeSetItem('helpyou_active_device_subscription', 'true');
+        setIsVip(true);
+      } else {
+        setIsVip(false);
+      }
+
+      // 8. Clean Native & Firebase Sign Out
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await FirebaseAuthentication.signOut();
+        } catch (_) {}
+        await clearGoogleCredentialState();
+      }
+      await signOut(auth);
+
+      setActiveModal(null);
+      setShowSettings(false);
+      showToast(wasPro 
+        ? "🗑️ Account data wiped! Your purchased Pro Subscription remains active." 
+        : "🗑️ Account and all data permanently deleted."
+      );
+    } catch (error: any) {
+      console.error("Error during account deletion:", error);
+      showToast("❌ Failed to complete data deletion.");
+    } finally {
+      setLoading(false);
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -1259,10 +1205,10 @@ export default function Profile({
                       >
                         <div className="max-h-48 overflow-y-auto overscroll-contain py-1">
                           {[
-                            '9th Grade (Freshman)', 
-                            '10th Grade (Sophomore)', 
-                            '11th Grade (Junior)', 
-                            '12th Grade (Senior)'
+                            '9th Grade (Freshman)', '10th Grade (Sophomore)', 
+                            '11th Grade (Junior)', '12th Grade (Senior)', 
+                            'College Freshman', 'College Sophomore', 
+                            'College Junior', 'College Senior'
                           ].map((grade) => (
                             <div 
                               key={grade}
@@ -1306,7 +1252,7 @@ export default function Profile({
                 <div className="space-y-1.5 relative">
                   <label className="text-[10px] font-bold text-zinc-500">Academic Track</label>
                   {(() => {
-                    const activeTracks = REGIONAL_TRACKS['United States'] || REGIONAL_TRACKS['Others / International'];
+                    const activeTracks = REGIONAL_TRACKS[selectedCountryName] || REGIONAL_TRACKS['Others / International'];
                     const currentTrackObj = activeTracks.find(t => t.id === streamMajor || t.title === streamMajor) || activeTracks[0];
                     const displayTitle = currentTrackObj ? currentTrackObj.title : streamMajor;
                     const isFoundationalGrade = gradeLevel.includes('9th Grade') || gradeLevel.includes('10th Grade');
@@ -1319,6 +1265,7 @@ export default function Profile({
                             if (isFoundationalGrade) return;
                             setIsTrackDropdownOpen(!isTrackDropdownOpen);
                             setIsGradeDropdownOpen(false);
+                            setIsCountryDropdownOpen(false);
                           }}
                           className={`w-full border rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold font-sans shadow-sm transition-all ${
                             isFoundationalGrade 
@@ -1376,72 +1323,87 @@ export default function Profile({
                   })()}
                 </div>
               </div>
+
+              {/* Country / Educational Region Selection */}
+              <div className="space-y-1.5 pt-1 relative">
+                <label className="text-[10px] font-bold text-zinc-500">Country / Curriculum System</label>
+                <button 
+                  onClick={() => {
+                    setIsCountryDropdownOpen(!isCountryDropdownOpen);
+                    setIsGradeDropdownOpen(false);
+                    setIsTrackDropdownOpen(false);
+                  }}
+                  className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
+                >
+                  <span className="truncate pr-2">{selectedCountryName}</span>
+                  <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                </button>
+
+                <AnimatePresence>
+                  {isCountryDropdownOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full left-0 w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
+                    >
+                      <div className="max-h-52 overflow-y-auto overscroll-contain py-1">
+                        {[
+                          { name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
+                          { name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
+                          { name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
+                          { name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
+                          { name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
+                        ].map((c) => (
+                          <div 
+                            key={c.name}
+                            onClick={() => {
+                              setSelectedCountryName(c.name);
+                              safeSetItem('academic_country', c.name);
+                              safeSetItem('academic_region', c.regionSystem);
+                              if (auth.currentUser?.uid) {
+                                safeSetItem(`academic_country_${auth.currentUser.uid}`, c.name);
+                                safeSetItem(`academic_region_${auth.currentUser.uid}`, c.regionSystem);
+                              }
+
+                              // Auto-sync track to match newly selected country
+                              const isFoundational = gradeLevel.includes('9th Grade') || gradeLevel.includes('10th Grade');
+                              if (isFoundational) {
+                                setStreamMajor('Core / Foundation');
+                                safeSetItem('academic_stream', 'Core / Foundation');
+                                if (auth.currentUser?.uid) {
+                                  safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'Core / Foundation');
+                                }
+                              } else {
+                                const newTracks = REGIONAL_TRACKS[c.name] || REGIONAL_TRACKS['Others / International'];
+                                const matchedTrack = newTracks.find(t => t.id === streamMajor) || newTracks[0];
+                                setStreamMajor(matchedTrack.id);
+                                safeSetItem('academic_stream', matchedTrack.id);
+                                if (auth.currentUser?.uid) {
+                                  safeSetItem(`academic_stream_${auth.currentUser.uid}`, matchedTrack.id);
+                                }
+                              }
+
+                              setIsCountryDropdownOpen(false);
+                              triggerVibration(10);
+                            }}
+                            className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${selectedCountryName === c.name ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span>{c.flag}</span>
+                              <span>{c.name}</span>
+                            </span>
+                            {selectedCountryName === c.name && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
-
-          {/* Official College Board AP® May Exam Live Countdown Card */}
-          {(() => {
-            const now = new Date();
-            let examYear = now.getFullYear();
-            // AP Exams occur during first two full weeks of May
-            let targetExamDate = new Date(examYear, 4, 4); // May 4th
-            if (now.getMonth() > 4 || (now.getMonth() === 4 && now.getDate() > 16)) {
-              examYear += 1;
-              targetExamDate = new Date(examYear, 4, 4);
-            }
-            const diffMs = targetExamDate.getTime() - now.getTime();
-            const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-            const weeksLeft = Math.floor(daysLeft / 7);
-            const remainingDaysInWeek = daysLeft % 7;
-
-            return (
-              <div className="rounded-[2.5rem] p-6 bg-gradient-to-br from-indigo-950 via-blue-950 to-indigo-900 text-white shadow-lg border border-indigo-800/60 relative overflow-hidden space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-8 h-8 rounded-xl bg-indigo-600/80 flex items-center justify-center text-sm shadow-xs border border-indigo-400/30">
-                      🗓️
-                    </span>
-                    <div>
-                      <span className="text-[10px] font-black tracking-widest uppercase text-indigo-300 block">
-                        College Board AP® Exam Season
-                      </span>
-                      <h3 className="text-sm font-black text-white">
-                        May {examYear} Testing Window
-                      </h3>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 uppercase tracking-wider">
-                    Target: Score 5
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2.5 text-center">
-                  <div className="bg-indigo-900/60 border border-indigo-700/50 rounded-2xl p-3 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-black text-white tracking-tight">{daysLeft}</span>
-                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-300">Days Left</span>
-                  </div>
-                  <div className="bg-indigo-900/60 border border-indigo-700/50 rounded-2xl p-3 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-black text-white tracking-tight">{weeksLeft}</span>
-                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-300">Weeks</span>
-                  </div>
-                  <div className="bg-indigo-900/60 border border-indigo-700/50 rounded-2xl p-3 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-black text-emerald-400 tracking-tight">5 / 5</span>
-                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">Target Score</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-indigo-200/90 pt-1 font-medium border-t border-indigo-800/40">
-                  <span className="flex items-center gap-1.5 truncate pr-2">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    Consistent unit practice secures top college credits
-                  </span>
-                  <span className="text-[10px] font-bold text-indigo-300 font-mono shrink-0">
-                    +{remainingDaysInWeek}d
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Mastery Radar Chart */}
           <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm relative">
@@ -1496,9 +1458,26 @@ export default function Profile({
             </p>
 
             {/* Passive Usage Line Chart */}
-            <div className="w-full h-48 -mt-1 select-none">
+            <div className="w-full h-48 -mt-1 select-none relative">
+              {/* Highest Study Time Pill Badge in the Corner */}
+              {(() => {
+                const highestItem = chartData.reduce((prev, curr) => (curr.focusTime > prev.focusTime ? curr : prev), chartData[0] || { focusTime: 0, day: 'Sun' });
+                const peakMinsRaw = highestItem?.focusTime || 0;
+                const peakMins = peakMinsRaw % 1 !== 0 ? peakMinsRaw.toFixed(1) : peakMinsRaw;
+                const peakDay = highestItem?.day || 'Sun';
+
+                return (
+                  <div className="absolute top-0 right-1 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFFDF0] border border-amber-300 shadow-xs pointer-events-none select-none">
+                    <span className="text-sm">🏆</span>
+                    <span className="text-xs font-bold text-amber-800">Highest Study Time:</span>
+                    <span className="text-xs font-black text-zinc-950 font-mono">{peakMins}m</span>
+                    <span className="text-xs font-bold text-amber-600">({peakDay})</span>
+                  </div>
+                );
+              })()}
+
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 22, right: 10, left: -25, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
                   <XAxis 
                     dataKey="day" 
@@ -1542,19 +1521,69 @@ export default function Profile({
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-black text-zinc-800 block">Today's Focus Time</span>
-                <span className="text-[9px] font-bold text-zinc-400">Recorded passively in background</span>
-              </div>
-              <span className="text-sm font-black text-zinc-900 bg-white border border-zinc-200/60 shadow-sm px-3.5 py-1.5 rounded-xl font-mono">
-                {(() => {
-                  const todayStr = getTodayDateString();
-                  const todayMins = chartData.find(item => item.dateString === todayStr)?.focusTime || 0;
-                  return `${todayMins}m`;
-                })()}
-              </span>
-            </div>
+            {/* Dual Metric Cards Grid: Today's Focus Time & Highest Study Time (Peak Record) */}
+            {(() => {
+              const todayStr = getTodayDateString();
+              const todayItem = chartData.find(item => item.dateString === todayStr);
+              const todayMinsRaw = todayItem?.focusTime || 0;
+              const todayMins = todayMinsRaw % 1 !== 0 ? todayMinsRaw.toFixed(1) : todayMinsRaw;
+
+              const highestItem = chartData.reduce((prev, curr) => (curr.focusTime > prev.focusTime ? curr : prev), chartData[0] || { focusTime: 0, day: 'Sun' });
+              const peakMinsRaw = highestItem?.focusTime || 0;
+              const peakMins = peakMinsRaw % 1 !== 0 ? peakMinsRaw.toFixed(1) : peakMinsRaw;
+              const peakDay = highestItem?.day || 'Sun';
+
+              return (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Card 1: Today's Focus Time */}
+                    <div className="bg-[#F8FAFC] border border-zinc-200/70 rounded-2xl p-4 flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">TODAY</span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black text-zinc-800 block">Today's Focus Time</span>
+                        <span className="text-2xl font-black text-zinc-950 font-mono tracking-tight block mt-1">
+                          {todayMins}m
+                        </span>
+                        <span className="text-[10px] font-bold text-zinc-400 block mt-1">Passively tracked</span>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Highest Study Time (Peak Record) */}
+                    <div className="bg-[#FFFDF5] border border-amber-300/80 rounded-2xl p-4 flex flex-col justify-between shadow-xs">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1">
+                          <span>🏆</span> PEAK RECORD
+                        </span>
+                        {peakDay && (
+                          <span className="text-[9px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-200/60 font-sans">
+                            {peakDay}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-xs font-black text-zinc-800 block">Highest Study Time</span>
+                        <span className="text-2xl font-black text-amber-600 font-mono tracking-tight block mt-1">
+                          {peakMins}m
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-700/80 block mt-1">7-Day Peak Record</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Program / Analytics Footer */}
+                  <div className="flex items-center justify-between pt-1 px-1 text-xs">
+                    <div className="flex items-center gap-1.5 text-purple-600 font-bold">
+                      <GraduationCap className="w-4 h-4 text-purple-600 stroke-[2.2]" />
+                      <span>{safeGetItem('academic_track_title') || safeGetItem('academic_stream') || 'AP Exam Prep App'}</span>
+                    </div>
+                    <span className="text-zinc-400 font-bold text-[11px]">Study Analytics</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Learning Preferences */}
@@ -1796,16 +1825,15 @@ export default function Profile({
                 {achievementBadges.map((badge) => (
                   <div
                     key={badge.id}
-                    title={`${badge.title} (${badge.requiredXP} XP): ${badge.description}`}
-                    className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all relative ${
+                    className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all ${
                       badge.unlocked
                         ? 'bg-amber-50/50 border-amber-200 shadow-xs'
-                        : 'bg-zinc-50/30 border-zinc-200/40 opacity-60'
+                        : 'bg-zinc-50/30 border-zinc-200/40 opacity-50'
                     }`}
                   >
                     <span className="text-2xl">{badge.icon}</span>
                     <div>
-                      <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-500'}`}>
+                      <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
                         {badge.title}
                       </span>
                       <span className="text-[8px] font-bold text-zinc-400 block">
@@ -1820,13 +1848,6 @@ export default function Profile({
                       <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-0.5">
                         <Lock className="w-2.5 h-2.5" /> Locked
                       </span>
-                    )}
-                    {badge.specialReward && (
-                      <div className="w-full mt-0.5">
-                        <span className="text-[7.5px] font-black uppercase tracking-tight bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white px-1.5 py-0.5 rounded-full shadow-2xs block truncate animate-pulse">
-                          🎁 {badge.specialReward}
-                        </span>
-                      </div>
                     )}
                   </div>
                 ))}
@@ -1891,6 +1912,15 @@ export default function Profile({
                         </h4>
                         <p className="text-[9px] text-white/80 font-bold leading-normal mt-0.5">Unlimited scans & speech</p>
                       </div>
+                      <button 
+                        onClick={() => {
+                          triggerVibration(15);
+                          setActiveModal('manage_sub');
+                        }}
+                        className="bg-white text-amber-700 hover:bg-zinc-50 px-3 py-1.5 rounded-xl text-[10px] font-black shadow-sm transition-all active:scale-95 shrink-0"
+                      >
+                        Manage
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -2426,6 +2456,15 @@ export default function Profile({
                       <span>Manage Subscription</span>
                     </button>
 
+                    <a 
+                      href="/delete-account.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center text-[11px] text-zinc-400 hover:text-zinc-600 font-semibold underline mt-1"
+                    >
+                      🌐 Need to delete outside the app? Visit Web Deletion Portal
+                    </a>
+
                     <div className="flex gap-2.5 pt-3">
                       <button 
                         onClick={() => { triggerVibration(10); setActiveModal(null); }}
@@ -2642,9 +2681,18 @@ export default function Profile({
                       </div>
                     </div>
 
+                    <a 
+                      href="/privacy-policy.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center text-[11px] text-purple-600 font-bold hover:underline mt-4"
+                    >
+                      🌐 View Full Webpage Privacy Policy &rarr;
+                    </a>
+
                     <button 
                       onClick={() => { triggerVibration(10); setActiveModal(null); }}
-                      className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-xs py-3.5 rounded-2xl cursor-pointer transition-all mt-6 shadow-md"
+                      className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-xs py-3.5 rounded-2xl cursor-pointer transition-all mt-3 shadow-md"
                     >
                       I Understand & Agree
                     </button>
@@ -2802,9 +2850,18 @@ export default function Profile({
                       </div>
                     </div>
 
+                    <a 
+                      href="/terms.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center text-[11px] text-purple-600 font-bold hover:underline mt-4"
+                    >
+                      🌐 View Full Webpage Terms of Service &rarr;
+                    </a>
+
                     <button 
                       onClick={() => { triggerVibration(10); setActiveModal(null); }}
-                      className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-xs py-3.5 rounded-2xl cursor-pointer transition-all mt-6 shadow-md"
+                      className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-xs py-3.5 rounded-2xl cursor-pointer transition-all mt-3 shadow-md"
                     >
                       I Accept Terms & Conditions
                     </button>
@@ -2832,7 +2889,7 @@ export default function Profile({
                 <button
                   onClick={() => {
                     triggerVibration(10);
-                    cancelOptimizationRestart();
+                    setShowOptimizationModal(false);
                   }}
                   className="absolute top-5 right-5 w-8 h-8 rounded-full bg-zinc-100 text-zinc-500 hover:text-zinc-800 flex items-center justify-center cursor-pointer transition-all border-none"
                 >
@@ -2923,11 +2980,7 @@ export default function Profile({
 
                   <button
                     onClick={() => {
-                      triggerVibration(25);
-                      if (autoRestartTimerRef.current) {
-                        clearTimeout(autoRestartTimerRef.current);
-                        autoRestartTimerRef.current = null;
-                      }
+                      triggerVibration(20);
                       restartAppCleanly();
                     }}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs py-3.5 rounded-2xl shadow-lg transition-all cursor-pointer border-none mt-2 flex items-center justify-center gap-2"
@@ -2935,19 +2988,9 @@ export default function Profile({
                     <Sparkles className="w-4 h-4 fill-white" />
                     <span>
                       {restartCountdown !== null
-                        ? `Restarting Cleanly in ${restartCountdown}s... (Tap to Reboot Now)`
+                        ? `Restarting Cleanly in ${restartCountdown}s... (Tap to Restart Now)`
                         : "Restart App Now & Enjoy 60fps 🚀"}
                     </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      triggerVibration(10);
-                      cancelOptimizationRestart();
-                    }}
-                    className="w-full bg-transparent hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 font-bold text-[11px] py-2 rounded-xl transition-all cursor-pointer border-none mt-1"
-                  >
-                    Stay in App (Skip Restart)
                   </button>
                 </motion.div>
               )}
@@ -3041,7 +3084,7 @@ export default function Profile({
                       <Calendar className="w-4 h-4" /> Last 28 Days Check-In
                     </h4>
                     <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
-                      {generateStreakCalendar().filter(d => d.isActive).length} Completed
+                      {streakCalendarDays.filter(d => d.isActive).length} Completed
                     </span>
                   </div>
 
@@ -3054,7 +3097,7 @@ export default function Profile({
                     ))}
 
                     {/* Date Boxes */}
-                    {generateStreakCalendar().map((day, idx) => (
+                    {streakCalendarDays.map((day, idx) => (
                       <div 
                         key={`day-box-${idx}`}
                         className={`relative aspect-square rounded-xl flex flex-col items-center justify-center border transition-all ${

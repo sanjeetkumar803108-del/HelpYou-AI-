@@ -125,6 +125,18 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
 
     const playTTS = async (id: string, text: string, existingAudioBase64?: string) => {
     if (!isVip) return;
+
+    const startProgressAnimation = (getCurrentElapsed: () => number) => {
+      const tick = () => {
+        const currentElapsed = getCurrentElapsed();
+        const currentProgress = Math.min((currentElapsed / durationRef.current) * 100, 100);
+        setProgress(currentProgress);
+        if (currentElapsed < durationRef.current) {
+          animationFrameRef.current = requestAnimationFrame(tick);
+        }
+      };
+      animationFrameRef.current = requestAnimationFrame(tick);
+    };
     
     if (window.speechSynthesis) {
       const silent = new SpeechSynthesisUtterance('');
@@ -212,18 +224,7 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
       startTimeRef.current = audioContextRef.current!.currentTime;
       setProgress(0);
       
-      const updateProgress = () => {
-        if (!audioContextRef.current) return;
-        const currentElapsed = audioContextRef.current.currentTime - startTimeRef.current;
-        const currentProgress = Math.min((currentElapsed / durationRef.current) * 100, 100);
-        setProgress(currentProgress);
-        
-        if (currentElapsed < durationRef.current) {
-          animationFrameRef.current = requestAnimationFrame(updateProgress);
-        }
-      };
-      
-      animationFrameRef.current = requestAnimationFrame(updateProgress);
+      startProgressAnimation(() => audioContextRef.current ? (audioContextRef.current.currentTime - startTimeRef.current) : 0);
 
       source.start();
 
@@ -272,17 +273,7 @@ export default function PocketTeacher({ isVip, items }: { isVip: boolean, items:
         durationRef.current = estimatedDurationSeconds;
         startTimeRef.current = Date.now() / 1000;
         
-        const updateProgress = () => {
-          const currentElapsed = (Date.now() / 1000) - startTimeRef.current;
-          const currentProgress = Math.min((currentElapsed / durationRef.current) * 100, 100);
-          setProgress(currentProgress);
-          
-          if (currentElapsed < durationRef.current) {
-            animationFrameRef.current = requestAnimationFrame(updateProgress);
-          }
-        };
-        
-        animationFrameRef.current = requestAnimationFrame(updateProgress);
+        startProgressAnimation(() => (Date.now() / 1000) - startTimeRef.current);
       } else {
         alert("Audio playback failed and your browser does not support text-to-speech fallback.");
       }

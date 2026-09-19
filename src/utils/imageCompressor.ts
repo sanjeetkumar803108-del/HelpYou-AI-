@@ -1,3 +1,20 @@
+function calculateTargetDimensions(width: number, height: number, maxDimension: number) {
+  if (width > maxDimension || height > maxDimension) {
+    if (width > height) {
+      return {
+        width: maxDimension,
+        height: Math.round((height * maxDimension) / width)
+      };
+    } else {
+      return {
+        width: Math.round((width * maxDimension) / height),
+        height: maxDimension
+      };
+    }
+  }
+  return { width, height };
+}
+
 /**
  * Helper to compress and downscale an image to optimize base64 and binary size for fast Gemini API delivery.
  */
@@ -7,19 +24,7 @@ export function compressImage(file: File, maxDimension = 1200, quality = 0.75): 
     reader.onload = (event) => {
       const img = new window.Image();
       img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        // Maintain aspect ratio while checking maximum dimensions
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
+        const { width, height } = calculateTargetDimensions(img.width, img.height, maxDimension);
 
         const canvas = document.createElement("canvas");
         canvas.width = width;
@@ -63,18 +68,7 @@ export function compressImageToFile(file: File, maxDimension = 1200, quality = 0
     reader.onload = (event) => {
       const img = new window.Image();
       img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
+        const { width, height } = calculateTargetDimensions(img.width, img.height, maxDimension);
 
         const canvas = document.createElement("canvas");
         canvas.width = width;

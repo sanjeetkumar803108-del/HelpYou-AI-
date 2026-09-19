@@ -387,23 +387,29 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
     }, 150);
   };
 
-  const triggerQuickAction = async (text: string) => {
-    if (chatLoading || loading) return;
+  const handleSendMessage = async (customText?: string) => {
+    const textToUse = customText !== undefined ? customText : chatInput;
+    if (!textToUse.trim() || chatLoading) return;
+    
+    const newMsg = textToUse;
+    if (customText === undefined) {
+      setChatInput('');
+    }
+    setMessages(prev => [...prev, { role: 'user', text: newMsg }]);
     setChatLoading(true);
-    setMessages(prev => [...prev, { role: 'user', text }]);
 
     try {
       const formData = new FormData();
-      formData.append('message', text);
+      formData.append('message', newMsg);
       formData.append('mode', activeMode);
       formData.append('gradeLevel', localStorage.getItem('academic_grade') || '11th Grade (Junior)');
       if (activeMode === 'Translate' && selectedLanguage) {
         formData.append('targetLanguage', selectedLanguage);
       }
       
-      const formattedHistory = [...messages, { role: 'user' as const, text }].map(m => {
+      const formattedHistory = messages.map(m => {
         if (m.text) return { role: m.role, parts: [{ text: m.text }] };
-        if (m.imageUrl) return { role: m.role, parts: [] };
+        if (m.imageUrl) return { role: m.role, parts: [] }; // preserved for image attachment
         return null;
       }).filter(Boolean);
       
@@ -430,9 +436,9 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       const data = await response.json();
       
       // Auto-detect and log student misconceptions or common traps in scanner responses
-      detectAndLogMistake('Scan', text, data.text).catch(e => console.error("Scanner mistake capture failed:", e));
+      detectAndLogMistake('Scan', newMsg, data.text).catch(e => console.error("Scanner mistake capture failed:", e));
 
-      const updatedMessages = [...messages, { role: 'user' as const, text }, { role: 'model' as const, text: data.text }];
+      const updatedMessages = [...messages, { role: 'user' as const, text: newMsg }, { role: 'model' as const, text: data.text }];
       setMessages(updatedMessages);
 
       if (auth.currentUser && chatDocId) {
@@ -455,6 +461,11 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const triggerQuickAction = async (text: string) => {
+    if (chatLoading || loading) return;
+    await handleSendMessage(text);
   };
 
   const processFile = async (file: File) => {
@@ -610,82 +621,6 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       });
       
       await handleSendMessage(originalText);
-    }
-  };
-
-  const handleSendMessage = async (customText?: string) => {
-    const textToUse = customText !== undefined ? customText : chatInput;
-    if (!textToUse.trim() || chatLoading) return;
-    
-    const newMsg = textToUse;
-    if (customText === undefined) {
-      setChatInput('');
-    }
-    setMessages(prev => [...prev, { role: 'user', text: newMsg }]);
-    setChatLoading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('message', newMsg);
-      formData.append('mode', activeMode);
-      formData.append('gradeLevel', localStorage.getItem('academic_grade') || '11th Grade (Junior)');
-      if (activeMode === 'Translate' && selectedLanguage) {
-        formData.append('targetLanguage', selectedLanguage);
-      }
-      
-      const formattedHistory = messages.map(m => {
-        if (m.text) return { role: m.role, parts: [{ text: m.text }] };
-        if (m.imageUrl) return { role: m.role, parts: [] }; // preserved for image attachment
-        return null;
-      }).filter(Boolean);
-      
-      formData.append('history', JSON.stringify(formattedHistory));
-
-      const firstImage = messages.find(m => m.imageUrl)?.imageUrl;
-      if (firstImage && firstImage !== "placeholder_for_text_only") {
-        const blob = await (await fetch(firstImage)).blob();
-        formData.append('image', blob, 'image.jpg');
-      }
-
-      const response = await fetch(getApiUrl('/api/chat'), {
-        method: 'POST',
-        body: formData,
-      });
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        throw new Error("Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.");
-      }
-
-      if (!response.ok) throw new Error("Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please tap 'Try Again'.");
-      
-      const data = await response.json();
-      
-      // Auto-detect and log student misconceptions or common traps in scanner responses
-      detectAndLogMistake('Scan', newMsg, data.text).catch(e => console.error("Scanner mistake capture failed:", e));
-
-      const updatedMessages = [...messages, { role: 'user' as const, text: newMsg }, { role: 'model' as const, text: data.text }];
-      setMessages(updatedMessages);
-
-      if (auth.currentUser && chatDocId) {
-        try {
-          const combinedText = updatedMessages
-            .filter(m => m.text)
-            .map(m => `**${m.role === 'user' ? 'You' : 'AI'}**: ${m.text}`)
-            .join('\n\n');
-          await updateDoc(doc(db, 'pocket_items', chatDocId), {
-            text: combinedText
-          });
-        } catch (e) {
-          console.error("Failed to update firestore", e);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      let errorMessage = "Oops! Something went wrong on our end. Please try again.";
-      setMessages(prev => [...prev, { role: 'model', text: errorMessage, isError: true }]);
-    } finally {
-      setChatLoading(false);
     }
   };
 

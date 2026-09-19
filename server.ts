@@ -11,7 +11,6 @@ import crypto from "crypto";
 import { YoutubeTranscript } from 'youtube-transcript';
 import rateLimit from "express-rate-limit";
 import xss from "xss";
-import { getGranularSubjectArchetypes } from "./src/utils/apArchetypes";
 
 
 process.on("unhandledRejection", (reason, promise) => {
@@ -253,8 +252,6 @@ let lastQuotaExceededTime = 0;
 const rateLimitedModels: Record<string, number> = {};
 const rateLimitedModelsCooldown: Record<string, number> = {};
 
-app.use(express.json({ limit: "35mb" }));
-
 app.use((req, res, next) => {
   if (req.body) {
     req.body = sanitizeInput(req.body);
@@ -267,8 +264,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
-app.use(express.urlencoded({ limit: "35mb", extended: true }));
 
 app.use((err: any, req: any, res: any, next: any) => {
   if (err instanceof multer.MulterError) {
@@ -896,35 +891,23 @@ CRITICAL SAFETY & QUALITY RULES (MUST FOLLOW):
 4. If the input is a question, translate the question itself, do NOT answer it.
 5. If the input is a single word or phrase, translate it directly.
 6. Absolutely no conversational preamble. The output must be 100% clean translated text only.`;
-  } else if (mode === "All Subjects") {
+  } else if (mode === "All Subjects" || mode === "General") {
     instruction = `You are the core intelligence engine for "HelpYou AI", an advanced educational and research assistant. Your primary job is to process user queries (which may contain conversational Hindi/Hinglish filler words) and provide highly structured, accurate, and context-aware responses.
 
 CRITICAL RULES:
-1. Keyword Extraction: Ignore conversational fillers (e.g., "Bhai", "tum", "research karo", "waha kya hua", "please batao"). Extract ONLY the core subject. (e.g., "Bhai tum jeju island case pe research karo" -> "Jeju Island Incident").
+1. Keyword Extraction: Ignore conversational fillers (e.g., "Bhai", "tum", "research karo", "waha kya hua", "please batao", "bhai batao"). Extract ONLY the core subject. (e.g., "Bhai tum jeju island case pe research karo" -> "Jeju Island Incident").
 2. Domain Classification: Analyze the core subject and classify it into one of two categories:
    - STEM (Math/Science): Physics, Chemistry, Biology, Mathematics.
    - Humanities/General: History, Geography, Current Events, Case Studies, Social Sciences, Literature.
 3. Dynamic Output Generation:
    - If STEM: Provide core principles, scientific mechanisms, key formulas (wrapped in LaTeX $...$ or $$...$$), and step-by-step actionable prep steps.
    - If Humanities/General: Provide historical context, major events, real-world impact, and analytical takeaways. Strictly DO NOT generate or mention formulas, equations, or scientific mechanisms for this category.
-4. No Fake URLs: When generating verified research sources, only use root domains (e.g., en.wikipedia.org, britannica.com). Do not fabricate full URL paths.
+4. No Fake URLs: When generating verified research sources, only use root domains (e.g., en.wikipedia.org, britannica.com). Do not fabricate full URL paths.${mode === "All Subjects" ? `
 
 You MUST structure your response strictly using this layout:
 🎯 Core Concept / Overview: Clear, formal academic definition & context.
 📝 Step-by-Step Logic / Key Events: A rigorous, sound breakdown.
-⚠️ Analytical Takeaway / Exam Traps: Key points to remember.`;
-  } else if (mode === "General") {
-    instruction = `You are the core intelligence engine for "HelpYou AI", an advanced educational and research assistant. Your primary job is to process user queries (which may contain conversational Hindi/Hinglish filler words) and provide highly structured, accurate, and context-aware responses.
-
-CRITICAL RULES:
-1. Keyword Extraction: Ignore conversational fillers (e.g., "Bhai", "tum", "research karo", "waha kya hua", "bhai batao"). Extract ONLY the core subject. (e.g., "Bhai tum jeju island case pe research karo" -> "Jeju Island Incident").
-2. Domain Classification: Analyze the core subject and classify it into one of two categories:
-   - STEM (Math/Science): Physics, Chemistry, Biology, Mathematics.
-   - Humanities/General: History, Geography, Current Events, Case Studies, Social Sciences, Literature.
-3. Dynamic Output Generation:
-   - If STEM: Provide core principles, scientific mechanisms, key formulas (wrapped in LaTeX $...$ or $$...$$), and step-by-step actionable prep steps.
-   - If Humanities/General: Provide historical context, major events, real-world impact, and analytical takeaways. Strictly DO NOT generate or mention formulas, equations, or scientific mechanisms for this category.
-4. No Fake URLs: When generating verified research sources, only use root domains (e.g., en.wikipedia.org, britannica.com). Do not fabricate full URL paths.`;
+⚠️ Analytical Takeaway / Exam Traps: Key points to remember.` : ''}`;
   } else {
     // Default / Math / Science / Tutor mode
     instruction = `You are the core intelligence engine for "HelpYou AI", an elite educational and research assistant, SAT/ACT Expert, and Master Educator.
@@ -3608,6 +3591,10 @@ function getCollegeBoardSubjectGuidelines(subject: string, questionType: 'object
   return `College Board AP Course and Exam Description standards for ${subject}. High rigor, analytical thinking, stimulus-based.`;
 }
 
+function getGranularSubjectArchetypes(subject: string, unitOrTopic: string, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => `Core conceptual inquiry #${i + 1} for ${unitOrTopic || subject}`);
+}
+
 function getDynamicTopicVariation(subject: string, unitOrTopic: string, count: number): string {
   const archetypes = getGranularSubjectArchetypes(subject, unitOrTopic, count);
   return archetypes.map((arch, idx) => `  - Question ${idx + 1} Target Archetype: ${arch}`).join('\n');
@@ -3702,29 +3689,40 @@ function generateBalancedAnswerSequence(count: number): number[] {
 }
 
 /**
- * Shuffles options for Test Prep questions to guarantee 25% balance across A, B, C, D
- * with no consecutive identical answers.
+ * Shuffles options for Test Prep and Trap Radar questions to guarantee 25% balance across A, B, C, D
+ * with no consecutive identical answers, synchronizing traps and explanations.
  */
-function shuffleAndBalanceTestPrepQuestions(questions: any[]): any[] {
+function shuffleAndBalanceQuestions(questions: any[]): any[] {
   if (!Array.isArray(questions) || questions.length === 0) return questions;
 
   const targetPositions = generateBalancedAnswerSequence(questions.length);
 
   return questions.map((q, qIdx) => {
+    if (q.format === 'subjective') return q;
+
     const rawOptions = Array.isArray(q.options) ? q.options.map(String) : [];
     if (rawOptions.length < 4) return q;
 
     const rawAns = String(q.correctAnswer || '').trim();
     let currentCorrectIdx = -1;
 
-    const letterMatch =
-      rawAns.match(/^Option\s+([A-Da-d])/i) ||
-      rawAns.match(/^([A-Da-d])[\)\.:\s]/) ||
-      rawAns.match(/^([A-Da-d])$/);
-    if (letterMatch && letterMatch[1]) {
-      const matchedLetter = letterMatch[1].toUpperCase();
-      const lIdx = MCQ_LETTERS.indexOf(matchedLetter);
-      if (lIdx >= 0 && lIdx < 4) currentCorrectIdx = lIdx;
+    if (Array.isArray(q.traps) && q.traps.length > 0) {
+      const correctTrapIdx = q.traps.findIndex((t: any) => t.isCorrect);
+      if (correctTrapIdx >= 0 && correctTrapIdx < 4) {
+        currentCorrectIdx = correctTrapIdx;
+      }
+    }
+
+    if (currentCorrectIdx === -1) {
+      const letterMatch =
+        rawAns.match(/^Option\s+([A-Da-d])/i) ||
+        rawAns.match(/^([A-Da-d])[\)\.:\s]/i) ||
+        rawAns.match(/^([A-Da-d])$/i);
+      if (letterMatch) {
+        const matchedLetter = (letterMatch[1] || letterMatch[0]).charAt(0).toUpperCase();
+        const lIdx = MCQ_LETTERS.indexOf(matchedLetter);
+        if (lIdx >= 0 && lIdx < 4) currentCorrectIdx = lIdx;
+      }
     }
 
     if (currentCorrectIdx === -1) {
@@ -3740,10 +3738,15 @@ function shuffleAndBalanceTestPrepQuestions(questions: any[]): any[] {
 
     const origLetter = MCQ_LETTERS[currentCorrectIdx];
 
-    const items = rawOptions.slice(0, 4).map((opt, idx) => ({
-      content: opt.replace(/^[A-Da-d][\)\.:\s]\s*/, '').trim(),
-      isCorrect: idx === currentCorrectIdx
-    }));
+    const items = rawOptions.slice(0, 4).map((opt, idx) => {
+      const cleanText = opt.replace(/^[A-Da-d][\)\.:\s]\s*/, '').trim();
+      const trap = Array.isArray(q.traps) && q.traps[idx] ? { ...q.traps[idx] } : null;
+      return {
+        content: cleanText,
+        isCorrect: idx === currentCorrectIdx,
+        trap
+      };
+    });
 
     const correctItem = items[currentCorrectIdx];
     const distractorItems = items.filter((_, idx) => idx !== currentCorrectIdx);
@@ -3778,96 +3781,15 @@ function shuffleAndBalanceTestPrepQuestions(questions: any[]): any[] {
         .replace(new RegExp(`\\(${origLetter}\\)\\s+is\\s+correct\\b`, 'gi'), `(${newLetter}) is correct`);
     }
 
-    return {
+    const result: any = {
       ...q,
       options: newOptions,
       correctAnswer: newCorrectAnswer,
       explanation: newExplanation
     };
-  });
-}
-
-/**
- * Shuffles options for AP Trap Radar questions to guarantee 25% balance across A, B, C, D
- * with no consecutive identical answers, perfectly synchronizing traps array.
- */
-function shuffleAndBalanceTrapRadarQuestions(questions: any[]): any[] {
-  if (!Array.isArray(questions) || questions.length === 0) return questions;
-
-  const targetPositions = generateBalancedAnswerSequence(questions.length);
-
-  return questions.map((q, qIdx) => {
-    if (q.format === 'subjective') return q;
-
-    const rawOptions = Array.isArray(q.options) ? q.options.map(String) : [];
-    if (rawOptions.length < 4) return q;
-
-    const rawAns = String(q.correctAnswer || '').trim();
-    let currentCorrectIdx = -1;
 
     if (Array.isArray(q.traps) && q.traps.length > 0) {
-      const correctTrapIdx = q.traps.findIndex((t: any) => t.isCorrect);
-      if (correctTrapIdx >= 0 && correctTrapIdx < 4) {
-        currentCorrectIdx = correctTrapIdx;
-      }
-    }
-
-    if (currentCorrectIdx === -1) {
-      const letterMatch = rawAns.match(/^[A-Da-d][\)\.:\s]/i) || rawAns.match(/^[A-Da-d]$/);
-      if (letterMatch) {
-        const matchedLetter = (letterMatch[1] || letterMatch[0]).charAt(0).toUpperCase();
-        const lIdx = MCQ_LETTERS.indexOf(matchedLetter);
-        if (lIdx >= 0) currentCorrectIdx = lIdx;
-      }
-    }
-
-    if (currentCorrectIdx === -1) {
-      const cleanRawAns = rawAns.toLowerCase().replace(/^[a-d][\)\.:\s]+/, '').trim();
-      const foundIdx = rawOptions.findIndex(opt => {
-        const cleanOpt = opt.toLowerCase().replace(/^[a-d][\)\.:\s]+/, '').trim();
-        return cleanOpt === cleanRawAns;
-      });
-      if (foundIdx >= 0) currentCorrectIdx = foundIdx;
-    }
-
-    if (currentCorrectIdx === -1) currentCorrectIdx = 0;
-
-    const items = rawOptions.slice(0, 4).map((opt, idx) => {
-      const cleanText = opt.replace(/^[A-Da-d][\)\.:\s]\s*/, '').trim();
-      const trap = Array.isArray(q.traps) && q.traps[idx] ? { ...q.traps[idx] } : null;
-      return {
-        content: cleanText,
-        isCorrect: idx === currentCorrectIdx,
-        trap
-      };
-    });
-
-    const correctItem = items[currentCorrectIdx];
-    const distractorItems = items.filter((_, idx) => idx !== currentCorrectIdx);
-
-    for (let d = distractorItems.length - 1; d > 0; d--) {
-      const rand = Math.floor(Math.random() * (d + 1));
-      [distractorItems[d], distractorItems[rand]] = [distractorItems[rand], distractorItems[d]];
-    }
-
-    const targetPos = targetPositions[qIdx];
-    const reorderedItems: any[] = [];
-    let distractorIdx = 0;
-
-    for (let pos = 0; pos < 4; pos++) {
-      if (pos === targetPos) {
-        reorderedItems.push(correctItem);
-      } else {
-        reorderedItems.push(distractorItems[distractorIdx++]);
-      }
-    }
-
-    const newOptions = reorderedItems.map((item, pos) => `${MCQ_LETTERS[pos]}) ${item.content}`);
-    const newCorrectAnswer = newOptions[targetPos];
-
-    let newTraps: any[] | undefined = undefined;
-    if (Array.isArray(q.traps) && q.traps.length > 0) {
-      newTraps = reorderedItems.map((item, pos) => {
+      result.traps = reorderedItems.map((item, pos) => {
         if (item.trap) {
           return {
             ...item.trap,
@@ -3885,14 +3807,27 @@ function shuffleAndBalanceTrapRadarQuestions(questions: any[]): any[] {
       });
     }
 
-    return {
-      ...q,
-      options: newOptions,
-      correctAnswer: newCorrectAnswer,
-      traps: newTraps
-    };
+    return result;
   });
 }
+
+const shuffleAndBalanceTestPrepQuestions = shuffleAndBalanceQuestions;
+const shuffleAndBalanceTrapRadarQuestions = shuffleAndBalanceQuestions;
+
+const AP_CODE_MATH_LATEX_FORMATTING = `CRITICAL CODE, MATH & LATEX FORMATTING:
+- FOR COMPUTER SCIENCE / PROGRAMMING (AP Computer Science A, AP Computer Science Principles):
+  * Always format code snippets inside standard Markdown fenced code blocks (\`\`\`java ... \`\`\`).
+  * In code blocks and programming expressions, ALWAYS use standard programming operators: '<=', '>=', '!=', '==', '&&', '||', '<', '>'. NEVER substitute LaTeX symbols like \\leqslant, \\le, \\ge, \\times into code!
+  * For inline variable names, methods, or keywords in question text (e.g. \`reverseString("APCS")\`, \`true\`, \`false\`, \`StackOverflowError\`), ALWAYS use Markdown backticks (\`code\`) and NEVER raw LaTeX like \\texttt{...}.
+- FOR MATHEMATICS & SCIENCE (AP Calculus, AP Physics, AP Chemistry, AP Statistics):
+  * Wrap all mathematical expressions in valid LaTeX syntax: $...$ for inline or $$...$$ for block.
+  * For data tables and matrices, ALWAYS wrap in $$ block delimiters:
+    $$\\begin{array}{c|ccccc} x & -1 & 0 & 2 & 3 & 4 \\\\ \\hline g(x) & -5 & 3 & -2 & 7 & 10 \\end{array}$$
+    NEVER output bare \\begin{array} without $$...$$ delimiters!
+  * For piecewise functions, ALWAYS use clean LaTeX with $$:
+    $$f(x) = \\begin{cases} g(x) & \\text{for } x < c \\\\ h(x) & \\text{for } x \\ge c \\end{cases}$$
+    NEVER write raw unescaped pseudo-code like 'f(x) = { ... }' or '<=' inside math equations that breaks KaTeX!
+  * Always double-escape backslashes in JSON output: \\\\frac, \\\\le, \\\\ge, \\\\to, \\\\infty, \\\\begin{cases}, \\\\end{cases}, \\\\begin{array}, \\\\end{array}.`;
 
 app.post("/api/generate-ap-questions", async (req, res) => {
   try {
@@ -4054,20 +3989,7 @@ ${combinedAntiRepetition}
 BATCH TARGET ARCHETYPES:
 ${batchArchetypePlan}
 
-CRITICAL CODE, MATH & LATEX FORMATTING:
-- FOR COMPUTER SCIENCE / PROGRAMMING (AP Computer Science A, AP Computer Science Principles):
-  * Always format code snippets inside standard Markdown fenced code blocks (\`\`\`java ... \`\`\`).
-  * In code blocks and programming expressions, ALWAYS use standard programming operators: '<=', '>=', '!=', '==', '&&', '||', '<', '>'. NEVER substitute LaTeX symbols like \\leqslant, \\le, \\ge, \\times into code!
-  * For inline variable names, methods, or keywords in question text (e.g. \`reverseString("APCS")\`, \`true\`, \`false\`, \`StackOverflowError\`), ALWAYS use Markdown backticks (\`code\`) and NEVER raw LaTeX like \\texttt{...}.
-- FOR MATHEMATICS & SCIENCE (AP Calculus, AP Physics, AP Chemistry, AP Statistics):
-  * Wrap all mathematical expressions in valid LaTeX syntax: $...$ for inline or $$...$$ for block.
-  * For data tables and matrices, ALWAYS wrap in $$ block delimiters:
-    $$\\begin{array}{c|ccccc} x & -1 & 0 & 2 & 3 & 4 \\\\ \\hline g(x) & -5 & 3 & -2 & 7 & 10 \\end{array}$$
-    NEVER output bare \\begin{array} without $$...$$ delimiters!
-  * For piecewise functions, ALWAYS use clean LaTeX with $$:
-    $$f(x) = \\begin{cases} g(x) & \\text{for } x < c \\\\ h(x) & \\text{for } x \\ge c \\end{cases}$$
-    NEVER write raw unescaped pseudo-code like 'f(x) = { ... }' or '<=' inside math equations that breaks KaTeX!
-  * Always double-escape backslashes in JSON output: \\\\frac, \\\\le, \\\\ge, \\\\to, \\\\infty, \\\\begin{cases}, \\\\end{cases}, \\\\begin{array}, \\\\end{array}.
+${AP_CODE_MATH_LATEX_FORMATTING}
 
 STRICT JSON OUTPUT:
 Return ONLY a valid JSON array of objects with this exact structure:
@@ -4298,20 +4220,7 @@ ${combinedAntiRepetition}
 BATCH TARGET ARCHETYPES:
 ${batchArchetypePlan}
 
-CRITICAL CODE, MATH & LATEX FORMATTING:
-- FOR COMPUTER SCIENCE / PROGRAMMING (AP Computer Science A, AP Computer Science Principles):
-  * Always format code snippets inside standard Markdown fenced code blocks (\`\`\`java ... \`\`\`).
-  * In code blocks and programming expressions, ALWAYS use standard programming operators: '<=', '>=', '!=', '==', '&&', '||', '<', '>'. NEVER substitute LaTeX symbols like \\leqslant, \\le, \\ge, \\times into code!
-  * For inline variable names, methods, or keywords in question text (e.g. \`reverseString("APCS")\`, \`true\`, \`false\`, \`StackOverflowError\`), ALWAYS use Markdown backticks (\`code\`) and NEVER raw LaTeX like \\texttt{...}.
-- FOR MATHEMATICS & SCIENCE (AP Calculus, AP Physics, AP Chemistry, AP Statistics):
-  * Wrap all mathematical expressions in valid LaTeX syntax: $...$ for inline or $$...$$ for block.
-  * For data tables and matrices, ALWAYS wrap in $$ block delimiters:
-    $$\\begin{array}{c|ccccc} x & -1 & 0 & 2 & 3 & 4 \\\\ \\hline g(x) & -5 & 3 & -2 & 7 & 10 \\end{array}$$
-    NEVER output bare \\begin{array} without $$...$$ delimiters!
-  * For piecewise functions, ALWAYS use clean LaTeX with $$:
-    $$f(x) = \\begin{cases} g(x) & \\text{for } x < c \\\\ h(x) & \\text{for } x \\ge c \\end{cases}$$
-    NEVER write raw unescaped pseudo-code like 'f(x) = { ... }' or '<=' inside math equations that breaks KaTeX!
-  * Always double-escape backslashes in JSON output: \\\\frac, \\\\le, \\\\ge, \\\\to, \\\\infty, \\\\begin{cases}, \\\\end{cases}, \\\\begin{array}, \\\\end{array}.
+${AP_CODE_MATH_LATEX_FORMATTING}
 
 STRICT JSON OUTPUT:
 Return ONLY a valid JSON object with key "questions" containing an array of objects:

@@ -678,6 +678,16 @@ interface SavedChat {
   updatedAt: any;
 }
 
+const getChatTime = (chat: SavedChat): number => {
+  const ts = chat.updatedAt || chat.createdAt;
+  if (!ts) return 0;
+  if (typeof ts.seconds === 'number') {
+    return ts.seconds * 1000 + (ts.nanoseconds ? ts.nanoseconds / 1000000 : 0);
+  }
+  const parsed = new Date(ts).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 const getChatCategory = (chat: SavedChat): { name: string; tag: string; color: string } => {
   const textToAnalyze = (chat.title + ' ' + (chat.messages?.map(m => m.text).join(' ') || '')).toLowerCase();
   
@@ -1737,15 +1747,6 @@ Please evaluate this answer strictly according to your system rubric.`;
         });
       });
 
-      const getChatTime = (chat: SavedChat) => {
-        const ts = chat.updatedAt || chat.createdAt;
-        if (!ts) return 0;
-        if (typeof ts.seconds === 'number') {
-          return ts.seconds * 1000 + (ts.nanoseconds ? ts.nanoseconds / 1000000 : 0);
-        }
-        const parsed = new Date(ts).getTime();
-        return isNaN(parsed) ? 0 : parsed;
-      };
       chats.sort((a, b) => getChatTime(b) - getChatTime(a));
 
       if (chats.length > 15) {
@@ -2029,16 +2030,6 @@ Please evaluate this answer strictly according to your system rubric.`;
                   </div>
                 ) : (
                   (() => {
-                    const getChatTime = (chat: SavedChat) => {
-                      const ts = chat.updatedAt || chat.createdAt;
-                      if (!ts) return Date.now();
-                      if (typeof ts.seconds === 'number') {
-                        return ts.seconds * 1000 + (ts.nanoseconds ? ts.nanoseconds / 1000000 : 0);
-                      }
-                      const dateParsed = new Date(ts).getTime();
-                      return isNaN(dateParsed) ? Date.now() : dateParsed;
-                    };
-
                     const sortedChats = [...(Array.isArray(savedChats) ? savedChats : [])].sort((a, b) => getChatTime(b) - getChatTime(a));
 
                     return (

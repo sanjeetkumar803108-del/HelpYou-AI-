@@ -112,14 +112,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         });
       }
 
-      if (this.props.featureName === 'Learning Island') {
-        safePurgeKeysByPrefix('learning_island_progress_');
-        safeRemoveItem('learning_island_selected_subject_id');
-      } else if (this.props.featureName === 'Test Prep') {
-        safeRemoveItem('ap_test_prep_history');
-      } else if (this.props.featureName === '1v1 Quiz Battle') {
-        safeRemoveItem('ap_quiz_battle_last_room');
-      } else if (this.props.featureName === 'Profile') {
+      if (this.props.featureName === 'Profile') {
         safeRemoveItem('study_passive_usage_data');
       }
     } catch (e) {

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, ArrowRight, Swords, BookOpen, Layers, Youtube, FileText, FileImage, Wand2, ChevronDown, ChevronUp, Calculator, UserCircle, Search, Lock, Brain, Crown, Share2, Archive, Trash2, Calendar, HelpCircle, Check, Undo, Zap } from 'lucide-react';
+import { Sparkles, ArrowRight, BookOpen, Layers, Youtube, FileText, FileImage, Wand2, ChevronDown, ChevronUp, Calculator, UserCircle, Search, Lock, Brain, Crown, Share2, Archive, Trash2, Calendar, HelpCircle, Check, Undo, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Capacitor } from '@capacitor/core';
-import appLogo from '../assets/logo.png';
+import appLogo from '../assets/logo.svg';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getCoins, isUserLoggedIn } from '../utils/coins';
@@ -32,19 +32,15 @@ const FEATURE_COSTS: Record<string, number> = {
   'grammar': 1,
   'summariser': 1,
   'calculator': 0,
-  'livetutorsearch': 0,
-  'apnotes': 0,
-  'apsamplepapers': 0,
-  'trapradar': 0,
-  'mindmap': 0,
-  'frqgrader': 0,
-  'quizbattle': 0
+  'image2pdf': 0,
+  'pdfhistory': 0,
+  'livetutorsearch': 0
 };
 
 const HeaderLogo = React.memo(() => (
   <div className="flex items-center gap-2 font-bold text-lg text-zinc-900 select-none">
-    <img src={appLogo} alt="AP Exam Logo" className="w-7 h-7 rounded-lg object-contain" referrerPolicy="no-referrer" loading="lazy" />
-    <span className="font-black tracking-tight text-zinc-950">AP Exam</span>
+    <img src={appLogo} alt="HelpYou AI Logo" className="w-7 h-7" referrerPolicy="no-referrer" loading="lazy" />
+    <span className="font-black tracking-tight text-zinc-950">HelpYou AI</span>
   </div>
 ));
 HeaderLogo.displayName = 'HeaderLogo';
@@ -86,7 +82,6 @@ function ToolsDashboard({
   refreshEpoch
 }: ToolsDashboardProps) {
   const [showAllTools, setShowAllTools] = useState(false);
-
   const loggedIn = isUserLoggedIn();
   const { deepFocus } = useSettings();
 
@@ -97,7 +92,6 @@ function ToolsDashboard({
   
   const startY = useRef(0);
   const isDragging = useRef(false);
-  const hasTriggeredReadyHaptic = useRef(false);
 
   // Trigger internal re-layout on refreshEpoch change
   useEffect(() => {
@@ -108,11 +102,10 @@ function ToolsDashboard({
 
   const handleDragStart = (clientY: number) => {
     if (!scrollRef.current) return;
-    // Allow pull-to-refresh when scrollbar is near the top (5px tolerance for mobile bounce)
-    if (scrollRef.current.scrollTop <= 5 && refreshState === 'idle') {
+    // Only allow pull-to-refresh if the scrollbar is completely at the top
+    if (scrollRef.current.scrollTop === 0 && refreshState === 'idle') {
       startY.current = clientY;
       isDragging.current = true;
-      hasTriggeredReadyHaptic.current = false;
     }
   };
 
@@ -121,26 +114,17 @@ function ToolsDashboard({
     const dy = clientY - startY.current;
     if (dy > 0) {
       // Apply a spring resistance damping ratio
-      const damped = Math.min(85, dy * 0.4);
+      const damped = Math.min(100, dy * 0.35);
       setPullDistance(damped);
-      if (damped >= 45) {
-        if (!hasTriggeredReadyHaptic.current) {
-          triggerVibration(15);
-          hasTriggeredReadyHaptic.current = true;
-        }
+      if (damped >= 55) {
         setRefreshState('ready');
       } else {
-        hasTriggeredReadyHaptic.current = false;
         setRefreshState('pulling');
       }
       // Prevent default overscroll bounce/refreshes in some WebView frames
       if (e?.preventDefault) {
-        try { e.preventDefault(); } catch (_) {}
+        e.preventDefault();
       }
-    } else if (dy < -10 && scrollRef.current && scrollRef.current.scrollTop > 5) {
-      isDragging.current = false;
-      setPullDistance(0);
-      setRefreshState('idle');
     }
   };
 
@@ -149,13 +133,13 @@ function ToolsDashboard({
     isDragging.current = false;
 
     if (refreshState === 'ready' && onForceSync) {
-      triggerVibration([20, 35]);
+      triggerVibration(10);
       setRefreshState('refreshing');
       setPullDistance(55); // Lock it at loading distance
       try {
         await onForceSync();
         setRefreshState('success');
-        triggerVibration(25);
+        triggerVibration(15);
       } catch (err) {
         console.error('[PTR] Manual refresh failed:', err);
         setRefreshState('idle');
@@ -167,7 +151,7 @@ function ToolsDashboard({
       setTimeout(() => {
         setRefreshState('idle');
         setPullDistance(0);
-      }, 750);
+      }, 1000);
     } else {
       setRefreshState('idle');
       setPullDistance(0);
@@ -285,7 +269,7 @@ function ToolsDashboard({
 
   const handleShareTool = (toolId: string) => {
     const cleanId = toolId.startsWith('tab:') ? toolId.substring(4) : toolId;
-    const shareText = `📚 Check out the AI Tool - "${cleanId.toUpperCase()}" on AP Exam App! It supercharges your learning! 🚀`;
+    const shareText = `📚 Check out the AI Tool - "${cleanId.toUpperCase()}" on HelpYou AI! It supercharges your learning! 🚀`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(shareText);
       setShowToastMessage(`📋 Share text copied to clipboard!`);
@@ -342,36 +326,7 @@ function ToolsDashboard({
 
   const handleSelectTool = (tool: string) => {
     triggerVibration(15);
-
-
-
-    // VIP/Subscription check for Deep Search AI (livetutorsearch)
-    if (tool === 'livetutorsearch') {
-      if (!isVip) {
-        alert("Deep Search AI is a premium VIP feature. Please upgrade to our VIP subscription model to unlock!");
-        if (onOpenVip) {
-          onOpenVip();
-        } else {
-          window.dispatchEvent(new CustomEvent('open-vip-modal'));
-        }
-        return;
-      }
-    }
-
-    // VIP/Subscription check for AI Question Generator (questiongenerator)
-    if (tool === 'questiongenerator') {
-      if (!isVip) {
-        alert("AI Questions Generator is a premium VIP feature. Please upgrade to our VIP subscription model to unlock!");
-        if (onOpenVip) {
-          onOpenVip();
-        } else {
-          window.dispatchEvent(new CustomEvent('open-vip-modal'));
-        }
-        return;
-      }
-    }
-
-    // 2. Coin requirement check (Handled elegantly inside each tool by the LockedFeature component!)
+    // Smoothly open the selected tool - locked states are handled inside components seamlessly!
     onSelectTool(tool);
   };
 
@@ -435,7 +390,6 @@ function ToolsDashboard({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUpOrLeave}
       onMouseLeave={handleMouseUpOrLeave}
-      style={{ overscrollBehaviorY: 'contain' }}
       className="w-full p-6 h-full flex flex-col text-zinc-900 bg-gradient-to-b from-[#F9FBE7]/15 via-[#FAF9F6] to-[#FAF9F6] overflow-y-auto relative font-sans select-none touch-pan-y"
     >
       {/* Pull-To-Refresh Visual Indicator Container */}
@@ -443,47 +397,47 @@ function ToolsDashboard({
         {pullDistance > 0 && (
           <motion.div 
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: pullDistance + 6, opacity: 1 }}
+            animate={{ height: pullDistance, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 350, damping: 28 }}
-            className="w-full overflow-hidden flex items-center justify-center shrink-0 mb-3 pointer-events-none"
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="w-full overflow-hidden flex items-center justify-center shrink-0 mb-4"
           >
-            <div className="flex items-center gap-2.5 text-zinc-700 font-black text-xs bg-white/95 border border-zinc-200/90 shadow-lg shadow-zinc-900/5 px-4 py-2 rounded-full backdrop-blur-md transition-all">
+            <div className="flex items-center gap-2 text-zinc-600 font-bold text-xs bg-white/95 border border-zinc-200/80 shadow-md px-4 py-2 rounded-full backdrop-blur-sm">
               {refreshState === 'pulling' && (
                 <>
                   <motion.div 
-                    animate={{ rotate: pullDistance * 6 }}
-                    className="w-4 h-4 border-2 border-emerald-300 border-t-emerald-600 rounded-full shrink-0"
+                    animate={{ rotate: pullDistance * 5 }}
+                    className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-600 rounded-full"
                   />
-                  <span className="text-zinc-600 font-bold">Pull down to refresh all features...</span>
+                  <span>Pull to sync cloud...</span>
                 </>
               )}
               {refreshState === 'ready' && (
                 <>
                   <motion.div 
                     animate={{ y: [0, 3, 0] }}
-                    transition={{ repeat: Infinity, duration: 0.6 }}
-                    className="w-4 h-4 flex items-center justify-center text-emerald-600 font-black text-sm shrink-0"
+                    transition={{ repeat: Infinity, duration: 0.8 }}
+                    className="w-4 h-4 flex items-center justify-center text-zinc-800 font-black text-sm"
                   >
                     ↓
                   </motion.div>
-                  <span className="text-emerald-700 font-black">Release to refresh HelpYou AI! 🚀</span>
+                  <span className="text-zinc-800 font-black">Release to force-sync</span>
                 </>
               )}
               {refreshState === 'refreshing' && (
                 <>
                   <motion.div 
                     animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
-                    className="w-4 h-4 border-2 border-emerald-200 border-t-emerald-600 rounded-full shrink-0"
+                    transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                    className="w-4 h-4 border-2 border-zinc-200 border-t-blue-600 rounded-full"
                   />
-                  <span className="text-emerald-600 font-black animate-pulse">Refreshing features, streaks & data...</span>
+                  <span className="text-blue-600 font-black animate-pulse">Syncing latest data...</span>
                 </>
               )}
               {refreshState === 'success' && (
                 <>
-                  <Check className="w-4 h-4 text-emerald-600 stroke-[3.5] shrink-0" />
-                  <span className="text-emerald-700 font-black">All features up-to-date! ✨</span>
+                  <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
+                  <span className="text-emerald-600 font-black">Sync complete!</span>
                 </>
               )}
             </div>
@@ -541,263 +495,396 @@ function ToolsDashboard({
           </button>
         </div>
       </div>
-      {/* Hero Feature Cards: Test Prep & AP Notes */}
-      <div className="flex-1 flex flex-col justify-center my-auto pb-10 gap-4">
-        {/* 1v1 AP Quiz Battle Google Gemini Animated Hero Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          whileHover={{ scale: 1.015, y: -2 }}
-          whileTap={{ scale: 0.985 }}
-          onClick={() => handleSelectTool('quizbattle')}
-          className="relative group cursor-pointer select-none"
+
+      {/* Homework Help Section */}
+      <div className="mb-8">
+        <h2 className="text-[28px] font-black text-zinc-900 tracking-tight mb-4">Homework Help</h2>
+        
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-2 gap-4 min-h-[140px] md:min-h-[180px]"
         >
-          {/* 1. Ambient Google Gemini Glowing Aura (Blue, Red, White) */}
-          <div className="absolute -inset-1 rounded-[2.8rem] gemini-glow-backdrop opacity-70 blur-xl group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+          {/* Scan Feature Card */}
+          {!archivedToolIds.includes('tab:scanner') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('tab:scanner', true, e)}
+              onTouchStart={(e) => handleStartPress('tab:scanner', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('tab:scanner'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('tab:scanner'))}
+              onMouseLeave={handleCancelPress}
+              className="relative overflow-hidden bg-[#EBF5FF] border border-blue-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('tab:scanner')}
+              <span className="text-4xl filter drop-shadow-sm select-none">📷</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Scan</h3>
+            </motion.div>
+          )}
 
-          {/* 2. Outer Gemini Animated Multi-Color Border Frame (2.5px) */}
-          <div className="rounded-[2.7rem] p-[2.5px] gemini-animated-border shadow-2xl">
-            {/* 3. Inner Dark Cosmic Surface with Floating Animated Gemini Orbs */}
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 p-6 sm:p-7 flex items-center justify-between">
-              
-              {/* Animated Floating Gemini Light Orbs (Blue, Red, White) */}
-              <div className="absolute -left-12 -top-12 w-48 h-48 rounded-full bg-blue-600/35 blur-2xl pointer-events-none animate-[gemini-orb-1_7s_ease-in-out_infinite]" />
-              <div className="absolute right-8 -bottom-12 w-48 h-48 rounded-full bg-rose-600/30 blur-2xl pointer-events-none animate-[gemini-orb-2_6s_ease-in-out_infinite]" />
-              <div className="absolute left-1/3 top-1/4 w-36 h-36 rounded-full bg-white/20 blur-xl pointer-events-none animate-[gemini-sparkle_5s_ease-in-out_infinite]" />
+          {/* Chat Feature Card */}
+          {!archivedToolIds.includes('tab:aitutor') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('tab:aitutor', true, e)}
+              onTouchStart={(e) => handleStartPress('tab:aitutor', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('tab:aitutor'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('tab:aitutor'))}
+              onMouseLeave={handleCancelPress}
+              className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('tab:aitutor')}
+              <span className="text-4xl filter drop-shadow-sm select-none">💭</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Chat</h3>
+            </motion.div>
+          )}
 
-              {/* Card Left: Swords Icon + Dynamic Gradient Typography */}
-              <div className="flex items-center gap-4 sm:gap-5 min-w-0 z-10">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-600/30 via-zinc-900 to-rose-600/30 border border-white/25 flex items-center justify-center text-3xl shrink-0 group-hover:scale-105 transition-transform duration-300 shadow-inner">
-                  <Swords className="w-7 h-7 sm:w-8 sm:h-8 text-white drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
+          {/* Live Search Tutor Card */}
+          {!archivedToolIds.includes('livetutorsearch') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.02, y: -4, boxShadow: "0 10px 25px -5px rgba(124, 58, 237, 0.25)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('livetutorsearch', true, e)}
+              onTouchStart={(e) => handleStartPress('livetutorsearch', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('livetutorsearch'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('livetutorsearch'))}
+              onMouseLeave={handleCancelPress}
+              className="col-span-2 relative overflow-hidden bg-gradient-to-r from-purple-600 to-blue-600 border-none shadow-md rounded-[2rem] p-5 flex items-center justify-between cursor-pointer transition-all gap-4 text-white select-none touch-pan-y"
+            >
+              <div className="flex items-center gap-4 text-white">
+                <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center text-white shrink-0">
+                  <Search className="w-6 h-6 stroke-[2.5]" />
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-rose-100 tracking-tight truncate">
-                      1v1 Quiz Battle
-                    </h2>
-                    <span className="flex h-2.5 w-2.5 relative shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gradient-to-r from-blue-400 to-rose-400 shadow-sm"></span>
-                    </span>
-                  </div>
-                  <p className="text-xs font-semibold text-zinc-300 mt-0.5 flex items-center gap-1.5">
-                    <span className="text-blue-300 font-bold">Live PvP Showdown</span>
-                  </p>
+                <div className="text-left">
+                  <h3 className="font-black text-white text-[1.05rem] tracking-tight leading-none mb-1.5 flex items-center gap-1.5">
+                    Deep Search AI
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-white/20 text-white px-1.5 py-0.5 rounded-full animate-pulse">LIVE</span>
+                  </h3>
+                  <p className="text-xs text-white/80 font-bold">Search live dates, syllabus & current facts</p>
                 </div>
               </div>
+              <ArrowRight className="w-5 h-5 text-white shrink-0" />
+            </motion.div>
+          )}
+        </motion.div>
+      </div>
 
-              {/* Card Right: Glowing Action Button */}
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-zinc-900 border border-white/20 group-hover:border-white/60 group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-rose-600 flex items-center justify-center text-white shrink-0 transition-all duration-300 shadow-lg z-10 ml-3">
-                <ArrowRight className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" />
+      {/* More Tools Section */}
+      <div className="mb-8">
+        <h2 className="text-xl md:text-2xl font-bold text-zinc-800 tracking-tight mb-4">More Tools</h2>
+        
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-2 gap-4 min-h-[280px] md:min-h-[360px]"
+        >
+          {/* Card 1: Calculator */}
+          {!archivedToolIds.includes('calculator') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('calculator', true, e)}
+              onTouchStart={(e) => handleStartPress('calculator', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('calculator'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('calculator'))}
+              onMouseLeave={handleCancelPress}
+              className="bg-[#E6FFFA] border border-teal-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-teal-500/20">
+                <Calculator className="w-6 h-6 stroke-[2.5]" />
               </div>
-            </div>
-          </div>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Calculator</h3>
+            </motion.div>
+          )}
+
+          {/* Card 2: Test Prep */}
+          {!archivedToolIds.includes('testprep') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('testprep', true, e)}
+              onTouchStart={(e) => handleStartPress('testprep', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('testprep'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('testprep'))}
+              onMouseLeave={handleCancelPress}
+              className="relative overflow-hidden bg-[#FEFCBF] border border-yellow-300/50 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('testprep')}
+              <span className="text-4xl filter drop-shadow-sm select-none">🎯</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Test Prep</h3>
+            </motion.div>
+          )}
+
+          {/* Card 3: AI Questions */}
+          {!archivedToolIds.includes('questiongenerator') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('questiongenerator', true, e)}
+              onTouchStart={(e) => handleStartPress('questiongenerator', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('questiongenerator'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('questiongenerator'))}
+              onMouseLeave={handleCancelPress}
+              className="relative overflow-hidden bg-[#FFE4E6] border border-pink-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('questiongenerator')}
+              <span className="text-4xl filter drop-shadow-sm select-none">🔮</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">AI Questions</h3>
+            </motion.div>
+          )}
+
+          {/* Card 4: Writing Helper */}
+          {!archivedToolIds.includes('contentgenerator') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('contentgenerator', true, e)}
+              onTouchStart={(e) => handleStartPress('contentgenerator', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('contentgenerator'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('contentgenerator'))}
+              onMouseLeave={handleCancelPress}
+              className="relative overflow-hidden bg-[#FFEDD5] border border-orange-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('contentgenerator')}
+              <span className="text-4xl filter drop-shadow-sm select-none">🖍️</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Writing Helper</h3>
+            </motion.div>
+          )}
+
+          {/* Card 5: Summariser */}
+          {!archivedToolIds.includes('summariser') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('summariser', true, e)}
+              onTouchStart={(e) => handleStartPress('summariser', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
+              onMouseLeave={handleCancelPress}
+              className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('summariser')}
+              <span className="text-4xl filter drop-shadow-sm select-none">📖</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Summariser</h3>
+            </motion.div>
+          )}
+
+          {/* Card 6: Grammar & Flow */}
+          {!archivedToolIds.includes('grammar') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onMouseDown={(e) => handleStartPress('grammar', true, e)}
+              onTouchStart={(e) => handleStartPress('grammar', true, e)}
+              onMouseMove={handleMovePress}
+              onTouchMove={handleMovePress}
+              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
+              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
+              onMouseLeave={handleCancelPress}
+              className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('grammar')}
+              <span className="text-4xl filter drop-shadow-sm select-none">✍️</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Grammar & Flow</h3>
+            </motion.div>
+          )}
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleSelectTool('testprep')}
-          className="relative overflow-hidden bg-white border border-zinc-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-indigo-300 hover:shadow-lg"
-        >
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
-              🎯
-            </div>
-            <div>
-              <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
-                Test Prep
-              </h2>
-              <p className="text-xs font-semibold text-zinc-500 mt-0.5">
-                AI Exam Drills
-              </p>
-            </div>
-          </div>
-          
-          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
-            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </motion.div>
+        {/* Expand / Show More Tools Toggle Button */}
+        <div className="mt-5">
+          <button 
+            onClick={() => {
+              triggerVibration(10);
+              setShowAllTools(!showAllTools);
+            }}
+            className="w-full bg-white border border-zinc-200 text-zinc-800 font-extrabold text-sm py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer hover:bg-zinc-50 active:scale-99"
+          >
+            <span>{showAllTools ? 'Show Less Tools' : 'More Tools'}</span>
+            {showAllTools ? <ChevronUp className="w-4 h-4 text-zinc-500" /> : <ChevronDown className="w-4 h-4 text-zinc-500" />}
+          </button>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.08, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleSelectTool('apnotes')}
-          className="relative overflow-hidden bg-white border border-zinc-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-purple-300 hover:shadow-lg"
-        >
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
-              📚
-            </div>
-            <div>
-              <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
-                AP Notes
-              </h2>
-              <p className="text-xs font-semibold text-purple-600 mt-0.5">
-                Smart Revision Guides
-              </p>
+        {/* Archived / Hidden Tools management section if any are archived */}
+        {Array.isArray(archivedToolIds) && archivedToolIds.length > 0 && (
+          <div className="mt-4 bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 select-none">
+            <h4 className="text-[10px] font-black text-zinc-450 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Archive className="w-3.5 h-3.5 text-zinc-400" /> Hidden Tools ({archivedToolIds.length})
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {archivedToolIds?.map(toolId => {
+                const cleanName = toolId.startsWith('tab:') ? toolId.substring(4) : toolId;
+                return (
+                  <button
+                    key={toolId}
+                    onClick={() => handleToggleArchiveTool(toolId)}
+                    className="bg-white hover:bg-zinc-100 active:scale-95 text-zinc-750 text-[10px] font-black uppercase tracking-wider py-1.5 px-3 rounded-full border border-zinc-200 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{cleanName}</span>
+                    <Undo className="w-3 h-3 text-purple-600" />
+                  </button>
+                );
+              })}
             </div>
           </div>
-          
-          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-purple-600 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
-            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </motion.div>
+        )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.16, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleSelectTool('apsamplepapers')}
-          className="relative overflow-hidden bg-white border border-zinc-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-emerald-300 hover:shadow-lg"
-        >
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
-              📑
-            </div>
-            <div>
-              <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
-                AP Sample Papers Set
-              </h2>
-              <p className="text-xs font-semibold text-emerald-600 mt-0.5">
-                Official Mock Tests
-              </p>
-            </div>
-          </div>
-          
-          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
-            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </motion.div>
+        <AnimatePresence>
+          {showAllTools && (
+            <motion.div 
+              key="all-tools"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              className="overflow-hidden mt-4"
+            >
+              <div className="border-t border-zinc-200/60 pt-4">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">All Features</h4>
+                
+                <motion.div 
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="show"
+                  className="grid grid-cols-2 gap-4 pb-2 min-h-[260px]"
+                >
+                  {/* Essay Grader */}
+                  {!archivedToolIds.includes('essaygrader') && (
+                    <motion.div 
+                      variants={itemVariants}
+                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
+                      whileTap={{ scale: 0.98 }}
+                      onMouseDown={(e) => handleStartPress('essaygrader', true, e)}
+                      onTouchStart={(e) => handleStartPress('essaygrader', true, e)}
+                      onMouseMove={handleMovePress}
+                      onTouchMove={handleMovePress}
+                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('essaygrader'))}
+                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('essaygrader'))}
+                      onMouseLeave={handleCancelPress}
+                      className="relative overflow-hidden bg-[#FFE4E6] border border-pink-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
+                    >
+                      {renderLockIndicator('essaygrader', "rounded-3xl")}
+                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
+                        ⭐
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">AI Essay Grader</h4>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Get grading & feedback</p>
+                      </div>
+                    </motion.div>
+                  )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.24, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleSelectTool('learningisland')}
-          className="relative overflow-hidden bg-white border border-amber-300 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-amber-500 hover:shadow-lg ring-1 ring-amber-400/20"
-        >
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-amber-500 group-hover:to-yellow-500 group-hover:text-white transition-all duration-300 shadow-xs">
-              🏝️
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
-                  Learning Island™
-                </h2>
+                  {/* Image to PDF */}
+                  {!archivedToolIds.includes('image2pdf') && (
+                    <motion.div 
+                      variants={itemVariants}
+                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
+                      whileTap={{ scale: 0.98 }}
+                      onMouseDown={(e) => handleStartPress('image2pdf', true, e)}
+                      onTouchStart={(e) => handleStartPress('image2pdf', true, e)}
+                      onMouseMove={handleMovePress}
+                      onTouchMove={handleMovePress}
+                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('image2pdf'))}
+                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('image2pdf'))}
+                      onMouseLeave={handleCancelPress}
+                      className="bg-[#EBF5FF] border border-blue-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
+                    >
+                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
+                        📄
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Image to PDF</h4>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Turn photos to PDF</p>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Mistake Vault */}
+                  {!archivedToolIds.includes('mistakevault') && (
+                    <motion.div 
+                      variants={itemVariants}
+                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(239, 68, 68, 0.08)" }}
+                      whileTap={{ scale: 0.98 }}
+                      onMouseDown={(e) => handleStartPress('mistakevault', true, e)}
+                      onTouchStart={(e) => handleStartPress('mistakevault', true, e)}
+                      onMouseMove={handleMovePress}
+                      onTouchMove={handleMovePress}
+                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('mistakevault'))}
+                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('mistakevault'))}
+                      onMouseLeave={handleCancelPress}
+                      className="relative overflow-hidden bg-[#FEF2F2] border border-red-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
+                    >
+                      {renderLockIndicator('mistakevault', "rounded-3xl")}
+                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
+                        🔒
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">The Mistake Vault</h4>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Concept correction lab</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </motion.div>
               </div>
-              <p className="text-xs font-semibold text-amber-700 mt-0.5">
-                Gamified Quest Maps
-              </p>
-            </div>
-          </div>
-          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
-            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-        <motion.div
+      {/* Relax & Learn Section */}
+      <div className="mb-24">
+        <h2 className="text-xl md:text-2xl font-bold text-zinc-800 tracking-tight mb-4">Relax & Learn</h2>
+        
+        <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.24, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleSelectTool('trapradar')}
-          className="relative overflow-hidden bg-white border border-amber-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-amber-400 hover:shadow-lg"
+          transition={{ delay: 0.25, duration: 0.4 }}
+          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08)" }}
+          whileTap={{ scale: 0.99 }}
+          onClick={() => handleSelectTool('dailytrivia')}
+          className="bg-white border border-zinc-200 p-5 rounded-[2rem] flex items-center justify-between shadow-sm cursor-pointer transition-all gap-4"
         >
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-amber-500 group-hover:to-emerald-600 group-hover:text-white transition-all duration-300">
-              🪤
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center text-2xl border border-amber-500/15 shadow-inner select-none">
+              💡
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
-                  AP Trap Radar™
-                </h2>
-              </div>
-              <p className="text-xs font-semibold text-amber-600 mt-0.5">
-                Bust Exam Traps
-              </p>
+              <h3 className="font-black text-zinc-900 text-lg leading-tight">Daily Trivia Booster</h3>
+              <p className="text-xs text-zinc-500 font-bold mt-0.5">Click to play and learn a cool fact!</p>
             </div>
           </div>
-          
-          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
-            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
+          <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center shrink-0">
+            <ArrowRight className="w-4 h-4 text-zinc-400" />
           </div>
         </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.32, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleSelectTool('mindmap')}
-          className="relative overflow-hidden bg-white border border-teal-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-teal-400 hover:shadow-lg"
-        >
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-teal-500 group-hover:to-cyan-600 group-hover:text-white transition-all duration-300">
-              🧠
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
-                  Mind Map Revision
-                </h2>
-              </div>
-              <p className="text-xs font-semibold text-teal-600 mt-0.5">
-                Visual Concept Trees
-              </p>
-            </div>
-          </div>
-          
-          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-teal-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
-            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.28, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, y: -2, boxShadow: "0 14px 30px -5px rgba(0, 0, 0, 0.08)" }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => handleSelectTool('frqgrader')}
-          className="relative overflow-hidden bg-white border border-emerald-200/90 shadow-md rounded-[2.5rem] p-7 cursor-pointer flex items-center justify-between transition-all select-none group hover:border-emerald-400 hover:shadow-lg"
-        >
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-3xl shrink-0 group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-teal-600 group-hover:text-white transition-all duration-300">
-              📝
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 tracking-tight">
-                  AP FRQ Grader™
-                </h2>
-              </div>
-              <p className="text-xs font-semibold text-emerald-600 mt-0.5">
-                Instant Rubric Grading
-              </p>
-            </div>
-          </div>
-          
-          <div className="w-12 h-12 rounded-full bg-zinc-100 group-hover:bg-emerald-500 group-hover:text-white flex items-center justify-center text-zinc-700 shrink-0 transition-colors shadow-sm">
-            <ArrowRight className="w-5 h-5 transform group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </motion.div>
-
       </div>
 
       {/* Premium Long-Press Context Menu Overlay */}
@@ -908,4 +995,3 @@ function ToolsDashboard({
 const MemoizedToolsDashboard = React.memo(ToolsDashboard);
 MemoizedToolsDashboard.displayName = 'ToolsDashboard';
 export default MemoizedToolsDashboard;
-

@@ -369,3 +369,57 @@ export function getBadgesStatus(): AchievementBadge[] {
     claimed: !!claimedBadges[badge.id]
   }));
 }
+
+export interface StreakDayItem {
+  dateLabel: number;
+  monthLabel: string;
+  dayName: string;
+  isToday: boolean;
+  isActive: boolean;
+  dateString: string;
+}
+
+/**
+ * Generates the last 28 days check-in array for study streak calendar
+ */
+export function generateStreakCalendar(studyStreak: number): StreakDayItem[] {
+  const days: StreakDayItem[] = [];
+  const today = new Date();
+  const lastPunchDate = safeGetItem('study_last_punch_date');
+  const todayString = today.toDateString();
+
+  for (let i = 27; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(today.getDate() - i);
+    const dateString = date.toDateString();
+    
+    let isActive = false;
+    if (lastPunchDate) {
+      const parts = lastPunchDate.split('-');
+      const lastDateObj = parts.length === 3 
+        ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+        : new Date(lastPunchDate);
+      lastDateObj.setHours(0, 0, 0, 0);
+      
+      const currentCheckDateObj = new Date(dateString);
+      currentCheckDateObj.setHours(0, 0, 0, 0);
+
+      const diffTime = lastDateObj.getTime() - currentCheckDateObj.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays >= 0 && diffDays < studyStreak) {
+        isActive = true;
+      }
+    }
+
+    days.push({
+      dateLabel: date.getDate(),
+      monthLabel: date.toLocaleString('default', { month: 'short' }),
+      dayName: date.toLocaleString('default', { weekday: 'narrow' }),
+      isToday: dateString === todayString,
+      isActive,
+      dateString,
+    });
+  }
+  return days;
+}

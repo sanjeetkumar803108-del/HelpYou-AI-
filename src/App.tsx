@@ -25,22 +25,7 @@ import { showToast } from './utils/toast';
 import { setupDailyLocalNotifications } from './utils/notifications';
 import confetti from 'canvas-confetti';
 
-function retryImport<T>(fn: () => Promise<T>, retriesLeft = 3, interval = 1000): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    fn()
-      .then(resolve)
-      .catch((error) => {
-        if (retriesLeft === 0) {
-          console.warn("Chunk load failed after retries, force reloading to get fresh assets:", error);
-          window.location.reload();
-          return reject(error);
-        }
-        setTimeout(() => {
-          retryImport(fn, retriesLeft - 1, interval).then(resolve, reject);
-        }, interval);
-      });
-  });
-}
+import { retryImport } from './utils/resilientLazy';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
@@ -414,9 +399,16 @@ export default function App() {
           }
         }
         
-        // 1. Initially set to specific user cached state or false (prevent leak from other sessions)
-        const cachedUserVip = safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true';
+        // 1. Initially set to specific user cached state or active device subscription
+        const cachedUserVip = 
+          safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true' || 
+          safeGetItem('helpyou_active_device_subscription') === 'true' ||
+          safeGetItem('study_is_vip') === 'true';
         setIsVip(cachedUserVip);
+        if (cachedUserVip) {
+          safeSetItem(`study_is_vip_${currentUser.uid}`, 'true');
+          safeSetItem('study_is_vip', 'true');
+        }
         
         // 2. Fresh Fetch on Login: Try Firestore first to ensure high consistency with user profile
         const fetchPromise = (async () => {
@@ -519,10 +511,10 @@ export default function App() {
                 userId: currentUser.uid,
                 email: currentUser.email || '',
                 coins: initialCoins,
-                isPro: false,
+                isPro: cachedUserVip ? true : false,
                 createdAt: new Date().toISOString()
               });
-              console.log(`[Auth Check] Initialized new user document in Firestore with ${initialCoins} coins`);
+              console.log(`[Auth Check] Initialized new user document in Firestore with ${initialCoins} coins and isPro: ${cachedUserVip}`);
             }
           } catch (fsErr) {
             console.warn('[Auth Check] Firestore fetch failed, falling back to REST/Cache:', fsErr);
@@ -538,6 +530,7 @@ export default function App() {
 
           // Fallback to REST API
           try {
+            const hasDeviceSub = safeGetItem('helpyou_active_device_subscription') === 'true';
             const res = await fetch(getApiUrl('/api/verify-subscription'), {
               method: 'POST',
               headers: {
@@ -548,10 +541,11 @@ export default function App() {
             if (res.ok) {
               const data = await res.json();
               if (data && typeof data.isPro === 'boolean') {
-                setIsVip(data.isPro);
-                safeSetItem('study_is_vip', String(data.isPro));
-                safeSetItem(`study_is_vip_${currentUser.uid}`, String(data.isPro));
-                console.log(`[Auth Check] Verified specific subscription status from backend: ${data.isPro}`);
+                const finalPro = data.isPro || hasDeviceSub;
+                setIsVip(finalPro);
+                safeSetItem('study_is_vip', String(finalPro));
+                safeSetItem(`study_is_vip_${currentUser.uid}`, String(finalPro));
+                console.log(`[Auth Check] Verified subscription status: ${finalPro} (backend: ${data.isPro}, deviceSub: ${hasDeviceSub})`);
                 return;
               }
             }
@@ -559,10 +553,16 @@ export default function App() {
             console.warn('[Auth Check] Subscription check endpoint offline, using local cached status:', err);
           }
 
-          // Fallback only to this specific logged-in user's cached value, never a different account
-          const verifiedVal = safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true';
+          // Fallback to cached value or active device subscription
+          const verifiedVal = 
+            safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true' || 
+            safeGetItem('helpyou_active_device_subscription') === 'true' ||
+            safeGetItem('study_is_vip') === 'true';
           setIsVip(verifiedVal);
           safeSetItem('study_is_vip', String(verifiedVal));
+          if (verifiedVal) {
+            safeSetItem(`study_is_vip_${currentUser.uid}`, 'true');
+          }
         })();
 
         // 2000ms max wait time to prevent loading screens under flaky network

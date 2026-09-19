@@ -518,7 +518,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
           >
             <div className="flex items-center gap-2 mb-2 text-amber-600 font-black text-xs uppercase tracking-widest justify-center">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-              <span>AP Pro Study Tip</span>
+              <span>AI Pro Study Tip</span>
             </div>
             <p className="text-zinc-600 text-xs font-semibold leading-relaxed">
               "{studyTip}"
@@ -777,7 +777,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
           {loading && (
             <div className="flex items-center gap-2.5 justify-center py-3.5 px-5 bg-indigo-50 border border-indigo-100/50 rounded-2xl text-xs font-bold text-indigo-700 animate-pulse mb-6">
               <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
-              <span>AP Teacher is writing feedback live...</span>
+              <span>AI Teacher is writing feedback live...</span>
             </div>
           )}
 

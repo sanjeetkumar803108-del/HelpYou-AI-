@@ -211,6 +211,22 @@ export default function Summariser({ onBack }: SummariserProps) {
 
   const wordCount = inputText.trim().split(/\s+/).filter(w => w.length > 0).length;
 
+  const autoSaveSummaryToPocket = async (docTitle: string, text: string) => {
+    if (!auth.currentUser) return;
+    try {
+      await addDoc(collection(db, 'pocket_items'), {
+        userId: auth.currentUser.uid,
+        type: 'pdf_summary',
+        title: docTitle,
+        text,
+        createdAt: serverTimestamp()
+      });
+      setSaved(true);
+    } catch (e) {
+      console.error("Auto-save failed", e);
+    }
+  };
+
   const handleSummarise = async () => {
     if (!inputText.trim()) return;
 
@@ -263,21 +279,7 @@ export default function Summariser({ onBack }: SummariserProps) {
       setResult(data.text);
       const docTitle = `Text Summary (${format === 'tldr' ? 'TL;DR' : format === 'eli5' ? 'ELI5' : 'Bullets'})`;
       setCurrentActiveTitle(docTitle);
-      // Auto-save
-      if (auth.currentUser) {
-        try {
-          await addDoc(collection(db, 'pocket_items'), {
-            userId: auth.currentUser.uid,
-            type: 'pdf_summary',
-            title: docTitle,
-            text: data.text,
-            createdAt: serverTimestamp()
-          });
-          setSaved(true);
-        } catch (e) {
-          console.error("Auto-save failed", e);
-        }
-      }
+      await autoSaveSummaryToPocket(docTitle, data.text);
     } catch (err: any) {
       if (err.name === 'AbortError' || err.message?.includes('aborted')) {
         return;
@@ -355,21 +357,7 @@ export default function Summariser({ onBack }: SummariserProps) {
       setResult(data.text);
       const docTitle = `File Summary (${format === 'tldr' ? 'TL;DR' : format === 'eli5' ? 'ELI5' : 'Bullets'}) - ${file.name}`;
       setCurrentActiveTitle(docTitle);
-      // Auto-save
-      if (auth.currentUser) {
-        try {
-          await addDoc(collection(db, 'pocket_items'), {
-            userId: auth.currentUser.uid,
-            type: 'pdf_summary',
-            title: docTitle,
-            text: data.text,
-            createdAt: serverTimestamp()
-          });
-          setSaved(true);
-        } catch (e) {
-          console.error("Auto-save failed", e);
-        }
-      }
+      await autoSaveSummaryToPocket(docTitle, data.text);
     } catch (err: any) {
       console.error(err);
       setError('Oops! Something went wrong on our end. Please try again.');

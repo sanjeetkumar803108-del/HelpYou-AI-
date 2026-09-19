@@ -172,8 +172,6 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 90000)
 let lastQuotaExceededTime = 0;
 const rateLimitedModels: Record<string, number> = {};
 
-app.use(express.json({ limit: "35mb" }));
-
 app.use((req, res, next) => {
   if (req.body) {
     req.body = sanitizeInput(req.body);
@@ -186,8 +184,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
-app.use(express.urlencoded({ limit: "35mb", extended: true }));
 
 app.use((err: any, req: any, res: any, next: any) => {
   if (err instanceof multer.MulterError) {

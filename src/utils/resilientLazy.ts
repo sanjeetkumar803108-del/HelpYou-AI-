@@ -34,7 +34,7 @@ export function resetAllLazyChunks() {
   });
 }
 
-function retryImport<T>(fn: () => Promise<T>, retriesLeft = 3, interval = 500): Promise<T> {
+export function retryImport<T>(fn: () => Promise<T>, retriesLeft = 3, interval = 500): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     fn()
       .then(resolve)

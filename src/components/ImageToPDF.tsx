@@ -31,23 +31,36 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   const mountTimeRef = useRef<number>(Date.now());
   const activeBlobUrlsRef = useRef<Set<string>>(new Set());
 
+  const revokeAllBlobs = () => {
+    activeBlobUrlsRef.current.forEach(url => {
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    });
+    activeBlobUrlsRef.current.clear();
+  };
+
+  const createItemsFromBlobs = (blobs: (Blob | File)[]): ImageItem[] => {
+    return blobs.map(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      activeBlobUrlsRef.current.add(blobUrl);
+      return {
+        id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        src: blobUrl,
+        isBlobUrl: true
+      };
+    });
+  };
+
   // Cleanup all memory / object URLs when unmounting to completely prevent memory leaks
   useEffect(() => {
     mountTimeRef.current = Date.now();
     return () => {
-      activeBlobUrlsRef.current.forEach(url => {
-        try { URL.revokeObjectURL(url); } catch (_) {}
-      });
-      activeBlobUrlsRef.current.clear();
+      revokeAllBlobs();
     };
   }, []);
 
   const clearAllImages = () => {
     triggerVibration(10);
-    activeBlobUrlsRef.current.forEach(url => {
-      try { URL.revokeObjectURL(url); } catch (_) {}
-    });
-    activeBlobUrlsRef.current.clear();
+    revokeAllBlobs();
     setImages([]);
   };
 
@@ -118,15 +131,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
           setImportCount(picked.length);
           await new Promise(r => setTimeout(r, 60));
 
-          const newItems: ImageItem[] = picked.map(p => {
-            const blobUrl = URL.createObjectURL(p.blob);
-            activeBlobUrlsRef.current.add(blobUrl);
-            return {
-              id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-              src: blobUrl,
-              isBlobUrl: true
-            };
-          });
+          const newItems = createItemsFromBlobs(picked.map(p => p.blob));
           setImages(prev => [...prev, ...newItems]);
           triggerVibration([15, 30]);
         }
@@ -152,15 +157,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       await new Promise(r => setTimeout(r, 80));
 
       try {
-        const newItems: ImageItem[] = files.map(file => {
-          const blobUrl = URL.createObjectURL(file);
-          activeBlobUrlsRef.current.add(blobUrl);
-          return {
-            id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-            src: blobUrl,
-            isBlobUrl: true
-          };
-        });
+        const newItems = createItemsFromBlobs(files);
         setImages(prev => [...prev, ...newItems]);
         triggerVibration([15, 30]);
       } catch (err) {
@@ -187,15 +184,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         triggerVibration(15);
         await new Promise(r => setTimeout(r, 80));
         try {
-          const newItems: ImageItem[] = files.map(file => {
-            const blobUrl = URL.createObjectURL(file);
-            activeBlobUrlsRef.current.add(blobUrl);
-            return {
-              id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-              src: blobUrl,
-              isBlobUrl: true
-            };
-          });
+          const newItems = createItemsFromBlobs(files);
           setImages(prev => [...prev, ...newItems]);
           triggerVibration([15, 30]);
         } catch (err) {
@@ -855,7 +844,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
               type="text"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              placeholder="Enter file name (e.g., AP_Bio_Notes)..."
+              placeholder="Enter file name (e.g., Biology_Notes)..."
               className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-semibold text-xs"
             />
           </div>

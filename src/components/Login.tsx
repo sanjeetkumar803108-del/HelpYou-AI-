@@ -20,6 +20,7 @@ import {
 } from 'firebase/auth';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { clearGoogleCredentialState } from '../utils/clearGoogleCredential';
 import appLogo from '../assets/logo.svg';
 
 // React Native web-compatibility components & helpers
@@ -86,6 +87,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const routeUserAfterAuth = async (currentUser: User) => {
     if (isRoutingRef.current) return;
     isRoutingRef.current = true;
+    safeSetItem('helpyou_active_user_session', 'true');
+    safeSetItem('last_logged_in_user', currentUser.uid);
     try {
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
@@ -147,11 +150,12 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     // immediately sign them out so the Login page is shown clean without auto-routing.
     const clearStaleSession = async () => {
       try {
+        if (Capacitor.isNativePlatform()) {
+          try { await FirebaseAuthentication.signOut(); } catch (_) {}
+          try { await clearGoogleCredentialState(); } catch (_) {}
+        }
         if (auth.currentUser) {
           console.log('[Login Mount] Stale Firebase session detected, clearing it...');
-          if (Capacitor.isNativePlatform()) {
-            try { await FirebaseAuthentication.signOut(); } catch (_) {}
-          }
           await signOut(auth);
           console.log('[Login Mount] Stale session cleared.');
         }
@@ -345,19 +349,21 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         try {
           console.log('[Google Auth] Starting native Google Sign-In with forced Account Chooser...');
           
-          // STEP 1: Clear Firebase JS SDK + native session tokens
+          // STEP 1: Clear Firebase JS SDK + native session tokens AND Android Credential Manager state
           try { await FirebaseAuthentication.signOut(); } catch (_) {}
+          try { await clearGoogleCredentialState(); } catch (_) {}
 
           let result;
           // PRIMARY: Use legacy Google Sign-In (NOT Credential Manager).
           // Legacy flow ALWAYS shows the account picker dialog — Credential Manager
-          // auto-selects a cached account silently, which is what caused the bug.
+          // auto-selects a cached account silently.
           try {
             console.log('[Google Auth] Attempting legacy sign-in (account picker guaranteed)...');
             result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
           } catch (legacyErr: any) {
-            // FALLBACK: If legacy is unavailable on this device, try Credential Manager
+            // FALLBACK: If legacy is unavailable on this device, clear credentials again and try Credential Manager
             console.warn('[Google Auth] Legacy sign-in unavailable, trying Credential Manager:', legacyErr?.message);
+            try { await clearGoogleCredentialState(); } catch (_) {}
             result = await FirebaseAuthentication.signInWithGoogle();
           }
 

@@ -45,13 +45,13 @@ public class ClearCredentialPlugin extends Plugin {
                 new CredentialManagerCallback<Void, ClearCredentialException>() {
                     @Override
                     public void onResult(Void result) {
+                        clearLegacyGoogleSignIn();
                         call.resolve();
                     }
 
                     @Override
                     public void onError(@NonNull ClearCredentialException e) {
-                        // Non-fatal: e.g. no stored credential state to clear, or
-                        // provider on this device doesn't support it. Never block logout.
+                        clearLegacyGoogleSignIn();
                         JSObject ret = new JSObject();
                         ret.put("warning", e.getMessage() == null ? "unknown" : e.getMessage());
                         call.resolve(ret);
@@ -59,10 +59,23 @@ public class ClearCredentialPlugin extends Plugin {
                 }
             );
         } catch (Exception e) {
-            // Never let this crash or block the app's logout flow.
+            clearLegacyGoogleSignIn();
             JSObject ret = new JSObject();
             ret.put("warning", e.getMessage() == null ? "unknown" : e.getMessage());
             call.resolve(ret);
         }
+    }
+
+    private void clearLegacyGoogleSignIn() {
+        try {
+            com.google.android.gms.auth.api.signin.GoogleSignInOptions gso = 
+                new com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+                    com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+                ).build();
+            com.google.android.gms.auth.api.signin.GoogleSignInClient client = 
+                com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(getContext(), gso);
+            client.signOut();
+            client.revokeAccess();
+        } catch (Exception ignored) {}
     }
 }

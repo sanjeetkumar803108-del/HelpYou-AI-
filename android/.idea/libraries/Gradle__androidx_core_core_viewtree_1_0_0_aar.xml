@@ -1,9 +1,9 @@
 <component name="libraryTable">
   <library name="Gradle: androidx.core:core-viewtree:1.0.0@aar" external-system-id="GRADLE">
     <CLASSES>
-      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/769d24fed0c3afab3652c9eb4a5978e9/transformed/core-viewtree-1.0.0/AndroidManifest.xml" />
-      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/769d24fed0c3afab3652c9eb4a5978e9/transformed/core-viewtree-1.0.0/res" />
-      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/769d24fed0c3afab3652c9eb4a5978e9/transformed/core-viewtree-1.0.0/jars/classes.jar!/" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-4/3e68050b78146430a460b45f37c1105e/transformed/jetified-core-viewtree-1.0.0/AndroidManifest.xml" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-4/3e68050b78146430a460b45f37c1105e/transformed/jetified-core-viewtree-1.0.0/res" />
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-4/3e68050b78146430a460b45f37c1105e/transformed/jetified-core-viewtree-1.0.0/jars/classes.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES>

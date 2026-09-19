@@ -18,7 +18,9 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { Network } from '@capacitor/network';
 import { Purchases } from '@revenuecat/purchases-capacitor';
-import { safeGetItem, safeSetItem, safeClearAll } from './utils/storage';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { clearGoogleCredentialState } from './utils/clearGoogleCredential';
+import { safeGetItem, safeSetItem, safeClearAll, safeRemoveItem } from './utils/storage';
 import { refillDailyCoins, getCoins } from './utils/coins';
 import { getStudyXP, getStudyLevel, getDailyXPStatus } from './utils/gamification';
 import { showToast } from './utils/toast';
@@ -370,14 +372,36 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        // ENFORCE EXPLICIT AUTHENTICATION GATE:
+        // If there is no confirmed active user session saved in storage,
+        // it means the user never logged in during an active session (or logged out / deleted account).
+        // This stops stale background cache / IndexedDB persistence from auto-logging into
+        // a random/stale email and auto-opening the app without user consent.
+        const hasActiveSession = safeGetItem('helpyou_active_user_session') === 'true';
+        if (!hasActiveSession) {
+          console.log('[Auth Guard] Stale unconfirmed background user session detected. Enforcing clean logout so Login screen is shown.');
+          setUser(null);
+          setIsVip(false);
+          setAuthLoading(false);
+          if (Capacitor.isNativePlatform()) {
+            try { await FirebaseAuthentication.signOut(); } catch (_) {}
+            try { await clearGoogleCredentialState(); } catch (_) {}
+          }
+          try { await signOut(auth); } catch (_) {}
+          return;
+        }
+
         const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
         if (!currentUser.emailVerified && !isGoogle) {
+          safeRemoveItem('helpyou_active_user_session');
           setUser(null);
           signOut(auth).catch(err => console.warn('Sign out on unverified error:', err));
           return;
         }
+      } else {
+        safeRemoveItem('helpyou_active_user_session');
       }
       setUser(currentUser);
       if (currentUser) {

@@ -25,7 +25,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
-import { safeGetItem, safeSetItem, safeClearAll } from '../utils/storage';
+import { safeGetItem, safeSetItem, safeClearAll, safeRemoveItem } from '../utils/storage';
 import { clearLocalSessionId } from '../utils/sessionManager';
 import { getCoins, addCoins, isProUser } from '../utils/coins';
 import { clear as clearIndexedDB } from 'idb-keyval';
@@ -766,6 +766,7 @@ export default function Profile({
     await syncUsageToFirestore();
     setIsVip(false);
     safeClearAll();
+    safeRemoveItem('helpyou_active_user_session');
     clearLocalSessionId(auth.currentUser?.uid);
     
     // Clear Native Capacitor Google Auth session so that Account Chooser is shown on next login
@@ -951,6 +952,7 @@ export default function Profile({
 
       // 6. Wipe all local study data, stats, coins, chat history, mistake vaults, streaks
       safeClearAll();
+      safeRemoveItem('helpyou_active_user_session');
       clearLocalSessionId(uid);
 
       // 7. PRESERVE ACTIVE PURCHASED SUBSCRIPTION:

@@ -1,9 +1,9 @@
 <component name="libraryTable">
   <library name="Gradle: io.ionic.libs:ioncamera-android:1.0.2@aar" external-system-id="GRADLE">
     <CLASSES>
-      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/3df44db3575d3ffa331d8e84158949b1/transformed/ioncamera-android-1.0.2/AndroidManifest.xml" />
-      <root url="file://$USER_HOME$/.gradle/caches/8.14.3/transforms/3df44db3575d3ffa331d8e84158949b1/transformed/ioncamera-android-1.0.2/res" />
-      <root url="jar://$USER_HOME$/.gradle/caches/8.14.3/transforms/3df44db3575d3ffa331d8e84158949b1/transformed/ioncamera-android-1.0.2/jars/classes.jar!/" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-4/abad99627c6b028420c031bd35584273/transformed/jetified-ioncamera-android-1.0.2/AndroidManifest.xml" />
+      <root url="file://$USER_HOME$/.gradle/caches/transforms-4/abad99627c6b028420c031bd35584273/transformed/jetified-ioncamera-android-1.0.2/res" />
+      <root url="jar://$USER_HOME$/.gradle/caches/transforms-4/abad99627c6b028420c031bd35584273/transformed/jetified-ioncamera-android-1.0.2/jars/classes.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES>

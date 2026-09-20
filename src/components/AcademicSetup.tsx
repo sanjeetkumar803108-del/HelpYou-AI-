@@ -146,10 +146,15 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
     const studyLevel = gradeObj?.isCollege ? 'College' : 'High School';
     safeSetItem('onboarding_grade', studyLevel);
     safeSetItem('onboarding_completed', 'true');
+    safeSetItem('academic_setup_completed', 'true');
+    safeSetItem('isOnboardingComplete', 'true');
+    safeSetItem('isOnboardingCompleted', 'true');
 
     // Save for this specific user locally
     const activeUid = userId || auth.currentUser?.uid || '';
     if (activeUid) {
+      safeSetItem('helpyou_active_user_session', 'true');
+      safeSetItem('last_logged_in_user', activeUid);
       safeSetItem(`academic_grade_${activeUid}`, selectedGrade);
       safeSetItem(`academic_stream_${activeUid}`, selectedStream);
       safeSetItem(`academic_region_${activeUid}`, countryObj.regionSystem);
@@ -158,6 +163,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
       safeSetItem(`academic_setup_completed_${activeUid}`, 'true');
       safeSetItem(`onboarding_completed_${activeUid}`, 'true');
       safeSetItem(`isOnboardingComplete_${activeUid}`, 'true');
+      safeSetItem(`isOnboardingCompleted_${activeUid}`, 'true');
 
       // Update Firestore user document with isOnboardingComplete and selections
       try {

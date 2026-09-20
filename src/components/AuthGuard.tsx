@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import { User } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import Login from './Login';
 import SplashScreen from './SplashScreen';
 import Onboarding from './Onboarding';
@@ -56,26 +57,12 @@ export default function AuthGuard({
     );
   }
 
-  // 3. Isolated Onboarding Stack (Welcome Screen) - Full-screen, no header
-  if (showOnboarding) {
-    return (
-      <div className={containerClass}>
-        <ErrorBoundary>
-          <Suspense fallback={fallbackSkeleton}>
-            <Onboarding 
-              onComplete={() => {
-                setShowOnboarding(false);
-                setShowAcademicSetup(true);
-              }} 
-            />
-          </Suspense>
-        </ErrorBoundary>
-      </div>
-    );
-  }
+  // Active User: use React state or fallback to immediate Firebase auth object
+  const activeUser = user || auth.currentUser;
 
-  // 4. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
-  if (!user) {
+  // 3. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
+  // If user is unauthenticated, ALWAYS show Login first!
+  if (!activeUser) {
     return (
       <div className={containerClass}>
         <ErrorBoundary>
@@ -102,6 +89,24 @@ export default function AuthGuard({
     );
   }
 
+  // 4. Isolated Onboarding Stack (Welcome Screen) - Full-screen, no header
+  if (showOnboarding) {
+    return (
+      <div className={containerClass}>
+        <ErrorBoundary>
+          <Suspense fallback={fallbackSkeleton}>
+            <Onboarding 
+              onComplete={() => {
+                setShowOnboarding(false);
+                setShowAcademicSetup(true);
+              }} 
+            />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+    );
+  }
+
   // 5. Isolated Onboarding Academic Setup Stack (Country, Grade, Stream Screens) - Full-screen, no header
   if (showAcademicSetup) {
     return (
@@ -109,7 +114,7 @@ export default function AuthGuard({
         <ErrorBoundary>
           <Suspense fallback={fallbackSkeleton}>
             <AcademicSetup 
-              userId={user?.uid || ''}
+              userId={activeUser.uid}
               onComplete={() => {
                 setShowAcademicSetup(false);
                 setShowOnboarding(false);

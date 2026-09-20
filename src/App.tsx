@@ -299,6 +299,10 @@ export default function App() {
       setShowPaywallModal(true);
     };
     const handleOpenLogin = () => {
+      if (auth.currentUser || user) {
+        console.log('[App] User is already authenticated, ignoring open-login-modal');
+        return;
+      }
       console.log('Received open-login-modal event');
       setShowLoginModal(true);
     };
@@ -379,7 +383,9 @@ export default function App() {
         // it means the user never logged in during an active session (or logged out / deleted account).
         // This stops stale background cache / IndexedDB persistence from auto-logging into
         // a random/stale email and auto-opening the app without user consent.
-        const hasActiveSession = safeGetItem('helpyou_active_user_session') === 'true';
+        const hasActiveSession = 
+          safeGetItem('helpyou_active_user_session') === 'true' || 
+          safeGetItem('last_logged_in_user') === currentUser.uid;
         if (!hasActiveSession) {
           console.log('[Auth Guard] Stale unconfirmed background user session detected. Enforcing clean logout so Login screen is shown.');
           setUser(null);
@@ -391,6 +397,9 @@ export default function App() {
           }
           try { await signOut(auth); } catch (_) {}
           return;
+        } else {
+          safeSetItem('helpyou_active_user_session', 'true');
+          safeSetItem('last_logged_in_user', currentUser.uid);
         }
 
         const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
@@ -401,7 +410,7 @@ export default function App() {
           return;
         }
       } else {
-        safeRemoveItem('helpyou_active_user_session');
+        // User is not signed in
       }
       setUser(currentUser);
       if (currentUser) {
@@ -944,8 +953,12 @@ export default function App() {
   }, []);
 
   const handleOpenLoginFromDashboard = useCallback(() => {
+    if (auth.currentUser || user) {
+      setActiveTab('profile');
+      return;
+    }
     setShowLoginModal(true);
-  }, []);
+  }, [user]);
 
   const handleSelectToolFromDashboard = useCallback((tool: string) => {
     if (tool === 'tab:scanner') {
@@ -1269,22 +1282,6 @@ export default function App() {
       )}
 
       <AnimatePresence>
-        {showSplash && (
-          <SplashScreen key="splash" />
-        )}
-        {showOnboarding && (
-          <Suspense fallback={<FullPageSkeleton />}>
-            <ErrorBoundary>
-              <Onboarding 
-                key="onboarding" 
-                onComplete={() => {
-                  setShowOnboarding(false);
-                  setShowLoginModal(true);
-                }} 
-              />
-            </ErrorBoundary>
-          </Suspense>
-        )}
         {showVipModal && !isVip && (
           <motion.div key="vip" 
             initial={{ opacity: 0, y: '100%' }}
@@ -1317,40 +1314,18 @@ export default function App() {
             <Suspense fallback={<FullPageSkeleton />}>
               <Login 
                 onClose={() => setShowLoginModal(false)} 
-                onLoginSuccess={() => {
+                onLoginSuccess={(target) => {
                   setShowLoginModal(false);
-                  if (auth.currentUser) {
-                    const setupCompleted = safeGetItem(`academic_setup_completed_${auth.currentUser.uid}`) === 'true';
-                    if (!setupCompleted) {
-                      setShowAcademicSetup(true);
-                    }
+                  if (target === 'setup') {
+                    setShowAcademicSetup(true);
+                  } else if (target === 'onboarding') {
+                    setShowOnboarding(true);
                   }
                 }} 
               />
             </Suspense>
           </motion.div>
         )}
-
-        {showAcademicSetup && user && (
-          <motion.div key="academic-setup" 
-            initial={{ opacity: 0, y: '100%' }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="absolute inset-0 z-[70] bg-white"
-          >
-            <Suspense fallback={<FullPageSkeleton />}>
-              <ErrorBoundary>
-                <AcademicSetup 
-                  userId={user.uid}
-                  onComplete={() => setShowAcademicSetup(false)} 
-                />
-              </ErrorBoundary>
-            </Suspense>
-          </motion.div>
-        )}
-
-        {/* Profile modal removed since it is now a main tab */}
       </AnimatePresence>
 
       {/* Floating Mobile Toast Notification */}

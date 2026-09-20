@@ -147,15 +147,20 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
   useEffect(() => {
     // On mount: if Firebase still has a cached/persisted user (stale session after logout),
-    // immediately sign them out so the Login page is shown clean without auto-routing.
+    // only sign them out if there is NO active confirmed user session.
     const clearStaleSession = async () => {
       try {
+        const hasActiveSession = safeGetItem('helpyou_active_user_session') === 'true';
+        if (hasActiveSession) {
+          console.log('[Login Mount] Active session exists, skipping stale session wipe.');
+          return;
+        }
         if (Capacitor.isNativePlatform()) {
           try { await FirebaseAuthentication.signOut(); } catch (_) {}
           try { await clearGoogleCredentialState(); } catch (_) {}
         }
         if (auth.currentUser) {
-          console.log('[Login Mount] Stale Firebase session detected, clearing it...');
+          console.log('[Login Mount] Stale unconfirmed Firebase session detected, clearing it...');
           await signOut(auth);
           console.log('[Login Mount] Stale session cleared.');
         }
@@ -194,8 +199,9 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    // Mark that the user actively initiated authentication
+    // Mark that the user actively initiated authentication and register active session immediately
     userInitiatedAuth.current = true;
+    safeSetItem('helpyou_active_user_session', 'true');
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
@@ -304,6 +310,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         onClose();
       }
     } catch (err: any) {
+      safeRemoveItem('helpyou_active_user_session');
       console.warn('[Auth Error]', err?.code, err?.message);
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
         const errMsg = 'Incorrect password, or this email is registered via Google Sign-In. Please use the Google button below.';
@@ -335,8 +342,9 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
   const handleGoogleSignIn = async () => {
     setError(null);
     setLoading(true);
-    // Mark that the user actively initiated authentication before any async call
+    // Mark that the user actively initiated authentication before any async call and register active session
     userInitiatedAuth.current = true;
+    safeSetItem('helpyou_active_user_session', 'true');
     const googleLoadingTimer = setTimeout(() => {
       setLoading(false);
     }, 15000);
@@ -479,6 +487,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
       await routeUserAfterAuth(loggedUser);
     } catch (err: any) {
+      safeRemoveItem('helpyou_active_user_session');
       console.warn('[Google Auth Error]', err?.code, err?.message);
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setError('Google Sign-In was cancelled.');

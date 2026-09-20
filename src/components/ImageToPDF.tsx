@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Upload, FileImage, FileDown, FileText, History, Share2 } from 'lucide-react';
+import { ArrowLeft, Upload, FileImage, FileDown, FileText, History, Share2, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
@@ -19,12 +19,13 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importCount, setImportCount] = useState<number | null>(null);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [compilingPage, setCompilingPage] = useState(0);
   const [fileName, setFileName] = useState('');
   const [quality, setQuality] = useState<'standard' | 'high'>('standard');
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfDataUri, setPdfDataUri] = useState<string | null>(null);
+  const [compiledBlob, setCompiledBlob] = useState<Blob | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string>('');
   const [showPreviewPage, setShowPreviewPage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,16 +39,29 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
     activeBlobUrlsRef.current.clear();
   };
 
-  const createItemsFromBlobs = (blobs: (Blob | File)[]): ImageItem[] => {
-    return blobs.map(blob => {
+  const createItemsFromBlobs = async (
+    blobs: (Blob | File)[],
+    onProgress?: (current: number, total: number) => void
+  ): Promise<ImageItem[]> => {
+    const items: ImageItem[] = [];
+    const total = blobs.length;
+    for (let i = 0; i < total; i++) {
+      // Yield every 3 items to let the browser pump animation frames and prevent ANR
+      if (i % 3 === 0) {
+        onProgress?.(i + 1, total);
+        await new Promise(r => setTimeout(r, 16));
+      }
+      const blob = blobs[i];
       const blobUrl = URL.createObjectURL(blob);
       activeBlobUrlsRef.current.add(blobUrl);
-      return {
-        id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      items.push({
+        id: `img_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 8)}`,
         src: blobUrl,
         isBlobUrl: true
-      };
-    });
+      });
+    }
+    onProgress?.(total, total);
+    return items;
   };
 
   // Cleanup all memory / object URLs when unmounting to completely prevent memory leaks
@@ -91,13 +105,34 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
   }, [pdfBlobUrl, showPreviewPage, images]);
 
   const sharePDF = async () => {
-    if (!pdfBlobUrl) return;
+    if (!pdfBlobUrl && !compiledBlob) return;
     try {
-      const response = await fetch(pdfBlobUrl);
-      const blob = await response.blob();
-      await sharePDFMobile(blob, pdfFileName || 'HelpYou-AI-Document.pdf');
+      let blob = compiledBlob;
+      if (!blob && pdfBlobUrl) {
+        const response = await fetch(pdfBlobUrl);
+        blob = await response.blob();
+      }
+      if (blob) {
+        await sharePDFMobile(blob, pdfFileName || 'HelpYou-AI-Document.pdf');
+      }
     } catch (err) {
       console.error('Failed to share PDF via mobile share:', err);
+    }
+  };
+
+  const downloadPDF = async () => {
+    if (!pdfBlobUrl && !compiledBlob) return;
+    try {
+      let blob = compiledBlob;
+      if (!blob && pdfBlobUrl) {
+        const response = await fetch(pdfBlobUrl);
+        blob = await response.blob();
+      }
+      if (blob) {
+        await savePDFMobile(blob, pdfFileName || 'HelpYou-AI-Document.pdf');
+      }
+    } catch (err) {
+      console.error('Failed to save/download PDF via mobile saver:', err);
     }
   };
 
@@ -123,15 +158,28 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
     if (Capacitor.isNativePlatform()) {
       try {
         setIsImporting(true);
-        setImportCount(null);
+        setImportProgress({ current: 0, total: 1 });
         await new Promise(r => setTimeout(r, 60));
 
-        const picked = await pickNativeFiles({ types: 'image', multiple: true });
-        if (picked && picked.length > 0) {
-          setImportCount(picked.length);
-          await new Promise(r => setTimeout(r, 60));
+        const picked = await pickNativeFiles({
+          types: 'image',
+          multiple: true,
+          onProgress: (current, total) => {
+            setImportProgress({ current, total });
+          }
+        });
 
-          const newItems = createItemsFromBlobs(picked.map(p => p.blob));
+        if (picked && picked.length > 0) {
+          const totalFiles = picked.length;
+          setImportProgress({ current: 0, total: totalFiles });
+          await new Promise(r => setTimeout(r, 30));
+
+          const newItems = await createItemsFromBlobs(
+            picked.map(p => p.blob),
+            (current, total) => {
+              setImportProgress({ current, total });
+            }
+          );
           setImages(prev => [...prev, ...newItems]);
           triggerVibration([15, 30]);
         }
@@ -140,8 +188,8 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       } finally {
         setTimeout(() => {
           setIsImporting(false);
-          setImportCount(null);
-        }, 250);
+          setImportProgress(null);
+        }, 300);
       }
     } else {
       fileInputRef.current?.click();
@@ -152,12 +200,17 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
       setIsImporting(true);
-      setImportCount(files.length);
+      setImportProgress({ current: 0, total: files.length });
       triggerVibration(15);
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(r => setTimeout(r, 60));
 
       try {
-        const newItems = createItemsFromBlobs(files);
+        const newItems = await createItemsFromBlobs(
+          files,
+          (current, total) => {
+            setImportProgress({ current, total });
+          }
+        );
         setImages(prev => [...prev, ...newItems]);
         triggerVibration([15, 30]);
       } catch (err) {
@@ -165,7 +218,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       } finally {
         setTimeout(() => {
           setIsImporting(false);
-          setImportCount(null);
+          setImportProgress(null);
         }, 300);
         e.target.value = '';
       }
@@ -180,11 +233,16 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
       if (files.length > 0) {
         setIsImporting(true);
-        setImportCount(files.length);
+        setImportProgress({ current: 0, total: files.length });
         triggerVibration(15);
-        await new Promise(r => setTimeout(r, 80));
+        await new Promise(r => setTimeout(r, 60));
         try {
-          const newItems = createItemsFromBlobs(files);
+          const newItems = await createItemsFromBlobs(
+            files,
+            (current, total) => {
+              setImportProgress({ current, total });
+            }
+          );
           setImages(prev => [...prev, ...newItems]);
           triggerVibration([15, 30]);
         } catch (err) {
@@ -192,7 +250,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         } finally {
           setTimeout(() => {
             setIsImporting(false);
-            setImportCount(null);
+            setImportProgress(null);
           }, 300);
         }
       }
@@ -298,10 +356,39 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      for (let i = 0; i < images.length; i++) {
+      // Adaptive memory & resolution scaling based on page count
+      // For 100+ images, huge 1800x2400 canvases crash Android WebView memory limit (ANR)
+      const totalImages = images.length;
+      const isHigh = quality === 'high';
+
+      let MAX_WIDTH = isHigh ? 1600 : 1100;
+      let MAX_HEIGHT = isHigh ? 2200 : 1500;
+      let compressionQuality = isHigh ? 0.8 : 0.65;
+
+      if (totalImages > 80) {
+        MAX_WIDTH = isHigh ? 1100 : 900;
+        MAX_HEIGHT = isHigh ? 1500 : 1200;
+        compressionQuality = isHigh ? 0.7 : 0.58;
+      } else if (totalImages > 40) {
+        MAX_WIDTH = isHigh ? 1300 : 1000;
+        MAX_HEIGHT = isHigh ? 1800 : 1350;
+        compressionQuality = isHigh ? 0.75 : 0.62;
+      }
+
+      // Reusable single offscreen canvas to avoid creating & garbage collecting 100+ separate canvas DOM nodes
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      for (let i = 0; i < totalImages; i++) {
         setCompilingPage(i + 1);
-        // Non-blocking yield: prevents Android ANR ("App Not Responding") watchdog from triggering on 100+ images!
-        await new Promise(resolve => setTimeout(resolve, 15));
+
+        // Cooperative yield: Gives Android OS 45ms to pump touch/system input events & reset ANR watchdog
+        await new Promise(resolve => setTimeout(resolve, 45));
+
+        // Every 8 pages, give an extra 100ms pause to allow Android garbage collection to sweep memory
+        if (i > 0 && i % 8 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         const item = images[i];
         let imgSrc = item.src;
@@ -312,23 +399,17 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.src = imgSrc;
-        await new Promise((resolve) => {
-          img.onload = resolve;
-          img.onerror = resolve; // Gracefully continue if one image fails to load
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve(); // Gracefully continue if one image fails to load
+          img.src = imgSrc;
         });
 
-        if (!img.width || !img.height) continue;
+        if (!img.width || !img.height) {
+          img.src = '';
+          continue;
+        }
 
-        // Memory-safe offscreen canvas compression
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        const isHigh = quality === 'high';
-        const MAX_WIDTH = isHigh ? 1800 : 1200;
-        const MAX_HEIGHT = isHigh ? 2400 : 1600;
-        const compressionQuality = isHigh ? 0.85 : 0.65;
-        
         let width = img.width;
         let height = img.height;
 
@@ -346,12 +427,13 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         
         canvas.width = width;
         canvas.height = height;
+        ctx?.clearRect(0, 0, width, height);
         ctx?.drawImage(img, 0, 0, width, height);
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', compressionQuality);
+        
+        // Immediate cleanup of HTMLImageElement reference
+        img.src = '';
 
-        // Immediate release of canvas memory buffer
-        canvas.width = 1;
-        canvas.height = 1;
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', compressionQuality);
 
         const imgRatio = width / height;
         const pdfRatio = pdfWidth / pdfHeight;
@@ -375,12 +457,20 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         pdf.addImage(compressedDataUrl, 'JPEG', x, y, renderWidth, renderHeight, undefined, 'FAST');
       }
 
+      // Explicitly free canvas memory buffer
+      canvas.width = 1;
+      canvas.height = 1;
+
+      // Small yield before final PDF generation
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       const outputName = fileName.trim() ? `${fileName.trim().replace(/\.pdf$/i, '')}.pdf` : 'HelpYou-AI-Document.pdf';
       setPdfFileName(outputName);
       
       const blob = pdf.output('blob');
       const blobUrl = URL.createObjectURL(blob);
       setPdfBlobUrl(blobUrl);
+      setCompiledBlob(blob);
 
       // Memory-safe capture for centralized PDF history without giant 80MB base64 storage crashes
       try {
@@ -392,7 +482,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
           featureTag: 'Image to PDF',
           pageCount: images.length,
           fileSize: `${(blob.size / 1024).toFixed(1)} KB`,
-        });
+        }, blob);
       } catch (historyErr) {
         console.warn('Could not auto-save PDF to history:', historyErr);
       }
@@ -424,7 +514,11 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         {/* Preview Content */}
         <div className="flex-1 overflow-hidden relative flex flex-col">
           {pdfDataUri || pdfBlobUrl ? (
-            <SafePdfViewer pdfUrlOrBase64={pdfDataUri || pdfBlobUrl} />
+            <SafePdfViewer 
+              pdfUrlOrBase64={pdfDataUri || pdfBlobUrl} 
+              pdfBlob={compiledBlob || undefined}
+              title={pdfFileName}
+            />
           ) : (
             <div className="text-center p-6 text-zinc-500 my-auto">
               <p className="text-xs font-bold text-zinc-400">Loading PDF Preview...</p>
@@ -434,8 +528,15 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
         {/* Bottom Action bar */}
         <div className="bg-zinc-950 p-4 border-t border-zinc-900 flex gap-2.5 shrink-0 z-10">
           <button
+            onClick={downloadPDF}
+            className="flex-1 bg-zinc-850 hover:bg-zinc-800 text-zinc-100 font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-zinc-750"
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+            <span>OPEN IN DEVICE</span>
+          </button>
+          <button
             onClick={sharePDF}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
           >
             <Share2 className="w-4 h-4 text-white" />
             <span>SHARE DOCUMENT</span>
@@ -559,65 +660,64 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
                   className="absolute -inset-3 bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 rounded-full blur-xl"
                 />
 
-                {/* Dual spinning rings */}
+                {/* Dual spinning rings - CSS animated so they never freeze even during heavy work */}
                 <div className="relative w-20 h-20 flex items-center justify-center">
-                  <motion.div
-                    className="absolute w-20 h-20 rounded-full border-[3.5px] border-blue-100 dark:border-zinc-800"
+                  <div
+                    className="absolute w-20 h-20 rounded-full border-[3.5px] border-blue-100 dark:border-zinc-800 animate-spin"
                     style={{
                       borderTopColor: '#2563eb',
                       borderRightColor: '#6366f1',
-                      filter: 'drop-shadow(0 0 6px rgba(37, 99, 235, 0.5))'
+                      filter: 'drop-shadow(0 0 6px rgba(37, 99, 235, 0.5))',
+                      animationDuration: '1.1s'
                     }}
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 1.1, ease: "linear" }}
                   />
-                  <motion.div
-                    className="absolute w-14 h-14 rounded-full border-[3px] border-blue-50 dark:border-zinc-850"
+                  <div
+                    className="absolute w-14 h-14 rounded-full border-[3px] border-blue-50 dark:border-zinc-850 animate-spin"
                     style={{
                       borderBottomColor: '#06b6d4',
                       borderLeftColor: '#3b82f6',
-                      filter: 'drop-shadow(0 0 5px rgba(6, 182, 212, 0.4))'
+                      filter: 'drop-shadow(0 0 5px rgba(6, 182, 212, 0.4))',
+                      animationDuration: '0.9s',
+                      animationDirection: 'reverse'
                     }}
-                    animate={{ rotate: -360 }}
-                    transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
                   />
 
                   {/* Center Animated Icon */}
-                  <motion.div
-                    animate={{ scale: [0.92, 1.08, 0.92] }}
-                    transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
-                    className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30"
-                  >
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30">
                     <Upload className="w-5 h-5 animate-bounce" />
-                  </motion.div>
+                  </div>
                 </div>
               </div>
 
               {/* Text and badges */}
               <h4 className="text-zinc-900 dark:text-white font-extrabold text-base tracking-tight mb-1">
-                {importCount ? `Uploading ${importCount} ${importCount === 1 ? 'Image' : 'Images'}...` : 'Uploading Images...'}
+                {importProgress && importProgress.total > 0
+                  ? `Loading ${importProgress.current} of ${importProgress.total} Photos...`
+                  : 'Uploading Images...'}
               </h4>
-              <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium max-w-[210px] leading-relaxed mb-4">
-                Preparing high-resolution previews for your PDF document
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium max-w-[220px] leading-relaxed mb-4">
+                Preparing previews ({importProgress && importProgress.total > 0 ? `${Math.round((importProgress.current / importProgress.total) * 100)}%` : '0%'})
               </p>
 
-              {/* Shimmering Progress Bar */}
-              <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden border border-zinc-200/60 dark:border-zinc-700/60 relative">
-                <motion.div
-                  className="absolute inset-y-0 bg-gradient-to-r from-blue-600 via-cyan-500 to-indigo-600 rounded-full"
-                  initial={{ left: "-40%", width: "40%" }}
-                  animate={{ left: "100%", width: "40%" }}
-                  transition={{
-                    repeat: Infinity,
-                    duration: 1.2,
-                    ease: "easeInOut"
+              {/* Responsive Progress Bar */}
+              <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2.5 overflow-hidden border border-zinc-200/60 dark:border-zinc-700/60 relative">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 via-cyan-500 to-indigo-600 rounded-full transition-all duration-150 ease-out"
+                  style={{
+                    width: `${importProgress && importProgress.total > 0
+                      ? Math.max(6, Math.min(100, Math.round((importProgress.current / importProgress.total) * 100)))
+                      : 15}%`
                   }}
                 />
               </div>
 
               <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 animate-ping" />
-                <span>Processing photos...</span>
+                <span>
+                  {importProgress && importProgress.total > 0
+                    ? `Processed ${importProgress.current} of ${importProgress.total} photos`
+                    : 'Reading photos...'}
+                </span>
               </div>
             </motion.div>
           </motion.div>
@@ -628,14 +728,10 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-[#FAF9F6]/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center"
+            className="absolute inset-0 bg-[#FAF9F6]/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center select-none"
           >
             <div className="relative mb-6">
-              <motion.div
-                animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.8, 0.4] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-blue-500/20 rounded-3xl blur-xl"
-              />
+              <div className="absolute inset-0 bg-blue-500/20 rounded-3xl blur-xl animate-pulse" />
               <div className="relative bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl p-6 shadow-2xl flex items-center justify-center text-white border border-blue-400/40">
                  <FileText className="w-12 h-12 animate-pulse" />
                  <span className="absolute -bottom-2 right-[-6px] bg-white text-blue-600 text-[10px] font-black px-2.5 py-1 rounded-md shadow-md border border-zinc-200 uppercase tracking-widest">PDF</span>
@@ -644,15 +740,18 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
             
             <h4 className="text-zinc-900 font-extrabold text-lg mb-1 tracking-tight">Building PDF Document...</h4>
             <p className="text-blue-600 font-bold text-xs tracking-wider uppercase mb-4">
-              Processing Page {compilingPage} of {images.length}
+              Processing Page {compilingPage} of {images.length} ({Math.round((compilingPage / Math.max(1, images.length)) * 100)}%)
             </p>
 
             <div className="w-full max-w-xs bg-zinc-200/80 rounded-full h-2.5 overflow-hidden border border-zinc-200">
               <div 
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-200 ease-out"
-                style={{ width: `${Math.max(5, (compilingPage / Math.max(1, images.length)) * 100)}%` }}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-150 ease-out"
+                style={{ width: `${Math.max(5, Math.min(100, (compilingPage / Math.max(1, images.length)) * 100))}%` }}
               />
             </div>
+            <p className="mt-3 text-[11px] font-semibold text-zinc-500">
+              {compilingPage >= images.length ? 'Finalizing PDF file...' : 'Optimizing and compiling pages smoothly...'}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

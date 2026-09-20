@@ -11,15 +11,24 @@ export interface MobilePickedFile {
   fileObj: File; // Mock/Real File object
 }
 
-// Convert base64 to Blob
+// Convert base64 to Blob with direct typed array allocation (avoids 50MB+ dynamic JS array memory thrashing)
 export function base64ToBlob(base64: string, mimeType: string): Blob {
   const byteCharacters = atob(base64);
-  const byteNumbers = new Array(byteCharacters.length);
+  const byteArray = new Uint8Array(byteCharacters.length);
   for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
+    byteArray[i] = byteCharacters.charCodeAt(i);
   }
-  const byteArray = new Uint8Array(byteNumbers);
   return new Blob([byteArray], { type: mimeType });
+}
+
+// Ultra-fast async base64 decoding using native browser background engine
+export async function base64ToBlobAsync(base64: string, mimeType: string): Promise<Blob> {
+  try {
+    const res = await fetch(`data:${mimeType};base64,${base64}`);
+    return await res.blob();
+  } catch (_) {
+    return base64ToBlob(base64, mimeType);
+  }
 }
 
 // Convert Blob to File object
@@ -34,6 +43,7 @@ export function blobToFile(blob: Blob, name: string): File {
 export async function pickNativeFiles(options: {
   types?: 'image' | 'pdf' | 'document' | 'all';
   multiple?: boolean;
+  onProgress?: (current: number, total: number) => void;
 }): Promise<MobilePickedFile[]> {
   if (!Capacitor.isNativePlatform()) {
     console.warn('[mobilePicker] Not on a native platform, fallback to web inputs instead.');
@@ -50,18 +60,52 @@ export async function pickNativeFiles(options: {
         return msg.includes('cancel') || msg.includes('dismiss') || msg.includes('closed') || msg.includes('abort');
       };
 
-      const mapFilesToPicked = (files: any[]): MobilePickedFile[] => {
+      const mapFilesToPicked = async (files: any[]): Promise<MobilePickedFile[]> => {
         const output: MobilePickedFile[] = [];
-        for (const file of files) {
-          if (!file.data) continue;
+        const total = files.length;
+
+        for (let i = 0; i < total; i++) {
+          const file = files[i];
+
+          // Cooperative multitasking: yield every 2 images so UI spinner rotates and Android ANR watchdog is fed
+          if (i % 2 === 0) {
+            options.onProgress?.(i + 1, total);
+            await new Promise(r => setTimeout(r, 16));
+          }
+
           const mimeType = file.mimeType || 'image/jpeg';
           const name = file.name || `gallery_${Date.now()}_${output.length}.jpg`;
-          const base64 = file.data;
-          const dataUrl = `data:${mimeType};base64,${base64}`;
-          const blob = base64ToBlob(base64, mimeType);
+          let blob: Blob | null = null;
+
+          // 1. FAST PATH: Stream directly from local Android storage if path exists (zero Base64 overhead!)
+          if (file.path) {
+            try {
+              const fileUrl = Capacitor.convertFileSrc(file.path);
+              const fetched = await fetch(fileUrl);
+              blob = await fetched.blob();
+            } catch (_) {}
+          }
+
+          // 2. FALLBACK PATH: Decode base64 asynchronously
+          if (!blob && file.data) {
+            blob = await base64ToBlobAsync(file.data, mimeType);
+          }
+
+          if (!blob) continue;
+
           const fileObj = blobToFile(blob, name);
-          output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
+          const base64 = file.data || '';
+          output.push({
+            name,
+            mimeType,
+            base64,
+            dataUrl: base64 ? `data:${mimeType};base64,${base64}` : '',
+            blob,
+            fileObj
+          });
         }
+
+        options.onProgress?.(total, total);
         return output;
       };
 
@@ -73,7 +117,7 @@ export async function pickNativeFiles(options: {
             readData: true,
           } as any);
           if (result && result.files && result.files.length > 0) {
-            const output = mapFilesToPicked(result.files);
+            const output = await mapFilesToPicked(result.files);
             if (output.length > 0) return output;
           }
           return [];
@@ -92,7 +136,7 @@ export async function pickNativeFiles(options: {
             readData: true,
           } as any);
           if (result && result.files && result.files.length > 0) {
-            const output = mapFilesToPicked(result.files);
+            const output = await mapFilesToPicked(result.files);
             if (output.length > 0) return output;
           }
           return [];
@@ -108,7 +152,13 @@ export async function pickNativeFiles(options: {
           const res = await Camera.pickImages({ quality: 90 });
           if (res && res.photos && res.photos.length > 0) {
             const output: MobilePickedFile[] = [];
-            for (const p of res.photos) {
+            const total = res.photos.length;
+            for (let i = 0; i < total; i++) {
+              const p = res.photos[i];
+              if (i % 2 === 0) {
+                options.onProgress?.(i + 1, total);
+                await new Promise(r => setTimeout(r, 16));
+              }
               if (!p.webPath) continue;
               try {
                 const fetched = await fetch(p.webPath);
@@ -116,15 +166,10 @@ export async function pickNativeFiles(options: {
                 const mimeType = p.format ? `image/${p.format}` : (blob.type || 'image/jpeg');
                 const name = `gallery_${Date.now()}_${output.length}.${p.format || 'jpg'}`;
                 const fileObj = blobToFile(blob, name);
-                const dataUrl = await new Promise<string>((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result as string);
-                  reader.readAsDataURL(blob);
-                });
-                const base64 = dataUrl.split(',')[1] || '';
-                output.push({ name, mimeType, base64, dataUrl, blob, fileObj });
+                output.push({ name, mimeType, base64: '', dataUrl: p.webPath, blob, fileObj });
               } catch (_) {}
             }
+            options.onProgress?.(total, total);
             if (output.length > 0) return output;
           }
         } catch (e3: any) {

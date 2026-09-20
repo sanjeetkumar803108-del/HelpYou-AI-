@@ -1461,25 +1461,8 @@ export default function Profile({
 
             {/* Passive Usage Line Chart */}
             <div className="w-full h-48 -mt-1 select-none relative">
-              {/* Highest Study Time Pill Badge in the Corner */}
-              {(() => {
-                const highestItem = chartData.reduce((prev, curr) => (curr.focusTime > prev.focusTime ? curr : prev), chartData[0] || { focusTime: 0, day: 'Sun' });
-                const peakMinsRaw = highestItem?.focusTime || 0;
-                const peakMins = peakMinsRaw % 1 !== 0 ? peakMinsRaw.toFixed(1) : peakMinsRaw;
-                const peakDay = highestItem?.day || 'Sun';
-
-                return (
-                  <div className="absolute top-0 right-1 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFFDF0] border border-amber-300 shadow-xs pointer-events-none select-none">
-                    <span className="text-sm">🏆</span>
-                    <span className="text-xs font-bold text-amber-800">Highest Study Time:</span>
-                    <span className="text-xs font-black text-zinc-950 font-mono">{peakMins}m</span>
-                    <span className="text-xs font-bold text-amber-600">({peakDay})</span>
-                  </div>
-                );
-              })()}
-
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 22, right: 10, left: -25, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
                   <XAxis 
                     dataKey="day" 
@@ -1498,12 +1481,23 @@ export default function Profile({
                     content={({ active, payload, label }: any) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-zinc-900/95 backdrop-blur-md text-white rounded-2xl p-3 shadow-xl border border-zinc-800 text-[11px] font-sans">
-                            <p className="font-black text-xs text-zinc-300 mb-1">{label} Report</p>
-                            <p className="flex items-center gap-1.5 font-bold text-purple-300">
-                              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                              Usage: {payload[0].value} mins
+                          <div 
+                            style={{ 
+                              backgroundColor: '#09090b', 
+                              borderColor: '#3f3f46',
+                              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)'
+                            }} 
+                            className="rounded-2xl px-3.5 py-2.5 border text-[11px] font-sans pointer-events-none select-none min-w-[130px]"
+                          >
+                            <p style={{ color: '#ffffff' }} className="font-black text-xs mb-1 flex items-center gap-1.5 tracking-tight">
+                              <span style={{ backgroundColor: '#a855f7' }} className="w-2 h-2 rounded-full inline-block shrink-0 shadow-xs" />
+                              <span style={{ color: '#ffffff' }}>{label} Report</span>
                             </p>
+                            <div className="flex items-baseline gap-1.5">
+                              <span style={{ color: '#e4e4e7' }} className="text-xs font-extrabold">Study Time:</span>
+                              <span style={{ color: '#facc15' }} className="font-mono text-sm font-black tracking-tight">{payload[0].value}</span>
+                              <span style={{ color: '#facc15' }} className="text-[10px] font-extrabold">mins</span>
+                            </div>
                           </div>
                         );
                       }
@@ -1824,35 +1818,89 @@ export default function Profile({
               </h3>
 
               <div className="grid grid-cols-3 gap-2.5">
-                {achievementBadges.map((badge) => (
-                  <div
-                    key={badge.id}
-                    className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all ${
-                      badge.unlocked
-                        ? 'bg-amber-50/50 border-amber-200 shadow-xs'
-                        : 'bg-zinc-50/30 border-zinc-200/40 opacity-50'
-                    }`}
-                  >
-                    <span className="text-2xl">{badge.icon}</span>
-                    <div>
-                      <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
-                        {badge.title}
-                      </span>
-                      <span className="text-[8px] font-bold text-zinc-400 block">
-                        {badge.requiredXP} XP
-                      </span>
+                {achievementBadges.map((badge) => {
+                  const isGrandmaster = badge.id === 'grandmaster';
+
+                  if (isGrandmaster) {
+                    return (
+                      <div
+                        key={badge.id}
+                        className={`col-span-3 p-4 rounded-2xl border-2 transition-all flex items-center justify-between gap-3 ${
+                          badge.unlocked
+                            ? 'bg-gradient-to-r from-amber-500/15 via-purple-500/10 to-amber-500/15 border-amber-400 shadow-md'
+                            : 'bg-gradient-to-r from-zinc-50 via-amber-50/40 to-purple-50/30 border-amber-200/90 shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 shadow-xs border ${
+                            badge.unlocked 
+                              ? 'bg-amber-100 border-amber-300 ring-2 ring-amber-400/40' 
+                              : 'bg-gradient-to-br from-amber-100 to-amber-200/60 border-amber-300'
+                          }`}>
+                            {badge.icon}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-black text-zinc-900 truncate">
+                                {badge.title}
+                              </span>
+                              <span className="text-[9px] font-black text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded font-mono border border-amber-200">
+                                {badge.requiredXP} XP
+                              </span>
+                            </div>
+                            <div className="mt-1">
+                              <span className="text-[10px] font-black text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-md tracking-wider uppercase inline-flex items-center gap-1 border border-purple-200 shadow-2xs">
+                                🎁 SUPRISED EMAIL
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {badge.unlocked ? (
+                            <span className="text-[9px] font-black uppercase text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-lg shadow-2xs">
+                              Unlocked
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 border border-zinc-200/90 px-3 py-1 rounded-lg flex items-center gap-1">
+                              <Lock className="w-2.5 h-2.5 text-zinc-400" /> Locked
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={badge.id}
+                      className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all ${
+                        badge.unlocked
+                          ? 'bg-amber-50/50 border-amber-200 shadow-xs'
+                          : 'bg-zinc-50/30 border-zinc-200/40 opacity-50'
+                      }`}
+                    >
+                      <span className="text-2xl">{badge.icon}</span>
+                      <div>
+                        <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                          {badge.title}
+                        </span>
+                        <span className="text-[8px] font-bold text-zinc-400 block">
+                          {badge.requiredXP} XP
+                        </span>
+                      </div>
+                      {badge.unlocked ? (
+                        <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                          Unlocked
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-0.5">
+                          <Lock className="w-2.5 h-2.5" /> Locked
+                        </span>
+                      )}
                     </div>
-                    {badge.unlocked ? (
-                      <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100/80 px-1.5 py-0.5 rounded">
-                        Unlocked
-                      </span>
-                    ) : (
-                      <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-0.5">
-                        <Lock className="w-2.5 h-2.5" /> Locked
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

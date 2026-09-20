@@ -8,6 +8,7 @@ import {
   getPdfHistory, 
   deletePdfFromHistory, 
   clearPdfHistory, 
+  getPdfDataBlob,
   PdfHistoryItem 
 } from '../utils/pdfHistory';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
@@ -154,22 +155,13 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
   };
 
   // Helper to open PDF in viewer
-  const handleViewPdf = (item: PdfHistoryItem) => {
+  const handleViewPdf = async (item: PdfHistoryItem) => {
     triggerVibration(15);
     setSelectedPdf(item);
 
     try {
-      if (item.fileUri.startsWith('data:')) {
-        // Convert data URI to Blob URL for iframe viewing
-        const parts = item.fileUri.split(',');
-        const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/pdf';
-        const bstr = atob(parts[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
-        }
-        const blob = new Blob([u8arr], { type: mime });
+      const blob = await getPdfDataBlob(item);
+      if (blob) {
         const url = URL.createObjectURL(blob);
         setPreviewBlobUrl(url);
       } else {
@@ -187,15 +179,8 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
     triggerVibration(20);
 
     try {
-      if (item.fileUri.startsWith('data:')) {
-        const parts = item.fileUri.split(',');
-        const bstr = atob(parts[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
-        }
-        const blob = new Blob([u8arr], { type: 'application/pdf' });
+      const blob = await getPdfDataBlob(item);
+      if (blob) {
         await savePDFMobile(blob, item.title);
       } else {
         await savePDFMobile(item.fileUri, item.title);
@@ -212,15 +197,8 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
     triggerVibration(20);
 
     try {
-      if (item.fileUri.startsWith('data:')) {
-        const parts = item.fileUri.split(',');
-        const bstr = atob(parts[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
-        }
-        const blob = new Blob([u8arr], { type: 'application/pdf' });
+      const blob = await getPdfDataBlob(item);
+      if (blob) {
         await sharePDFMobile(blob, item.title);
       } else {
         await sharePDFMobile(item.fileUri, item.title);
@@ -258,8 +236,12 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
         </div>
         {/* Preview Content */}
         <div className="flex-1 overflow-hidden relative flex flex-col">
-          {selectedPdf.fileUri ? (
-            <SafePdfViewer pdfUrlOrBase64={selectedPdf.fileUri} />
+          {previewBlobUrl || selectedPdf.fileUri ? (
+            <SafePdfViewer 
+              pdfUrlOrBase64={previewBlobUrl || selectedPdf.fileUri} 
+              pdfId={selectedPdf.id}
+              title={selectedPdf.title}
+            />
           ) : (
             <div className="text-center p-6 text-zinc-500 my-auto">
               <p className="text-xs font-bold text-zinc-400">Loading PDF Preview...</p>
@@ -269,8 +251,15 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
         {/* Bottom Action bar */}
         <div className="bg-zinc-950 p-4 border-t border-zinc-900 flex gap-2.5 shrink-0 z-10">
           <button
+            onClick={() => handleSavePdf(selectedPdf)}
+            className="flex-1 bg-zinc-850 hover:bg-zinc-800 text-zinc-100 font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-zinc-750"
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+            <span>OPEN IN DEVICE</span>
+          </button>
+          <button
             onClick={() => handleSharePdf(selectedPdf)}
-            className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+            className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
           >
             <Share2 className="w-4 h-4 text-white" />
             <span>SHARE DOCUMENT</span>

@@ -1,10 +1,11 @@
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, getDocs, query, where, deleteDoc, doc, writeBatch } from 'firebase/firestore';
+import { get, set, del } from 'idb-keyval';
 
 export interface PdfHistoryItem {
   id: string;
   title: string;
-  fileUri: string; // Base64 data URI or Blob URI
+  fileUri: string; // Base64 data URI, idb:// identifier, or Blob URI
   timestamp: number;
   featureTag: string; // e.g., 'Image to PDF', 'Notes Export', 'AI Content Export', 'Study Guide'
   fileSize?: string;
@@ -12,6 +13,7 @@ export interface PdfHistoryItem {
 }
 
 const STORAGE_KEY = 'helpyou_ai_pdf_history_v1';
+const IDB_BLOB_PREFIX = 'helpyou_pdf_blob_';
 
 /**
  * Retrieves all saved PDF history records sorted by newest first.
@@ -31,8 +33,63 @@ export function getPdfHistory(): PdfHistoryItem[] {
 }
 
 /**
+ * Retrieves the full PDF binary Blob for a given history record from IndexedDB or fileUri.
+ * 100% offline-ready and immune to session-based blob: URL expiration or localStorage limits.
+ */
+export async function getPdfDataBlob(item: { id: string; fileUri: string }): Promise<Blob | null> {
+  // 1. Try reading persistent offline Blob from IndexedDB
+  try {
+    const idbBlob = await get(IDB_BLOB_PREFIX + item.id);
+    if (idbBlob instanceof Blob) {
+      return idbBlob;
+    }
+    if (idbBlob instanceof Uint8Array || idbBlob instanceof ArrayBuffer) {
+      return new Blob([idbBlob], { type: 'application/pdf' });
+    }
+  } catch (err) {
+    console.warn('[PDFHistory] Error reading from IndexedDB:', err);
+  }
+
+  // 2. If fileUri is a base64 data URI
+  if (item.fileUri && item.fileUri.startsWith('data:')) {
+    try {
+      const parts = item.fileUri.split(',');
+      const base64Data = parts[1] || parts[0];
+      const binaryString = atob(base64Data.replace(/\s/g, ''));
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      // Cache into IndexedDB for fast subsequent access
+      set(IDB_BLOB_PREFIX + item.id, blob).catch(() => {});
+      return blob;
+    } catch (e) {
+      console.warn('[PDFHistory] Error decoding base64 fileUri:', e);
+    }
+  }
+
+  // 3. If fileUri is a live blob or native/local URL
+  if (item.fileUri && (item.fileUri.startsWith('blob:') || item.fileUri.startsWith('http') || item.fileUri.startsWith('capacitor:'))) {
+    try {
+      const response = await fetch(item.fileUri);
+      if (response.ok) {
+        const fetchedBlob = await response.blob();
+        set(IDB_BLOB_PREFIX + item.id, fetchedBlob).catch(() => {});
+        return fetchedBlob;
+      }
+    } catch (e) {
+      console.warn('[PDFHistory] Could not fetch live fileUri (may be expired session blob):', e);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Automatically captures and saves a PDF record into history storage.
- * Implements a strict duplicate prevention check (same title or same file contents).
+ * Stores metadata in localStorage and heavy binary payloads in IndexedDB.
  */
 export function savePdfToHistory(item: {
   title: string;
@@ -40,7 +97,7 @@ export function savePdfToHistory(item: {
   featureTag: string;
   fileSize?: string;
   pageCount?: number;
-}): PdfHistoryItem {
+}, binaryBlob?: Blob | Uint8Array): PdfHistoryItem {
   const history = getPdfHistory();
   
   // Format title neatly
@@ -49,7 +106,7 @@ export function savePdfToHistory(item: {
     cleanTitle += '.pdf';
   }
 
-  // Check for any duplicate by title or content URI
+  // Check for any duplicate by title or id
   const existingIdx = history.findIndex(
     record => record.title === cleanTitle || record.fileUri === item.fileUri
   );
@@ -58,7 +115,6 @@ export function savePdfToHistory(item: {
   let targetRecord: PdfHistoryItem;
 
   if (existingIdx !== -1) {
-    // Duplicate found! Reuse existing record, update timestamp/size, and move to top
     const existing = history[existingIdx];
     targetRecord = {
       ...existing,
@@ -69,7 +125,6 @@ export function savePdfToHistory(item: {
     const filtered = history.filter((_, idx) => idx !== existingIdx);
     updated = [targetRecord, ...filtered].slice(0, 30);
   } else {
-    // Completely new record
     targetRecord = {
       id: `pdf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title: cleanTitle,
@@ -82,15 +137,49 @@ export function savePdfToHistory(item: {
     updated = [targetRecord, ...history].slice(0, 30);
   }
 
+  // Asynchronously store binary in IndexedDB
+  if (binaryBlob) {
+    const blobToStore = binaryBlob instanceof Blob ? binaryBlob : new Blob([binaryBlob], { type: 'application/pdf' });
+    set(IDB_BLOB_PREFIX + targetRecord.id, blobToStore).catch(err => {
+      console.warn('[PDFHistory] Error caching blob in idb:', err);
+    });
+  } else if (item.fileUri && item.fileUri.startsWith('data:')) {
+    try {
+      const parts = item.fileUri.split(',');
+      const base64Data = parts[1] || parts[0];
+      const binaryString = atob(base64Data.replace(/\s/g, ''));
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      set(IDB_BLOB_PREFIX + targetRecord.id, blob).catch(() => {});
+    } catch (e) {}
+  }
+
+  // For very large base64 or session blob URLs, avoid bloating localStorage
+  const isLargeBase64 = item.fileUri && item.fileUri.startsWith('data:') && item.fileUri.length > 250000;
+  const isSessionBlob = item.fileUri && item.fileUri.startsWith('blob:');
+  const safeHistory = updated.map(rec => {
+    if (rec.id === targetRecord.id && (isLargeBase64 || isSessionBlob)) {
+      return { ...rec, fileUri: `idb://${rec.id}` };
+    }
+    return rec;
+  });
+
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(safeHistory));
     window.dispatchEvent(new CustomEvent('pdf-history-updated', { detail: { record: targetRecord } }));
   } catch (err) {
     console.warn('[PDFHistory] Quota exceeded or error saving PDF history, trimming older items:', err);
     try {
-      const filtered = history.filter((_, idx) => idx !== existingIdx);
-      const trimmed = [targetRecord, ...filtered.slice(0, 10)];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+      // Strip all heavy fileUris to keep metadata intact
+      const leanHistory = safeHistory.slice(0, 15).map(rec => ({
+        ...rec,
+        fileUri: rec.fileUri.startsWith('data:') ? `idb://${rec.id}` : rec.fileUri
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(leanHistory));
       window.dispatchEvent(new CustomEvent('pdf-history-updated', { detail: { record: targetRecord } }));
     } catch (e) {
       console.error('[PDFHistory] Failed to write PDF record to storage:', e);
@@ -129,6 +218,9 @@ export function deletePdfFromHistory(id: string): void {
     console.warn('[PDFHistory] Error deleting item from history:', err);
   }
 
+  // Delete persistent binary blob from IndexedDB
+  del(IDB_BLOB_PREFIX + id).catch(() => {});
+
   // Delete from Firestore if the user is authenticated
   if (auth.currentUser) {
     getDocs(query(collection(db, 'pdf_history'), where('userId', '==', auth.currentUser.uid), where('id', '==', id)))
@@ -149,6 +241,12 @@ export function deletePdfFromHistory(id: string): void {
  * Clears all PDF history records.
  */
 export function clearPdfHistory(): void {
+  const history = getPdfHistory();
+  // Clear persistent binary blobs from IndexedDB
+  history.forEach(item => {
+    del(IDB_BLOB_PREFIX + item.id).catch(() => {});
+  });
+
   try {
     localStorage.removeItem(STORAGE_KEY);
     window.dispatchEvent(new CustomEvent('pdf-history-updated', { detail: { cleared: true } }));

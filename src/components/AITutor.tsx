@@ -89,25 +89,29 @@ Before generating your final response for math/science numericals, execute a str
 CRITICAL DYNAMIC JSON OUTPUT (NO RAW TEXT OUTSIDE JSON):
 You MUST output your response strictly as valid raw JSON. Do NOT wrap JSON in code fences (\`\`\`json).
 
---- MODE 1: STEP-BY-STEP MATH / SCIENCE NUMERICAL SOLVER (format_type = "steps") ---
-Use this mode for math problems, physics calculations, chemical derivations, and complex multi-step numerical problem solving.
+--- MODE 1: STEP-BY-STEP ACADEMIC CONCEPTS & NUMERICAL SOLVER (format_type = "steps") ---
+MANDATORY FOR ALL ACADEMIC TOPICS, SCIENCE, STEM, MATH, PHYSICS, CHEMISTRY, BIOLOGY, THEORY LESSONS, CONCEPTS (e.g. 'Quantum Physics', 'Photosynthesis', 'Thermodynamics', 'Atomic Structure', 'Calculus', 'Kinematics') AND NUMERICAL PROBLEM SOLVING.
+Break the topic or solution down into 2 to 4 high-yield pedagogical cards:
+- Step 1: Core Concept, Definition & Intuitive Real-Life Hook
+- Step 2: Underlying Mechanism, Laws, Working Principles & Equations
+- Step 3: Real-World Applications, Why We Care, or Final Boxed Result
 FORMAT:
 {
-  "topic_title": "Subject or Topic of the problem (e.g. 'Definite Integrals via Integration by Parts')",
+  "topic_title": "Subject or Topic Title (e.g. 'Quantum Physics for Freshmen', 'Integration by Parts')",
   "format_type": "steps",
-  "key_formula": "The primary theoretical formula in LaTeX (e.g. $$\\int u \\, dv = uv - \\int v \\, du$$)",
-  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misconceptions",
+  "key_formula": "The primary theoretical formula, governing law, or core identity in LaTeX (e.g. $$E = h\\nu$$, $$\\lambda = \\frac{h}{p}$$, or $$\\int u \\, dv = uv - \\int v \\, du$$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common exam traps, misconceptions, or careless errors students make on this topic",
   "solution_steps": [
     {
       "step_id": 1,
-      "title": "Clear concise step title",
+      "title": "Clear concise concept/step title",
       "content": "Detailed explanation with formulas on dedicated block lines ($$). Every equation cleanly separated.",
       "is_final_answer": false
     },
     {
       "step_id": 2,
-      "title": "Final Analytical & Numerical Result",
-      "content": "Final step revealing the boxed result with $$\\boxed{...}$$.",
+      "title": "Final Analytical & Numerical Result / Summary",
+      "content": "Final step concluding directly. For calculations, conclude with the boxed result: $$1 + 4 = \\boxed{5}$$. (CRITICAL: NEVER write the answer twice, never write '5 \\boxed{5}' or '= 5 \\boxed{5}').",
       "is_final_answer": true
     }
   ],
@@ -118,13 +122,15 @@ FORMAT:
   ]
 }
 
---- MODE 2: CONVERSATIONAL & CONCEPTUAL / GENERAL (format_type = "conversational") ---
-Use this mode for non-numerical questions, conceptual explanations, humanities, summaries, custom formats, or text problems.
+--- MODE 2: CONVERSATIONAL (format_type = "conversational") ---
+STRICTLY RESERVED FOR: Casual small talk / greetings ('Hi', 'Hello', 'How are you?'), or when the student EXPLICITLY commands a non-step format (e.g., 'write an essay', 'give me a table', 'summarize in 50 words', 'give 3 bullet points').
 FORMAT:
 {
   "topic_title": "Topic or Concept Title",
   "format_type": "conversational",
   "markdown_content": "Full markdown response with clear headings, bullet points, explanations, or tables.",
+  "key_formula": "Primary formula or law in LaTeX if applicable (or null)",
+  "exam_trap": "Exam trap or caution point if applicable (or null)",
   "suggestions": [
     "Follow-up question 1",
     "Follow-up question 2",
@@ -135,7 +141,8 @@ FORMAT:
 RULES:
 - Always populate "suggestions" with 3 context-aware study follow-up ideas.
 - Whenever using LaTeX for formulas, wrap in $$ or $ and double-escape backslashes in JSON (\\\\frac, \\\\sqrt, \\\\text).
-- In the "suggestions" array: Wrap all mathematical formulas, variables with superscripts/exponents (e.g. $x^2$), or subscripts (e.g. $x_1$, $H_2O$) in single dollar signs ($...$). NEVER output raw un-delimited LaTeX or block ($$) math in suggestions.`;
+- In the "suggestions" array: Wrap all mathematical formulas, variables with superscripts/exponents (e.g. $x^2$), or subscripts (e.g. $x_1$, $H_2O$) in single dollar signs ($...$). NEVER output raw un-delimited LaTeX or block ($$) math in suggestions.
+- NEVER wrap scientist names (e.g. Schrödinger, Newton, Einstein), English words, or possessive nouns in math mode ($). Only wrap actual mathematical symbols and equations.`;
 
 // Used when the student types a question/message WITHOUT an image
 const SYSTEM_INSTRUCTION_TEXT_CHAT = `You are an elite, polyglot AI Master Educator and Academic Tutor for HelpYou AI. You are intellectually brilliant, deeply empathetic, and dynamically adaptive to student needs.
@@ -148,15 +155,21 @@ CRITICAL GOVERNING PROTOCOLS (HIGHEST PRIORITY):
    If the student commands or requests a persona, role, or tone in their prompt (e.g., "act as a strict teacher", "talk like a pirate", "explain like I'm 5", "be a sarcastic tutor", "speak in poetic rhymes", "be an angry professor"), you MUST 100% prioritize and embody that requested persona and tone! Adopt their requested character voice fully in vocabulary and style.
 
 2. STRICT USER FORMAT CONSTRAINT ADHERENCE (CRITICAL):
-   If the student asks for a specific format (e.g. "give me 3 bullet points", "explain in 2 sentences", "make a comparison table", "write an essay", "summarize in 50 words", "give pros and cons"), you MUST strictly satisfy that exact format. Use format_type = "conversational" with "markdown_content". Do NOT break requested formats into step cards.
+   If the student asks for a specific format (e.g. "give me 3 bullet points", "explain in 2 sentences", "make a comparison table", "write an essay", "summarize in 50 words", "give pros and cons"), you MUST strictly satisfy that exact format. Use format_type = "conversational" with "markdown_content". Do NOT break requested formats into step cards unless requested.
 
 3. GREETINGS & CASUAL CHAT (CRITICAL):
    If the student sends small talk or casual greetings (e.g., "Hi", "Hello", "Kya haal hai", "How are you?", "Hey tutor"), respond warmly, casually, and naturally using format_type = "conversational" with "markdown_content". NEVER invent a math problem or force greetings into step cards.
 
-4. LANGUAGE MIRRORING:
+4. ALL ACADEMIC & SCIENCE CONCEPTS MUST USE STEP CARDS:
+   For ANY academic concept, science lesson, theory explanation, or inquiry (e.g. "Quantum Physics for Freshmen", "Photosynthesis", "Thermodynamics", "Cell Division", "Newton's laws", "World War 2 causes"):
+   - ALWAYS use format_type = "steps" with structured "solution_steps" cards!
+   - ALWAYS provide "key_formula" (the core governing equation or foundational law in LaTeX, e.g. $$E = h\\nu$$).
+   - ALWAYS provide "exam_trap" (the 1-2 sentence high-yield warning about traps, common mistakes, or student misconceptions).
+
+5. LANGUAGE MIRRORING:
    Always reply in the SAME language and script the student used (Hinglish -> Hinglish, Hindi -> Hindi, English -> English).
 
-5. MATH & SCIENCE NUMERICAL 3-PASS ACCURACY:
+6. MATH & SCIENCE NUMERICAL 3-PASS ACCURACY:
    For mathematical equations, physics numericals, and multi-step derivations:
    - PASS 1: Question & sign anatomy. Default to Degrees for angles unless π is present. Check King's property vs. Integration by Parts.
    - PASS 2: Step-by-step PEMDAS execution with exact radicals/fractions and decimal precision.
@@ -167,40 +180,48 @@ MANDATORY JSON OUTPUT STRUCTURE (NO RAW TEXT OUTSIDE JSON):
 ================================================================
 You MUST output your response strictly in one of the two JSON formats below. Do NOT wrap JSON in code fences (\`\`\`json).
 
---- FORMAT TYPE A: "steps" (For Math/Physics/Chemistry Numerical Calculations & Multi-Step Solving) ---
-Use this whenever the problem is a mathematical equation, calculus, trigonometry, physics numerical, or sequential calculation where step-by-step cards provide the highest pedagogical clarity.
+--- FORMAT TYPE A: "steps" (MANDATORY FOR ALL ACADEMIC CONCEPTS, LESSONS & NUMERICAL SOLVING) ---
+Use this for ALL academic learning questions (concepts like Quantum Physics, Photosynthesis, Kinematics, etc.) as well as numerical equations and problems.
 {
-  "topic_title": "3–6 word topic title (e.g. 'Quadratic Roots via Formula', 'Trigonometric Ladder Problem')",
+  "topic_title": "3–6 word topic title (e.g. 'Quantum Physics for Freshmen', 'Quadratic Roots via Formula')",
   "format_type": "steps",
-  "key_formula": "Primary formula or identity in LaTeX (e.g. $$\\sin(\\theta) = \\frac{\\text{Opposite}}{\\text{Hypotenuse}}$$, or null if not applicable)",
-  "exam_trap": "Brief 1-2 sentence high-yield warning about common exam traps or sign mistakes (or null)",
+  "key_formula": "Primary formula, governing law, or core identity in LaTeX (e.g. $$E = h\\nu$$, $$\\sin(\\theta) = \\frac{\\text{Opposite}}{\\text{Hypotenuse}}$$, or null if purely conceptual)",
+  "exam_trap": "Brief 1-2 sentence high-yield warning about common exam traps, misconceptions, or sign mistakes",
   "solution_steps": [
     {
       "step_id": 1,
-      "title": "Clear concise step title",
-      "content": "Step working with clear logic and centered block formulas ($$ ... $$).",
+      "title": "Clear concise concept/step title (e.g. 'Core Concept & The Small Scale World')",
+      "content": "Explanation with clear logic and centered block formulas ($$ ... $$) where applicable. Generous vertical spacing.",
       "is_final_answer": false
     },
     {
       "step_id": 2,
-      "title": "Final Calculation & Result",
-      "content": "Final step concluding with the boxed answer $$\\boxed{...}$$.",
+      "title": "Key Principles & Working Mechanisms",
+      "content": "Deep dive into core rules, equations, and mechanisms.",
+      "is_final_answer": false
+    },
+    {
+      "step_id": 3,
+      "title": "Real-World Applications & Final Takeaway",
+      "content": "Why this matters, practical applications, or final calculation result with \\boxed{...}.",
       "is_final_answer": true
     }
   ],
   "suggestions": [
-    "Relevant follow-up practice problem or calculation 1",
-    "Relevant follow-up practice problem or calculation 2",
-    "Relevant follow-up practice problem or calculation 3"
+    "Relevant follow-up practice problem or exploration question 1",
+    "Relevant follow-up practice problem or exploration question 2",
+    "Relevant follow-up practice problem or exploration question 3"
   ]
 }
 
---- FORMAT TYPE B: "conversational" (For Greetings, Bullet Points, Concepts, Tables, Roleplays, Essays, Small Talk) ---
-Use this for greetings, conceptual questions, bullet-point lists, comparison tables, summaries, humanities, and roleplay/custom persona requests.
+--- FORMAT TYPE B: "conversational" (Strictly for Casual Greetings, Small Talk & Explicit User Format Requests) ---
+Use this ONLY for small talk / greetings or when the user explicitly asked for an essay, comparison table, or summary.
 {
   "topic_title": "Short Topic Title (or null for simple greetings/small talk)",
   "format_type": "conversational",
   "markdown_content": "Your rich, formatted markdown response. Use standard markdown: bullet points (- or *), bold text (**text**), numbered lists (1. 2.), markdown tables, and LaTeX math ($...$ or $$...$$) where applicable. Embody user's requested persona and strictly obey their formatting instructions.",
+  "key_formula": "Optional core formula in LaTeX if relevant (or null)",
+  "exam_trap": "Optional exam trap or key warning if relevant (or null)",
   "suggestions": [
     "Context-aware follow-up suggestion 1",
     "Context-aware follow-up suggestion 2",
@@ -212,12 +233,19 @@ RULES:
 - The JSON object must be valid raw JSON.
 - Double-escape backslashes for all LaTeX inside JSON (\\\\frac, \\\\sqrt, \\\\sin, \\\\boxed).
 - Always include 3 high-value suggestions in the "suggestions" array.
-- In "suggestions", wrap all math, exponents (e.g. $x^2$), subscripts (e.g. $x_1$, $H_2O$), and formulas in single dollar signs ($...$).`;
+- In "suggestions", wrap all math, exponents (e.g. $x^2$), subscripts (e.g. $x_1$, $H_2O$), and formulas in single dollar signs ($...$).
+- NEVER wrap scientist names (e.g. Schrödinger, Newton, Einstein), English words, or possessive nouns in math mode ($). Only wrap actual mathematical symbols and equations.`;
 
-// ----------------------------------------------------
 function formatSpacedContent(text: string): string {
   if (!text) return '';
-  return text.trim();
+  let cleaned = text.trim();
+  // Heal leaked literal '\n' sequences that are not part of LaTeX commands
+  cleaned = cleaned.replace(/\\n(?!(?:eq|abla|otin|atural|earrow|warrow|nu\b|not\b|neg\b|nexists|nsim|nleq|ngeq))/g, '\n\n');
+  // Deduplicate accidental double answers before \boxed{...} (e.g. "1 + 4 = 5 \boxed{5}" -> "1 + 4 = \boxed{5}")
+  cleaned = cleaned.replace(/([=:])\s*([0-9a-zA-Z._\-]+|\\[a-zA-Z]+(?:\{[^{}]*\})+)\s*(?:\\quad|\\;|\\,|~|\s)*\\boxed\{\s*\2\s*\}/g, '$1 \\boxed{$2}');
+  cleaned = cleaned.replace(/(?<=[=+\-*/(\s]|^)([0-9a-zA-Z._\-]+|\\[a-zA-Z]+(?:\{[^{}]*\})+)\s*(?:\\quad|\\;|\\,|~|\s)*\\boxed\{\s*\1\s*\}/g, '\\boxed{$1}');
+  cleaned = cleaned.replace(/=\s*([0-9a-zA-Z._\-]+|\\[a-zA-Z]+(?:\{[^{}]*\})+)\s*\${1,2}\s*\${1,2}\s*\\boxed\{\s*\1\s*\}/g, '= \\boxed{$1}');
+  return cleaned;
 }
 
 const AITutorMessageItem = React.memo(function AITutorMessageItem({ 
@@ -257,8 +285,47 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
       return null;
     }
     const result = parsePartialJSON(textToParse);
+    if (!result) return null;
+
+    // Heal literal '\n' sequences in key fields (preserving valid LaTeX commands)
+    const healString = (s: any) => typeof s === 'string'
+      ? s.replace(/\\n(?!(?:eq|abla|otin|atural|earrow|warrow|nu\b|not\b|neg\b|nexists|nsim|nleq|ngeq))/g, '\n\n')
+      : s;
+
+    if (result.key_formula) result.key_formula = healString(result.key_formula);
+    if (result.exam_trap) result.exam_trap = healString(result.exam_trap);
+    if (result.markdown_content) result.markdown_content = healString(result.markdown_content);
+
+    // Auto-segmentation fallback: If solution_steps is empty but markdown_content has multiple titled sections, break into interactive cards!
+    if ((!result.solution_steps || !Array.isArray(result.solution_steps) || result.solution_steps.length === 0) && result.markdown_content) {
+      const headingRegex = /(?:^|\n)(#{2,4}\s+[^\n]+|\*\*[^*\n]+\*\*|\d+\.\s+\*\*[^*\n]+\*\*)/g;
+      const headings = [...result.markdown_content.matchAll(headingRegex)];
+      if (headings.length >= 2) {
+        const generatedSteps: any[] = [];
+        headings.forEach((h, hIdx) => {
+          const title = h[1].replace(/^#{2,4}\s+|\*\*|\d+\.\s+/g, '').replace(/:\s*$/, '').trim();
+          const startIndex = h.index! + h[0].length;
+          const nextHeading = headings[hIdx + 1];
+          const endIndex = nextHeading ? nextHeading.index! : result.markdown_content.length;
+          const content = result.markdown_content.slice(startIndex, endIndex).trim();
+          if (content) {
+            generatedSteps.push({
+              step_id: hIdx + 1,
+              title,
+              content: healString(content),
+              is_final_answer: hIdx === headings.length - 1
+            });
+          }
+        });
+        if (generatedSteps.length >= 2) {
+          result.solution_steps = generatedSteps;
+          result.format_type = 'steps';
+        }
+      }
+    }
+
     // Safety: if parsing succeeded but content fields are undefined/null, sanitize them
-    if (result && Array.isArray(result.solution_steps)) {
+    if (Array.isArray(result.solution_steps)) {
       result.solution_steps = result.solution_steps.map((step: any, sIdx: number) => {
         let content = step.content;
         if (!content || content === 'undefined') {
@@ -267,8 +334,8 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
         return {
           ...step,
           step_id: step.step_id || (sIdx + 1),
-          title: step.title != null && step.title !== 'undefined' ? step.title : `Step ${step.step_id || (sIdx + 1)}`,
-          content
+          title: step.title != null && step.title !== 'undefined' ? healString(step.title) : `Step ${step.step_id || (sIdx + 1)}`,
+          content: healString(content)
         };
       });
     }
@@ -277,6 +344,10 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
 
   const isConversational = useMemo(() => {
     if (!parsedSolution) return false;
+    // If solution_steps exists with > 1 steps, ALWAYS render structured interactive cards!
+    if (parsedSolution.solution_steps && Array.isArray(parsedSolution.solution_steps) && parsedSolution.solution_steps.length > 1) {
+      return false;
+    }
     if (parsedSolution.format_type === 'conversational' || parsedSolution.format_type === 'markdown' || parsedSolution.format_type === 'chat') {
       return true;
     }
@@ -294,15 +365,17 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
   }, [parsedSolution]);
 
   const conversationalText = useMemo(() => {
-    if (!parsedSolution) return cleanText;
-    if (parsedSolution.markdown_content) return parsedSolution.markdown_content;
-    if (parsedSolution.content) return parsedSolution.content;
-    if (parsedSolution.explanation) return parsedSolution.explanation;
-    if (parsedSolution.response) return parsedSolution.response;
-    if (parsedSolution.solution_steps && parsedSolution.solution_steps.length === 1) {
-      return parsedSolution.solution_steps[0].content || parsedSolution.solution_steps[0].title || cleanText;
+    let raw = cleanText;
+    if (parsedSolution) {
+      if (parsedSolution.markdown_content) raw = parsedSolution.markdown_content;
+      else if (parsedSolution.content) raw = parsedSolution.content;
+      else if (parsedSolution.explanation) raw = parsedSolution.explanation;
+      else if (parsedSolution.response) raw = parsedSolution.response;
+      else if (parsedSolution.solution_steps && parsedSolution.solution_steps.length === 1) {
+        raw = parsedSolution.solution_steps[0].content || parsedSolution.solution_steps[0].title || cleanText;
+      }
     }
-    return cleanText;
+    return String(raw).replace(/\\n(?!(?:eq|abla|otin|atural|earrow|warrow|nu\b|not\b|neg\b|nexists|nsim|nleq|ngeq))/g, '\n\n');
   }, [parsedSolution, cleanText]);
 
   const showTopicHeader = useMemo(() => {
@@ -479,10 +552,50 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
               )}
               
               {isConversational ? (
-                <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-1 text-zinc-850 leading-relaxed text-sm space-y-3 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_li]:mb-1.5 [&_.katex-display]:my-3">
-                  <GlobalMarkdown>
-                    {conversationalText + (msg.isTyping ? " ▌" : "")}
-                  </GlobalMarkdown>
+                <div className="space-y-3 max-w-full overflow-hidden">
+                  <div className="max-w-full overflow-x-auto overflow-y-hidden break-words py-1 text-zinc-850 leading-relaxed text-sm space-y-3 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_li]:mb-1.5 [&_.katex-display]:my-3">
+                    <GlobalMarkdown>
+                      {conversationalText + (msg.isTyping ? " ▌" : "")}
+                    </GlobalMarkdown>
+                  </div>
+
+                  {/* Key Formula / Identity Cheat-Box */}
+                  {parsedSolution?.key_formula && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/5 to-purple-500/10 border border-amber-400/30 shadow-sm"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="text-xs font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1">
+                          <span>🧮</span>
+                          <span>Core Formula / Identity</span>
+                        </span>
+                      </div>
+                      <div className="text-sm font-semibold text-zinc-900 overflow-x-auto py-0.5">
+                        <GlobalMarkdown>{parsedSolution.key_formula}</GlobalMarkdown>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Exam Trap Alert Banner */}
+                  {parsedSolution?.exam_trap && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 text-amber-950 shadow-sm"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span className="text-xs font-extrabold text-amber-800 uppercase tracking-wide">
+                          Exam Trap to Avoid
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-900 font-medium leading-relaxed m-0">
+                        {parsedSolution.exam_trap}
+                      </p>
+                    </motion.div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3 max-w-full overflow-hidden">
@@ -975,6 +1088,7 @@ export default function AITutor({ isVip, isActive = true }: { isVip: boolean; is
       abortControllerRef.current = null;
     }
     setLoading(false);
+    setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { ...m, isTyping: false } : m));
   };
 
   // Handle cycle of dynamic thinking messages
@@ -1342,8 +1456,14 @@ Please evaluate this answer strictly according to your system rubric.`;
         ? SYSTEM_INSTRUCTION_NURSERY + personaSuffix + scannerRoutingInstructions
         : SYSTEM_INSTRUCTION_TEXT_CHAT + personaSuffix;
       formData.append('customSystemInstruction', baseSystemInstruction);
+      const userProfile = getUserProfileData();
       formData.append('profileContext', getProfileContext());
-      formData.append('gradeLevel', safeGetItem('academic_grade') || '11th Grade (Junior)');
+      formData.append('gradeLevel', userProfile.gradeLevel);
+      formData.append('stream', 'true');
+      formData.append('academicStream', userProfile.stream);
+      formData.append('academic_stream', userProfile.stream);
+      formData.append('country', userProfile.country);
+      formData.append('academic_country', userProfile.country);
       
       const formattedHistory = messages.map(m => {
         if (m.text) return { role: m.role, parts: [{ text: m.text }] };
@@ -1411,75 +1531,120 @@ Please evaluate this answer strictly according to your system rubric.`;
         setMessages([...updatedMessages, initialModelMessage]);
 
         let buffer = "";
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
+        let wasInterrupted = false;
 
-          const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
+        // 28-second watchdog timer: if no data arrives, abort gracefully instead of freezing forever
+        let streamWatchdog: any = null;
+        const resetWatchdog = () => {
+          if (streamWatchdog) clearTimeout(streamWatchdog);
+          streamWatchdog = setTimeout(() => {
+            console.warn("[AITutor] Stream watchdog triggered: stalled network detected.");
+            wasInterrupted = true;
+            if (abortControllerRef.current) {
+              abortControllerRef.current.abort();
+            }
+          }, 28000);
+        };
+        resetWatchdog();
 
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
+            resetWatchdog();
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
 
-            if (trimmed.startsWith("data: ")) {
-              const dataStr = trimmed.slice(6).trim();
-              if (dataStr === "[DONE]") {
-                break;
-              }
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
 
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.error) {
-                  throw new Error(parsed.error);
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+
+              // Ignore keep-alive heartbeats
+              if (trimmed === ": keep-alive" || trimmed === ":") continue;
+
+              if (trimmed.startsWith("data: ")) {
+                const dataStr = trimmed.slice(6).trim();
+                if (dataStr === "[DONE]") {
+                  break;
                 }
-                if (parsed.text) {
-                  finalAIResponseText += parsed.text;
 
-                  setMessages(prev => {
-                    const next = [...prev];
-                    if (next[modelMessageIdx]) {
-                      const text = finalAIResponseText;
-                      const isJson = text.trim().startsWith('{') || text.trim().includes('"solution_steps"') || text.trim().includes('"markdown_content"') || text.trim().includes('"format_type"');
-                      next[modelMessageIdx] = {
-                        ...next[modelMessageIdx],
-                        text,
-                        displayedText: isJson ? text : '',
-                        isTyping: !isJson
-                      };
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  if (parsed.error) {
+                    console.warn("[AITutor] Stream error received from server:", parsed.error);
+                    if (parsed.partialText && !finalAIResponseText) {
+                      finalAIResponseText = parsed.partialText;
                     }
-                    return next;
-                  });
-
-                  // Scroll container down if user is not actively scrolling up
-                  if (!isUserScrollingRef.current) {
-                    const scrollAnchor = document.getElementById('ai-chat-scroll-anchor');
-                    if (scrollAnchor) {
-                      scrollAnchor.scrollIntoView({ behavior: 'auto' });
-                    }
+                    wasInterrupted = true;
+                    break;
                   }
+                  if (parsed.isReplacement && parsed.text) {
+                    finalAIResponseText = parsed.text;
+                  } else if (parsed.text) {
+                    finalAIResponseText += parsed.text;
+                  }
+
+                    setMessages(prev => {
+                      const next = [...prev];
+                      if (next[modelMessageIdx]) {
+                        const text = finalAIResponseText;
+                        const isJson = text.trim().startsWith('{') || text.trim().includes('"solution_steps"') || text.trim().includes('"markdown_content"') || text.trim().includes('"format_type"');
+                        next[modelMessageIdx] = {
+                          ...next[modelMessageIdx],
+                          text,
+                          displayedText: isJson ? text : '',
+                          isTyping: true // Keep typing true while actively streaming tokens
+                        };
+                      }
+                      return next;
+                    });
+
+                    // Scroll container down if user is not actively scrolling up
+                    if (!isUserScrollingRef.current) {
+                      const scrollAnchor = document.getElementById('ai-chat-scroll-anchor');
+                      if (scrollAnchor) {
+                        scrollAnchor.scrollIntoView({ behavior: 'auto' });
+                      }
+                    }
+                } catch (e) {
+                  console.warn("Error parsing stream chunk:", e);
                 }
-              } catch (e) {
-                console.warn("Error parsing stream chunk:", e);
               }
             }
+            if (wasInterrupted) break;
           }
+        } finally {
+          if (streamWatchdog) clearTimeout(streamWatchdog);
         }
 
-        // Set isTyping to false once stream is fully complete
+        // Set isTyping to false once stream is fully complete or cleanly handled
         setMessages(prev => {
           const next = [...prev];
           if (next[modelMessageIdx]) {
-            next[modelMessageIdx] = {
-              ...next[modelMessageIdx],
-              isTyping: false
-            };
+            if (!finalAIResponseText.trim()) {
+              next[modelMessageIdx] = {
+                ...next[modelMessageIdx],
+                text: "⚠️ Connection timed out while generating. Tap retry below to regenerate.",
+                isError: true,
+                isTyping: false
+              };
+            } else {
+              next[modelMessageIdx] = {
+                ...next[modelMessageIdx],
+                isTyping: false
+              };
+            }
           }
           return next;
         });
+
+        if (wasInterrupted && finalAIResponseText.trim()) {
+          showToast("⚡ Network hiccup paused output. Tap 'Ask a Doubt' or send 'Continue' to finish.", "warning", 5000);
+        }
 
       } else {
         // Fallback for standard JSON responses
@@ -2221,7 +2386,7 @@ Please evaluate this answer strictly according to your system rubric.`;
               })()}
 
               {/* Premium Brain Thinking Wave Animation (Requirement 6) */}
-              {loading && (
+              {loading && (!messages.length || messages[messages.length - 1].role !== 'model' || !messages[messages.length - 1].text) && (
                 <div className="flex justify-start">
                   <div className="bg-zinc-900 border border-white/5 rounded-3xl p-5 rounded-tl-none flex items-center space-x-3.5 shadow-xl max-w-[85%] relative overflow-hidden">
                     {/* Glowing background ripple */}

@@ -20,6 +20,7 @@ import { Network } from '@capacitor/network';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { clearGoogleCredentialState } from './utils/clearGoogleCredential';
+import { listenToActiveSession, terminateSessionDueToConflict } from './utils/sessionManager';
 import { safeGetItem, safeSetItem, safeClearAll, safeRemoveItem } from './utils/storage';
 import { refillDailyCoins, getCoins } from './utils/coins';
 import { getStudyXP, getStudyLevel, getDailyXPStatus } from './utils/gamification';
@@ -28,6 +29,7 @@ import { setupDailyLocalNotifications } from './utils/notifications';
 import confetti from 'canvas-confetti';
 
 import { retryImport } from './utils/resilientLazy';
+import ToolsDashboard from './components/ToolsDashboard';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
@@ -35,7 +37,6 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
   return lazy(() => retryImport(factory));
 }
 
-const ToolsDashboard = lazyWithRetry(() => import('./components/ToolsDashboard'));
 const ImageToPDF = lazyWithRetry(() => import('./components/ImageToPDF'));
 const PdfHistoryScreen = lazyWithRetry(() => import('./components/PdfHistoryScreen'));
 const MagicScanner = lazyWithRetry(() => import('./components/MagicScanner'));
@@ -180,7 +181,7 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 2500);
+    }, 400);
     return () => clearTimeout(timer);
   }, []);
 
@@ -232,10 +233,50 @@ export default function App() {
     } catch (_) {}
   }, []);
 
+  // Background feature pre-warming: preloads feature chunks into browser cache when main thread is idle
+  useEffect(() => {
+    const prewarmFeatures = () => {
+      const features = [
+        () => import('./components/MagicScanner'),
+        () => import('./components/AITutor'),
+        () => import('./components/LiveTutorSearch'),
+        () => import('./components/EssayGrader'),
+        () => import('./components/Calculator'),
+        () => import('./components/QuizGenerator'),
+        () => import('./components/QuestionGenerator'),
+        () => import('./components/DailyTrivia'),
+        () => import('./components/MistakeVault'),
+        () => import('./components/ContentGenerator'),
+        () => import('./components/GrammarEnhancer'),
+        () => import('./components/Summariser'),
+        () => import('./components/ImageToPDF'),
+        () => import('./components/PdfHistoryScreen'),
+        () => import('./components/TestPrep'),
+        () => import('./components/StreakDetailsPage'),
+        () => import('./components/CoinPage'),
+        () => import('./components/Profile'),
+      ];
+
+      features.forEach((loadFn, idx) => {
+        setTimeout(() => {
+          loadFn().catch(() => {});
+        }, 800 + idx * 150);
+      });
+    };
+
+    const timer = setTimeout(prewarmFeatures, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(() => {
+    const hasCachedSession = 
+      safeGetItem('helpyou_active_user_session') === 'true' || 
+      Boolean(safeGetItem('last_logged_in_user'));
+    return !hasCachedSession;
+  });
   const [pocketItems, setPocketItems] = useState<any[]>(() => {
     const lastUser = safeGetItem('last_logged_in_user');
     const cached = lastUser ? safeGetItem(`stale_pocket_items_${lastUser}`) : null;
@@ -442,6 +483,18 @@ export default function App() {
           safeSetItem(`study_is_vip_${currentUser.uid}`, 'true');
           safeSetItem('study_is_vip', 'true');
         }
+
+        const hasCompletedLocalSetup = 
+          safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true' ||
+          safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true' ||
+          safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
+
+        if (hasCompletedLocalSetup) {
+          setShowOnboarding(false);
+          setShowAcademicSetup(false);
+          // Instant Zero-Wait Unblock: Returning user UI renders in 0ms without network gating
+          setAuthLoading(false);
+        }
         
         // 2. Fresh Fetch on Login: Try Firestore first to ensure high consistency with user profile
         const fetchPromise = (async () => {
@@ -598,8 +651,8 @@ export default function App() {
           }
         })();
 
-        // 2000ms max wait time to prevent loading screens under flaky network
-        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
+        // Fast-path timeout: 0ms if returning user already unblocked, or max 250ms for first-time login
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, hasCompletedLocalSetup ? 0 : 250));
 
         Promise.race([fetchPromise, timeoutPromise])
           .finally(() => {
@@ -620,6 +673,32 @@ export default function App() {
     });
     return () => unsubscribeAuth();
   }, []);
+
+  // Single-Device Session Enforcement:
+  // Enforces 1 active device per account. If this account signs into another mobile device,
+  // this device immediately gets kicked out and returned to the login screen.
+  useEffect(() => {
+    if (!user) return;
+
+    let isTerminating = false;
+    const handleSessionConflict = async (details?: { remotePlatform?: string }) => {
+      if (isTerminating) return;
+      isTerminating = true;
+
+      console.warn('[Single Device Gate] Session conflict detected! Another device logged in.');
+      const platformStr = details?.remotePlatform ? ` (${details.remotePlatform})` : '';
+      showToast(`⚠️ Logged out: Your account was logged into another mobile device${platformStr}.`, 'warning', 6500);
+
+      setUser(null);
+      setIsVip(false);
+      await terminateSessionDueToConflict(user.uid);
+    };
+
+    const unsubscribeSession = listenToActiveSession(user.uid, handleSessionConflict);
+    return () => {
+      unsubscribeSession();
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -1046,14 +1125,13 @@ export default function App() {
         </header>
       )}
       
-      <main className={`w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 ${(activeTab === 'scanner' || activeTab === 'aitutor' || activeTab === 'teacher' || activeTool !== null) ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto pb-20'} bg-[#FAF9F6]`}>
+      <main className={`w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 ${(activeTab === 'scanner' || activeTab === 'aitutor' || activeTab === 'teacher' || activeTool !== null) ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto pb-20'} bg-[#FAF9F6]`} style={{ position: 'relative' }}>
         {/* Scanner Tab */}
         <div className={activeTab === 'scanner' ? 'h-full flex flex-col' : 'hidden'}>
           <ErrorBoundary>
             <Suspense fallback={<FullPageSkeleton />}>
               <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
                 setActiveTab(tab);
-                setActiveTool(null);
               }} />
             </Suspense>
           </ErrorBoundary>
@@ -1068,8 +1146,8 @@ export default function App() {
           </ErrorBoundary>
         </div>
 
-        {/* Home/Notes Tab */}
-        <div className={activeTab === 'notes' ? 'h-full flex flex-col' : 'hidden'}>
+        {/* Home/Notes Tab — always keep mounted so tools stay alive on tab switch */}
+        <div className={(activeTab === 'notes' || activeTool !== null) ? 'h-full flex flex-col' : 'hidden'}>
           <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
             <ErrorBoundary>
               <Suspense fallback={<FullPageSkeleton />}>
@@ -1089,106 +1167,102 @@ export default function App() {
               </Suspense>
             </ErrorBoundary>
           </div>
-          {/* Active Tool Rendering */}
+          {/* Active Tool Rendering — kept mounted via hidden class, NOT && so state/processing survives tab switches */}
           <Suspense fallback={<FullPageSkeleton />}>
-            {activeTool === 'essaygrader' && (
+            <div className={activeTool === 'essaygrader' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                   <EssayGrader onBack={() => setActiveTool(null)} />
                 </LockedFeature>
               </ErrorBoundary>
-            )}
-            {activeTool === 'testprep' && (
+            </div>
+            <div className={activeTool === 'testprep' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <TestPrep 
                   onBack={() => setActiveTool(null)} 
                   isVip={isVip}
                   onOpenVip={() => setShowVipModal(true)}
                   onNavigateToTab={(tab) => {
-                    setActiveTool(null);
                     setActiveTab(tab);
                   }}
                 />
               </ErrorBoundary>
-            )}
-            {activeTool === 'image2pdf' && (
+            </div>
+            <div className={activeTool === 'image2pdf' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <ImageToPDF 
                   onBack={() => setActiveTool(null)} 
                   onOpenHistory={() => setActiveTool('pdfhistory')} 
                 />
               </ErrorBoundary>
-            )}
-            {activeTool === 'pdfhistory' && (
+            </div>
+            <div className={activeTool === 'pdfhistory' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <PdfHistoryScreen 
                   onBack={() => setActiveTool('image2pdf')} 
                   onOpenImageToPdf={() => setActiveTool('image2pdf')}
                 />
               </ErrorBoundary>
-            )}
-            {activeTool === 'contentgenerator' && (
+            </div>
+            <div className={activeTool === 'contentgenerator' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <LockedFeature cost={1} featureName="AI Study Content Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                   <ContentGenerator onBack={() => setActiveTool(null)} />
                 </LockedFeature>
               </ErrorBoundary>
-            )}
-            {activeTool === 'grammar' && (
+            </div>
+            <div className={activeTool === 'grammar' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <LockedFeature cost={1} featureName="AI Grammar Enhancer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                   <GrammarEnhancer onBack={() => setActiveTool(null)} />
                 </LockedFeature>
               </ErrorBoundary>
-            )}
-            {activeTool === 'summariser' && (
+            </div>
+            <div className={activeTool === 'summariser' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <LockedFeature cost={1} featureName="AI Text Summarizer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                   <Summariser onBack={() => setActiveTool(null)} />
                 </LockedFeature>
               </ErrorBoundary>
-            )}
-
-            {activeTool === 'calculator' && (
+            </div>
+            <div className={activeTool === 'calculator' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <Calculator 
                   onBack={() => setActiveTool(null)} 
                   onNavigateToTab={(tab) => {
                     setActiveTab(tab);
-                    setActiveTool(null);
                   }} 
                 />
               </ErrorBoundary>
-            )}
-            {activeTool === 'questiongenerator' && (
+            </div>
+            <div className={activeTool === 'questiongenerator' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                   <QuestionGenerator 
                     onBack={() => setActiveTool(null)} 
                     onNavigateToTab={(tab) => {
                       setActiveTab(tab);
-                      setActiveTool(null);
                     }} 
                   />
                 </LockedFeature>
               </ErrorBoundary>
-            )}
-            {activeTool === 'dailytrivia' && (
+            </div>
+            <div className={activeTool === 'dailytrivia' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <DailyTrivia onBack={() => setActiveTool(null)} />
               </ErrorBoundary>
-            )}
-            {activeTool === 'livetutorsearch' && (
+            </div>
+            <div className={activeTool === 'livetutorsearch' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <LiveTutorSearch onBack={() => setActiveTool(null)} />
               </ErrorBoundary>
-            )}
-            {activeTool === 'mistakevault' && (
+            </div>
+            <div className={activeTool === 'mistakevault' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <MistakeVault onBack={() => setActiveTool(null)} />
               </ErrorBoundary>
-            )}
-            {activeTool === 'coinpage' && (
+            </div>
+            <div className={activeTool === 'coinpage' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <CoinPage 
                   isVip={isVip}
@@ -1196,22 +1270,20 @@ export default function App() {
                   onSelectTool={(tool) => {
                     if (tool === 'tab:scanner') {
                       setActiveTab('scanner');
-                      setActiveTool(null);
                     } else if (tool === 'tab:aitutor') {
                       setActiveTab('aitutor');
-                      setActiveTool(null);
                     } else {
                       setActiveTool(tool);
                     }
                   }} 
                 />
               </ErrorBoundary>
-            )}
-            {activeTool === 'streakpage' && (
+            </div>
+            <div className={activeTool === 'streakpage' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
                 <StreakDetailsPage onBack={() => setActiveTool(null)} />
               </ErrorBoundary>
-            )}
+            </div>
           </Suspense>
         </div>
 
@@ -1246,40 +1318,42 @@ export default function App() {
         </div>
       </main>
 
-      {activeTool === null && (
-        <nav className="absolute bottom-0 w-full border-t pb-safe z-20 transition-all duration-300 bg-white/90 border-zinc-200/60 backdrop-blur-2xl">
-          <div className="flex justify-around items-center px-2 py-0.5">
-            <NavItem 
-              icon={<Home className="w-5 h-5" />} 
-              label="Home" 
-              isActive={activeTab === 'notes'} 
-              onClick={() => setActiveTab('notes')} 
-              isLightTheme={!isDarkMode}
-            />
-            <NavItem 
-              icon={<Camera className="w-5 h-5" />} 
-              label="Scan" 
-              isActive={activeTab === 'scanner'} 
-              onClick={() => setActiveTab('scanner')} 
-              isLightTheme={!isDarkMode}
-            />
-            <NavItem 
-              icon={<Sparkles className="w-5 h-5" />} 
-              label="Tutor" 
-              isActive={activeTab === 'aitutor'} 
-              onClick={() => setActiveTab('aitutor')} 
-              isLightTheme={!isDarkMode}
-            />
-            <NavItem 
-              icon={<UserCircle className="w-5 h-5" />} 
-              label="Profile" 
-              isActive={activeTab === 'profile'} 
-              onClick={() => setActiveTab('profile')} 
-              isLightTheme={!isDarkMode}
-            />
-          </div>
-        </nav>
-      )}
+      {/* Bottom nav is always visible — tools overlay on top via absolute positioning.
+           Tapping another tab while a tool is open hides the tool's tab but keeps it mounted. */}
+      <nav className="absolute bottom-0 w-full border-t pb-safe z-20 transition-all duration-300 bg-white/90 border-zinc-200/60 backdrop-blur-2xl">
+        <div className="flex justify-around items-center px-2 py-0.5">
+          <NavItem 
+            icon={<Home className="w-5 h-5" />} 
+            label="Home" 
+            isActive={activeTab === 'notes'} 
+            onClick={() => {
+              setActiveTab('notes');
+            }} 
+            isLightTheme={!isDarkMode}
+          />
+          <NavItem 
+            icon={<Camera className="w-5 h-5" />} 
+            label="Scan" 
+            isActive={activeTab === 'scanner'} 
+            onClick={() => setActiveTab('scanner')} 
+            isLightTheme={!isDarkMode}
+          />
+          <NavItem 
+            icon={<Sparkles className="w-5 h-5" />} 
+            label="Tutor" 
+            isActive={activeTab === 'aitutor'} 
+            onClick={() => setActiveTab('aitutor')} 
+            isLightTheme={!isDarkMode}
+          />
+          <NavItem 
+            icon={<UserCircle className="w-5 h-5" />} 
+            label="Profile" 
+            isActive={activeTab === 'profile'} 
+            onClick={() => setActiveTab('profile')} 
+            isLightTheme={!isDarkMode}
+          />
+        </div>
+      </nav>
 
       <AnimatePresence>
         {showVipModal && !isVip && (

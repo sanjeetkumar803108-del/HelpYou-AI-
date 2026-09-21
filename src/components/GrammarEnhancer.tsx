@@ -13,6 +13,7 @@ import { deductCoins, getCoins } from '../utils/coins';
 import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
+import { getUserProfileData } from '../utils/profile';
 import { compressImage } from '../utils/imageCompressor';
 import { generateNotesPDFBlob } from '../lib/pdfExporter';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
@@ -243,11 +244,18 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
     setFixes([]);
 
     try {
-      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
+      const profile = getUserProfileData();
       const response = await fetch(getApiUrl('/api/grammar-enhance'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText, mode, gradeLevel, images: uploadedImages }),
+        body: JSON.stringify({ 
+          text: inputText, 
+          mode, 
+          gradeLevel: profile.gradeLevel, 
+          stream: profile.stream,
+          country: profile.country,
+          images: uploadedImages 
+        }),
         signal: controller.signal
       });
       

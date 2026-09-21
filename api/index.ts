@@ -378,9 +378,94 @@ function extractUserQuery(params: any): string {
   }
   return "";
 }
+/**
+ * 4-Tier Pedagogical Calibration Engine:
+ * Strictly maps any student grade/academic level string to concrete vocabulary tiers,
+ * sentence length constraints, mathematical limits, and analogy rules so HelpYou AI
+ * outputs never sound generic or misaligned with the student's real-world grade.
+ */
+function getGradePedagogicalDirective(gradeLevel?: string, stream?: string, country?: string): string {
+  const g = (gradeLevel || '').toLowerCase().trim();
 
+  let tier = 'tier3';
+  let tierTitle = "Upper High School / Pre-College (Grades 11–12 / AP / IB / A-Levels / Senior)";
 
+  if (
+    g.includes('6th') || g.includes('7th') || g.includes('8th') ||
+    g.includes('middle') || g.includes('junior high') ||
+    g.includes('grade 6') || g.includes('grade 7') || g.includes('grade 8') ||
+    g.includes('class 6') || g.includes('class 7') || g.includes('class 8')
+  ) {
+    tier = 'tier1';
+    tierTitle = "Middle School (Grades 6–8 / Ages 11–14)";
+  } else if (
+    (g.includes('9th') || g.includes('10th') || g.includes('freshman') || g.includes('sophomore') ||
+     g.includes('grade 9') || g.includes('grade 10') || g.includes('class 9') || g.includes('class 10') ||
+     g.includes('gcse') || g.includes('secondary')) && !g.includes('college') && !g.includes('university')
+  ) {
+    tier = 'tier2';
+    tierTitle = "Early High School (Grades 9–10 / Ages 14–16 / GCSE / Freshman-Sophomore)";
+  } else if (
+    g.includes('college') || g.includes('undergrad') || g.includes('university') ||
+    g.includes('bachelor') || g.includes('degree') || g.includes('graduate') ||
+    g.includes('masters') || g.includes('phd')
+  ) {
+    tier = 'tier4';
+    tierTitle = "College / Undergraduate Level (University & Higher Education)";
+  } else {
+    tier = 'tier3';
+    tierTitle = "Upper High School / Pre-College (Grades 11–12 / Junior-Senior / AP / IB / A-Levels / CBSE 11-12)";
+  }
 
+  const streamInfo = stream ? `Stream/Track: ${stream}` : 'Track: General Academic';
+  const countryInfo = country ? `Curriculum: ${country}` : 'Curriculum: Global Academic';
+
+  let tierGuidelines = '';
+
+  if (tier === 'tier1') {
+    tierGuidelines = `[TIER 1: MIDDLE SCHOOL (GRADES 6–8) MANDATORY PEDAGOGY]:
+• AUDIENCE: 11 to 14-year-old student.
+• VOCABULARY: Use simple, familiar everyday words (6th-8th grade level). STRICTLY FORBIDDEN to use college/academic jargon without immediately explaining it in child-friendly words (e.g. say "speed up" instead of "catalyze", "energy producer" instead of "oxidative phosphorylation", "compare" instead of "juxtapose").
+• SENTENCE LENGTH: Keep sentences short and punchy (10–15 words per sentence max). Avoid dense paragraphs.
+• MATH & SCIENCE DEPTH: Stick to arithmetic, basic fractions, percentages, and simple 1-variable pre-algebra. Show every single step with zero leaps. NEVER use calculus, matrices, complex vectors, or multi-step organic mechanisms.
+• REAL-WORLD ANALOGIES: Mandatory! Explain every core concept using everyday metaphors: pizza slices, video games, sports, superheroes, smartphones, pets, or school playground situations.
+• TONE: Friendly, enthusiastic, encouraging, and clear.`;
+  } else if (tier === 'tier2') {
+    tierGuidelines = `[TIER 2: EARLY HIGH SCHOOL (GRADES 9–10 / GCSE) MANDATORY PEDAGOGY]:
+• AUDIENCE: 14 to 16-year-old high school student.
+• VOCABULARY: Introduce standard foundational high-school terms (e.g., 'acceleration', 'photosynthesis', 'thesis statement', 'stoichiometry'), but ALWAYS accompany any newly introduced term with a crisp 1-sentence definition.
+• STRUCTURE: Clear, structured paragraphs with strong topic sentences and logical flow.
+• MATH & SCIENCE DEPTH: Algebra 1 & 2, basic trigonometry (sin, cos, tan), linear/quadratic equations, and basic kinematics ($v = u + at$). State the governing formula first in LaTeX ($...$), then substitute values step-by-step.
+• COMMON EXAM TRAPS: Highlight common 9th/10th grade student mistakes (e.g., sign errors with negative numbers, forgetting units like $m/s^2$, confusing mass vs weight).
+• TONE: Supportive academic coach, building solid conceptual foundations for board/high-school exams.`;
+  } else if (tier === 'tier3') {
+    tierGuidelines = `[TIER 3: UPPER HIGH SCHOOL / PRE-COLLEGE (GRADES 11–12 / AP / IB / A-LEVELS) MANDATORY PEDAGOGY]:
+• AUDIENCE: 16 to 18-year-old college-bound or board exam student.
+• VOCABULARY: Rigorous, formal academic terminology (e.g., 'chemical equilibrium perturbation', 'electronegativity gradients', 'counter-argument synthesis', 'rhetorical strategies').
+• STRUCTURE: Advanced logical arguments with nuanced cause-and-effect mechanisms.
+• MATH & SCIENCE DEPTH: Single-variable calculus (derivatives, integrals, limits), logarithmic expansions, vector mechanics, and organic reaction mechanisms with intermediate states, all rendered with LaTeX.
+• EXAM RUBRICS & TRAPS: Focus on AP/IB/Board scoring criteria, distractor options in exam questions, and full-credit solution formats.
+• TONE: Intellectually stimulating, academically rigorous, and authoritative.`;
+  } else {
+    tierGuidelines = `[TIER 4: COLLEGE / UNDERGRADUATE MANDATORY PEDAGOGY]:
+• AUDIENCE: University undergraduate or graduate student.
+• VOCABULARY: Scholarly prose, publication-grade academic discourse, formal theoretical models, and precise discipline nomenclature.
+• STRUCTURE: Academic journal-level clarity, critical deconstruction, and evidence-based synthesis.
+• MATH & SCIENCE DEPTH: Multi-variable calculus, differential equations, linear algebra matrices, algorithmic complexity ($O(n \\log n)$), rigorous formal proofs, and boundary conditions.
+• REAL-WORLD APPLICATION: Bridge theory with cutting-edge industry implementations, laboratory methodologies, or research paradigms.
+• TONE: Scholarly, collegiate, and uncompromising in technical depth.`;
+  }
+
+  return `=======================================================
+STUDENT GRADE PEDAGOGICAL CALIBRATION (${tierTitle}):
+Active Profile: Grade: ${gradeLevel || 'Standard'} | ${streamInfo} | ${countryInfo}
+
+${tierGuidelines}
+
+CRITICAL ANTI-GENERIC MANDATE:
+Do NOT output a generic, one-size-fits-all answer. Your tone, depth, vocabulary, and explanation complexity MUST authentically and recognizably reflect this specific student's grade (${gradeLevel || 'Selected Level'}).
+=======================================================`;
+}
 
 async function safeGenerateContent(params: any, retries = 3, delay = 200): Promise<any> {
   // Extract student profile data if provided
@@ -493,16 +578,13 @@ async function safeGenerateContent(params: any, retries = 3, delay = 200): Promi
     if (learningStyle) profileLines.push(`• Learning Style Preference: ${learningStyle}`);
     if (profileContext && typeof profileContext === 'string') profileLines.push(`• Profile Background: ${profileContext}`);
 
-    if (profileLines.length > 0) {
+    if (gradeLevel || profileLines.length > 0) {
+      const pedagogicalDirective = getGradePedagogicalDirective(gradeLevel, stream, country || region);
       const studentProfileInstruction = `STUDENT PROFILE & PERSONALIZATION DIRECTIVE:
 You are actively interacting with a student who has the following academic profile:
-${profileLines.join('\n')}
+${profileLines.length > 0 ? profileLines.join('\n') : `• Academic Level / Grade: ${gradeLevel || 'Standard'}`}
 
-MANDATORY ADAPTATION RULES:
-1. PEDAGOGICAL CALIBRATION: Calibrate conceptual depth, mathematical rigor, sentence complexity, and vocabulary precisely to this student's grade level (${gradeLevel || 'Standard'}). Never use graduate-level jargon if the student is in middle/high school, and never over-simplify or talk down to a college student.
-2. STREAM RELEVANCE: When providing real-world examples, analogies, applications, or problem setups, tailor them to their academic track (${stream || 'General Academic'}). (e.g. use physics/engineering examples for STEM, biological/clinical examples for Pre-Med, commerce/market examples for Business, social/literary contexts for Humanities).
-3. CURRICULUM ACCURACY: Respect regional standards (${country || region || 'Global'}). Use terminology, units, and conventions aligned with standard regional curricula (e.g. AP/SAT in US, A-Levels/GCSE in UK, HSC/VCE in Australia, IB in International).
-4. EMPOWERING TONE: Maintain an encouraging, intellectually stimulating, and supportive mentor persona.`;
+${pedagogicalDirective}`;
 
       const parts = clonedParams.config.systemInstruction.parts || [];
       const text = parts[0]?.text || "";
@@ -510,13 +592,6 @@ MANDATORY ADAPTATION RULES:
         { text: `${studentProfileInstruction}\n\n${text}`.trim() },
         ...parts.slice(1)
       ];
-    }
-
-    // ⚡ SPEED OPTIMIZATION: Disable internal "thinking" mode on Gemini flash models.
-    // thinkingBudget=0 skips the extended reasoning phase which adds 5-15s of latency.
-    // This is safe for EdTech Q&A — fast direct answers are better for students.
-    if (!clonedParams.config.thinkingConfig) {
-      clonedParams.config.thinkingConfig = { thinkingBudget: 0 };
     }
   }
 
@@ -537,20 +612,20 @@ MANDATORY ADAPTATION RULES:
     params.model.includes("clip")
   ));
 
-  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash") : params.model;
+  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.5-flash-lite");
+  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
+    requestedModel = "gemini-3.5-flash-lite";
+  }
   let modelsToTry = isAudioModel
-    ? [requestedModel, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp"].filter(Boolean)
+    ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean)
     : isSpecialtyModel 
       ? [requestedModel] 
       : [
-          requestedModel || "gemini-2.5-flash",
-          "gemini-2.5-flash",
-          "gemini-2.0-flash",
-          "gemini-1.5-flash",
-          "gemini-2.0-flash-lite",
-          "gemini-2.5-pro",
-          "gemini-1.5-pro",
-          "gemini-3.1-flash-lite"
+          requestedModel,
+          "gemini-3.5-flash-lite",
+          "gemini-flash-lite-latest",
+          "gemini-3.5-flash",
+          "gemini-3.6-flash"
         ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -592,6 +667,11 @@ MANDATORY ADAPTATION RULES:
         if (currentParams.config.systemInstruction.parts) {
           currentParams.config.systemInstruction.parts = currentParams.config.systemInstruction.parts.map((p: any) => ({ ...p }));
         }
+      }
+
+      // Flash-lite models do NOT support thinkingConfig and fail with 400 INVALID_ARGUMENT if present
+      if (model.includes("lite") || model.includes("flash-lite")) {
+        delete currentParams.config.thinkingConfig;
       }
     }
     
@@ -701,8 +781,13 @@ app.post("/api/scan", upload.single("image"), async (req, res) => {
     
     const profileContext = req.body.profileContext;
     const gradeLevel = req.body.gradeLevel;
+    const stream = req.body.stream || req.body.academic_stream;
+    const country = req.body.country || req.body.academic_country;
+    const pedagogicalDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const textPart = {
-      text: `You are "Magic AI Tutor", an elite, highly intelligent, encouraging educational assistant, SAT/ACT Expert, and Master Educator.
+      text: `${pedagogicalDirective}
+
+You are "Magic AI Tutor", an elite, highly intelligent, encouraging educational assistant, SAT/ACT Expert, and Master Educator.
 You are analyzing a full-screen, uncropped photo. Scan the image to locate the primary mathematical equation, science question, diagram, or text problem. Ignore any background noise, hands, or irrelevant objects. Focus solely on extracting and solving the main academic problem visible in the image.
 ${profileContext ? `\nUSER PROFILE CONTEXT:\n${profileContext}\n` : ''}
 
@@ -756,7 +841,7 @@ Before generating your response, you MUST analyze the extracted academic problem
   "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |"
 }
 
-3. RULE 3 (General Theory/Biology/History):
+3. RULE 3 (General Academic Explanations):
 - Use this for general explanations, descriptive essays, conceptual questions, diagrams, small talk, or conversational queries (e.g., "Explain photosynthesis", "Who was George Washington?", "Why is the sky blue?").
 - Set "format_type" to "markdown".
 - Output structured, rich text using standard markdown headings (###) and bullet points. It must NEVER use steps or sequential solver cards for this.
@@ -785,6 +870,8 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
     
     const response = await safeGenerateContent({
       gradeLevel,
+      stream,
+      country,
       model: "gemini-3.5-flash-lite",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
@@ -852,8 +939,12 @@ Before generating your response, you MUST analyze the user's query and categoriz
 
 --- CATEGORIZATION & ROUTING RULES ---
 
-1. RULE 1 (Math & Physics Numerical Calculations / Step-by-Step STEM):
-- Use this if the query is a mathematical equation, calculation, arithmetic, trigonometry, calculus, physics numerical, chemical reaction, derivation, or problem requiring step-by-step sequential solving.
+1. RULE 1 (STEM, Science, Math, Physics, Chemistry, Biology Concepts & Numerical Calculations):
+- MANDATORY FOR ALL ACADEMIC TOPICS, SCIENCE, STEM, CONCEPTS (e.g. 'Quantum Physics', 'Photosynthesis', 'Thermodynamics', 'Atomic Structure', 'Calculus', 'Kinematics'), AND NUMERICAL PROBLEM SOLVING.
+- Structure your response into 2 to 4 high-yield pedagogical steps:
+  * Step 1: Core Concept, Definition & Intuitive Real-Life Hook
+  * Step 2: Underlying Mechanism, Laws, Working Principles & Equations
+  * Step 3: Real-World Applications, Why We Care, or Final Boxed Result
 - MANDATORY 3-PASS INTERNAL VERIFICATION PROTOCOL (0% HALLUCINATION & ZERO-ERROR GUARANTEE):
   Before generating your final response, you MUST execute a strict 3-pass internal verification:
   * PASS 1 (Expression & Question Anatomy): Deconstruct every term, sign (+/-), parenthesis, exponent, radical, fraction, constant, and boundary condition without dropping or modifying ANY symbol. In nested expressions (e.g. sin(90 * cos(90 / 6))), isolate innermost operations first. Default to Degrees (°) for standard numericals unless explicitly in Radians or containing π. In Definite Integrals with Limits:
@@ -866,17 +957,20 @@ Before generating your response, you MUST analyze the user's query and categoriz
   * DEDICATED CENTERED BLOCK FORMULAS: Every equation, substitution, or derivation must be on its OWN standalone centered block ($$ ... $$) on a separate line. Never cram equations together.
   * NO BULLET SYMBOLS: Do NOT use bullet signs (no "•", no "-", no "*", no "1.", no "2."). Arrange points cleanly and spacious using blank lines (\\n\\n).
   * FINAL BOXED ANSWER: On the final step, ALWAYS provide both the exact analytical closed form and the boxed numerical value using \\boxed{...} (e.g. $$\\boxed{I \\approx 0.845254}$$).
+  * CRITICAL NO DUPLICATE FINAL ANSWER RULE: In the final calculation step, NEVER write the final answer twice in a row (e.g. NEVER write "1 + 4 = 5 \\boxed{5}" or "= 5 \\boxed{5}"). Put the final result directly and only inside the LaTeX box: "$$1 + 4 = \\boxed{5}$$" or "$$\\text{Final Answer} = \\boxed{5}$$".
   * MAXIMUM CLARITY & BREATHING ROOM: Ensure generous vertical spacing so mobile students can effortlessly read and absorb every single line without confusion.
 - Set "format_type" to "steps".
-- Populate the "solution_steps" array with each logical phase of the sequential solution.
+- Populate the "solution_steps" array with each logical phase of the concept or calculation.
 - Output strictly in this format:
 {
-  "topic_title": "Subject or Topic of the problem",
+  "topic_title": "Subject or Topic of the problem / concept",
   "format_type": "steps",
+  "key_formula": "The primary theoretical formula, governing law, or core identity in LaTeX (e.g. $$E = h\\nu$$ or $$\\sin(A \\pm B) = \\sin A \\cos B \\pm \\cos A \\sin B$$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misconceptions students must avoid in exams",
   "solution_steps": [
     {
       "step_id": 1,
-      "title": "Clear concise step title",
+      "title": "Clear concise step title (e.g. 'Core Concept & Hook')",
       "content": "A detailed, encouraging explanation with formulas and step-by-step calculations. Whenever generating mathematical numbers, formulas, symbols, or equations, you must strictly wrap them in LaTeX delimiters. Use single '$' for inline math and double '$$' for block math equations.",
       "is_final_answer": false
     }
@@ -895,11 +989,11 @@ Before generating your response, you MUST analyze the user's query and categoriz
   "markdown_content": "### Comparison Table\n\n| Parameter | Category A | Category B |\n|---|---|---|\n| Detail 1 | Description | Description |"
 }
 
-3. RULE 3 (General Theory/Biology/History):
-- Use this for general explanations, descriptive essays, conceptual questions, small talk, or conversational queries (e.g., "Explain photosynthesis", "Who was George Washington?", "Why is the sky blue?").
+3. RULE 3 (Humanities, Case Studies & Non-STEM Essays):
+- Use this for general descriptive essays, humanities, case studies, historical events, or non-STEM conceptual questions (e.g., "French Revolution", "Who was George Washington?").
 - Set "format_type" to "markdown".
-- Output structured, rich text using standard markdown headings (###) and bullet points. It must NEVER use steps or sequential solver cards for this.
-- Place the entire response in the "markdown_content" field. Do NOT use the "solution_steps" array.
+- Output structured, rich text using standard markdown headings (###) and bullet points.
+- Place the entire response in the "markdown_content" field.
 - Output strictly in this format:
 {
   "topic_title": "Concept: [Topic Title]",
@@ -984,10 +1078,16 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
       normalizedMsg.includes("who is")
     );
 
+    const academicTrack = (req.body.stream !== 'true' && req.body.stream !== true ? req.body.stream : null) || req.body.academicStream || req.body.academic_stream || req.body.track;
+    const country = req.body.country || req.body.academic_country;
+    const gradePedagogicalDirective = getGradePedagogicalDirective(gradeLevel, academicTrack, country);
+
     // Get base system instruction
     let systemInstruction = "";
     if (isEvaluation === 'true' || isEvaluation === true) {
-      systemInstruction = `You are a strict academic examiner. DO NOT act as a standard tutor. Your SOLE purpose is to grade the student's answer based on their grade level. YOU MUST output strictly using this format:
+      systemInstruction = `${gradePedagogicalDirective}
+
+You are a strict academic examiner. DO NOT act as a standard tutor. Your SOLE purpose is to grade the student's answer based on their grade level (${gradeLevel || 'Standard'}). YOU MUST output strictly using this format:
 
 ## Grade-Level Assessment
 [Pass/Fail/Needs Improvement for this grade level]
@@ -1001,18 +1101,14 @@ app.post("/api/chat", upload.single("image"), async (req, res) => {
 **[Total Score] / 10**
 
 ## Examiner Feedback & Ideal Solution
-[Explain mistakes and provide the perfect 10/10 mathematical solution]`;
+[Explain mistakes and provide the perfect 10/10 mathematical solution tailored to their grade level]`;
     } else {
       systemInstruction = customSystemInstruction || getSystemInstruction(mode, targetLanguage);
       if (profileContext) {
         systemInstruction += "\n\nUSER PROFILE CONTEXT:\n" + profileContext;
       }
 
-      // Inject grade level instruction if provided
-      if (gradeLevel) {
-        const gradeInstruction = `CRITICAL INSTRUCTION: The user you are interacting with is currently in Grade: ${gradeLevel}. You MUST strictly adapt your entire response, vocabulary, conceptual complexity, sentence structure, and examples to perfectly match the comprehension level of a ${gradeLevel} student. Absolutely DO NOT use advanced jargon, higher-level academic concepts, or complex language that exceeds this specific grade level. Keep the tone encouraging and age-appropriate.`;
-        systemInstruction = `${gradeInstruction}\n\n${systemInstruction}`;
-      }
+      systemInstruction = `${gradePedagogicalDirective}\n\n${systemInstruction}`;
 
       // Inject current date & time
       systemInstruction += `\n\nThe current date and time is: ${new Date().toISOString()}. You must treat this as the absolute present moment.`;
@@ -1113,19 +1209,25 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       for (const model of modelsToTry) {
         try {
           const aiClient = getAI();
-          responseStream = await aiClient.models.generateContentStream({
+          const streamConfig: any = { 
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
+            maxOutputTokens: 8192,
+            temperature: 0.2,
+            candidateCount: 1
+          };
+          if (model.includes("thinking")) {
+            streamConfig.thinkingConfig = { thinkingBudget: 0 };
+          }
+          const streamPromise = aiClient.models.generateContentStream({
             model,
             contents,
-            config: { 
-              systemInstruction: { parts: [{ text: systemInstruction }] },
-              responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
-              maxOutputTokens: 8192,
-              temperature: 0.2,
-              candidateCount: 1,
-              thinkingConfig: { thinkingBudget: 0 },
-              
-            }
+            config: streamConfig
           });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Stream start timeout for model ${model}`)), 12000)
+          );
+          responseStream = await Promise.race([streamPromise, timeoutPromise]);
           successModel = model;
           break;
         } catch (err: any) {
@@ -1139,10 +1241,11 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
                                      errStr.includes("unavailable") ||
                                      errStr.includes("overloaded") ||
                                      errStr.includes("demand") ||
-                                     errStr.includes("temporary");
+                                     errStr.includes("temporary") ||
+                                     errStr.includes("timeout");
           
           if (isRateLimitOrQuota) {
-            console.warn(`[chat stream] Model ${model} hit rate-limit, 503, or quota constraint:`, errStr);
+            console.warn(`[chat stream] Model ${model} hit constraint:`, errStr);
             rateLimitedModels[model] = Date.now();
           } else {
             console.error(`Stream start failed for model ${model}:`, err);
@@ -1150,8 +1253,36 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         }
       }
 
+      // If streaming could not be initialized across models, gracefully fall back to safeGenerateContent
       if (!responseStream) {
-        return res.status(500).json({ error: "Failed to initialize AI response stream." });
+        console.warn("[/api/chat] Streaming failed to initialize across models. Gracefully falling back to safeGenerateContent...");
+        try {
+          const fallbackRes = await safeGenerateContent({
+            gradeLevel,
+            stream: academicTrack,
+            country,
+            model: "gemini-3.5-flash-lite",
+            contents,
+            config: {
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
+              maxOutputTokens: 8192,
+              temperature: 0.2,
+              candidateCount: 1
+            }
+          });
+          const text = fallbackRes.text || "";
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+          res.flushHeaders();
+          res.write(`data: ${JSON.stringify({ text })}\n\n`);
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        } catch (fbErr: any) {
+          return res.status(500).json({ error: fbErr.message || "Failed to initialize AI response stream." });
+        }
       }
 
       res.setHeader('Content-Type', 'text/event-stream');
@@ -1159,24 +1290,68 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       res.setHeader('Connection', 'keep-alive');
       res.flushHeaders();
 
+      // Continuous 3-second heartbeat to prevent TCP socket drops (ECONNRESET)
+      const heartbeatTimer = setInterval(() => {
+        if (!res.writableEnded) {
+          try {
+            res.write(": keep-alive\n\n");
+          } catch (_) {}
+        }
+      }, 3000);
+
+      let accumulatedText = "";
       try {
         for await (const chunk of responseStream) {
           const text = chunk.text || "";
           if (text) {
+            accumulatedText += text;
             res.write(`data: ${JSON.stringify({ text })}\n\n`);
           }
         }
+        clearInterval(heartbeatTimer);
         res.write("data: [DONE]\n\n");
         res.end();
         return;
       } catch (err: any) {
-        console.error("Error during streaming:", err);
-        res.write(`data: ${JSON.stringify({ error: err.message || "Stream interrupted" })}\n\n`);
+        clearInterval(heartbeatTimer);
+        console.warn("[/api/chat] Stream interrupted midway (e.g. 503/timeout/network), attempting automatic seamless recovery with safeGenerateContent...", err.message);
+
+        try {
+          const recoveryRes = await safeGenerateContent({
+            gradeLevel,
+            stream: academicTrack,
+            country,
+            model: "gemini-3.5-flash",
+            contents,
+            config: {
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              responseMimeType: (isEvaluation === 'true' || isEvaluation === true) ? "text/plain" : "application/json",
+              maxOutputTokens: 8192,
+              temperature: 0.2,
+              candidateCount: 1
+            }
+          });
+
+          const recoveryText = recoveryRes.text || "";
+          if (recoveryText) {
+            res.write(`data: ${JSON.stringify({ text: recoveryText, isReplacement: true })}\n\n`);
+            res.write("data: [DONE]\n\n");
+            res.end();
+            return;
+          }
+        } catch (recoveryErr: any) {
+          console.error("Stream recovery failed:", recoveryErr);
+        }
+
+        res.write(`data: ${JSON.stringify({ error: err.message || "Stream interrupted", partialText: accumulatedText, canResume: true })}\n\n`);
         res.end();
         return;
       }
     } else {
       const response = await safeGenerateContent({
+        gradeLevel,
+        stream: academicTrack,
+        country,
         model: "gemini-3.5-flash-lite",
         contents,
         config: { 
@@ -1209,18 +1384,23 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     const action = req.body.action || 'summarize';
     const textInput = req.body.text || "";
     const gradeLevel = req.body.gradeLevel;
+    const stream = req.body.stream || req.body.academic_stream;
+    const country = req.body.country || req.body.academic_country;
     const format = req.body.format || "bullet";
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     
     if (!req.file && !textInput) {
       return res.status(400).json({ error: "No PDF file or text content provided" });
     }
 
-    let cacheKey = "";
-    if (req.file) {
-      cacheKey = crypto.createHash("sha256").update(req.file.buffer).digest("hex") + "_" + action;
-    } else {
-      cacheKey = crypto.createHash("sha256").update(Buffer.from(textInput)).digest("hex") + "_" + action;
+    if (req.file && (!req.file.buffer || req.file.buffer.length === 0)) {
+      return res.status(400).json({ error: "The uploaded file is empty. Please select a valid document." });
     }
+
+    const fileHash = req.file
+      ? crypto.createHash("sha256").update(req.file.buffer).digest("hex")
+      : crypto.createHash("sha256").update(Buffer.from(textInput)).digest("hex");
+    const cacheKey = `${fileHash}_${action}_${format}_${gradeLevel || 'std'}_${stream || ''}`;
 
     if (summaryCache.has(cacheKey)) {
       const cached = summaryCache.get(cacheKey);
@@ -1234,25 +1414,47 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     
     let extractedText = "";
     let useRawFile = false;
+    let effectiveMime = "application/pdf";
 
     if (req.file) {
-      if (action === 'flashcards-json' || action === 'flashcards') {
-        // Direct PDF upload without any local text extraction or parsing
-        useRawFile = true;
-      } else {
-        try {
-          const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
-          const pdfData = await pdf(req.file.buffer, { max: 100 });
-          
-          extractedText = pdfData.text || "";
-          // If extracted text is too short, it might be a scanned PDF or images
-          if (extractedText.trim().length < 50) {
+      const originalName = (req.file.originalname || "").toLowerCase();
+      const mime = (req.file.mimetype || "").toLowerCase();
+      const bufferHeader = req.file.buffer && req.file.buffer.length >= 4 ? req.file.buffer.slice(0, 5).toString() : "";
+      const isPdf = bufferHeader.includes("%PDF") || originalName.endsWith(".pdf") || mime.includes("pdf");
+
+      if (isPdf) {
+        effectiveMime = "application/pdf";
+        if (action === 'flashcards-json' || action === 'flashcards') {
+          // Direct PDF upload without any local text extraction or parsing
+          useRawFile = true;
+        } else {
+          try {
+            const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
+            const pdfData = await pdf(req.file.buffer, { max: 100 });
+            
+            extractedText = pdfData.text || "";
+            // If extracted text is too short, it might be a scanned PDF or images
+            if (extractedText.trim().length < 50) {
+              useRawFile = true;
+            }
+            
+            if (extractedText && extractedText.length > 300000) { extractedText = extractedText.slice(0, 300000); }
+          } catch (parseError) {
+            console.warn("Failed to parse PDF locally with pdf-parse, will fallback to raw bytes:", parseError);
             useRawFile = true;
           }
-          
-          if (extractedText && extractedText.length > 200000) { extractedText = extractedText.slice(0, 200000); }
-        } catch (parseError) {
-          console.warn("Failed to parse PDF locally with pdf-parse, will fallback to raw bytes:", parseError);
+        }
+      } else {
+        // Plain text, markdown, csv, or doc
+        try {
+          const rawStr = req.file.buffer.toString("utf-8");
+          if (rawStr && rawStr.trim().length > 0) {
+            extractedText = rawStr.slice(0, 300000);
+          } else {
+            useRawFile = true;
+            effectiveMime = req.file.mimetype || "application/octet-stream";
+          }
+        } catch (_) {
           useRawFile = true;
         }
       }
@@ -1373,63 +1575,97 @@ IF FORMAT IS "Explain Like I'm 5":
       promptText += "\n\nCRITICAL FORMATTING INSTRUCTIONS: Output ONLY standard, plain ASCII-compatible conversational text. You are STRICTLY FORBIDDEN from using emojis, LaTeX math blocks, special characters, or markdown formatting (like bold, italics, bullet points, or hashtags) as they interfere with text-to-speech rendering.";
     }
 
-    const textPart = { text: promptText };
+    const textPart = { text: `${gradeDirective}\n\n${promptText}` };
     
-    let contentsPayload: any;
+    let contentsPayload: any[];
     if (useRawFile && req.file) {
       // Prioritize raw PDF for better OCR/extraction if text extraction failed or is weak
       const pdfPart = {
         inlineData: {
-          mimeType: req.file.mimetype || "application/pdf",
+          mimeType: effectiveMime,
           data: req.file.buffer.toString("base64"),
         },
       };
-      contentsPayload = { parts: [pdfPart, textPart] };
+      contentsPayload = [{ parts: [pdfPart, textPart] }];
     } else if (extractedText && extractedText.trim().length > 10) {
       // Use the extracted clean text for efficiency if available
       const documentContentPart = { text: `DOCUMENT CONTENT:\n${extractedText}` };
-      contentsPayload = { parts: [documentContentPart, textPart] };
+      contentsPayload = [{ parts: [documentContentPart, textPart] }];
     } else if (req.file) {
       // Absolute fallback: raw file
       const pdfPart = {
         inlineData: {
-          mimeType: req.file.mimetype || "application/pdf",
+          mimeType: effectiveMime,
           data: req.file.buffer.toString("base64"),
         },
       };
-      contentsPayload = { parts: [pdfPart, textPart] };
+      contentsPayload = [{ parts: [pdfPart, textPart] }];
     } else {
-      return res.status(400).json({ error: "Text content is too short to process." });
+      return res.status(400).json({ error: "Document content is too short or empty to process." });
     }
     
-    const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: contentsPayload,
-      config: {
-        responseMimeType: responseMimeType
+    // Model fallback chain for summarize — try faster models first, fall back on rate-limit or error
+    const summarizeModels = [
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+    ];
+    let summaryText = "";
+    let summarizeError: any = null;
+    for (const model of summarizeModels) {
+      try {
+        const response = await safeGenerateContent({
+          gradeLevel,
+          stream,
+          country,
+          model,
+          contents: contentsPayload,
+          config: {
+            responseMimeType: responseMimeType,
+            maxOutputTokens: 8192,
+            temperature: 0.3,
+          }
+        });
+        summaryText = response.text || "";
+        if (summaryText.trim().length > 0) {
+          summarizeError = null;
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`[summarize] Model ${model} failed, trying next fallback:`, err?.message || err);
+        summarizeError = err;
       }
-    });
+    }
+
+    if (summarizeError && !summaryText) {
+      throw summarizeError;
+    }
     
-    const summaryText = response.text || "";
-    
+    const outputText = summaryText || "";
     // Handle JSON response for flashcards-json
     if (action === 'flashcards-json') {
-      const flashcards = safeParseJSON(summaryText, 'array');
+      let flashcards = safeParseJSON(outputText, 'array');
+      if (!Array.isArray(flashcards) || flashcards.length === 0) {
+        const parsed = safeParseJSON(outputText, 'object');
+        if (parsed && Array.isArray(parsed.flashcards)) {
+          flashcards = parsed.flashcards;
+        }
+      }
       summaryCache.set(cacheKey, flashcards);
       return res.json({ flashcards });
     }
 
-    summaryCache.set(cacheKey, summaryText);
-    res.json({ text: summaryText });
+    summaryCache.set(cacheKey, outputText);
+    res.json({ text: outputText });
   } catch (error: any) {
-    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
+    if (error.message === "GEMINI_QUOTA_EXHAUSTED" || String(error.message).includes("429")) {
        return res.status(429).json({ 
-         error: "QUOTA_EXCEEDED",
-         text: `⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded\n\nThe Gemini API is currently experiencing rate limits or has exceeded its quota. Please try again in 60 seconds.`
+         error: "API quota limit exceeded for PDF summarization. Please try again in 60 seconds."
        });
      }
     console.error("Summarize error:", error);
-    res.status(500).json({ error: error.message || "Failed to generate summary" });
+    res.status(500).json({ error: error.message || "Failed to generate summary from document" });
   }
 });
 
@@ -1505,11 +1741,7 @@ app.post("/api/tts", async (req, res) => {
 
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const text = req.body.text || req.body.essay || req.body.content || "";
-    const curriculum = req.body.curriculum;
-    const subject = req.body.subject || req.body.topic;
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const images = req.body.images;
+    const { text, curriculum, subject, gradeLevel, stream, country, images } = req.body;
     
     const wordCount = text ? text.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
     
@@ -1521,6 +1753,7 @@ app.post("/api/grade-essay", async (req, res) => {
     
     const curr = curriculum || 'AP (Advanced Placement)';
     const subj = subject || 'General Essay';
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream || curr, country);
 
     let rubricInstructions = '';
     let scoreHeader = '';
@@ -1557,10 +1790,19 @@ IB CRITERIA SCORE: [Score]/34 (Focus: [FocusScore]/10, Analysis: [AnalysisScore]
 Your score output must EXACTLY match this format:
 A-LEVEL GRADE: [Grade] (A*, A, B, C, D, or E) - Score: [Score]/25`;
     } else {
-      scoreHeader = 'HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: [ContentScore]/25, Style: [StyleScore]/25, Grammar: [GrammarScore]/25)';
-      rubricInstructions = `You MUST evaluate the essay using a standard high school grading rubric out of 100 points, broken down into Focus/Organization, Content/Development, Style/Sentence Structure, and Grammar/Mechanics (each 25 points).
+      const g = (gradeLevel || '').toLowerCase();
+      const isMiddleSchool = g.includes('6th') || g.includes('7th') || g.includes('8th') || g.includes('middle');
+      if (isMiddleSchool) {
+        scoreHeader = 'MIDDLE SCHOOL ESSAY SCORE: [Score]/100 (Idea & Focus: [FocusScore]/25, Supporting Details: [ContentScore]/25, Organization & Flow: [StyleScore]/25, Grammar & Spelling: [GrammarScore]/25)';
+        rubricInstructions = `You MUST evaluate the essay using a supportive Middle School 100-point rubric tailored for 6th-8th grade writing: Idea & Focus (25), Supporting Details (25), Organization & Flow (25), Grammar & Spelling (25). Do NOT penalize for lacking college-level thesis complexity; focus on clear ideas, supportive reasons, and paragraph clarity.
+Your score output must EXACTLY match this format:
+MIDDLE SCHOOL ESSAY SCORE: [Score]/100 (Idea & Focus: [FocusScore]/25, Supporting Details: [ContentScore]/25, Organization & Flow: [StyleScore]/25, Grammar & Spelling: [GrammarScore]/25)`;
+      } else {
+        scoreHeader = 'HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: [ContentScore]/25, Style: [StyleScore]/25, Grammar: [GrammarScore]/25)';
+        rubricInstructions = `You MUST evaluate the essay using a standard high school grading rubric out of 100 points, broken down into Focus/Organization, Content/Development, Style/Sentence Structure, and Grammar/Mechanics (each 25 points).
 Your score output must EXACTLY match this format:
 HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: [ContentScore]/25, Style: [StyleScore]/25, Grammar: [GrammarScore]/25)`;
+      }
     }
 
     let pointDeductionTemplate = "";
@@ -1589,10 +1831,12 @@ HIGH SCHOOL RUBRIC SCORE: [Score]/100 (Focus/Org: [FocusScore]/25, Content/Dev: 
 - Grammar & Mechanics: [Score out of 25 and technical accuracy]`;
     }
 
-    const systemInstruction = `You are a Senior Academic Examiner, Certified College Board AP Reader, and Elite Essay Assessor for the "${curr}" curriculum, specifically for "${subj}".
+    const systemInstruction = `${gradeDirective}
+
+You are a Senior Academic Examiner, Certified College Board AP Reader, and Elite Essay Assessor for the "${curr}" curriculum, specifically for "${subj}".
 Your task is to grade and provide rigorous, highly specific, actionable feedback on the student's essay.
 
-GRADE LEVEL CALIBRATION: The student is in Grade: ${gradeLevel}. Calibrate your explanations, tone, and examples so they are encouraging, academically rigorous, and crystal-clear.
+GRADE LEVEL CALIBRATION: The student is in Grade: ${gradeLevel || 'Standard'}. Calibrate your explanations, tone, and examples so they are encouraging, academically rigorous, and crystal-clear for this grade level.
 
 CRITICAL GRADING RULES (STRICT COMPLIANCE REQUIRED):
 1. OFFICIAL RUBRIC SCORE HEADER:
@@ -1635,12 +1879,11 @@ ${pointDeductionTemplate}
 ### OVERALL VERDICT
 [A supportive, motivating 2-sentence summary providing a clear roadmap for their next revision.]`;
 
-    const originalModel = "gemini-3.6-flash";
     let modelsToTry = [
-        "gemini-3.1-flash-lite",
         "gemini-3.5-flash-lite",
         "gemini-3.5-flash",
         "gemini-flash-lite-latest",
+        "gemini-flash-latest",
         "gemini-3.6-flash"
       ];
     
@@ -1687,14 +1930,20 @@ ${pointDeductionTemplate}
 
     for (const model of modelsToTry) {
       try {
+        const streamConfig: any = {
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          temperature: 0.15,
+          maxOutputTokens: 8192
+        };
+        // Disable internal silent reasoning pause so tokens stream instantly and smoothly without freezing
+        if (model.includes("thinking") || model.includes("3.5") || model.includes("2.5") || model.includes("flash")) {
+          streamConfig.thinkingConfig = { thinkingBudget: 0 };
+        }
+
         streamResponse = await aiClient.models.generateContentStream({
           model,
-          contents: { parts: contentParts },
-          config: { 
-            systemInstruction: systemInstruction,
-            temperature: 0.15,
-            maxOutputTokens: 8192
-          }
+          contents: [{ parts: contentParts }],
+          config: streamConfig
         });
         break; // Successfully got the stream
       } catch (err: any) {
@@ -1720,11 +1969,13 @@ ${pointDeductionTemplate}
       }
     }
 
-    // Set streaming headers
+    // Set streaming headers with immediate flushing and no proxy buffering
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
 
     if (!streamResponse) {
       if (anyQuotaExceeded) {
@@ -1736,9 +1987,46 @@ ${pointDeductionTemplate}
       return;
     }
 
-    for await (const chunk of streamResponse) {
-      if (chunk.text) {
-        res.write(chunk.text);
+    let accumulatedOutput = "";
+    try {
+      for await (const chunk of streamResponse) {
+        if (chunk.text) {
+          accumulatedOutput += chunk.text;
+          res.write(chunk.text);
+          if (typeof (res as any).flush === 'function') {
+            (res as any).flush();
+          }
+        }
+      }
+    } catch (streamErr: any) {
+      console.warn("[/api/grade-essay] Stream interrupted midway, attempting recovery...", streamErr?.message);
+      try {
+        const recoveryRes = await safeGenerateContent({
+          gradeLevel,
+          stream,
+          country,
+          model: "gemini-3.5-flash-lite",
+          contents: [{
+            parts: [
+              ...contentParts,
+              ...(accumulatedOutput ? [{ text: `[SYSTEM: Previous streaming was interrupted midway. Please complete the remainder of the grading feedback starting immediately where it cut off]:\n\n${accumulatedOutput}` }] : [])
+            ]
+          }],
+          config: {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            temperature: 0.15,
+            maxOutputTokens: 8192,
+            thinkingConfig: { thinkingBudget: 0 }
+          }
+        });
+        if (recoveryRes.text) {
+          res.write(recoveryRes.text);
+          if (typeof (res as any).flush === 'function') {
+            (res as any).flush();
+          }
+        }
+      } catch (recErr) {
+        console.error("[/api/grade-essay] Stream recovery fallback failed:", recErr);
       }
     }
     res.end();
@@ -1838,6 +2126,8 @@ app.post("/api/generate-flashcards", async (req, res) => {
   try {
     const text = req.body.text || req.body.topic || req.body.content || "";
     const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const stream = req.body.stream || req.body.academic_stream;
+    const country = req.body.country || req.body.academic_country;
     const count = req.body.count;
     if (!text) {
       return res.status(400).json({ error: "Missing text" });
@@ -1845,15 +2135,18 @@ app.post("/api/generate-flashcards", async (req, res) => {
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const aiClient = getAI();
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     
-    const systemInstruction = `Act as an Elite Cognitive Scientist and Active Recall Specialist.
-Your mission is to generate exactly ${requestedCount} high-yield revision flashcards for the provided text or academic topic.
+    const systemInstruction = `${gradeDirective}
+
+Act as an Elite Cognitive Scientist and Active Recall Specialist.
+Your mission is to generate exactly ${requestedCount} high-yield revision flashcards for the provided text or academic topic tailored to the student's grade level (${gradeLevel || 'Standard'}).
 
 CRITICAL ACTIVE RECALL & CONCISE LENGTH RULES:
-1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept.
+1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept at their grade level.
 2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise, punchy, and between 15 to 25 words max. It must be an active recall mnemonic, definition, or key formula concept designed for rapid revision. NEVER output long multi-sentence paragraphs.
 3. 100% COMPLETE THOUGHTS: The 15-25 word answer must be grammatically complete and self-contained (no trailing '...', no chopped clauses).
-4. LATEX & CODE: If there are formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in backticks (\`<div>\`).
+4. LATEX & CODE: If there are formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in standard code formatting.
 
 CRITICAL OUTPUT FORMAT:
 You must output ONLY a valid JSON array of objects. Do not wrap in markdown quotes.
@@ -1872,30 +2165,40 @@ Format:
 
     const response = await safeGenerateContent({
       gradeLevel,
+      stream,
+      country,
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Generate exactly ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic:\n\n${text}` }] },
+      contents: [{
+        role: "user",
+        parts: [{ text: `Generate exactly ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic:\n\n${text}` }]
+      }],
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json",
-        maxOutputTokens: 8192,
+        maxOutputTokens: 2048,
         temperature: 0.2
-      }
+      },
+      timeoutMs: 15000
     });
     
     let outputText = response.text || "[]";
-    res.json({ flashcards: safeParseJSON(outputText, 'array') });
-  } catch (error: any) {
-    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      console.warn("Flashcards quota exceeded:", error.message);
-      return res.json({ 
-        flashcards: [
-          {
-            question: "⚠️ AI Tutor Notice: Rate Limit / Quota Exceeded",
-            answer: "The Gemini API has exceeded its rate limit. Please wait 60 seconds and try again, or check your API key in settings."
-          }
-        ]
-      });
+    let cards = safeParseJSON(outputText, 'array');
+    if (!Array.isArray(cards) || cards.length === 0) {
+      const objParsed = safeParseJSON(outputText, 'object');
+      if (objParsed && Array.isArray(objParsed.flashcards)) {
+        cards = objParsed.flashcards;
+      }
     }
+    if (!Array.isArray(cards) || cards.length === 0) {
+      const match = outputText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (match) {
+        try {
+          cards = JSON.parse(match[0]);
+        } catch (_) {}
+      }
+    }
+    res.json({ flashcards: cards || [] });
+  } catch (error: any) {
     console.error("Flashcards error:", error);
     res.status(500).json({ error: error.message || "Failed to generate flashcards" });
   }
@@ -1913,22 +2216,27 @@ app.post("/api/generate-pdf-flashcards", upload.single("pdf"), async (req, res) 
 
     const count = req.body.count || 15;
     const gradeLevel = req.body.gradeLevel;
+    const stream = req.body.stream || req.body.academic_stream;
+    const country = req.body.country || req.body.academic_country;
     const requestedCount = Math.min(Math.max(parseInt(count) || 15, 5), 30);
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
 
     const cacheKey = crypto.createHash("sha256").update(req.file.buffer).digest("hex") + `_pdf_flashcards_${requestedCount}`;
     if (summaryCache.has(cacheKey)) {
       return res.json({ flashcards: summaryCache.get(cacheKey) });
     }
 
-    const systemInstruction = `Act as an Elite Cognitive Scientist and Active Recall Specialist.
+    const systemInstruction = `${gradeDirective}
+
+Act as an Elite Cognitive Scientist and Active Recall Specialist.
 Your mission is to thoroughly read, analyze, and comprehend the attached complete PDF document across all its pages, chapters, diagrams, formulas, tables, and sections.
-Generate exactly ${requestedCount} high-yield, comprehensive active recall revision flashcards covering the most critical concepts throughout the ENTIRE document from beginning to end.
+Generate exactly ${requestedCount} high-yield, comprehensive active recall revision flashcards covering the most critical concepts throughout the ENTIRE document from beginning to end tailored to Grade: ${gradeLevel || 'Standard'}.
 
 CRITICAL ACTIVE RECALL RULES:
-1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept from the document.
+1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept from the document at their grade level.
 2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise, punchy, and between 15 to 25 words max. It must be an active recall mnemonic, definition, or key formula concept designed for rapid revision. NEVER output long multi-sentence paragraphs.
 3. 100% COMPLETE THOUGHTS: The 15-25 word answer must be grammatically complete and self-contained (no trailing '...', no chopped clauses).
-4. LATEX & CODE: If there are mathematical formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in backticks (\`<div>\`).
+4. LATEX & CODE: If there are mathematical formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in standard code formatting.
 5. FULL DOCUMENT COVERAGE: Distribute questions across the entire document (beginning, middle, and end), not just the first few pages.
 
 CRITICAL OUTPUT FORMAT:
@@ -1952,6 +2260,8 @@ Format:
 
     const response = await safeGenerateContent({
       gradeLevel,
+      stream,
+      country,
       model: "gemini-3.5-flash-lite",
       contents: [{
         parts: [
@@ -2434,21 +2744,28 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 
 app.post("/api/generate-content", async (req, res) => {
   try {
-    const topic = req.body.topic || req.body.prompt || req.body.content || "";
-    const type = req.body.type || req.body.contentType || "General";
-    const tone = req.body.tone || "Academic";
-    const format = req.body.format || "Standard";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const { topic, type, tone = "Academic", format = "Standard", gradeLevel, stream, country } = req.body;
 
-    if (!topic) {
+    const wordCount = topic ? topic.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+
+    if (!topic || !type) {
       return res.status(400).json({ error: "Missing topic or type" });
     }
 
     const aiClient = getAI();
-    
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
+
     let formatSpecificRules = "";
     if (type.toUpperCase() === "ESSAY") {
-      formatSpecificRules = `
+      const g = (gradeLevel || '').toLowerCase();
+      const isMiddleOrEarlyHigh = g.includes('6th') || g.includes('7th') || g.includes('8th') || g.includes('9th') || g.includes('10th') || g.includes('middle') || g.includes('freshman') || g.includes('sophomore');
+
+      if (isMiddleOrEarlyHigh && format !== "APA" && format !== "MLA") {
+        formatSpecificRules = `
+- GRADE-APPROPRIATE ESSAY STRUCTURE: Structure the essay with a clear title (# Title), an engaging introductory paragraph with a simple, clear central idea (thesis statement), 2-4 focused body paragraphs with concrete real-world examples, and a warm, summarizing conclusion.
+- ACCESSIBLE LANGUAGE: Keep sentences clear and vocabulary age-appropriate. DO NOT force APA 7th edition headers, student researcher metadata, or complex theoretical citations for middle school and early high school students unless explicitly requested.`;
+      } else {
+        formatSpecificRules = `
 - ESSAY SCHOLARSHIP & RIGOR: Avoid the simplistic 5-paragraph template. Synthesize theoretical frameworks, evaluate counter-arguments, and present persuasive, evidence-based academic reasoning.
 - MANDATORY IN-TEXT CITATIONS (APA / MLA / ACADEMIC): You MUST integrate authentic parenthetical in-text citations throughout the body paragraphs for every factual claim, statistical figure, scientific definition, or theoretical argument (e.g., (Author, Year) for APA; (Author Page) for MLA).
 - 1-TO-1 CITATION TO REFERENCE MAPPING: Every source listed in the References or Works Cited section at the end of the essay MUST appear at least once as an in-text citation inside the body text. Never produce a detached bibliography.
@@ -2471,6 +2788,7 @@ app.post("/api/generate-content", async (req, res) => {
     ---
     Follow with standard body paragraphs and ## Works Cited.
   * Standard Format: Title at top (# Title), followed by structured introduction, analytical body paragraphs, and conclusion.`;
+      }
     } else if (type.toUpperCase() === "BLOG") {
       formatSpecificRules = `
 - Ground the text in reality. Use concrete examples, hypothetical case studies, or hard numbers (e.g., specific metrics, benchmarks, case studies).
@@ -2490,9 +2808,8 @@ app.post("/api/generate-content", async (req, res) => {
     let toneSpecificRules = "";
     if (tone.toUpperCase() === "ACADEMIC") {
       toneSpecificRules = `
-- Maintain extreme objectivity, elevated scholarship, and formal structure.
-- Incorporate parenthetical citations logically into every analytical paragraph.
-- Synthesize complex mechanisms with authoritative clarity.`;
+- Maintain objectivity, elevated scholarship, and formal structure appropriate to the student's grade level.
+- Synthesize key mechanisms with authoritative clarity.`;
     } else if (tone.toUpperCase() === "PERSUASIVE") {
       toneSpecificRules = `
 - Write from the trenches. Be direct, authoritative, and logic-driven.
@@ -2504,14 +2821,16 @@ app.post("/api/generate-content", async (req, res) => {
 - Avoid melodrama and clichéd tropes.`;
     } else if (tone.toUpperCase() === "CASUAL") {
       toneSpecificRules = `
-- Write like a brilliant mentor or a masterclass article.
+- Write like a brilliant mentor or an engaging guide.
 - Be relatable, conversational, energetic, and highly engaging.`;
     }
 
-    const systemInstruction = `You are an Elite Academic Author, Senior Essayist, and Master Literary Writer capable of adapting flawlessly to any format and tone. Your primary goal is to generate high-quality, deeply engaging content while strictly adhering to formatting standards and avoiding formulaic "AI-speak."
+    const systemInstruction = `${gradeDirective}
+
+You are an Elite Academic Author, Senior Essayist, and Master Literary Writer capable of adapting flawlessly to any format, tone, and student grade level (${gradeLevel || 'Standard'}). Your primary goal is to generate high-quality, deeply engaging content while strictly adhering to formatting standards and avoiding formulaic "AI-speak."
 
 1. THE GLOBAL ANTI-ROBOT FILTER (Applies to ALL outputs):
-- BAN AI CLICHÉS: Never use overused words like "delve," "testament," "realm," "tapestry," "crucial," "foster," or "unassailable." Use natural, precise, and sophisticated vocabulary.
+- BAN AI CLICHÉS: Never use overused words like "delve," "testament," "realm," "tapestry," "crucial," "foster," or "unassailable." Use natural, precise, and grade-appropriate vocabulary.
 - NO ROBOTIC TRANSITIONS: Eliminate mechanical transitions ("Firstly," "Furthermore," "In conclusion," "Ultimately"). Weave ideas together naturally.
 - NO ROBOTIC FILLER: Do not say "Here is your content" or "Certainly". Output ONLY the final content itself.
 
@@ -2523,8 +2842,10 @@ ${toneSpecificRules}`;
 
     const response = await safeGenerateContent({
       gradeLevel,
+      stream,
+      country,
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone. Topic: ${topic}` }] },
+      contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone for a student in Grade: ${gradeLevel || 'Standard'}. Topic: ${topic}` }] },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
         maxOutputTokens: 8192,
@@ -2549,6 +2870,8 @@ app.post("/api/grammar-enhance", async (req, res) => {
     const text = req.body.text || req.body.prompt || req.body.content || "";
     const mode = req.body.mode || "Fix All Errors";
     const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const stream = req.body.stream || req.body.academic_stream;
+    const country = req.body.country || req.body.academic_country;
     const images = req.body.images;
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
@@ -2556,6 +2879,7 @@ app.post("/api/grammar-enhance", async (req, res) => {
 
     const aiClient = getAI();
     const userMode = mode === "academic" ? "academic" : "fix";
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     
     let modeInstruction = "";
     if (userMode === "fix") {
@@ -2563,13 +2887,17 @@ app.post("/api/grammar-enhance", async (req, res) => {
 - Fix all spelling mistakes, grammatical errors, subject-verb agreement issues, punctuation errors, and typos.
 - DO NOT rewrite or fundamentally change the user's sentence structure, tone, vocabulary level, or core meaning. Keep it as close to the user's original words as possible, only correcting mistakes and very minor awkward phrasing.`;
     } else {
-      modeInstruction = `MODE: Academic Rewrite (Elevates vocabulary and flow)
-- Elevate vocabulary, academic phrasing, structures, flow, and clarity.
-- Make it read like a well-crafted essay, scientific article, or formal scholarship submission.
+      modeInstruction = `MODE: Academic Rewrite (Elevates vocabulary and flow appropriate to Grade: ${gradeLevel || 'Standard'})
+- Elevate vocabulary, phrasing, and flow strictly matched to the student's grade level (${gradeLevel || 'Standard'}).
+- For Middle School (Grades 6-8): elevate to crisp, clear 8th-grade academic English. NEVER introduce college-level jargon or dense polysyllabic phrasing.
+- For High School / AP: elevate to AP/Board exam essay quality with formal academic transitions.
+- For College: elevate to publication-grade scholarly discourse.
 - Ensure professional transitions and academic style. Use high-yield educational adjustments.`;
     }
     
-    const systemInstruction = `You are an Elite Academic Writer, Expert English Editor, and Master Study Coach. Your job is to proofread, correct, and enhance the provided text based on the requested mode.
+    const systemInstruction = `${gradeDirective}
+
+You are an Elite Academic Writer, Expert English Editor, and Master Study Coach. Your job is to proofread, correct, and enhance the provided text based on the requested mode.
 
 ${modeInstruction}
 
@@ -2604,6 +2932,8 @@ You must return your output strictly in JSON format matching the following schem
 
     const response = await safeGenerateContent({
       gradeLevel,
+      stream,
+      country,
       model: "gemini-3.5-flash-lite",
       contents: { parts: contentParts },
       config: { 
@@ -2721,6 +3051,9 @@ app.post("/api/fetch-url-text", async (req, res) => {
 app.post("/api/summarize-text", async (req, res) => {
   try {
     const { text, format, gradeLevel } = req.body;
+    const stream = req.body.stream || req.body.academic_stream;
+    const country = req.body.country || req.body.academic_country;
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     if (!text) {
       return res.status(400).json({ error: "No text provided" });
     }
@@ -2744,7 +3077,9 @@ app.post("/api/summarize-text", async (req, res) => {
       selectedFormatName = "Explain Like I'm 5";
     }
 
-    const systemInstruction = `SYSTEM INSTRUCTION: EXPERT SUMMARISER
+    const systemInstruction = `${gradeDirective}
+
+SYSTEM INSTRUCTION: EXPERT SUMMARISER
 
 You are an expert academic and professional summarizer. Your task is to extract key information from the provided text and format it STRICTLY according to the user's requested mode. 
 
@@ -2780,14 +3115,37 @@ IF FORMAT IS "Explain Like I'm 5":
 3. Keep the tone extremely warm, engaging, and story-like.
 4. Use short paragraphs and emojis to make it visually friendly for beginners.`;
 
-    const response = await safeGenerateContent({
-      gradeLevel,
-      model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text }] },
-      config: { systemInstruction: { parts: [{ text: systemInstruction }] } }
-    });
+    // Model fallback chain for text summarize
+    const textSumModels = [
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+    ];
+    let textSummaryResult = "";
+    let textSumError: any = null;
+    for (const model of textSumModels) {
+      try {
+        const response = await safeGenerateContent({
+          gradeLevel,
+          stream,
+          country,
+          model,
+          contents: { parts: [{ text }] },
+          config: { systemInstruction: { parts: [{ text: systemInstruction }] }, maxOutputTokens: 8192, temperature: 0.3 }
+        });
+        textSummaryResult = response.text || "";
+        textSumError = null;
+        break;
+      } catch (err: any) {
+        console.warn(`[summarize-text] Model ${model} failed, trying next fallback:`, err?.message || err);
+        textSumError = err;
+        continue;
+      }
+    }
+    if (textSumError && !textSummaryResult) throw textSumError;
     
-    res.json({ text: response.text });
+    res.json({ text: textSummaryResult });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Text summarize quota exceeded:", error.message);
@@ -2820,7 +3178,7 @@ app.post("/api/generate-questions", async (req, res) => {
     const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || 'academic curriculum'}`;
 
     const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
-Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-ended) practice questions along with standard examiner expected model answers and official marking rubrics.
+Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-ended) practice questions along with official examiner marking rubrics and score allocations.
 
 CRITICAL ARCHITECTURE RULES:
 
@@ -2852,13 +3210,20 @@ CRITICAL ARCHITECTURE RULES:
    - Target Grade: ${gradeLevel}.
    - The vocabulary, conceptual depth, and mark expectations must strictly match this academic level. Do NOT make secondary/high school questions into graduate-level research papers.
 
-4. EXPECTED MODEL ANSWER ('expectedAnswer'):
-   - Provide a complete, high-scoring model answer (2-4 well-structured sentences or clear breakdown) that demonstrates how a student achieves full marks according to official board standards.
-   - For mathematical and scientific formulas, always use valid LaTeX ($...$).
+4. COMPREHENSIVE MASTER MODEL ANSWER ('expectedAnswer'):
+   - Provide an exhaustive, step-by-step master model answer / official solution in 'expectedAnswer'.
+   - For mathematical, physics, and calculation problems: Provide the full derivation, explicit step-by-step working, substituted values, and final highlighted result with appropriate units.
+   - For literature, language, and social science problems: Provide a complete, structured multi-paragraph model answer containing textual evidence, thematic depth, and nuanced explanation.
+   - For multi-part questions ((a), (b)): Provide clear, separate complete solutions for each part.
+   - (Note: This master model answer will be compiled into the exported PDF's final Answer Key & Solutions section).
 
-5. ESSENTIAL MARKING RUBRIC ('keyRubricPoints'):
-   - Provide an array of 3-5 real grading criteria or key conceptual points that an examiner looks for when awarding marks.
-   - Points must be strictly subject-relevant (e.g., for literature: specific character traits, quotes, plot points, emotional states; for science: specific laws, keywords, reaction names, units).
+5. OFFICIAL MARKING RUBRIC & SCORE BREAKDOWN ('keyRubricPoints'):
+   - Provide an array of 3-5 real grading criteria with EXPLICIT SCORE ALLOCATIONS (e.g., "[1 Mark]", "[1.5 Marks]", "[2 Marks]") that an examiner uses to evaluate students' answers.
+   - Points must specify the exact conceptual checkpoint and its mark value:
+     * e.g., "[1 Mark] Correct definition and mathematical formula of Ohm's Law ($V = IR$) under constant temperature"
+     * e.g., "[1.5 Marks] High melting point ($3380^\\circ\\\\text{C}$) and high resistivity of tungsten filament"
+     * e.g., "[0.5 Mark] Chemical inertness of argon/nitrogen gas preventing oxidation"
+   - Points must be strictly subject-relevant.
 
 6. STRICT JSON OUTPUT FORMAT:
    - Return ONLY a valid JSON object with the key "questions".
@@ -2869,32 +3234,31 @@ Use this exact JSON structure:
   "questions": [
     {
       "question": "Why did Lencho describe the falling raindrops as 'new coins'? How did his feelings change when the weather took a turn for the worse?",
-      "expectedAnswer": "Lencho compared the raindrops to new coins because a good downpour promised a bountiful harvest of ripe corn, which would bring wealth and prosperity to his family. However, his joy quickly turned to despair when a violent hailstorm destroyed his entire crop, leaving his family facing potential starvation.",
+      "expectedAnswer": "Lencho was an industrious farmer whose family depended entirely on the harvest of his cornfield, which urgently needed rain. When large clouds began to pour, he was filled with joy and compared the big drops to 10-cent pieces and the little drops to 5-cent pieces, seeing them as coins of prosperity that would guarantee a rich yield.\\n\\nHowever, his happiness turned to sorrow when strong winds brought a heavy hailstorm that battered the valley for an hour. The hail left the field completely white as if covered with salt, destroying all the corn and flowers. Lencho's heart was filled with deep grief and despair, realizing that without help, his family would go hungry that year.",
       "keyRubricPoints": [
-        "Comparison of big drops to 10-cent pieces and small drops to 5-cent pieces",
-        "Expectation of a rich harvest and financial security",
-        "Destructive hailstorm lasting an hour that stripped the fields bare",
-        "Lencho's profound despair and sorrow for his family's survival"
+        "[1 Mark] Comparison of big drops to 10-cent pieces and small drops to 5-cent pieces",
+        "[1 Mark] Expectation of a bountiful harvest and financial prosperity",
+        "[1 Mark] Sudden onset of violent hailstorm destroying entire crop fields",
+        "[1 Mark] Lencho's deep sorrow and despair regarding family's survival"
       ]
     },
     {
       "question": "How does the story 'A Letter to God' highlight the irony in human nature through the postmaster's kind gesture and Lencho's reaction?",
-      "expectedAnswer": "The supreme irony lies in Lencho's unquestioning faith in God contrasted with his complete mistrust of humanity. While the compassionate postmaster and his staff sacrificed part of their salaries to collect 70 pesos to help Lencho, Lencho suspected them of stealing the missing 30 pesos and branded them a 'bunch of crooks'.",
+      "expectedAnswer": "The supreme irony of the story lies in Lencho's unwavering faith in God contrasting with his profound distrust of human beings. When the postmaster read Lencho's letter to God requesting 100 pesos, he was deeply moved and resolved not to shake the man's faith. Through genuine selflessness, the postmaster and his staff collected and sent 70 pesos.\\n\\nYet when Lencho counted only 70 pesos, he was convinced God could never make a mistake or deny his request. Consequently, he assumed the post office employees were a 'bunch of crooks' who stole the missing 30 pesos. The poignant irony is that Lencho condemned the very people who sacrificed their own money to help him, illustrating how rigid dogmatic faith can blind a person to genuine human kindness.",
       "keyRubricPoints": [
-        "Postmaster's selfless act of charity to preserve Lencho's faith",
-        "Lencho's absolute, unwavering conviction that God could not make a mistake",
-        "Accusation that the postal employees stole 30 pesos ('bunch of crooks')",
-        "Irony of suspecting the very benefactors who helped him"
+        "[1.5 Marks] Postmaster and postal staff collecting 70 pesos out of selflessness to preserve faith",
+        "[1.5 Marks] Lencho's absolute conviction that God would not make a mistake",
+        "[1 Mark] Lencho branding the benefactors as a 'bunch of crooks' for missing 30 pesos",
+        "[1 Mark] Irony of distrusting the very humans who assisted him"
       ]
     },
     {
       "question": "(a) State Ohm's Law and write its mathematical formula.\\n\\n(b) Explain why an electric bulb's filament is made of tungsten and why inert gases are filled inside the bulb.",
-      "expectedAnswer": "(a) Ohm's Law states that electric current through a conductor is directly proportional to the potential difference across its ends ($V = IR$), provided temperature remains constant.\\n\\n(b) Tungsten has a very high melting point ($3380^\\circ\\\\text{C}$) and high resistivity, allowing it to glow white-hot without melting. The bulb is filled with inert gases like argon or nitrogen to prevent oxidation and prolong filament life.",
+      "expectedAnswer": "(a) Ohm's Law states that the electric current ($I$) flowing through a metallic conductor is directly proportional to the potential difference ($V$) across its ends, provided physical conditions like temperature remain constant.\\nFormula: $V \\\\propto I \\\\implies V = IR$, where $R$ is resistance.\\n\\n(b) Tungsten is used for bulb filaments because it possesses an exceptionally high melting point ($3380^\\circ\\\\text{C}$) and high electrical resistivity, allowing it to glow white-hot without melting. Chemically inactive gases like argon and nitrogen are filled inside the bulb to prevent oxidation of the incandescent tungsten filament, thereby prolonging the bulb's lifespan.",
       "keyRubricPoints": [
-        "Correct statement and formula of Ohm's Law ($V = IR$)",
-        "Tungsten's extremely high melting point and high resistivity",
-        "Inert gases prevent oxidation of the glowing filament",
-        "Prolongation of the bulb's operational lifespan"
+        "[1 Mark] Definition and formula of Ohm's Law ($V = IR$) with constant temperature condition",
+        "[1.5 Marks] High melting point ($3380^\\circ\\\\text{C}$) and high resistivity of tungsten filament",
+        "[0.5 Mark] Use of chemically inert gases (argon/nitrogen) to prevent filament oxidation"
       ]
     }
   ]
@@ -2913,7 +3277,10 @@ Target Grade: ${gradeLevel}.
 ${userStreamDirective}
 ${userCountryDirective}
 Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic and grade.
-Ensure questions match real exam standards (short conceptual, long analytical, and multi-part only where natural). Ground all questions, expected answers, and rubric points strictly in the authentic subject domain of "${topicText}".${avoidDirective}`;
+For each question, provide:
+1. An authentic exam-style subjective question in 'question'.
+2. A complete, high-quality step-by-step model solution in 'expectedAnswer' (to be compiled into the PDF Answer Key).
+3. An official examiner marking scheme with explicit mark allocations in 'keyRubricPoints'.${avoidDirective}`;
 
     let generatedText = "";
     try {
@@ -2936,14 +3303,23 @@ Ensure questions match real exam standards (short conceptual, long analytical, a
       throw apiError;
     }
 
+    const sanitizeQuestions = (list: any[]) => list.map(q => {
+      if (typeof q === 'string') return q;
+      return {
+        ...q,
+        expectedAnswer: typeof q.expectedAnswer === 'string' ? q.expectedAnswer.trim() : '',
+        keyRubricPoints: Array.isArray(q.keyRubricPoints) ? q.keyRubricPoints : []
+      };
+    });
+
     const parsed = safeParseJSON(generatedText, 'object');
     if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
-      return res.json({ questions: parsed.questions });
+      return res.json({ questions: sanitizeQuestions(parsed.questions) });
     } else if (Array.isArray(parsed) && parsed.length > 0) {
-      return res.json({ questions: parsed });
+      return res.json({ questions: sanitizeQuestions(parsed) });
     } else if (parsed && typeof parsed === 'object') {
       const found = Object.values(parsed).find(v => Array.isArray(v) && v.length > 0);
-      if (found) return res.json({ questions: found });
+      if (found) return res.json({ questions: sanitizeQuestions(found as any[]) });
     }
 
     throw new Error("Failed to generate a valid subjective questions structure.");
@@ -3489,21 +3865,27 @@ OUTPUT FORMAT: Output strictly using this clean Markdown structure:
 - **🌟 Key Strengths**: [What was done accurately with proper terminology/notation]
 - **⚠️ Costly Traps & Where Points Were Lost**: [Specific slips, missing conditions, or flawed notation]
 - **🎯 Full-Credit College Board Standard**: [How to write or format this on the actual May AP exam to guarantee full credit]`
-      : `You are a strict academic examiner. DO NOT act as a standard tutor. Your SOLE purpose is to grade the student's answer based on their grade level. YOU MUST output strictly using this format:
+      : `You are an encouraging, constructive academic evaluator and pedagogical coach. Your purpose is to evaluate the student's answer fairly based on their grade level.
+IMPORTANT EVALUATION PHILOSOPHY:
+- Value conceptual clarity, logical reasoning, and core principles over exact wording. Do NOT penalize the student for expressing concepts in their own words or using valid alternative synonyms or methods.
+- Award fair partial credit for every correct step, formula, or concept mentioned.
+- Provide encouraging, actionable feedback that helps the student improve.
+
+YOU MUST output strictly using this format:
 
 ## Grade-Level Assessment
-[Pass/Fail/Needs Improvement for this grade level]
+[Pass / Exemplary / Needs Improvement for this grade level]
 
 ## Step-Marking Breakdown
-- Formula Selection & Concepts: [Score]/3
-- Logical Working & Steps: [Score]/5
-- Final Answer & Units: [Score]/2
+- Core Concepts & Formula Selection: [Score]/3
+- Logical Reasoning & Working Steps: [Score]/5
+- Final Conclusion & Units/Clarity: [Score]/2
 
 ## Final Score
 **[Total Score] / 10**
 
-## Examiner Feedback & Ideal Solution
-[Explain mistakes and provide the perfect 10/10 mathematical solution]`;
+## Evaluator Feedback & Key Guidance
+[Explain what was done well, gently point out any conceptual gaps, and provide a clear reference solution to guide them]`;
 
     const parts: any[] = [];
     if (image) {
@@ -3533,7 +3915,7 @@ ${image ? 'IMPORTANT: The student has provided an attached photo containing thei
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
       model: "gemini-2.5-flash",
-      contents: { parts },
+      contents: [{ role: "user", parts }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         thinkingConfig: { thinkingBudget: 0 }
@@ -3612,6 +3994,8 @@ app.post("/api/generate-quiz", async (req, res) => {
   try {
     const topic = req.body.topic || req.body.prompt || req.body.text || "";
     const gradeLevel = req.body.gradeLevel || req.body.userGrade;
+    const stream = req.body.stream || req.body.academic_stream;
+    const country = req.body.country || req.body.academic_country;
     const count = req.body.count;
     if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
@@ -3619,13 +4003,16 @@ app.post("/api/generate-quiz", async (req, res) => {
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     
-    const systemInstruction = `You are an Elite Academic Tutor and Curriculum Exam Expert. The user will provide a subject or specific topic. 
-Your ONLY job is to generate a highly accurate, exam-level Multiple Choice Quiz for that topic.
+    const systemInstruction = `${gradeDirective}
+
+You are an Elite Academic Tutor and Curriculum Exam Expert. The user will provide a subject or specific topic. 
+Your ONLY job is to generate a highly accurate, exam-level Multiple Choice Quiz for that topic tailored to the student's grade level (${gradeLevel || 'Standard'}).
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation matching their grade level comprehension.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array. Do not return an array of multiple correct answers.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
 5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
@@ -3649,8 +4036,10 @@ Use this exact JSON structure:
     try {
       const response = await safeGenerateContent({
         gradeLevel,
+        stream,
+        country,
         model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Topic: ${topic}. Generate the ${requestedCount}-question JSON quiz now.` }] },
+        contents: { parts: [{ text: `Topic: ${topic}. Generate the ${requestedCount}-question JSON quiz now for Grade: ${gradeLevel || 'Standard'}.` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json"
@@ -3683,7 +4072,10 @@ Use this exact JSON structure:
 
 app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
   try {
-    const { gradeLevel, count } = req.body;
+    const { gradeLevel, count, stream, academic_stream, country, academic_country } = req.body;
+    const academicTrack = stream || academic_stream;
+    const countryContext = country || academic_country;
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicTrack, countryContext);
     if (!req.file) {
       console.warn("[PDF Quiz API] No PDF file provided in request.");
       return res.status(400).json({ error: "No PDF file provided" });
@@ -3716,7 +4108,9 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
 
-    const systemInstruction = `You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate exactly ${requestedCount} multiple choice questions based strictly on this text/document. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
+    const systemInstruction = `${gradeDirective}
+
+You are an expert exam creator. Analyze the provided study material and extract the most high-yield concepts. Generate exactly ${requestedCount} multiple choice questions based strictly on this text/document tailored to Grade: ${gradeLevel || 'Standard'}. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct matching their grade level comprehension).
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
@@ -3746,9 +4140,11 @@ Use this exact JSON structure:
       const slicedText = extractedText.length > 150000 ? extractedText.slice(0, 150000) : extractedText;
       response = await safeGenerateContent({
         gradeLevel,
+        stream: academicTrack,
+        country: countryContext,
         model: "gemini-3.5-flash-lite",
         contents: [{
-          parts: [{ text: `DOCUMENT CONTENT:\n${slicedText}\n\nGenerate the ${requestedCount}-question JSON quiz now based strictly on the content above.` }]
+          parts: [{ text: `DOCUMENT CONTENT:\n${slicedText}\n\nGenerate the ${requestedCount}-question JSON quiz now based strictly on the content above for Grade: ${gradeLevel || 'Standard'}.` }]
         }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3766,11 +4162,13 @@ Use this exact JSON structure:
 
       response = await safeGenerateContent({
         gradeLevel,
+        stream: academicTrack,
+        country: countryContext,
         model: "gemini-3.5-flash-lite",
         contents: [{ 
           parts: [
             pdfPart,
-            { text: `Analyze the attached PDF document and generate the ${requestedCount}-question JSON quiz now based strictly on its content.` }
+            { text: `Analyze the attached PDF document and generate the ${requestedCount}-question JSON quiz now based strictly on its content for Grade: ${gradeLevel || 'Standard'}.` }
           ] 
         }],
         config: {
@@ -3807,7 +4205,10 @@ Use this exact JSON structure:
 
 app.post("/api/generate-image-quiz", upload.single("image"), async (req, res) => {
   try {
-    const { gradeLevel, count } = req.body;
+    const { gradeLevel, count, stream, academic_stream, country, academic_country } = req.body;
+    const academicTrack = stream || academic_stream;
+    const countryContext = country || academic_country;
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicTrack, countryContext);
     if (!req.file) {
       return res.status(400).json({ error: "No image provided" });
     }
@@ -3821,11 +4222,13 @@ app.post("/api/generate-image-quiz", upload.single("image"), async (req, res) =>
 
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
 
-    const systemInstruction = `You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate exactly ${requestedCount} multiple choice questions based strictly on the content of that textbook page.
+    const systemInstruction = `${gradeDirective}
+
+You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate exactly ${requestedCount} multiple choice questions based strictly on the content of that textbook page tailored to Grade: ${gradeLevel || 'Standard'}.
     
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with A), B), C), D)) and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with A), B), C), D)) and a short explanation matching their grade level comprehension.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
 4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
 5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
@@ -3847,8 +4250,10 @@ Use this exact JSON structure:
 
     const response = await safeGenerateContent({
       gradeLevel,
+      stream: academicTrack,
+      country: countryContext,
       model: "gemini-3.5-flash-lite",
-      contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions.` }] }],
+      contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions for Grade: ${gradeLevel || 'Standard'}.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json"
@@ -3955,13 +4360,30 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
           const link = (block.match(/<link>([\s\S]*?)<\/link>/)?.[1] || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
           const source = (block.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
           const pubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] || '';
+
+          const rawDesc = block.match(/<description>([\s\S]*?)<\/description>/)?.[1] || '';
+          const cleanDesc = rawDesc
+            .replace(/<!\[CDATA\[|\]\]>/g, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          const richSnippet = cleanDesc && cleanDesc.length > 20
+            ? `${cleanDesc} (Published: ${pubDate}, Source: ${source || 'News Wire'})`
+            : `Headline: ${title}. Published: ${pubDate} by ${source || 'News Wire'}.`;
+
           if (title && link && !seenUrls.has(link) && !link.includes('wikipedia.org') && !link.includes('wikimedia.org')) {
             seenUrls.add(link);
             sources.push({
               title,
               uri: link,
               sourceName: source || 'Live News Wire',
-              snippet: `Published: ${pubDate}. Source: ${source}. Headline: ${title}`,
+              snippet: richSnippet,
               pubDate,
               type: 'news'
             });
@@ -4026,14 +4448,19 @@ async function performLiveWebSearch(query: string, searchKeywords: string[] = []
 
 app.post("/api/fix-mistake", async (req, res) => {
   try {
-    const { question, wrongInput, correctConcept, gradeLevel } = req.body;
+    const { question, wrongInput, correctConcept, gradeLevel, stream, academic_stream, country, academic_country } = req.body;
+    const academicTrack = stream || academic_stream;
+    const countryContext = country || academic_country;
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicTrack, countryContext);
 
     const safeQuestion = (question || "Academic Problem").slice(0, 3000);
     const safeWrong = (wrongInput || "Incorrect attempt").slice(0, 1000);
     const safeCorrect = (correctConcept || "Correct method / concept").slice(0, 2000);
 
-    const systemInstruction = `You are the Lead Master of Academic Conceptual Clarity & Mistake Correction.
-Your job is to analyze a student's academic mistake and provide a structured 3-part conceptual breakdown.
+    const systemInstruction = `${gradeDirective}
+
+You are the Lead Master of Academic Conceptual Clarity & Mistake Correction.
+Your job is to analyze a student's academic mistake and provide a structured 3-part conceptual breakdown tailored to Grade: ${gradeLevel || 'Standard'}.
 Be direct, encouraging, precise, and crystal-clear.
 
 STRICT JSON OUTPUT FORMAT (Return ONLY a single valid JSON object, NO markdown wrappers):
@@ -4047,12 +4474,14 @@ STRICT JSON OUTPUT FORMAT (Return ONLY a single valid JSON object, NO markdown w
 - Problem / Question: ${safeQuestion}
 - Student's Incorrect Input: ${safeWrong}
 - Correct Concept / Solution: ${safeCorrect}
-- Target Grade Level: ${gradeLevel || "High School"}
+- Target Grade Level: ${gradeLevel || "Standard"}
 
 Analyze this mistake and provide the 3-part JSON fix.`;
 
     const response = await safeGenerateContent({
-      gradeLevel: gradeLevel || "High School",
+      gradeLevel: gradeLevel || "Standard",
+      stream: academicTrack,
+      country: countryContext,
       model: "gemini-3.5-flash-lite",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
@@ -4084,39 +4513,71 @@ Analyze this mistake and provide the 3-part JSON fix.`;
 
 app.post("/api/quiz-ai-help", async (req, res) => {
   try {
-    const { question, options, correctAnswer, explanation, mode } = req.body;
+    const { question, options, correctAnswer, explanation, mode, gradeLevel, stream, academic_stream, country, academic_country } = req.body;
     if (!question) {
       return res.status(400).json({ error: "Missing question" });
     }
 
     const isHint = mode === 'hint';
-    const systemInstruction = `You are the AI Magic Tutor & Live Study Coach.
-A student is answering a multiple-choice question and clicked ${isHint ? '"Explain Question & Hint by AI"' : '"Explain Step-by-Step Answer by AI"'}.
+    const academicTrack = stream || academic_stream;
+    const countryContext = country || academic_country;
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicTrack, countryContext);
 
-CRITICAL PEDAGOGICAL & MATH RULES:
+    const systemInstruction = `${gradeDirective}
+
+You are an elite SAT/AP/Olympiad Master Coach and Professor.
+A student in Grade: ${gradeLevel || 'Standard'} is answering a multiple-choice question and clicked ${isHint ? '"Explain Question & Hint"' : '"Explain Step-by-Step Answer"'}.
+
+CRITICAL PEDAGOGICAL MANDATE:
 1. ${isHint 
-     ? 'DO NOT give away the final correct option or direct answer! Instead, break down what the question is asking in clear and friendly terms, define key variables, explain the governing concept or theorem, and provide 2-3 progressive hints so the student can think through and solve it themselves.'
-     : 'Deliver a clear, step-by-step walkthrough explaining why the correct answer is right, the exact mathematical or conceptual derivation, and why common wrong distractors fail.'}
-2. MATHEMATICAL FORMULAS & LATEX:
-   - ALL math expressions, numbers with units, formulas, and equations MUST be wrapped in standard LaTeX inline delimiters ($...$).
-   - Use standard exponents like $x^2$, $e^x$, $10^{-5}$.
-   - Use \\cdot for multiplication ($3x^2 \\cdot e^x$), never bare asterisks (*).
-   - Use standard subscripts for chemical formulas like $H_2O$, $CO_2$, $H_2SO_4$.
-3. STRUCTURE & FORMATTING:
-   - Use clean Markdown with bold headers and bullet points.
-   - Keep the tone encouraging, crystal-clear, and academic.`;
+     ? `DO NOT reveal the final correct option or direct answer!
+Structure your response in rich, clean Markdown with these exact sections:
+### 🎯 What This Question Is Asking
+Break down the problem in simple, encouraging terms. Explain what scenario is being described, what the question is asking you to solve or identify, and why this concept matters.
+### 🔑 Core Concepts & Key Mechanism
+Explain the foundational concept, biological pathway, chemical mechanism, historical context, or mathematical theorem involved.
+### 💡 Guided Progressive Hints
+- **Hint 1 (Starting Point):** A gentle conceptual clue to get started.
+- **Hint 2 (Critical Connection):** Connect the key mechanism to the terms in the choices.
+- **Hint 3 (Elimination Clue):** What common trap or confusion should they avoid? How can they eliminate wrong distractors?`
+     : `Deliver an exhaustive, comprehensive, master-tier explanation.
+Structure your response in rich, clean Markdown with these exact sections:
+### 🎯 Correct Answer & Comprehensive Summary
+State the official correct answer clearly, with an executive summary explaining why it is 100% correct.
+### 📝 In-Depth Step-by-Step Breakdown & Mechanism
+Provide a thorough, step-by-step conceptual walkthrough or mathematical derivation. Explain the underlying biological mechanism, chemical pathway, historical context, or mathematical working in complete detail.
+### ❌ Why the Other Options Are Incorrect
+Break down the wrong options and explain specifically why they fail or represent common exam misconceptions.
+### 💡 High-Yield Exam Tip & Pitfall
+Provide an exam-tested mnemonic, trap alert, or key takeaway specifically tailored to this exact subject and topic.`}
 
-    const userPrompt = `Question:
+2. MATHEMATICAL FORMULAS & SCIENTIFIC NOTATION (STRICT KA-TEX RULES):
+   - CRITICAL: EVERY single mathematical formula, derivation step, variable, equation, number with units, and chemical symbol MUST be fully enclosed in LaTeX dollar signs ($...$ for inline or $$...$$ for display blocks).
+   - NEVER output raw un-bracketed LaTeX syntax (such as \\frac, \\sqrt, \\cos, \\sin, \\text{}, \\cdot, \\theta, \\circ) without enclosing dollar signs ($...$).
+   - NEVER leave unmatched or dangling dollar signs (e.g. NEVER write 'gives: v_{0x}=...$' with an unclosed '$').
+   - When writing equations after colons or introductory text, ALWAYS wrap the entire equation in dollar signs: e.g. 'gives: $v_{0x} = v_0 \\cos(\\theta)$', NEVER 'gives: v_{0x}=...$'.
+   - When explaining options, wrap all math and units: e.g. '• A) $10\\text{ m/s}$: This represents $20\\sin(30^\\circ)$ which...'.
+   - Use standard subscripts and superscripts: e.g. $NADH$, $FADH_2$, $ATP$, $H_2O$, $x^2$, $10^{-5}$, $v_{0x}$, $v_{0y}$.
+   - Never write bare asterisks for multiplication (use $\\cdot$ or $\\times$).
+
+3. TONE & DEPTH:
+   - Highly encouraging, intellectually rigorous, crystal-clear, and thorough matching their grade level. Never write lazy 1-sentence summaries.`;
+
+    const userPrompt = `Student Question:
 ${question}
 
-${options && options.length > 0 ? `Options:\n${options.join('\n')}\n` : ''}${correctAnswer ? `Official Correct Answer: ${correctAnswer}\n` : ''}${explanation ? `Context/Explanation: ${explanation}\n` : ''}
+Available Options:
+${options && options.length > 0 ? (Array.isArray(options) ? options.join('\n') : options) : 'N/A'}
 
-Goal: Provide ${isHint ? 'a guided conceptual breakdown and progressive hints without spoiling the final answer' : 'a full step-by-step solution and mathematical breakdown'}.`;
+${correctAnswer ? `Official Correct Option: ${correctAnswer}\n` : ''}${explanation ? `Provided Context/Explanation: ${explanation}\n` : ''}
+Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive hints without spoiling the final choice' : 'full step-by-step solution, option-by-option analysis, and subject-specific exam tip'} for a student in Grade: ${gradeLevel || 'Standard'}.`;
 
     const response = await safeGenerateContent({
-      gradeLevel: "High School / College",
+      gradeLevel: gradeLevel || "Standard",
+      stream: academicTrack,
+      country: countryContext,
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: userPrompt }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         temperature: 0.3
@@ -4132,14 +4593,19 @@ Goal: Provide ${isHint ? 'a guided conceptual breakdown and progressive hints wi
 
 app.post("/api/generate-practice", async (req, res) => {
   try {
-    const { question, wrongInput, correctConcept, sourceFeature, gradeLevel } = req.body;
+    const { question, wrongInput, correctConcept, sourceFeature, gradeLevel, stream, academic_stream, country, academic_country } = req.body;
+    const academicTrack = stream || academic_stream;
+    const countryContext = country || academic_country;
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicTrack, countryContext);
 
     const safeQuestion = (question || "Academic Concept").slice(0, 3000);
     const safeWrong = (wrongInput || "Incorrect attempt").slice(0, 1000);
     const safeCorrect = (correctConcept || "Correct concept").slice(0, 2000);
 
-    const systemInstruction = `You are an Elite Academic Practice Coach.
-Your task is to generate exactly 3 multiple-choice practice questions that test the SAME core concept as the student's mistake, but with fresh numbers, contexts, or scenarios.
+    const systemInstruction = `${gradeDirective}
+
+You are an Elite Academic Practice Coach.
+Your task is to generate exactly 3 multiple-choice practice questions that test the SAME core concept as the student's mistake, but with fresh numbers, contexts, or scenarios tailored to Grade: ${gradeLevel || 'Standard'}.
 
 RULES:
 1. Generate exactly 3 questions with increasing mastery (Easy, Medium, Mastery).
@@ -4163,12 +4629,14 @@ STRICT JSON OUTPUT (Return ONLY a JSON array with 3 question objects):
 - Original Question: ${safeQuestion}
 - Incorrect Input: ${safeWrong}
 - Correct Principle: ${safeCorrect}
-- Target Grade: ${gradeLevel || "High School"}
+- Target Grade: ${gradeLevel || "Standard"}
 
 Generate 3 fresh similar practice questions to help the student master this concept.`;
 
     const response = await safeGenerateContent({
-      gradeLevel: gradeLevel || "High School",
+      gradeLevel: gradeLevel || "Standard",
+      stream: academicTrack,
+      country: countryContext,
       model: "gemini-3.5-flash-lite",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
@@ -4292,26 +4760,36 @@ app.post("/api/live-study-tutor", async (req, res) => {
       `[Source ${idx + 1}] Title: ${s.title}\nURL: ${s.uri}\nPublisher: ${s.sourceName}\nContent Snippet: ${s.snippet}\n`
     ).join('\n---\n');
 
-    const systemInstruction = `You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
-Your mission is to process student queries and produce an elite, point-wise, in-depth academic research report grounded in real-time verified data, peer-reviewed journals, and accredited national educational repositories.
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicStream, country);
+
+    const systemInstruction = `${gradeDirective}
+
+You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
+Your mission is to process student queries and produce an elite, point-wise, in-depth academic research report grounded in real-time verified data, peer-reviewed journals, and accredited national educational repositories tailored to the student's grade level (${gradeLevel || 'Standard'}).
 
 CRITICAL ACADEMIC INTEGRITY & CITATION RULES:
 1. STRICT WIKIPEDIA HARD-BAN:
-   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output.
+   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output. Tier-1 academic institutions strictly ban Wikipedia citations.
    - Strictly prioritize peer-reviewed journals (.edu, .gov, Nature, Science, IEEE, NIH, JSTOR, Springer, Elsevier, Crossref DOI), authoritative encyclopedias (Encyclopaedia Britannica), accredited national education boards (CollegeBoard, NCERT, UCAS), and verified global news wires (Reuters, AP, BBC).
 
 2. MANDATORY INLINE CITATIONS PROTOCOL:
-   - Every single factual claim, statistic, date, quote, policy decision, exam notification, or scientific theorem in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...ratified in early 2026 [1]...", "...quantum coherence increased by 42% [2]...").
+   - Every single factual claim, statistic, date, quote, policy decision, exam notification, or scientific theorem in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...approved on January 14, 2026 [1]...", "...quantum coherence increased by 42% [2]...").
    - Every citation number [1], [2], [3] MUST correspond directly to the 1-based index of the items in "source_links" and "detailed_sources".
 
-3. ONLY ONE MAIN HEADLINE:
+3. REAL-WORLD SPECIFICITY & NAMED ENTITIES (ZERO VAGUE SUMMARIES):
+   - When citing real-time web sources for medical, tech, or current events, do NOT write vague summaries. You MUST explicitly name specific medicines/therapies, companies, clinical trials, or exact dates found in the search results.
+   - For Medical / Health Queries: You MUST explicitly name the specific medicines or therapies (e.g., Lecanemab/Leqembi, Donanemab/Kisunla, Tirzepatide/Mounjaro, CRISPR Casgevy), companies or institutions involved (e.g., Biogen, Eisai, Eli Lilly, Vertex, FDA, NIH), exact clinical trial names or phases (e.g., Phase 3 Clarity AD trial, SURPASS clinical trial program, NCT registry ID), and specific outcomes/endpoints.
+   - For Tech / Engineering Queries: You MUST explicitly state the exact models or architecture versions (e.g., Claude 3.7 Sonnet, Gemini 2.5 Flash, Llama 3.3 70B, GPT-4.5), chipsets/hardware (e.g., Nvidia B200 Blackwell, Apple M4 Max), performance benchmarks, and corporate labs.
+   - For Current Events / Educational Policies: You MUST state the exact government bodies, exam boards, or institutions (e.g., US Department of Education, NTA, CBSE, CollegeBoard), exact bills or acts, and exact dates (e.g., "January 14, 2026" or "March 2026") instead of vague words like "recently" or "in recent times".
+
+4. ONLY ONE MAIN HEADLINE:
    - "topic_title" MUST be a crisp, elegant, concise headline of 3 to 6 words max.
 
-4. NEVER OUTPUT LARGE UNBROKEN PARAGRAPHS:
+5. NEVER OUTPUT LARGE UNBROKEN PARAGRAPHS:
    - All explanations MUST be strictly broken down into small, digestible subheadings and point-wise bullet points.
    - Each entry in "live_updates" MUST start with a small markdown subheading (e.g. "### 📌 Core Background & Overview").
 
-5. REGIONAL ACADEMIC ADAPTATION:
+6. REGIONAL ACADEMIC ADAPTATION:
    - The student is located in ${country}, Grade: ${gradeLevel}, Stream: ${academicStream}.
 
 STRICT JSON OUTPUT FORMAT:
@@ -4320,8 +4798,8 @@ STRICT JSON OUTPUT FORMAT:
   "match_score": "98%",
   "live_updates": [
     "### 📌 Core Background & Overview\\n* **Foundational Context:** Clear, verified background facts supported by research [1].\\n* **Core Definition & Significance:** Key concepts students need to know for examination [2].",
-    "### 🔍 Detailed Timeline & Key Developments\\n* **Chronological Milestones:** Specific dates and verified occurrences [1].\\n* **Key Turning Points:** Critical discoveries or institutional policy shifts [2].",
-    "### ⚖️ Analytical Impact & Real-World Consequences\\n* **Institutional Findings:** Official commissions or syllabus implications [1].\\n* **Current 2026 Status:** Up-to-date verified status as of today [2].",
+    "### 🔍 Detailed Timeline & Key Developments\\n* **Chronological Milestones:** Specific dates, clinical trial stages, and verified occurrences [1].\\n* **Key Turning Points:** Critical discoveries or institutional policy shifts [2].",
+    "### ⚖️ Analytical Impact & Real-World Consequences\\n* **Institutional Findings:** Official commissions or syllabus implications [1].\\n* **Current 2026 Status:** Up-to-date verified status as of today with exact naming [2].",
     "### 💡 High-Yield Student Takeaways\\n* **Critical Exam Insights:** High-yield questions and summary synthesis [1].\\n* **Common Misconceptions:** Key distinctions to avoid exam traps [2]."
   ],
   "action_steps": [
@@ -4347,10 +4825,14 @@ STUDENT ACADEMIC PROFILE: Country: ${country}, Grade: ${gradeLevel}, Stream: ${a
 VERIFIED REAL-TIME ACADEMIC & RESEARCH DATA:
 ${verifiedContextString || "No external search feeds returned. Synthesize using verified ground truth."}
 
-Conduct an elite, point-wise, structured academic research report with small markdown subheadings (### ...), bullet points, and mandatory inline bracketed citations ([1], [2]) mapping to verified references, returning strictly the JSON structure above.`;
+Conduct an elite, point-wise, structured academic research report with small markdown subheadings (### ...), bullet points, and mandatory inline bracketed citations ([1], [2]) mapping to verified references.
+CRITICAL MANDATORY CONSTRAINT: When citing real-time web sources for medical, tech, or current events, do NOT write vague summaries. You MUST explicitly name specific medicines/therapies, companies, clinical trials, or exact dates found in the search results.
+Return strictly the JSON structure above.`;
 
     const response = await safeGenerateContent({
       gradeLevel,
+      stream: academicStream,
+      country,
       model: "gemini-3.5-flash-lite",
       contents: [{ parts: [{ text: contentPrompt }] }],
       config: {
@@ -4480,72 +4962,130 @@ Conduct an elite, point-wise, structured academic research report with small mar
 
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade || req.body.studyLevel;
-    const academicStream = req.body.academicStream || req.body.stream || "General Science & Logic";
-    const topic = req.body.topic || req.body.category || "";
-    const excludeQuestions = req.body.excludeQuestions || [];
-    const country = req.body.country || "Global";
-    
-    const aiClient = getAI();
+    const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country, isBonus } = req.body;
+
+    const studentGrade = gradeLevel || studyLevel || req.body.userGrade || "11th Grade";
+    const studentStream = academicStream || req.body.stream || "STEM / Science & Engineering";
+    const studentCountry = country || "Global";
+
     const normalizeStr = (s: string) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
     const excludesSet = new Set((excludeQuestions || []).map((q: string) => normalizeStr(q)));
-    
+    const gradeDirective = getGradePedagogicalDirective(studentGrade, studentStream, studentCountry);
+
+    // Determine 3-Card Subject & Trap Focus based on academic profile
+    const streamLower = studentStream.toLowerCase();
+    const gradeLower = studentGrade.toLowerCase();
+    const isSTEM = streamLower.includes("stem") || streamLower.includes("sci") || streamLower.includes("eng") || streamLower.includes("med") || streamLower.includes("pcm") || streamLower.includes("pcb");
+    const isCommerce = streamLower.includes("commerce") || streamLower.includes("business") || streamLower.includes("econ") || streamLower.includes("account");
+    const isHumanities = streamLower.includes("human") || streamLower.includes("art") || streamLower.includes("law") || streamLower.includes("pol");
+    const isMiddleSchool = gradeLower.includes("6") || gradeLower.includes("7") || gradeLower.includes("8") || gradeLower.includes("9") || gradeLower.includes("10");
+
+    let subjectCurriculumGuidance = "";
+    if (isSTEM) {
+      subjectCurriculumGuidance = `
+STRICT 3-CARD SUBJECT MODEL FOR STEM (11th/12th / Competitive Exams like JEE/NEET/SAT/AP):
+- Card 1: Physics (Mechanics, Vectors, Gravitation, Waves, or Kinematics targeting mathematical approximation, signs, or inverse-square scaling traps).
+- Card 2: Chemistry (Physical, Inorganic, or Organic targeting periodic exceptions, hybridization traps, equilibrium Le Chatelier shifts, or reagent traps).
+- Card 3: Biology or Mathematics (For Bio: Cell bio, Biomolecules, or Physiology with confusable biochemical pathways & nomenclature like NADH vs NADPH; For Math: Limits, modulus/sign traps, or trigonometric domain/range traps).`;
+    } else if (isCommerce) {
+      subjectCurriculumGuidance = `
+STRICT 3-CARD SUBJECT MODEL FOR COMMERCE:
+- Card 1: Accountancy (Debit/Credit rules, Depreciation calculation traps, Capital vs Revenue expenditure traps).
+- Card 2: Economics (Price elasticity sign traps, Opportunity cost paradoxes, GDP vs Real GDP deflator traps).
+- Card 3: Business Studies / Financial Math (Statutory compliance, working capital traps, interest formula traps).`;
+    } else if (isHumanities) {
+      subjectCurriculumGuidance = `
+STRICT 3-CARD SUBJECT MODEL FOR HUMANITIES / ARTS / LAW:
+- Card 1: History / Polity (Constitutional amendment traps, landmark case traps, chronological sequence traps).
+- Card 2: Critical Logic & Reasoning (Syllogism traps, correlation vs causation fallacies, deductive validity traps).
+- Card 3: Geography / Economics (Cartographic scale traps, climate wind circulation traps, resource allocation traps).`;
+    } else if (isMiddleSchool) {
+      subjectCurriculumGuidance = `
+STRICT 3-CARD SUBJECT MODEL FOR FOUNDATIONAL SCIENCE & MATH:
+- Card 1: Physical Science (Speed vs velocity, light reflection/refraction sign traps, density and buoyant force traps).
+- Card 2: Chemical Science (Acids/bases pH traps, physical vs chemical change traps, reaction balancing traps).
+- Card 3: Biology & Quantitative Reasoning (Plant vs animal cell traps, exponent rules, or fraction percentage traps).`;
+    } else {
+      subjectCurriculumGuidance = `
+STRICT 3-CARD SUBJECT MODEL:
+- Card 1: Science / Quantitative Reasoning (Algebraic or physical scaling traps).
+- Card 2: Conceptual Logic (Counter-intuitive scientific or logical principles).
+- Card 3: Analytical Problem Solving (Common cognitive fallacies or terminology confusion traps).`;
+    }
+
     let attempts = 0;
-    let finalTrivia: any = null;
-    let extraAvoidInstruction = "";
+    let finalBooster: any = null;
 
     while (attempts < 3) {
       attempts++;
-      
-      let promptText = `Generate a single short, curriculum-aligned academic brain booster trivia question for:
-- Student Academic Grade/Level: ${gradeLevel || "High School"}
-- Academic Stream/Interest: ${academicStream || "General Science & Logic"}
-- Student's Country & Context: ${country || "Global"}`;
 
-      if (country && country.trim().length > 0) {
-        promptText += `\n- Country Context: Align with the national academic curriculum and everyday relatable logic relevant to ${country}.`;
-      }
+      const promptText = `You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
+Target: High-Yield Daily Micro-Assessment (Under 90 Seconds) focusing on "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
+${subjectCurriculumGuidance}
+${topic && topic.trim().length > 0 ? `Specific Focus Theme: ${topic}` : `Theme: High-Yield Exam Traps`}
+${studentCountry ? `Curricular Context: Aligned with standard national/competitive syllabus for ${studentCountry}.` : ""}
+${excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0 ? `Do NOT repeat these recently asked questions: ${JSON.stringify(excludeQuestions.slice(-30))}` : ""}
 
-      if (topic && topic.trim().length > 0) {
-        promptText += `\n- Specific Category Focus: ${topic}`;
-      } else {
-        promptText += `\n- Category Focus: High-yield academic concepts, everyday scientific applications, mathematical intuition, or clever logical problem solving tailored to ${academicStream}.`;
-      }
+STRICT RULES:
+- Tone: Academic, sharp, motivating.
+- Generate EXACTLY 3 multiple-choice micro-questions.
+- Keep question length STRICTLY under 25 words.
+- Options: Exactly 4 distinct, plausible options.
+- Explanations must not exceed 40 words.
+- Include 'latexEquation' with valid KaTeX math/chemical formulas (e.g. g = \\frac{GM}{R^2}).
+- Always include 'examTrapWarning' explicitly pointing out the exact careless trap where 80%+ of students lose negative marks.
 
-      if (excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0) {
-        promptText += `\n- EXCLUDE the following questions (do NOT repeat them): ${JSON.stringify(excludeQuestions.slice(-120))}`;
-      }
-
-      if (extraAvoidInstruction) {
-        promptText += `\n${extraAvoidInstruction}`;
-      }
-
-      const systemInstruction = `You are the Master of Academic Brain Booster & Cognitive Trivia for Students.
-
-MISSION:
-Generate a single, ultra-short, highly engaging multiple choice brain booster question tailored STRICTLY to the student's profile (Grade level: ${gradeLevel}, Stream: ${academicStream}, and Country: ${country}).
-
-QUESTION PHILOSOPHY:
-1. Focus on HIGH-YIELD ACADEMIC CONCEPTS, PRACTICAL SCIENCE/PHYSICS/MATH APPLICATIONS, CLEVER LOGIC SHORTCUTS, or ACCURATE CURRICULAR INSIGHTS.
-2. The question must trigger an instant "Aha!" moment and reinforce real academic learning.
-3. STRICT SHORT LENGTH CONSTRAINTS:
-   - "question": STRICTLY SHORT & PUNCHY — 15 to 25 words maximum! (1 or 2 crisp sentences). NEVER output long wordy paragraphs.
-   - "options": EXACTLY 3 or 4 short options (1 to 4 words each).
-   - "fact": STRICTLY 15 to 25 words max explaining the core concept or logic with an emoji (e.g. "💡 High-Yield Concept: ...").
-4. SUBJECT TAG: 2-3 words with an appropriate emoji (e.g. "⚡ Physics Intuition", "🧪 Chemistry in Action", "🧬 Biology Masterclass", "📐 Mental Math Shortcut", "📈 Economics Insight").
-
-STRICT JSON OUTPUT FORMAT:
-Output ONLY a valid JSON object matching this exact schema:
+STRICT OUTPUT JSON FORMAT:
 {
-  "subjectTag": "⚡ Physics Intuition",
-  "question": "If you double the speed of a car, by what factor does its braking distance increase on a dry road?",
-  "options": ["2 times", "4 times", "8 times", "Remains same"],
-  "correctIndex": 1,
-  "fact": "💡 Kinetic Energy is proportional to velocity squared (v^2), so braking distance quadruples! 🚗"
+  "dayNumber": 1,
+  "theme": "Exam Traps & Negative-Marking Avoidance",
+  "questions": [
+    {
+      "id": "q1",
+      "subject": "Physics",
+      "topic": "Gravitation",
+      "question": "If the radius of the Earth contracts by 1.5% while its total mass remains constant, the acceleration due to gravity on its surface (g) will:",
+      "options": ["Decrease by 1.5%", "Increase by 1.5%", "Increase by approx. 3.0%", "Decrease by approx. 3.0%"],
+      "correctIndex": 2,
+      "latexEquation": "g = \\frac{GM}{R^2} \\implies \\frac{\\Delta g}{g} \\approx -2\\left(\\frac{\\Delta R}{R}\\right)",
+      "shortExplanation": "When radius contracts (ΔR/R = -1.5%), g increases by +3.0%. Inverse-square laws double percentage variation.",
+      "examTrapWarning": "Common mistake: Forgetting the exponent -2 in the denominator and selecting +1.5%. Inverse-square laws double the percentage change!"
+    },
+    {
+      "id": "q2",
+      "subject": "Chemistry",
+      "topic": "Periodic Properties",
+      "question": "Which element exhibits the most negative (most exothermic) electron gain enthalpy (ΔegH)?",
+      "options": ["Fluorine (F)", "Chlorine (Cl)", "Bromine (Br)", "Oxygen (O)"],
+      "correctIndex": 1,
+      "latexEquation": "|\\Delta_{\\text{eg}}H_{\\text{Cl}}| > |\\Delta_{\\text{eg}}H_{\\text{F}}|",
+      "shortExplanation": "Chlorine's larger 3p orbital minimizes electron repulsion compared to Fluorine's compact 2p subshell.",
+      "examTrapWarning": "Common mistake: Choosing Fluorine due to highest electronegativity. Fluorine's compact 2p shell repels incoming electrons, giving Chlorine the highest value!"
+    },
+    {
+      "id": "q3",
+      "subject": "Biology",
+      "topic": "Cellular Respiration",
+      "question": "During aerobic cellular respiration in eukaryotic cells, which electron-carrying coenzyme is produced during the Krebs cycle to shuttle electrons to Complex I?",
+      "options": ["NADH", "NADPH", "FADH2", "Cytochrome c"],
+      "correctIndex": 0,
+      "latexEquation": "\\text{Krebs Cycle} \\rightarrow 3\\,\\text{NADH} + 1\\,\\text{FADH}_2 + 1\\,\\text{GTP}",
+      "shortExplanation": "NADH is synthesized in catabolic pathways (Krebs cycle). NADPH operates strictly in anabolic biosynthetic pathways.",
+      "examTrapWarning": "Common mistake: Confusing NADH with NADPH ('P' for Photosynthesis/Phosphate in anabolic pathways). Examiners deliberately put NADPH to penalize speed-readers!"
+    }
+  ]
 }`;
 
+      const systemInstruction = `${gradeDirective}
+
+You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
+Generate exactly 3 multiple-choice micro-questions targeting "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
+Return strictly a valid JSON object matching the requested schema.`;
+
       const response = await safeGenerateContent({
-        gradeLevel: gradeLevel || "High School",
+        gradeLevel: studentGrade,
+        stream: studentStream,
+        country: studentCountry,
         model: "gemini-3.5-flash-lite",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
@@ -4556,66 +5096,164 @@ Output ONLY a valid JSON object matching this exact schema:
 
       const triviaText = response.text || "";
       const parsed = safeParseJSON(triviaText, 'object');
-      
-      if (parsed && parsed.question && Array.isArray(parsed.options)) {
-        const normQ = normalizeStr(parsed.question);
-        if (!excludesSet.has(normQ)) {
-          finalTrivia = parsed;
-          break; // Found a completely unique question!
-        } else {
-          console.warn(`[Trivia Loop] Duplicate question generated: "${parsed.question}". Retrying...`);
-          extraAvoidInstruction = `\n- IMPORTANT: You previously generated "${parsed.question}", which was already asked. Please choose a completely different subtopic or a creative new angle to make sure it is 100% unique.`;
+
+      if (parsed && Array.isArray(parsed.questions) && parsed.questions.length >= 3) {
+        // Validate questions
+        const validQuestions = parsed.questions.filter((q: any) => 
+          q && q.question && Array.isArray(q.options) && q.options.length >= 3 && typeof q.correctIndex === 'number'
+        );
+
+        if (validQuestions.length >= 3) {
+          finalBooster = {
+            dayNumber: parsed.dayNumber || 1,
+            theme: parsed.theme || "Daily Exam Trap Booster",
+            questions: validQuestions.slice(0, 3)
+          };
+          break;
         }
       }
     }
 
-    if (finalTrivia) {
-      return res.json({ trivia: finalTrivia });
+    if (finalBooster) {
+      return res.json({ 
+        booster: finalBooster,
+        questions: finalBooster.questions,
+        trivia: finalBooster.questions[0]
+      });
     }
 
-    throw new Error("Failed to parse or generate a unique trivia response after multiple attempts");
+    throw new Error("Failed to generate a valid 3-question trivia booster after multiple attempts");
   } catch (error: any) {
     console.error("Trivia generation error:", error);
-    // Fallback to punchy presence of mind / common sense trivia
-    const fallbacks = [
+
+    // High-yield fallback sets (including Day 1 Blueprint exemplar)
+    const fallbackSets = [
       {
-        subjectTag: "💡 Presence of Mind",
-        question: "If an electric train travels North at 60 mph and wind blows West at 20 mph, which way does the smoke blow?",
-        options: ["North", "West", "No smoke (Electric)"],
-        correctIndex: 2,
-        fact: "⚡ Presence of mind! Electric trains don't produce any smoke! 🚂"
+        dayNumber: 1,
+        theme: "Day 1 Trap Master: Mechanics, Trends & Pathways",
+        questions: [
+          {
+            id: "q1",
+            subject: "Physics",
+            topic: "Gravitation & Inverse Square",
+            question: "If the radius of the Earth contracts by 1.5% while its total mass remains constant, the acceleration due to gravity on its surface (g) will:",
+            options: ["Decrease by 1.5%", "Increase by 1.5%", "Increase by approx. 3.0%", "Decrease by approx. 3.0%"],
+            correctIndex: 2,
+            latexEquation: "g = \\frac{GM}{R^2} = GM \\cdot R^{-2} \\implies \\frac{\\Delta g}{g} \\approx -2\\left(\\frac{\\Delta R}{R}\\right)",
+            shortExplanation: "When radius contracts (ΔR/R = -1.5%), g increases by +3.0%. Inverse-square laws double the percentage variation.",
+            examTrapWarning: "Common mistake: Forgetting the exponent -2 in the denominator and selecting +1.5%. Inverse-square laws double percentage changes!"
+          },
+          {
+            id: "q2",
+            subject: "Chemistry",
+            topic: "Periodic Trends & Electron Gain",
+            question: "Which element exhibits the most negative (most exothermic) electron gain enthalpy (ΔegH)?",
+            options: ["Fluorine (F)", "Chlorine (Cl)", "Bromine (Br)", "Oxygen (O)"],
+            correctIndex: 1,
+            latexEquation: "|\\Delta_{\\text{eg}}H_{\\text{Cl}}| > |\\Delta_{\\text{eg}}H_{\\text{F}}|",
+            shortExplanation: "Chlorine's larger 3p orbital minimizes inter-electronic repulsion compared to Fluorine's compact 2p subshell.",
+            examTrapWarning: "Common mistake: Choosing Fluorine due to highest electronegativity. Fluorine's compact 2p subshell causes strong electron-electron repulsion!"
+          },
+          {
+            id: "q3",
+            subject: "Biology",
+            topic: "Respiration & Coenzymes",
+            question: "During aerobic cellular respiration in eukaryotic cells, which electron-carrying coenzyme is produced during the Krebs cycle to shuttle electrons to Complex I?",
+            options: ["NADH", "NADPH", "FADH2", "Cytochrome c"],
+            correctIndex: 0,
+            latexEquation: "\\text{Krebs Cycle} \\rightarrow 3\\,\\text{NADH} + 1\\,\\text{FADH}_2 + 1\\,\\text{GTP}",
+            shortExplanation: "NADH is synthesized in catabolic pathways (Krebs cycle). NADPH operates strictly in anabolic biosynthetic pathways.",
+            examTrapWarning: "Common mistake: Confusing NADH with NADPH ('P' for Photosynthesis / Phosphorylation in anabolic pathways). Deliberately placed to catch speed-readers!"
+          }
+        ]
       },
       {
-        subjectTag: "🧠 Logic & Common Sense",
-        question: "A bat and ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much is the ball?",
-        options: ["$0.10", "$0.05", "$0.01"],
-        correctIndex: 1,
-        fact: "💡 Common sense trap! If the ball were $0.10, the bat would be $1.10, making the total $1.20! 🎾"
+        dayNumber: 2,
+        theme: "Day 2 Trap Master: Curvature, Oxidation & Botany",
+        questions: [
+          {
+            id: "q1",
+            subject: "Physics",
+            topic: "Projectile Motion Curvature",
+            question: "A projectile is launched with velocity u at angle θ. At the highest point of its trajectory, what is its radius of curvature?",
+            options: ["u² / g", "(u² cos²θ) / g", "(u² sin²θ) / g", "Infinity"],
+            correctIndex: 1,
+            latexEquation: "R = \\frac{v^2}{a_\\perp} = \\frac{(u\\cos\\theta)^2}{g}",
+            shortExplanation: "At the peak, velocity is purely horizontal (u cos θ) and normal acceleration is g, giving R = (u² cos²θ)/g.",
+            examTrapWarning: "Common mistake: Selecting u²/g by forgetting that speed at the vertex is u cos θ, not initial speed u!"
+          },
+          {
+            id: "q2",
+            subject: "Chemistry",
+            topic: "Coordination Chemistry & Nitrosyl",
+            question: "In the brown ring complex [Fe(H2O)5(NO)]SO4, what is the formal oxidation state of Iron (Fe)?",
+            options: ["+2", "+3", "+1", "0"],
+            correctIndex: 2,
+            latexEquation: "[\\text{Fe}^{+1}(\\text{H}_2\\text{O})_5(\\text{NO}^+)]\\text{SO}_4^{2-}",
+            shortExplanation: "Nitric oxide coordinates as nitrosonium ion (NO⁺), transferring an electron to iron so Fe has a +1 oxidation state.",
+            examTrapWarning: "Common mistake: Assuming NO is a neutral ligand and concluding Fe is +2. In the brown ring test, NO is NO⁺!"
+          },
+          {
+            id: "q3",
+            subject: "Biology",
+            topic: "Plant Physiology & C4 Pathway",
+            question: "In C4 plants, what is the primary stable 4-carbon product formed following initial atmospheric CO2 fixation in mesophyll cells?",
+            options: ["Oxaloacetate (OAA)", "3-Phosphoglycerate (3-PGA)", "Malate", "Aspartate"],
+            correctIndex: 0,
+            latexEquation: "\\text{PEP} + \\text{CO}_2 + \\text{H}_2\\text{O} \\xrightarrow{\\text{PEPcase}} \\text{Oxaloacetate (4C)}",
+            shortExplanation: "PEP carboxylase fixes CO2 to produce Oxaloacetate (4C), which is subsequently reduced to malate.",
+            examTrapWarning: "Common mistake: Selecting 3-PGA (which is the C3 pathway first product) or Malate (which is the transported form, not the first direct product)!"
+          }
+        ]
       },
       {
-        subjectTag: "⚡ Everyday Physics",
-        question: "Why can birds sit safely on uninsulated high-voltage power lines without getting an electric shock?",
-        options: ["Insulated feet", "Zero voltage difference", "Feathers absorb charge"],
-        correctIndex: 1,
-        fact: "🦅 Both feet are on the exact same wire, creating zero voltage difference so no current flows! ⚡"
-      },
-      {
-        subjectTag: "🧪 Kitchen Science",
-        question: "Which freezes faster in a home freezer under certain conditions: hot water or cold water?",
-        options: ["Cold Water", "Hot Water (Mpemba Effect)", "Both at same rate"],
-        correctIndex: 1,
-        fact: "❄️ Known as the Mpemba Effect, hot water can sometimes freeze faster due to rapid surface evaporation! 🧊"
-      },
-      {
-        subjectTag: "🧩 Mind Teaser",
-        question: "A rooster lays an egg on the very top of a slanted triangular barn roof. Which side does it roll down?",
-        options: ["Left side", "Right side", "Roosters don't lay eggs"],
-        correctIndex: 2,
-        fact: "🐔 Classic presence of mind riddle! Roosters are male and do not lay eggs! 🥚"
+        dayNumber: 3,
+        theme: "Day 3 Trap Master: Energy, Geometry & Clotting",
+        questions: [
+          {
+            id: "q1",
+            subject: "Physics",
+            topic: "Spring Potential Energy Ratio",
+            question: "Two ideal springs with spring constants k1 and k2 (k1 > k2) are stretched by applying equal forces F. Which spring stores more potential energy?",
+            options: ["Spring 1 (k1)", "Spring 2 (k2)", "Both store equal energy", "Depends on spring length"],
+            correctIndex: 1,
+            latexEquation: "U = \\frac{F^2}{2k} \\implies U \\propto \\frac{1}{k} \\quad (\\text{for constant } F)",
+            shortExplanation: "When force is constant, stored energy is inversely proportional to k (U = F²/2k). The softer spring (k2) stores more energy.",
+            examTrapWarning: "Common mistake: Using U = 1/2 k x² and assuming larger k gives larger energy. That formula applies when extension x is identical, not force F!"
+          },
+          {
+            id: "q2",
+            subject: "Chemistry",
+            topic: "Molecular Geometry & Dipole Moment",
+            question: "Which of the following molecules possesses polar covalent bonds but has an overall dipole moment of exactly zero (μ = 0)?",
+            options: ["SF4", "XeF4", "ClF3", "H2O"],
+            correctIndex: 1,
+            latexEquation: "\\text{XeF}_4: \\text{sp}^3\\text{d}^2 \\text{ (Square Planar Geometry)} \\implies \\vec{\\mu} = 0",
+            shortExplanation: "XeF4 has 4 bond pairs and 2 axial lone pairs in a square planar geometry, causing bond dipoles and lone pairs to cancel symmetrically.",
+            examTrapWarning: "Common mistake: Confusing XeF4 with SF4. SF4 has a see-saw geometry with non-zero dipole moment!"
+          },
+          {
+            id: "q3",
+            subject: "Biology",
+            topic: "Human Physiology & Coagulation Cascade",
+            question: "During blood coagulation cascade, which enzyme complex directly catalyzes the conversion of inactive Prothrombin into active Thrombin?",
+            options: ["Thrombokinase (Prothrombinase)", "Thrombin", "Fibrinogen", "Heparin"],
+            correctIndex: 0,
+            latexEquation: "\\text{Prothrombin} \\xrightarrow{\\text{Thrombokinase} + \\text{Ca}^{2+}} \\text{Thrombin}",
+            shortExplanation: "Thrombokinase (Factor Xa + Va + Ca²⁺) cleaves prothrombin into thrombin, which then converts fibrinogen into fibrin threads.",
+            examTrapWarning: "Common mistake: Selecting Thrombin or Fibrin. Thrombin is the product of the conversion, not the activating enzyme!"
+          }
+        ]
       }
     ];
-    const randomIndex = Math.floor(Math.random() * fallbacks.length);
-    res.json({ trivia: fallbacks[randomIndex], isFallback: true });
+
+    const fallback = fallbackSets[Math.floor(Math.random() * fallbackSets.length)];
+    res.json({ 
+      booster: fallback, 
+      questions: fallback.questions, 
+      trivia: fallback.questions[0], 
+      isFallback: true 
+    });
   }
 });
 

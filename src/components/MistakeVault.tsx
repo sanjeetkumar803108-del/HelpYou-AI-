@@ -11,6 +11,7 @@ import { collection, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy }
 import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
+import { getUserProfileData } from '../utils/profile';
 
 interface MistakeVaultProps {
   onBack: () => void;
@@ -157,7 +158,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
     setFixingId(item.id);
     
     try {
-      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
+      const profile = getUserProfileData();
       const response = await fetch(getApiUrl('/api/fix-mistake'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,7 +166,9 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
           question: item.question || 'Academic problem',
           wrongInput: item.wrongInput || 'Incorrect attempt',
           correctConcept: item.correctConcept || 'Correct principle',
-          gradeLevel
+          gradeLevel: profile.gradeLevel,
+          stream: profile.stream,
+          country: profile.country
         })
       });
 
@@ -234,7 +237,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
     setPracticeComplete(false);
 
     try {
-      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
+      const profile = getUserProfileData();
       const response = await fetch(getApiUrl('/api/generate-practice'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,7 +246,9 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
           wrongInput: item.wrongInput || 'Incorrect response',
           correctConcept: item.correctConcept || 'Correct principle',
           sourceFeature: item.sourceFeature || 'General Study',
-          gradeLevel
+          gradeLevel: profile.gradeLevel,
+          stream: profile.stream,
+          country: profile.country
         })
       });
 

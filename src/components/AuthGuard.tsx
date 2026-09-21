@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { safeGetItem } from '../utils/storage';
 import Login from './Login';
 import SplashScreen from './SplashScreen';
 import Onboarding from './Onboarding';
@@ -59,6 +60,20 @@ export default function AuthGuard({
 
   // Active User: use React state or fallback to immediate Firebase auth object
   const activeUser = user || auth.currentUser;
+  const hasCachedSession = Boolean(
+    safeGetItem('last_logged_in_user') && 
+    safeGetItem('helpyou_active_user_session') === 'true'
+  );
+
+  // If user has an active session cached, but Firebase Auth hasn't finished reading IndexedDB yet,
+  // hold the smooth skeleton briefly instead of flashing the login screen.
+  if (!activeUser && hasCachedSession) {
+    return (
+      <div className={containerClass}>
+        {fallbackSkeleton}
+      </div>
+    );
+  }
 
   // 3. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
   // If user is unauthenticated, ALWAYS show Login first!

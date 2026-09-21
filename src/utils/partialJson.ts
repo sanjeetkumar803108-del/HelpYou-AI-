@@ -25,13 +25,46 @@ export function sanitizeLaTeXInJSON(raw: string): string {
         // Standard JSON escape characters: ", \, /
         if (char === '"' || char === '\\' || char === '/') {
           out += '\\' + char;
-        } else if (char === 'b' || char === 'f' || char === 'n' || char === 'r' || char === 't') {
-          // If followed immediately by an ASCII letter (e.g. \frac, \text, \times, \theta, \right, \beta, \boxed, \neq)
-          // it's a LaTeX command, NOT a JSON control escape. Double-escape it so JSON.parse preserves the LaTeX string!
-          if (nextChar && /^[a-zA-Z]/.test(nextChar)) {
-            out += '\\\\' + char;
+        } else if (char === 'n') {
+          // Check if this is an actual LaTeX command starting with \n (\neq, \nabla, \notin, \natural, \nearrow, \nwarrow, \nu, \not, \neg, \nexists, \nsim, \nleq, \ngeq)
+          const isLatexCommand = /^(?:eq|abla|otin|atural|earrow|warrow|u\b|ot\b|eg\b|exists|sim|leq|geq)/.test(raw.slice(i + 1, i + 10));
+          if (isLatexCommand) {
+            out += '\\\\n';
           } else {
-            out += '\\' + char;
+            // Standard JSON newline escape (\n) -> decode as \n so JSON.parse outputs a real newline character!
+            out += '\\n';
+          }
+        } else if (char === 'r') {
+          // LaTeX commands starting with \r (\rightarrow, \rho, \right, \rangle, \real, \rm, \root, \rceil, \rfloor)
+          const isLatexCommand = /^(?:ightarrow|ho\b|ight\b|angle\b|eal\b|m\b|oot\b|ceil\b|floor\b)/.test(raw.slice(i + 1, i + 12));
+          if (isLatexCommand) {
+            out += '\\\\r';
+          } else {
+            out += '\\r';
+          }
+        } else if (char === 'b') {
+          // LaTeX commands starting with \b (\beta, \begin, \bar, \big, \boldsymbol, \binom, \bot, \bullet, \bf, \bmod, \boxed, \backslash)
+          const isLatexCommand = /^(?:eta\b|egin\b|ar\b|ig\b|oldsymbol\b|inom\b|ot\b|ullet\b|f\b|mod\b|oxed\b|ackslash\b)/.test(raw.slice(i + 1, i + 12));
+          if (isLatexCommand) {
+            out += '\\\\b';
+          } else {
+            out += '\\b';
+          }
+        } else if (char === 't') {
+          // LaTeX commands starting with \t (\text, \times, \theta, \tan, \tau, \to, \tilde, \tag, \top, \textbf, \textit, \therefore, \tfrac)
+          const isLatexCommand = /^(?:ext|imes|heta|an\b|au\b|o\b|ilde|ag|op\b|extbf|extit|herefore|frac)/.test(raw.slice(i + 1, i + 12));
+          if (isLatexCommand) {
+            out += '\\\\t';
+          } else {
+            out += '\\t';
+          }
+        } else if (char === 'f') {
+          // LaTeX commands starting with \f (\frac, \forall, \flat, \frown)
+          const isLatexCommand = /^(?:rac|orall|lat|rown)/.test(raw.slice(i + 1, i + 8));
+          if (isLatexCommand) {
+            out += '\\\\f';
+          } else {
+            out += '\\f';
           }
         } else if (char === 'u') {
           // Check if followed by 4 hex digits

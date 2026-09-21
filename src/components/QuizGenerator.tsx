@@ -14,6 +14,7 @@ import { db, auth } from '../lib/firebase';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
+import { getUserProfileData } from '../utils/profile';
 import { detectUserRegion } from '../utils/regionDetector';
 import { useSettings } from '../hooks/useSettings';
 import { saveMistakeToVault } from '../utils/mistakes';
@@ -699,14 +700,16 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   // --- ASK AI QUESTION TUTOR STATES ---
   const [showAskAIModal, setShowAskAIModal] = useState(false);
   const [askAIMode, setAskAIMode] = useState<'choose' | 'hint' | 'step_by_step'>('choose');
-  const [askAILoading, setAskAILoading] = useState(false);
+  const [askAILoadingMode, setAskAILoadingMode] = useState<'hint' | 'step_by_step' | null>(null);
+  const askAILoading = !!askAILoadingMode;
+  const askAICacheRef = useRef<Record<number, { hint?: string; step_by_step?: string }>>({});
   const [askAICache, setAskAICache] = useState<Record<number, { hint?: string; step_by_step?: string }>>({});
   const [copiedAiHelp, setCopiedAiHelp] = useState(false);
 
   const handleOpenAskAI = (currentQ?: Question) => {
     triggerVibration(15);
     setCopiedAiHelp(false);
-    const cached = askAICache[currentIndex];
+    const cached = askAICacheRef.current[currentIndex] || askAICache[currentIndex];
     if (cached?.step_by_step || cached?.hint) {
       setAskAIMode(cached.step_by_step ? 'step_by_step' : 'hint');
     } else {
@@ -720,68 +723,169 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
     setAskAIMode(targetMode);
     setCopiedAiHelp(false);
 
-    if (askAICache[currentIndex]?.[targetMode]) {
+    // 1. Instant Cache Check: If this question and mode are already cached, switch instantly without re-fetching
+    const cachedItem = askAICacheRef.current[currentIndex]?.[targetMode] || askAICache[currentIndex]?.[targetMode];
+    if (cachedItem) {
       return;
     }
 
-    setAskAILoading(true);
+    // 2. Prevent duplicate concurrent requests for the same mode
+    if (askAILoadingMode === targetMode) {
+      return;
+    }
+
+    setAskAILoadingMode(targetMode);
     const curQ = quiz[currentIndex];
     if (!curQ) {
-      setAskAILoading(false);
+      setAskAILoadingMode(null);
       return;
     }
 
     try {
-      const res = await fetch(getApiUrl('/api/quiz-ai-help'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          question: curQ.question,
-          options: curQ.options,
-          correctAnswer: curQ.correctAnswer,
-          explanation: curQ.explanation,
-          mode: targetMode
-        })
-      });
+      let explanationText = '';
 
-      if (!res.ok) {
-        throw new Error(`Server returned status ${res.status}`);
-      }
+      const profile = getUserProfileData();
 
-      const data = await res.json();
-      if (data && data.explanation) {
-        setAskAICache(prev => ({
-          ...prev,
-          [currentIndex]: {
-            ...prev[currentIndex],
-            [targetMode]: data.explanation
+      // Layer 1: Attempt dedicated /api/quiz-ai-help endpoint
+      try {
+        const res = await fetch(getApiUrl('/api/quiz-ai-help'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            question: curQ.question,
+            options: curQ.options,
+            correctAnswer: curQ.correctAnswer,
+            explanation: curQ.explanation,
+            mode: targetMode,
+            gradeLevel: profile.gradeLevel,
+            stream: profile.stream,
+            country: profile.country
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.explanation) {
+            explanationText = data.explanation;
           }
-        }));
-      } else {
-        throw new Error("No explanation returned");
+        }
+      } catch (e) {
+        console.warn("Dedicated quiz-ai-help unavailable, trying universal AI route...", e);
       }
-    } catch (err) {
-      console.warn("Error fetching AI Help, using structured fallback:", err);
-      const fallbackText = targetMode === 'hint'
-        ? `### 🎯 What This Question Is Asking\n- Focus on the core relationship between the given values and what you are solving for.\n\n### 🔑 Key Concept & Formula\n- Review the governing principle for this specific question type.\n\n### 💡 Guided Clue\n- Double check the initial vs. final states and identify the appropriate formula to use.`
-        : `### 🎯 Step-by-Step Solution\n- **Correct Answer:** ${curQ.correctAnswer || 'Identified in options'}\n\n### 📝 Step 1: Breakdown\n- ${curQ.explanation || 'Apply the fundamental equation to substitute values and calculate the final result.'}\n\n### 💡 Key Takeaway\n- Always verify your units and signs before submitting your answer on exam day!`;
 
+      // Layer 2: Fallback to universal /api/chat endpoint (works 100% across remote and local servers)
+      if (!explanationText) {
+        const isHint = targetMode === 'hint';
+        const sysInstruction = `You are an elite SAT/AP/Olympiad Master Coach and Professor.
+A student is answering a multiple-choice question and clicked ${isHint ? '"Explain Question & Hint"' : '"Explain Step-by-Step Answer"'}.
+
+CRITICAL PEDAGOGICAL MANDATE:
+1. ${isHint 
+     ? `DO NOT reveal the final correct option or direct answer!
+Structure your response in rich, clean Markdown with these exact sections:
+### 🎯 What This Question Is Asking
+Break down the problem in simple, encouraging terms. Explain what scenario is being described, what the question is asking you to solve or identify, and why this concept matters.
+### 🔑 Core Concepts & Key Mechanism
+Explain the foundational concept, biological pathway, chemical mechanism, historical context, or mathematical theorem involved.
+### 💡 Guided Progressive Hints
+- **Hint 1 (Starting Point):** A gentle conceptual clue to get started.
+- **Hint 2 (Critical Connection):** Connect the key mechanism to the terms in the choices.
+- **Hint 3 (Elimination Clue):** What common trap or confusion should they avoid? How can they eliminate wrong distractors?`
+     : `Deliver an exhaustive, comprehensive, master-tier explanation.
+Structure your response in rich, clean Markdown with these exact sections:
+### 🎯 Correct Answer & Comprehensive Summary
+State the official correct answer clearly, with an executive summary explaining why it is 100% correct.
+### 📝 In-Depth Step-by-Step Breakdown & Mechanism
+Provide a thorough, step-by-step conceptual walkthrough or mathematical derivation. Explain the underlying biological mechanism, chemical pathway, historical context, or mathematical working in complete detail.
+### ❌ Why the Other Options Are Incorrect
+Break down the wrong options and explain specifically why they fail or represent common exam misconceptions.
+### 💡 High-Yield Exam Tip & Pitfall
+Provide an exam-tested mnemonic, trap alert, or key takeaway specifically tailored to this exact subject and topic.`}
+
+2. MATHEMATICAL FORMULAS & SCIENTIFIC NOTATION (STRICT KA-TEX RULES):
+   - CRITICAL: EVERY single mathematical formula, derivation step, variable, equation, number with units, and chemical symbol MUST be fully enclosed in LaTeX dollar signs ($...$ for inline or $$...$$ for display blocks).
+   - NEVER output raw un-bracketed LaTeX syntax (such as \\frac, \\sqrt, \\cos, \\sin, \\text{}, \\cdot, \\theta, \\circ) without enclosing dollar signs ($...$).
+   - NEVER leave unmatched or dangling dollar signs (e.g. NEVER write 'gives: v_{0x}=...$' with an unclosed '$').
+   - When writing equations after colons or introductory text, ALWAYS wrap the entire equation in dollar signs: e.g. 'gives: $v_{0x} = v_0 \\cos(\\theta)$', NEVER 'gives: v_{0x}=...$'.
+   - When explaining options, wrap all math and units: e.g. '• A) $10\\text{ m/s}$: This represents $20\\sin(30^\\circ)$ which...'.
+   - Use standard subscripts and superscripts: e.g. $NADH$, $FADH_2$, $ATP$, $H_2O$, $x^2$, $10^{-5}$, $v_{0x}$, $v_{0y}$.
+   - Never write bare asterisks for multiplication (use $\\cdot$ or $\\times$).
+3. Thorough, encouraging, and master-level pedagogical depth.`;
+
+        const userPrompt = `Student Question:
+${curQ.question}
+
+Available Options:
+${curQ.options && curQ.options.length > 0 ? (Array.isArray(curQ.options) ? curQ.options.join('\n') : curQ.options) : 'N/A'}
+
+${curQ.correctAnswer ? `Official Correct Option: ${curQ.correctAnswer}\n` : ''}${curQ.explanation ? `Provided Context/Explanation: ${curQ.explanation}\n` : ''}
+Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive hints without spoiling the final choice' : 'full step-by-step solution, option-by-option analysis, and subject-specific exam tip'}.`;
+
+        const formData = new FormData();
+        formData.append('message', userPrompt);
+        formData.append('customSystemInstruction', sysInstruction);
+        formData.append('mode', 'General');
+        formData.append('gradeLevel', profile.gradeLevel);
+        if (profile.stream) formData.append('stream', profile.stream);
+        if (profile.country) formData.append('country', profile.country);
+
+        const chatRes = await fetch(getApiUrl('/api/chat'), {
+          method: 'POST',
+          body: formData
+        });
+
+        if (chatRes.ok) {
+          const chatData = await chatRes.json();
+          let rawText = chatData.text || '';
+          if (rawText.trim().startsWith('{')) {
+            try {
+              const parsed = JSON.parse(rawText);
+              rawText = parsed.markdown_content || parsed.explanation || parsed.content || rawText;
+            } catch (_) {}
+          }
+          if (rawText) {
+            explanationText = rawText;
+          }
+        }
+      }
+
+      // Layer 3: True offline fallback (contextually derived from current question, no canned physics lines)
+      if (!explanationText) {
+        const isHint = targetMode === 'hint';
+        if (isHint) {
+          explanationText = `### 🎯 What This Question Is Asking\nThis question asks you to evaluate: **"${curQ.question}"**.\n\n### 🔑 Core Concept\nIdentify the core terms and mechanisms being tested, and relate them to the principles you studied in this chapter.\n\n### 💡 Guided Clues\n- **Clue 1:** Review each option individually to see which one directly aligns with the fundamental definitions.\n- **Clue 2:** Watch out for common distractors that describe related but distinct processes.\n- **Clue 3:** Eliminate options that contain partial truths or mismatched terms.`;
+        } else {
+          explanationText = `### 🎯 Step-by-Step Solution\n- **Correct Answer:** ${curQ.correctAnswer || 'Identified in options'}\n\n### 📝 Detailed Breakdown\n${curQ.explanation || 'The correct option accurately satisfies all criteria and principles presented in the question.'}\n\n### 💡 Key Takeaway\nAlways verify key scientific terms and eliminate distractors based on fundamental mechanisms on exam day!`;
+        }
+      }
+
+      // Save into synchronous ref FIRST (immune to race conditions and closure staleness)
+      if (!askAICacheRef.current[currentIndex]) {
+        askAICacheRef.current[currentIndex] = {};
+      }
+      askAICacheRef.current[currentIndex][targetMode] = explanationText;
+
+      // Update React state to trigger clean UI re-render
       setAskAICache(prev => ({
         ...prev,
         [currentIndex]: {
-          ...prev[currentIndex],
-          [targetMode]: fallbackText
+          ...(prev[currentIndex] || {}),
+          ...askAICacheRef.current[currentIndex],
+          [targetMode]: explanationText
         }
       }));
+    } catch (err) {
+      console.error("Error in handleFetchAIHelp:", err);
     } finally {
-      setAskAILoading(false);
+      setAskAILoadingMode(prev => (prev === targetMode ? null : prev));
     }
   };
 
   const handleCopyAIHelp = () => {
-    const text = askAICache[currentIndex]?.[askAIMode === 'hint' ? 'hint' : 'step_by_step'];
+    const text = askAICacheRef.current[currentIndex]?.[askAIMode === 'hint' ? 'hint' : 'step_by_step'] ||
+                 askAICache[currentIndex]?.[askAIMode === 'hint' ? 'hint' : 'step_by_step'];
     if (text && navigator.clipboard) {
       navigator.clipboard.writeText(text);
       triggerVibration(15);
@@ -812,16 +916,11 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   const userUid = currentUser?.uid;
 
   const [gradeLevel, setGradeLevel] = useState<string>(() => {
-    return safeGetItem('academic_grade') 
-      || (userUid ? safeGetItem(`academic_grade_${userUid}`) : null) 
-      || safeGetItem('onboarding_grade') 
-      || '11th Grade';
+    return getUserProfileData().gradeLevel || '11th Grade';
   });
 
   const [academicTrack, setAcademicTrack] = useState<string>(() => {
-    return safeGetItem('academic_stream') 
-      || (userUid ? safeGetItem(`academic_stream_${userUid}`) : null) 
-      || 'STEM / Engineering';
+    return getUserProfileData().stream || 'STEM / Engineering';
   });
 
   const getDerivedRegion = (uid?: string) => {
@@ -845,15 +944,9 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     const syncAcademicProfile = () => {
       const uid = auth.currentUser?.uid;
-      const updatedGrade = safeGetItem('academic_grade') 
-        || (uid ? safeGetItem(`academic_grade_${uid}`) : null) 
-        || safeGetItem('onboarding_grade') 
-        || '11th Grade';
-
-      const updatedTrack = safeGetItem('academic_stream') 
-        || (uid ? safeGetItem(`academic_stream_${uid}`) : null) 
-        || 'STEM / Engineering';
-
+      const profile = getUserProfileData();
+      const updatedGrade = profile.gradeLevel || '11th Grade';
+      const updatedTrack = profile.stream || 'STEM / Engineering';
       const updatedRegion = getDerivedRegion(uid);
 
       setGradeLevel(updatedGrade);
@@ -1332,8 +1425,10 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       const formData = new FormData();
       formData.append("pdf", file);
       formData.append("count", String(selectedCount));
-      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      formData.append("gradeLevel", gradeLevel);
+      const profile = getUserProfileData();
+      formData.append("gradeLevel", profile.gradeLevel);
+      if (profile.stream) formData.append("stream", profile.stream);
+      if (profile.country) formData.append("country", profile.country);
 
       const response = await fetch(getApiUrl('/api/generate-pdf-quiz'), {
         method: 'POST',
@@ -1399,8 +1494,10 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       const formData = new FormData();
       formData.append("image", file);
       formData.append("count", String(selectedCount));
-      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
-      formData.append("gradeLevel", gradeLevel);
+      const profile = getUserProfileData();
+      formData.append("gradeLevel", profile.gradeLevel);
+      if (profile.stream) formData.append("stream", profile.stream);
+      if (profile.country) formData.append("country", profile.country);
 
       const response = await fetch(getApiUrl('/api/generate-image-quiz'), {
         method: 'POST',
@@ -1464,11 +1561,17 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
     setCurrentQuizRecordId(null);
 
     try {
-      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
+      const profile = getUserProfileData();
       const response = await fetch(getApiUrl('/api/generate-quiz'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: activeTopic, gradeLevel, count: selectedCount }),
+        body: JSON.stringify({
+          topic: activeTopic,
+          gradeLevel: profile.gradeLevel,
+          stream: profile.stream,
+          country: profile.country,
+          count: selectedCount
+        }),
       });
 
       if (!response.ok) {
@@ -3358,6 +3461,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                       >
                         <Lightbulb className="w-3.5 h-3.5" />
                         <span>Question & Hint</span>
+                        {askAILoadingMode === 'hint' && <Loader2 className="w-3 h-3 animate-spin ml-1 text-amber-600" />}
                       </button>
                       <button
                         type="button"
@@ -3370,11 +3474,12 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Step-by-Step Answer</span>
+                        {askAILoadingMode === 'step_by_step' && <Loader2 className="w-3 h-3 animate-spin ml-1 text-indigo-600" />}
                       </button>
                     </div>
 
-                    {/* Loading State */}
-                    {askAILoading && (
+                    {/* Loading State for active mode */}
+                    {askAILoadingMode === askAIMode && (
                       <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
                         <div className="relative">
                           <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
@@ -3391,11 +3496,14 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                       </div>
                     )}
 
-                    {/* Content Render */}
-                    {!askAILoading && askAICache[currentIndex]?.[askAIMode] && (
+                    {/* Content Render (checked from both synchronous ref and reactive state) */}
+                    {askAILoadingMode !== askAIMode && (askAICacheRef.current[currentIndex]?.[askAIMode] || askAICache[currentIndex]?.[askAIMode]) && (
                       <div className="bg-zinc-50/80 border border-zinc-200/80 rounded-2xl p-4 md:p-5 shadow-xs">
                         <GlobalMarkdown className="text-xs md:text-sm text-zinc-800 leading-relaxed space-y-3 font-medium">
-                          {formatQuizMath(askAICache[currentIndex][askAIMode] || '')}
+                          {formatQuizMath(
+                            askAICacheRef.current[currentIndex]?.[askAIMode] ||
+                            askAICache[currentIndex]?.[askAIMode] || ''
+                          )}
                         </GlobalMarkdown>
                       </div>
                     )}
@@ -3419,7 +3527,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
                       <button
                         type="button"
                         onClick={handleCopyAIHelp}
-                        disabled={askAILoading || !askAICache[currentIndex]?.[askAIMode]}
+                        disabled={askAILoadingMode === askAIMode || !(askAICacheRef.current[currentIndex]?.[askAIMode] || askAICache[currentIndex]?.[askAIMode])}
                         className="px-3.5 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 hover:bg-zinc-50 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-40"
                         title="Copy Explanation"
                       >

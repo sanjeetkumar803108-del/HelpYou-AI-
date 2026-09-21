@@ -861,7 +861,7 @@ function ToolsDashboard({
 
       {/* Relax & Learn Section */}
       <div className="mb-24">
-        <h2 className="text-xl md:text-2xl font-bold text-zinc-800 tracking-tight mb-4">Relax & Learn</h2>
+        <h2 className="text-xl md:text-2xl font-bold text-zinc-800 tracking-tight mb-4">Daily Brain Booster</h2>
         
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
@@ -870,19 +870,24 @@ function ToolsDashboard({
           whileHover={{ scale: 1.02, y: -2, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08)" }}
           whileTap={{ scale: 0.99 }}
           onClick={() => handleSelectTool('dailytrivia')}
-          className="bg-white border border-zinc-200 p-5 rounded-[2rem] flex items-center justify-between shadow-sm cursor-pointer transition-all gap-4"
+          className="bg-white border border-zinc-200 p-5 rounded-[2rem] flex items-center justify-between shadow-sm cursor-pointer transition-all gap-4 group"
         >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center text-2xl border border-amber-500/15 shadow-inner select-none">
-              💡
+            <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center text-2xl border border-amber-500/20 shadow-inner select-none group-hover:scale-105 transition-transform">
+              ⚡
             </div>
             <div>
-              <h3 className="font-black text-zinc-900 text-lg leading-tight">Daily Trivia Booster</h3>
-              <p className="text-xs text-zinc-500 font-bold mt-0.5">Click to play and learn a cool fact!</p>
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-zinc-900 text-base leading-tight">Daily Trivia Booster</h3>
+                <span className="text-[10px] font-black uppercase bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-200/80">
+                  3-Card Trap
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 font-bold mt-1">Under 90s micro-assessment • Master negative-marking traps 🔥</p>
             </div>
           </div>
-          <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center shrink-0">
-            <ArrowRight className="w-4 h-4 text-zinc-400" />
+          <div className="w-9 h-9 rounded-full bg-zinc-100 group-hover:bg-zinc-200 flex items-center justify-center shrink-0 transition-colors">
+            <ArrowRight className="w-4 h-4 text-zinc-600" />
           </div>
         </motion.div>
       </div>

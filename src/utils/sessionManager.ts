@@ -70,54 +70,6 @@ export async function registerActiveSession(userId: string): Promise<string> {
 }
 
 /**
- * Checks session on app boot for an already authenticated user.
- * Returns:
- * - 'valid': local session matches remote session
- * - 'conflict': remote session differs (logged in elsewhere) -> MUST LOG OUT
- * - 'initialized': new session initialized for user
- */
-export async function verifyOrInitSessionOnBoot(userId: string): Promise<'valid' | 'conflict' | 'initialized'> {
-  const localSessionId = getLocalSessionId(userId);
-
-  try {
-    const userDocRef = doc(db, 'users', userId);
-    const snap = await getDoc(userDocRef);
-    const remoteSessionId = snap.exists() ? snap.data()?.currentSessionId : null;
-
-    // Case 1: Firestore already has an active remote session
-    if (remoteSessionId) {
-      if (localSessionId && localSessionId === remoteSessionId) {
-        return 'valid';
-      }
-      if (localSessionId && localSessionId !== remoteSessionId) {
-        // Conflict! Remote has a newer/different session ID
-        console.warn(`[SessionManager] Boot session mismatch for ${userId}. Local: ${localSessionId}, Remote: ${remoteSessionId}`);
-        return 'conflict';
-      }
-      // If no local session exists but remote exists on a fresh startup with cached auth,
-      // this device does not own the current session
-      if (!localSessionId) {
-        console.warn(`[SessionManager] Missing local session while remote exists for ${userId}`);
-        return 'conflict';
-      }
-    }
-
-    // Case 2: No remote session registered yet (e.g. legacy account before this update)
-    const newSessionId = localSessionId || generateNewSessionId();
-    setLocalSessionId(userId, newSessionId);
-    await setDoc(userDocRef, {
-      currentSessionId: newSessionId,
-      lastLoginAt: serverTimestamp(),
-      lastActivePlatform: Capacitor.getPlatform() || 'web'
-    }, { merge: true });
-    return 'initialized';
-  } catch (err) {
-    console.warn('[SessionManager] Error verifying session on boot:', err);
-    return 'valid'; // Don't block if temporary network glitch
-  }
-}
-
-/**
  * Real-time listener that monitors the user's document in Firestore.
  * If another device logs in, Firestore pushes the new currentSessionId in real time,
  * triggering the onConflict callback immediately.
@@ -137,15 +89,22 @@ export function listenToActiveSession(
 
     if (isInitial) {
       isInitial = false;
-      // On initial snapshot, if remote session exists and local exists and they differ, flag conflict
+      // On initial snapshot:
       if (remoteSessionId && localSessionId && remoteSessionId !== localSessionId) {
         console.warn(`[SessionManager] Initial snapshot session conflict! Local: ${localSessionId}, Remote: ${remoteSessionId}`);
         onConflict({ remotePlatform: data?.lastActivePlatform });
+      } else if (!remoteSessionId) {
+        // Auto-register session if legacy user document has no session ID yet
+        registerActiveSession(userId).catch(e => console.warn('[SessionManager] Auto-register notice:', e));
+      } else if (remoteSessionId && !localSessionId) {
+        // Existing active session on current device: adopt the remoteSessionId locally
+        console.log(`[SessionManager] Current device adopting active session for user ${userId}: ${remoteSessionId}`);
+        setLocalSessionId(userId, remoteSessionId);
       }
       return;
     }
 
-    // On subsequent updates pushed by Firestore (e.g. second phone logs in right now):
+    // On subsequent updates pushed by Firestore (when another mobile logs in in real time):
     if (remoteSessionId && localSessionId && remoteSessionId !== localSessionId) {
       console.warn(`[SessionManager] Real-time session conflict detected! Local: ${localSessionId}, Remote: ${remoteSessionId}`);
       onConflict({ remotePlatform: data?.lastActivePlatform });
@@ -162,6 +121,9 @@ export function listenToActiveSession(
  */
 export async function terminateSessionDueToConflict(userId?: string): Promise<void> {
   clearLocalSessionId(userId);
+  safeRemoveItem('helpyou_active_user_session');
+  safeRemoveItem('last_logged_in_user');
+  safeSetItem('session_conflict_notice', '⚠️ You were logged out because this account was logged into another mobile device.');
 
   if (Capacitor.isNativePlatform()) {
     try {

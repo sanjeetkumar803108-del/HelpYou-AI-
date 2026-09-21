@@ -34,29 +34,18 @@ export function resetAllLazyChunks() {
   });
 }
 
-export function retryImport<T>(fn: () => Promise<T>, retriesLeft = 3, interval = 500): Promise<T> {
+export function retryImport<T>(fn: () => Promise<T>, retriesLeft = 4, interval = 400): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     fn()
       .then(resolve)
       .catch((error) => {
-        // If it is a chunk version mismatch error, auto-reload the page once to pull fresh bundle
-        if (isChunkLoadError(error) && typeof window !== 'undefined') {
-          const lastReload = sessionStorage.getItem('last_chunk_auto_reload');
-          const now = Date.now();
-          if (!lastReload || now - parseInt(lastReload, 10) > 15000) {
-            sessionStorage.setItem('last_chunk_auto_reload', now.toString());
-            console.warn('[ResilientLazy] Chunk version mismatch detected. Reloading for fresh bundle...');
-            window.location.reload();
-            return;
-          }
-        }
-
         if (retriesLeft <= 0) {
           console.error('[ResilientLazy] Dynamic asset import failed after retries:', error);
           return reject(error);
         }
+        // Smooth exponential backoff retry without ever restarting or reloading the app
         setTimeout(() => {
-          retryImport(fn, retriesLeft - 1, Math.round(interval * 1.5)).then(resolve, reject);
+          retryImport(fn, retriesLeft - 1, Math.min(Math.round(interval * 1.6), 2500)).then(resolve, reject);
         }, interval);
       });
   });

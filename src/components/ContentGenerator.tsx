@@ -17,6 +17,7 @@ import SafePdfViewer from './SafePdfViewer';
 import { deductCoins, getCoins } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
+import { getUserProfileData } from '../utils/profile';
 
 interface ContentGeneratorProps {
   onBack: () => void;
@@ -366,7 +367,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-      const gradeLevel = safeGetItem('academic_grade') || '11th Grade (Junior)';
+      const profile = getUserProfileData();
       const response = await fetch(getApiUrl('/api/generate-content'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -376,7 +377,9 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
           type: selectedType,
           tone: selectedTone,
           format: selectedType === 'Essay' ? selectedFormat : 'Standard',
-          gradeLevel
+          gradeLevel: profile.gradeLevel,
+          stream: profile.stream,
+          country: profile.country
         })
       });
       

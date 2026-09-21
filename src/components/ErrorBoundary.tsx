@@ -48,17 +48,8 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     try { triggerVibration(10); } catch (_) {}
 
-    // 1. If it is a chunk version mismatch error, auto-reload window cleanly once
-    if (isChunkLoadError(error) && typeof window !== 'undefined') {
-      const lastReload = sessionStorage.getItem('last_chunk_auto_reload');
-      const now = Date.now();
-      if (!lastReload || now - parseInt(lastReload, 10) > 15000) {
-        sessionStorage.setItem('last_chunk_auto_reload', now.toString());
-        console.warn(`[CrashProof Boundary] Auto-healing chunk mismatch for ${feature}...`);
-        window.location.reload();
-        return;
-      }
-    }
+    // 1. Reset lazy chunks smoothly without reloading the entire app
+    resetAllLazyChunks();
 
     // 2. Automatically purge any corrupt local cache keys for this feature
     this.autoPurgeCorruptCache();

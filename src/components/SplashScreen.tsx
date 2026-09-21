@@ -81,8 +81,9 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
             </linearGradient>
 
             <linearGradient id="sparkleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#a855f7" />
-              <stop offset="100%" stopColor="#6b21a8" />
+              <stop offset="0%" stopColor="#d8b4fe" />
+              <stop offset="50%" stopColor="#a855f7" />
+              <stop offset="100%" stopColor="#7c3aed" />
             </linearGradient>
             
             <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -103,10 +104,12 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
             <path d="M 320 275 L 320 295 A 25 25 0 0 1 295 320 L 275 320" />
           </g>
 
-          {/* Glowing 4-point magical star centerpiece */}
+          {/* Glowing 4-point magical star centerpiece (Bright Glowing Purple) */}
           <path 
             d="M 200 90 C 200 118 185 133 155 133 C 185 133 200 148 200 176 C 200 148 215 133 245 133 C 215 133 200 118 200 90 Z" 
             fill="url(#sparkleGradient)" 
+            stroke="#c084fc"
+            strokeWidth="1.5"
             filter="url(#soft-glow)" 
           />
 

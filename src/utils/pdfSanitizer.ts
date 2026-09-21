@@ -163,6 +163,30 @@ export function sanitizePdfText(text: string): string {
     .replace(/9\uFE0F?\u20E3/gu, '9. ')
     .replace(/\u{1F51F}/gu, '10. ');
 
+  // 2b. Unicode Superscript & Subscript characters — must be mapped BEFORE Step 3,
+  //     because jsPDF standard fonts (Helvetica, Times, Courier) cannot render these glyphs.
+  //     Superscripts: ⁰¹²³⁴⁵⁶⁷⁸⁹ and ⁻⁺ⁿⁱ
+  const superscriptMap: Record<string, string> = {
+    '\u2070': '^0', '\u00B9': '^1', '\u00B2': '^2', '\u00B3': '^3',
+    '\u2074': '^4', '\u2075': '^5', '\u2076': '^6', '\u2077': '^7',
+    '\u2078': '^8', '\u2079': '^9', '\u207B': '^-', '\u207A': '^+',
+    '\u207F': '^n', '\u2071': '^i',
+  };
+  //     Subscripts: ₀₁₂₃₄₅₆₇₈₉ and ₊₋ₐₑₒₓₙ
+  const subscriptMap: Record<string, string> = {
+    '\u2080': '_0', '\u2081': '_1', '\u2082': '_2', '\u2083': '_3',
+    '\u2084': '_4', '\u2085': '_5', '\u2086': '_6', '\u2087': '_7',
+    '\u2088': '_8', '\u2089': '_9', '\u208A': '_+', '\u208B': '_-',
+    '\u2090': '_a', '\u2091': '_e', '\u2092': '_o', '\u2093': '_x',
+    '\u2099': '_n',
+  };
+  for (const [ch, rep] of Object.entries(superscriptMap)) {
+    str = str.split(ch).join(rep);
+  }
+  for (const [ch, rep] of Object.entries(subscriptMap)) {
+    str = str.split(ch).join(rep);
+  }
+
   // 3. Mathematical Greek & Scientific Unicode symbols mapping for core standard PDF fonts
   str = str
     .replace(/θ/g, 'theta')

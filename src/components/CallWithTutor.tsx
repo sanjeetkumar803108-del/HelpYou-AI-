@@ -1,5 +1,5 @@
 import { getApiUrl } from '../utils/api';
-import { getProfileContext } from "../utils/profile";
+import { getProfileContext, getUserProfileData } from "../utils/profile";
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, 
@@ -513,7 +513,8 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
         return baseRules + "\n" + personaInstructions;
       };
 
-      const systemPrompt = getSystemPrompt(selectedVibeStr);
+      const profileCtx = getProfileContext();
+      const systemPrompt = getSystemPrompt(selectedVibeStr) + `\n\nSTUDENT CONTEXT (adapt your depth, vocabulary, and examples accordingly):\n${profileCtx}`;
 
       // Structure conversation history for context
       const chatHistory = transcript.slice(-4).map(t => ({
@@ -527,6 +528,13 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
       formData.append('mode', 'standard');
       formData.append('history', JSON.stringify(chatHistory));
       formData.append('customSystemInstruction', systemPrompt);
+      const voiceProfile = getUserProfileData();
+      formData.append('gradeLevel', voiceProfile.gradeLevel);
+      formData.append('stream', voiceProfile.stream);
+      formData.append('academicStream', voiceProfile.stream);
+      formData.append('academic_stream', voiceProfile.stream);
+      formData.append('country', voiceProfile.country);
+      formData.append('academic_country', voiceProfile.country);
       if (imageFile) {
         formData.append('image', imageFile);
       }

@@ -1962,15 +1962,6 @@ export default function Profile({
                         </h4>
                         <p className="text-[9px] text-white/80 font-bold leading-normal mt-0.5">Unlimited scans & speech</p>
                       </div>
-                      <button 
-                        onClick={() => {
-                          triggerVibration(15);
-                          setActiveModal('manage_sub');
-                        }}
-                        className="bg-white text-amber-700 hover:bg-zinc-50 px-3 py-1.5 rounded-xl text-[10px] font-black shadow-sm transition-all active:scale-95 shrink-0"
-                      >
-                        Manage
-                      </button>
                     </div>
                   </div>
                 ) : (

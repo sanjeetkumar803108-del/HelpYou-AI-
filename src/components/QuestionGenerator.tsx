@@ -3,7 +3,7 @@ import {
   ArrowLeft, HelpCircle, Loader2, Copy, Check, Share2, 
   Sparkles, BookOpen, GraduationCap, Clock, FileText, 
   ChevronRight, Save, History, Trash2, Send, PenTool, CheckCircle2,
-  RefreshCw, ExternalLink, Camera, Plus, Image, X
+  RefreshCw, ExternalLink, Camera, Plus, Image, X, Info, Award
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -11,6 +11,7 @@ import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, de
 import { deductCoins, getCoins, isUserLoggedIn, isProUser } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
+import { getUserProfileData } from '../utils/profile';
 import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
@@ -116,7 +117,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [customTopic, setCustomTopic] = useState('');
   const [loading, setLoading] = useState(false);
   const [questions, setQuestions] = useState<QuestionItem[] | null>(null);
-  const [expandedRubrics, setExpandedRubrics] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   
   // Answers drafted by the user
@@ -201,14 +201,10 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
   // Load profile from local storage / context
   useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    const savedGrade = safeGetItem('academic_grade') || (uid ? safeGetItem(`academic_grade_${uid}`) : null);
-    const savedStream = safeGetItem('academic_stream') || (uid ? safeGetItem(`academic_stream_${uid}`) : null);
-    const savedCountry = safeGetItem('academic_country') || (uid ? safeGetItem(`academic_country_${uid}`) : null);
-
-    if (savedGrade) setGradeLevel(savedGrade);
-    if (savedStream) setStream(savedStream);
-    if (savedCountry) setCountry(savedCountry);
+    const profile = getUserProfileData();
+    if (profile.gradeLevel) setGradeLevel(profile.gradeLevel);
+    if (profile.stream) setStream(profile.stream);
+    if (profile.country) setCountry(profile.country);
   }, []);
 
   // Suggestions states and auto-refresh logic
@@ -258,9 +254,9 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     return q.question || '';
   };
 
-  const getExpectedAnswer = (q: any): string => {
-    if (!q || typeof q === 'string') return '';
-    return q.expectedAnswer || '';
+  const getExpectedAnswer = (_q: any): string => {
+    // Deliberately return empty string: students practice independently without answers being leaked
+    return '';
   };
 
   const getKeyRubricPoints = (q: any): string[] => {
@@ -513,15 +509,16 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     setDraftAnswers({});
 
     try {
+      const profile = getUserProfileData();
       const response = await fetch(getApiUrl('/api/generate-questions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           topic: customTopic, 
           count: questionCount, 
-          gradeLevel, 
-          stream,
-          country
+          gradeLevel: profile.gradeLevel || gradeLevel, 
+          stream: profile.stream || stream,
+          country: profile.country || country
         })
       });
 
@@ -590,10 +587,10 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     setEvaluatingIndex(index);
     setError(null);
 
-    const uid = auth.currentUser?.uid;
-    const userGrade = gradeLevel || '11th Grade (Junior)';
-    const curriculum = safeGetItem('academic_region') || (uid ? safeGetItem(`academic_region_${uid}`) : null) || 'National Board';
-    const subject = customTopic || stream || 'General Academic';
+    const profile = getUserProfileData();
+    const userGrade = profile.gradeLevel || gradeLevel || '11th Grade (Junior)';
+    const curriculum = profile.region || 'National Board';
+    const subject = customTopic || profile.stream || stream || 'General Academic';
 
     // 1. Immediately transition to the AI Magic Tutor tab and dispatch the question, text, and image file
     if (onNavigateToTab) {
@@ -643,6 +640,9 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
           questionText,
           userAnswer: answerText,
           userGrade,
+          gradeLevel: userGrade,
+          stream: profile.stream,
+          country: profile.country,
           curriculum,
           subject,
         }),
@@ -680,16 +680,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const handleCopyQuestion = (q: QuestionItem, index: number) => {
     triggerVibration(10);
     const qText = getQuestionText(q);
-    const expected = getExpectedAnswer(q);
-    const rubrics = getKeyRubricPoints(q);
-    
-    let text = `Question ${index + 1}:\n${normalizeQuestionBreaks(qText)}`;
-    if (expected) {
-      text += `\n\nExpected Model Answer:\n${expected}`;
-    }
-    if (rubrics.length > 0) {
-      text += `\n\nKey Grading Keywords / Rubric:\n${rubrics.map(r => `• ${r}`).join('\n')}`;
-    }
+    const text = `Question ${index + 1}:\n${normalizeQuestionBreaks(qText)}`;
 
     navigator.clipboard.writeText(text);
     setCopiedIndex(index);
@@ -701,16 +692,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     triggerVibration(10);
     const textToCopy = questions.map((q, i) => {
       const qText = getQuestionText(q);
-      const expected = getExpectedAnswer(q);
-      const rubrics = getKeyRubricPoints(q);
-      let block = `Question ${i + 1}:\n${normalizeQuestionBreaks(qText)}`;
-      if (expected) {
-        block += `\n\nExpected Model Answer:\n${expected}`;
-      }
-      if (rubrics.length > 0) {
-        block += `\n\nKey Grading Keywords:\n${rubrics.map(r => `• ${r}`).join('\n')}`;
-      }
-      return block;
+      return `Question ${i + 1}:\n${normalizeQuestionBreaks(qText)}`;
     }).join('\n\n' + '─'.repeat(30) + '\n\n');
 
     navigator.clipboard.writeText(textToCopy);
@@ -835,7 +817,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         currentY = 25;
       }
 
-      // Draw question
+      // Draw question number + text
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10.5);
       doc.setTextColor(40, 40, 40);
@@ -854,6 +836,156 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         currentY += 5.5;
       }
       currentY += 6; // spacing
+    }
+
+    // ─────────────────────────────────────────────
+    // OFFICIAL ANSWER KEY & DETAILED SOLUTIONS SECTION — starts on a new page at the end of the PDF
+    // ─────────────────────────────────────────────
+    doc.addPage();
+    pageCount++;
+    addFooter(pageCount);
+    currentY = 25;
+
+    // Header bar
+    doc.setFillColor(79, 70, 229); // Indigo-600
+    doc.rect(margin, currentY, contentWidth, 3, 'F');
+    currentY += 10;
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(79, 70, 229);
+    doc.text('Official Answer Key & Detailed Solutions', margin, currentY);
+    currentY += 6;
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text('Comprehensive model answers, step-by-step solutions, and examiner marking rubrics', margin, currentY);
+    currentY += 4;
+
+    doc.setDrawColor(200, 200, 240);
+    doc.setLineWidth(0.4);
+    doc.line(margin, currentY, pageWidth - margin, currentY);
+    currentY += 10;
+
+    // Render each question's model answer and rubric criteria
+    for (let i = 0; i < qs.length; i++) {
+      const qItem = qs[i];
+      const isObj = typeof qItem === 'object' && qItem !== null;
+      const qObj = isObj ? (qItem as QuestionObject) : null;
+      const rawExpected = qObj?.expectedAnswer ? qObj.expectedAnswer.trim() : '';
+      const rubricPoints = qObj?.keyRubricPoints && Array.isArray(qObj.keyRubricPoints) ? qObj.keyRubricPoints : [];
+
+      // -- Question label
+      const qLabelText = sanitizePdfText(`Q${i + 1}. ${normalizeQuestionBreaks(getQuestionText(qItem))}`);
+      const wrappedQLabel: string[] = doc.splitTextToSize(qLabelText, contentWidth - 5);
+
+      if (currentY + wrappedQLabel.length * 5.5 + 25 > pageHeight - 20) {
+        doc.addPage();
+        pageCount++;
+        addFooter(pageCount);
+        currentY = 25;
+      }
+
+      // Draw question number + text
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(30, 30, 30);
+      for (const ql of wrappedQLabel) {
+        if (currentY > pageHeight - 20) {
+          doc.addPage(); pageCount++; addFooter(pageCount); currentY = 25;
+          doc.setFont('Helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(30, 30, 30);
+        }
+        doc.text(ql, margin, currentY);
+        currentY += 5.5;
+      }
+      currentY += 2;
+
+      // Draw Model Solution / Answer (if available)
+      if (rawExpected) {
+        if (currentY > pageHeight - 25) {
+          doc.addPage(); pageCount++; addFooter(pageCount); currentY = 25;
+        }
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(16, 110, 60); // Emerald green for official solution
+        doc.text('Official Model Solution & Step-by-Step Answer:', margin + 2, currentY);
+        currentY += 5.5;
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+
+        const paragraphs = rawExpected.split('\n');
+        for (const para of paragraphs) {
+          const trimmedPara = sanitizePdfText(para.trim());
+          if (!trimmedPara) {
+            currentY += 2.5;
+            continue;
+          }
+          const wrappedPara: string[] = doc.splitTextToSize(trimmedPara, contentWidth - 8);
+          for (const line of wrappedPara) {
+            if (currentY > pageHeight - 20) {
+              doc.addPage(); pageCount++; addFooter(pageCount); currentY = 25;
+              doc.setFont('Helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+            }
+            doc.text(line, margin + 4, currentY);
+            currentY += 4.8;
+          }
+          currentY += 1.5;
+        }
+        currentY += 2;
+      }
+
+      // Draw Examiner Rubric & Checkpoints
+      const rubricLines: string[] = [];
+      if (rubricPoints.length > 0) {
+        rubricLines.push('Examiner Marking Scheme & Score Breakdown:');
+        rubricPoints.forEach(pt => {
+          rubricLines.push(`• ${sanitizePdfText(pt.trim())}`);
+        });
+      } else if (!rawExpected) {
+        rubricLines.push('• Evaluation based on conceptual clarity, accurate principles, and complete reasoning.');
+      }
+
+      if (rubricLines.length > 0) {
+        for (const line of rubricLines) {
+          if (currentY > pageHeight - 20) {
+            doc.addPage(); pageCount++; addFooter(pageCount); currentY = 25;
+          }
+          if (line === '') {
+            currentY += 2.5;
+            continue;
+          }
+          const isHeading = line.startsWith('Examiner Marking');
+          const isBullet = line.startsWith('•');
+          const indent = isBullet ? 6 : (isHeading ? 2 : 4);
+          const maxW = contentWidth - indent - 4;
+
+          doc.setFont('Helvetica', isHeading ? 'bold' : 'normal');
+          doc.setFontSize(isHeading ? 9.5 : 8.5);
+          doc.setTextColor(isHeading ? 79 : 70, isHeading ? 70 : 75, isHeading ? 229 : 90);
+
+          const wrappedLines: string[] = doc.splitTextToSize(line.trim(), maxW);
+          for (const wl of wrappedLines) {
+            if (currentY > pageHeight - 20) {
+              doc.addPage(); pageCount++; addFooter(pageCount); currentY = 25;
+              doc.setFont('Helvetica', isHeading ? 'bold' : 'normal');
+              doc.setFontSize(isHeading ? 9.5 : 8.5);
+              doc.setTextColor(isHeading ? 79 : 70, isHeading ? 70 : 75, isHeading ? 229 : 90);
+            }
+            doc.text(wl, margin + indent, currentY);
+            currentY += 4.8;
+          }
+        }
+      }
+
+      // Divider between questions
+      currentY += 4;
+      doc.setDrawColor(230, 230, 242);
+      doc.setLineWidth(0.25);
+      doc.line(margin, currentY, pageWidth - margin, currentY);
+      currentY += 8;
     }
 
     return doc;
@@ -1183,13 +1315,13 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
               <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-[2rem] p-6 shadow-md text-left flex justify-between items-center relative overflow-hidden">
                 <div className="relative z-10 space-y-1">
                   <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
-                    SUCCESS • NO ANSWERS INCLUDED
+                    PRACTICE MODE • QUESTIONS ONLY
                   </span>
                   <h3 className="font-black text-lg tracking-tight">
                     {customTopic ? customTopic : `${stream} Set`}
                   </h3>
                   <p className="text-xs text-white/80 font-bold leading-relaxed">
-                    Here are {questions.length} level-appropriate subjective practice questions.
+                    Here are {questions.length} subjective practice questions. Official answer key & detailed step-by-step solutions are included at the end of the exported PDF!
                   </p>
                 </div>
                 <div className="text-4xl opacity-20 absolute right-4 bottom-2 font-bold select-none">
@@ -1226,7 +1358,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
               <div className="space-y-5">
                 {questions.map((question, index) => {
                   const qText = getQuestionText(question);
-                  const expectedAns = getExpectedAnswer(question);
                   const rubricPoints = getKeyRubricPoints(question);
 
                   return (
@@ -1256,78 +1387,11 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                         <button
                           onClick={() => handleCopyQuestion(question, index)}
                           className="w-8 h-8 rounded-full bg-zinc-50 hover:bg-zinc-100 flex items-center justify-center text-zinc-450 transition-colors shrink-0 cursor-pointer"
-                          title="Copy Question & Rubric"
+                          title="Copy Question"
                         >
                           {copiedIndex === index ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                         </button>
                       </div>
-
-                      {/* Expandable Expected Answer & Rubric Toggle */}
-                      {(expectedAns || rubricPoints.length > 0) && (
-                        <div className="pt-2 border-t border-zinc-100">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              triggerVibration(10);
-                              setExpandedRubrics(prev => ({ ...prev, [index]: !prev[index] }));
-                            }}
-                            className={`w-full py-2.5 px-3.5 rounded-2xl border text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
-                              expandedRubrics[index]
-                                ? 'bg-amber-50/90 border-amber-300 text-amber-950 shadow-xs'
-                                : 'bg-zinc-50 hover:bg-amber-50/50 border-zinc-200/80 text-zinc-750 hover:text-amber-900'
-                            }`}
-                          >
-                            <span className="flex items-center gap-2">
-                              <span className="text-sm">💡</span>
-                              <span>{expandedRubrics[index] ? "Hide Expected Answer & Marking Scheme" : "Check Expected Answer & Rubric"}</span>
-                            </span>
-                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${expandedRubrics[index] ? 'rotate-90 text-amber-700' : 'text-zinc-400'}`} />
-                          </button>
-
-                          <AnimatePresence>
-                            {expandedRubrics[index] && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                className="overflow-hidden mt-2.5 space-y-3 bg-gradient-to-br from-amber-50/70 via-orange-50/30 to-amber-50/70 border border-amber-200/90 rounded-2xl p-4 shadow-inner"
-                              >
-                                {expectedAns && (
-                                  <div className="space-y-1.5 text-left">
-                                    <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-900 uppercase tracking-wider">
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>Expected Model Answer (Full Marks Benchmark)</span>
-                                    </div>
-                                    <div className="text-zinc-850 text-xs font-medium leading-relaxed bg-white/90 p-3 rounded-xl border border-amber-200/60 select-text">
-                                      <GlobalMarkdown>{expectedAns}</GlobalMarkdown>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {rubricPoints.length > 0 && (
-                                  <div className="space-y-1.5 pt-1 text-left">
-                                    <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-900 uppercase tracking-wider">
-                                      <Sparkles className="w-3.5 h-3.5 text-orange-600" />
-                                      <span>Essential Grading Keywords / Rubric Checklist</span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {rubricPoints.map((pt, pIdx) => (
-                                        <span 
-                                          key={pIdx}
-                                          className="inline-flex items-center gap-1 text-[11px] font-bold bg-white text-zinc-800 border border-amber-300/80 px-2.5 py-1 rounded-xl shadow-xs"
-                                        >
-                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                          <span>{pt}</span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      )}
 
                       {/* Expandable practice answer draft box */}
                       <div className="space-y-2 pt-2 border-t border-zinc-100">
@@ -1559,6 +1623,11 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                 >
                   <Share2 className="w-4 h-4 text-purple-600" /> Share PDF
                 </button>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 text-[10px] font-bold text-purple-800 bg-purple-50/80 border border-purple-200/70 py-2 px-3 rounded-xl shadow-2xs text-center">
+                <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <span>Exported PDF includes the full Question Paper + complete Answer Key & Solutions at the end!</span>
               </div>
 
               {/* Generate New Button */}

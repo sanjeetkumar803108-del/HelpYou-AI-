@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { isProUser } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
-import { getProfileContext } from '../utils/profile';
+import { getProfileContext, getUserProfileData } from '../utils/profile';
 import { safeGetItem } from '../utils/storage';
 import { detectAndLogMistake } from '../utils/mistakes';
 import { db, auth } from '../lib/firebase';
@@ -390,21 +390,19 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
 
     try {
       const currentNotes = localNotes.trim();
-      const activeUid = auth.currentUser?.uid;
-      const country = safeGetItem('academic_country') || (activeUid ? safeGetItem(`academic_country_${activeUid}`) : null) || 'United States';
-      const grade = safeGetItem('academic_grade') || (activeUid ? safeGetItem(`academic_grade_${activeUid}`) : null) || '11th Grade (Junior)';
-      const stream = safeGetItem('academic_stream') || (activeUid ? safeGetItem(`academic_stream_${activeUid}`) : null) || 'STEM / Engineering';
+      const profile = getUserProfileData();
 
       const response = await fetch(getApiUrl('/api/live-study-tutor'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: activeQuery,
-          profileContext: getProfileContext(),
+          profileContext: profile.profileContext,
           studentNotes: currentNotes || undefined,
-          country,
-          gradeLevel: grade,
-          academicStream: stream
+          country: profile.country,
+          gradeLevel: profile.gradeLevel,
+          academicStream: profile.stream,
+          stream: profile.stream
         }),
       });
 

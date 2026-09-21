@@ -46,7 +46,7 @@ export default function LockedFeature({
     return () => window.removeEventListener('study-coins-updated', handleCoinsUpdate);
   }, []);
 
-  const hasAccess = isPro || (loggedIn && coins >= cost);
+  const hasAccess = isPro || coins >= cost;
 
   if (hasAccess) {
     return <>{children}</>;

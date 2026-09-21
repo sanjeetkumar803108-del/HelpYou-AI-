@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { X, UserPlus, LogIn, Chrome, LogOut, Loader2, Eye, EyeOff, Check } from 'lucide-react';
 import { auth, googleProvider, db } from '../lib/firebase';
-import { safeClearAll, safeSetItem, safeGetItem } from '../utils/storage';
+import { safeClearAll, safeSetItem, safeGetItem, safeRemoveItem } from '../utils/storage';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { 
-  createUserWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword, 
   signInWithPopup,
   signInWithRedirect,
@@ -21,6 +21,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { clearGoogleCredentialState } from '../utils/clearGoogleCredential';
+import { registerActiveSession } from '../utils/sessionManager';
 import appLogo from '../assets/logo.svg';
 
 // React Native web-compatibility components & helpers
@@ -34,22 +35,32 @@ const Image = ({ source, style, className }: { source: any; style?: any; classNa
   return (
     <img 
       src={src} 
-      style={{ width: 80, height: 80, objectFit, ...style }} 
+      alt="App Logo" 
+      style={{ ...style, objectFit }}
       className={className} 
-      alt="logo" 
-      referrerPolicy="no-referrer" 
     />
   );
 };
 
-const TouchableOpacity = ({ onPress, children, className, style }: { onPress?: () => void; children: React.ReactNode; className?: string; style?: React.CSSProperties }) => {
+const View = ({ children, style, className }: { children: any; style?: any; className?: string }) => {
   return (
-    <button
-      type="button"
-      onClick={onPress}
-      className={`opacity-100 active:opacity-60 transition-opacity focus:outline-none ${className || ''}`}
-      style={style}
-    >
+    <div style={style} className={className}>
+      {children}
+    </div>
+  );
+};
+
+const Text = ({ children, style, className }: { children: any; style?: any; className?: string }) => {
+  return (
+    <span style={style} className={className}>
+      {children}
+    </span>
+  );
+};
+
+const TouchableOpacity = ({ children, onPress, style, className }: { children: any; onPress?: () => void; style?: any; className?: string }) => {
+  return (
+    <button type="button" onClick={onPress} style={style} className={className}>
       {children}
     </button>
   );
@@ -58,19 +69,29 @@ const TouchableOpacity = ({ onPress, children, className, style }: { onPress?: (
 import { showToast } from '../utils/toast';
 
 const Alert = {
-  alert: (title: string, message: string) => {
-    const isSuccess = title.toLowerCase().includes('success') || title.toLowerCase().includes('sent');
-    showToast(`${title}: ${message}`, isSuccess ? 'success' : 'error', 4500);
+  alert: (title: string, message?: string) => {
+    if (typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message || ''}`);
+    }
   }
 };
 
 
 export default function Login({ onClose, onLoginSuccess, hideClose = false }: { onClose: () => void, onLoginSuccess: (target?: 'main' | 'setup' | 'onboarding') => void, hideClose?: boolean }) {
-  const [isSignUp, setIsSignUp] = useState(true);
+  const [isSignUp, setIsSignUp] = useState(() => {
+    return !safeGetItem('session_conflict_notice');
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const conflictNotice = safeGetItem('session_conflict_notice');
+    if (conflictNotice) {
+      safeRemoveItem('session_conflict_notice');
+      return conflictNotice;
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
@@ -89,6 +110,14 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     isRoutingRef.current = true;
     safeSetItem('helpyou_active_user_session', 'true');
     safeSetItem('last_logged_in_user', currentUser.uid);
+
+    // Register active device session in Firestore so any other mobile device is immediately logged out
+    try {
+      await registerActiveSession(currentUser.uid);
+    } catch (sessionErr) {
+      console.warn('[Login Route] Active session register notice:', sessionErr);
+    }
+
     try {
       const userDocRef = doc(db, 'users', currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
@@ -579,15 +608,17 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         </button>
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-center mt-8 z-10">
-        <Image 
-          source={require('../assets/logo.png')} 
-          style={{ width: 96, height: 96, resizeMode: 'contain' }}
-          className="mb-4 animate-fade-in"
-        />
+      <div className="flex-1 flex flex-col items-center justify-center mt-2 sm:mt-4 z-10">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 mb-3 flex items-center justify-center">
+          <img 
+            src={appLogo} 
+            alt="HelpYou AI Logo" 
+            className="w-full h-full object-contain drop-shadow-sm animate-fade-in"
+          />
+        </div>
         
-        <h1 className="text-4xl font-bold text-zinc-800 mb-2 tracking-tight">HelpYou AI</h1>
-        <p className="text-zinc-500 text-xs font-bold tracking-widest uppercase mb-10">
+        <h1 className="text-2xl sm:text-3xl font-black text-zinc-900 mb-1 tracking-tight">HelpYou AI</h1>
+        <p className="text-zinc-500 text-[11px] font-bold tracking-widest uppercase mb-6">
           Your Digital Study Assistant
         </p>
 

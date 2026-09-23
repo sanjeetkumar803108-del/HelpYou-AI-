@@ -5781,10 +5781,383 @@ Return strictly the JSON structure above.`;
     });
   }
 });
+var dailySharedTriviaCache = {};
+var triviaFallbackDatabase = {
+  stem: [
+    {
+      id: "stem_fb_1",
+      subject: "Physics",
+      topic: "Kinematics & Freefall Acceleration",
+      question: "A ball is projected vertically upward. At its highest apex point, what is the magnitude and direction of its acceleration?",
+      options: ["0 m/s\xB2", "9.8 m/s\xB2 downward", "9.8 m/s\xB2 upward", "Cannot be determined without launch mass"],
+      correctIndex: 1,
+      latexEquation: "a = -g \\approx -9.8\\text{ m/s}^2 \\quad (\\text{constant downward})",
+      shortExplanation: "Velocity is momentarily zero at the apex, but the gravitational acceleration pulls downward constantly at 9.8 m/s\xB2.",
+      examTrapWarning: "Common mistake: Confusing instantaneous zero velocity with acceleration. Speed stops, but gravity never switches off!"
+    },
+    {
+      id: "stem_fb_2",
+      subject: "Chemistry",
+      topic: "Thermodynamics & Real Gas Deviation",
+      question: "Under which specific physical conditions does a real gas exhibit its MAXIMUM deviation from ideal gas behavior?",
+      options: ["High temperature and low pressure", "Low temperature and high pressure", "High temperature and high pressure", "Low temperature and low pressure"],
+      correctIndex: 1,
+      latexEquation: "\\left(P + \\frac{an^2}{V^2}\\right)(V - nb) = nRT",
+      shortExplanation: "Low temperature slows molecules (amplifying intermolecular attractions) while high pressure reduces free volume, maximizing deviations.",
+      examTrapWarning: "Common mistake: Inverting the relationship. Real gases behave MOST ideally at high temperature and low pressure, NOT low temp / high pressure!"
+    },
+    {
+      id: "stem_fb_3",
+      subject: "Biology / Mathematics",
+      topic: "Cellular Respiration & Energy Yield",
+      question: "Which organelle is responsible for synthesizing ATP through aerobic cellular respiration in eukaryotic cells?",
+      options: ["Ribosome", "Mitochondria", "Chloroplast", "Endoplasmic Reticulum"],
+      correctIndex: 1,
+      latexEquation: "\\text{Glucose} + 6\\,\\text{O}_2 \\rightarrow 6\\,\\text{CO}_2 + 6\\,\\text{H}_2\\text{O} + 36\\,\\text{ATP}",
+      shortExplanation: "Mitochondria generate cellular ATP via the citric acid cycle and oxidative phosphorylation on the cristae inner membrane.",
+      examTrapWarning: "Common mistake: Confusing chloroplasts (which produce sugars via photosynthesis in plants) with mitochondria (the universal powerhouses)."
+    },
+    {
+      id: "stem_fb_4",
+      subject: "Physics",
+      topic: "Projectile Trajectory Curvature",
+      question: "A projectile is launched with velocity u at angle \u03B8. At the highest point of its trajectory, what is its radius of curvature?",
+      options: ["u\xB2 / g", "(u\xB2 cos\xB2\u03B8) / g", "(u\xB2 sin\xB2\u03B8) / g", "Infinity"],
+      correctIndex: 1,
+      latexEquation: "R = \\frac{v^2}{a_\\perp} = \\frac{(u\\cos\\theta)^2}{g}",
+      shortExplanation: "At the apex, velocity is purely horizontal (u cos \u03B8) and normal acceleration is g, yielding R = (u\xB2 cos\xB2\u03B8)/g.",
+      examTrapWarning: "Common mistake: Selecting u\xB2/g by forgetting that speed at the vertex is u cos \u03B8, not the initial speed u!"
+    },
+    {
+      id: "stem_fb_5",
+      subject: "Chemistry",
+      topic: "Coordination Chemistry & Nitrosyl State",
+      question: "In the brown ring coordination complex [Fe(H2O)5(NO)]SO4, what is the formal oxidation state of Iron (Fe)?",
+      options: ["+2", "+3", "+1", "0"],
+      correctIndex: 2,
+      latexEquation: "[\\text{Fe}^{+1}(\\text{H}_2\\text{O})_5(\\text{NO}^+)]\\text{SO}_4^{2-}",
+      shortExplanation: "Nitric oxide coordinates as the nitrosonium ion (NO\u207A), transferring an electron to iron so Fe adopts a +1 oxidation state.",
+      examTrapWarning: "Common mistake: Assuming NO is a neutral ligand and concluding Fe is +2. In the brown ring test, NO is NO\u207A!"
+    },
+    {
+      id: "stem_fb_6",
+      subject: "Biology / Mathematics",
+      topic: "Plant Physiology & C4 Fixation",
+      question: "In C4 plants, what is the primary stable 4-carbon product formed following initial atmospheric CO2 fixation in mesophyll cells?",
+      options: ["Oxaloacetate (OAA)", "3-Phosphoglycerate (3-PGA)", "Malate", "Aspartate"],
+      correctIndex: 0,
+      latexEquation: "\\text{PEP} + \\text{CO}_2 + \\text{H}_2\\text{O} \\xrightarrow{\\text{PEPcase}} \\text{Oxaloacetate (4C)}",
+      shortExplanation: "PEP carboxylase fixes CO2 to produce Oxaloacetate (4C), which is subsequently reduced to malate.",
+      examTrapWarning: "Common mistake: Selecting 3-PGA (which is the C3 pathway first product) or Malate (which is the transported form, not the first product)!"
+    },
+    {
+      id: "stem_fb_7",
+      subject: "Physics",
+      topic: "Spring Potential Energy Under Equal Force",
+      question: "Two ideal springs with spring constants k1 and k2 (k1 > k2) are stretched by applying equal forces F. Which spring stores more energy?",
+      options: ["Spring 1 (k1)", "Spring 2 (k2)", "Both store equal energy", "Depends on spring unstretched length"],
+      correctIndex: 1,
+      latexEquation: "U = \\frac{F^2}{2k} \\implies U \\propto \\frac{1}{k} \\quad (\\text{for constant } F)",
+      shortExplanation: "When force is identical, stored energy is inversely proportional to k (U = F\xB2/2k). The softer spring (k2) stores more energy.",
+      examTrapWarning: "Common mistake: Using U = 1/2 k x\xB2 and assuming larger k gives larger energy. That formula applies when extension x is identical, not force F!"
+    },
+    {
+      id: "stem_fb_8",
+      subject: "Chemistry",
+      topic: "Molecular Geometry & Dipole Moment",
+      question: "Which of the following molecules possesses polar covalent bonds but has an overall net dipole moment of exactly zero (\u03BC = 0)?",
+      options: ["SF4", "XeF4", "ClF3", "H2O"],
+      correctIndex: 1,
+      latexEquation: "\\text{XeF}_4: \\text{sp}^3\\text{d}^2 \\text{ (Square Planar Geometry)} \\implies \\vec{\\mu} = 0",
+      shortExplanation: "XeF4 has 4 bond pairs and 2 axial lone pairs in a square planar geometry, causing bond dipoles and lone pairs to cancel symmetrically.",
+      examTrapWarning: "Common mistake: Confusing XeF4 with SF4. SF4 has a see-saw geometry with a non-zero dipole moment!"
+    },
+    {
+      id: "stem_fb_9",
+      subject: "Biology / Mathematics",
+      topic: "Human Physiology & Coagulation Cascade",
+      question: "During the blood coagulation cascade, which enzyme complex directly catalyzes the conversion of inactive Prothrombin into active Thrombin?",
+      options: ["Thrombokinase (Prothrombinase)", "Thrombin", "Fibrinogen", "Heparin"],
+      correctIndex: 0,
+      latexEquation: "\\text{Prothrombin} \\xrightarrow{\\text{Thrombokinase} + \\text{Ca}^{2+}} \\text{Thrombin}",
+      shortExplanation: "Thrombokinase (Factor Xa + Va + Ca\xB2\u207A) cleaves prothrombin into thrombin, which then converts fibrinogen into fibrin threads.",
+      examTrapWarning: "Common mistake: Selecting Thrombin or Fibrin. Thrombin is the product of the conversion, not the activating enzyme!"
+    }
+  ],
+  commerce: [
+    {
+      id: "comm_fb_1",
+      subject: "Accountancy",
+      topic: "Forfeiture of Shares",
+      question: "When shares issued at a premium are forfeited for non-payment of call money, which amount is debited to Share Capital?",
+      options: ["Called-up nominal face value", "Total issue price including premium", "Paid-up amount only", "Current market value of the shares"],
+      correctIndex: 0,
+      latexEquation: "\\text{Share Capital Dr.} = \\text{Number of Shares} \\times \\text{Called-up Face Value}",
+      shortExplanation: "Share capital is always credited with called-up nominal value, so upon forfeiture it must be debited with called-up nominal value, excluding premium.",
+      examTrapWarning: "Common mistake: Debiting the premium into Share Capital. If premium was already collected, it cannot be touched or reversed here!"
+    },
+    {
+      id: "comm_fb_2",
+      subject: "Economics",
+      topic: "Price Elasticity Sign Interpretation",
+      question: "If price elasticity of demand is calculated as -1.8, how is the responsiveness of consumers technically categorized?",
+      options: ["Inelastic", "Elastic (magnitude > 1)", "Unitary elastic", "Perfectively inelastic"],
+      correctIndex: 1,
+      latexEquation: "e_d = \\left|\\frac{\\% \\Delta Q}{\\% \\Delta P}\\right| = |-1.8| = 1.8 > 1 \\implies \\text{Elastic}",
+      shortExplanation: "The negative sign reflects downward sloping demand. In economic elasticity analysis, magnitude |e_d| = 1.8 indicates elastic demand.",
+      examTrapWarning: "Common mistake: Treating -1.8 as mathematically less than 1 (inelastic). The minus sign is purely directional!"
+    },
+    {
+      id: "comm_fb_3",
+      subject: "Business Studies",
+      topic: "Working Capital Operating Cycle",
+      question: "Which of the following business decisions directly shortens the working capital operating cycle of a firm?",
+      options: ["Increasing inventory turnover velocity", "Extending longer credit terms to buyers", "Reducing credit period taken from suppliers", "Stockpiling larger raw material buffers"],
+      correctIndex: 0,
+      latexEquation: "\\text{Operating Cycle} = \\text{Raw Mat. Days} + \\text{WIP Days} + \\text{Debtor Days} - \\text{Creditor Days}",
+      shortExplanation: "Faster conversion of inventory into sales reduces inventory holding days, directly shortening the cash-to-cash operating cycle.",
+      examTrapWarning: "Common mistake: Thinking reducing supplier credit shortens the cycle. Paying suppliers faster actually INCREASES the cash gap!"
+    },
+    {
+      id: "comm_fb_4",
+      subject: "Accountancy",
+      topic: "Cash Flow Statement Categorization",
+      question: "Under standard Accounting Standards, dividend paid by a financing enterprise is classified under which cash flow activity?",
+      options: ["Financing activity", "Operating activity", "Investing activity", "Extraordinary activity"],
+      correctIndex: 0,
+      latexEquation: "\\text{Dividend Paid} \\implies \\text{Outflow from Financing Activity}",
+      shortExplanation: "Regardless of whether a company is financial or non-financial, dividend paid is always a Financing activity as it relates to capital providers.",
+      examTrapWarning: "Common mistake: Classifying dividend paid as operating for finance firms. Interest can be operating, but dividend paid is ALWAYS financing!"
+    },
+    {
+      id: "comm_fb_5",
+      subject: "Economics",
+      topic: "Production Possibility Curve Curvature",
+      question: "Why is a standard Production Possibility Curve (PPC) typically concave to the origin?",
+      options: ["Increasing marginal opportunity cost", "Constant marginal opportunity cost", "Decreasing marginal returns to scale", "Perfect resource substitutability"],
+      correctIndex: 0,
+      latexEquation: "\\text{MOC} = \\frac{\\Delta \\text{Loss}}{\\Delta \\text{Gain}} \\uparrow \\implies \\text{Concave Curve}",
+      shortExplanation: "Resources are not equally efficient in the production of all goods, so transferring resources increases the opportunity cost per unit sacrificed.",
+      examTrapWarning: "Common mistake: Confusing convex indifference curves with concave PPCs (increasing marginal opportunity cost)!"
+    },
+    {
+      id: "comm_fb_6",
+      subject: "Business Studies",
+      topic: "Capital Structure & Financial Leverage",
+      question: "Trading on equity (financial leverage) produces favorable returns for equity shareholders ONLY when:",
+      options: ["Return on Investment (ROI) exceeds Cost of Debt", "Cost of Debt exceeds Return on Investment", "Tax rate is exactly zero", "Debt-to-equity ratio is zero"],
+      correctIndex: 0,
+      latexEquation: "\\text{ROI} > K_d \\implies \\text{EPS Increases with Debt}",
+      shortExplanation: "When the company earns a higher return on borrowed funds than the interest rate paid, the surplus expands Earnings Per Share (EPS).",
+      examTrapWarning: "Common mistake: Believing adding debt always increases equity returns. If ROI falls below interest cost, financial leverage turns negative!"
+    }
+  ],
+  humanities: [
+    {
+      id: "hum_fb_1",
+      subject: "Polity & Constitution",
+      topic: "Basic Structure Doctrine",
+      question: "In which landmark verdict did the Supreme Court establish that Parliament cannot amend the 'Basic Structure' of the Constitution?",
+      options: ["Kesavananda Bharati v. State of Kerala (1973)", "Golaknath v. State of Punjab (1967)", "Minerva Mills v. Union of India (1980)", "Maneka Gandhi v. Union of India (1978)"],
+      correctIndex: 0,
+      latexEquation: "\\text{Article 368} \\neq \\text{Power to Destroy Basic Structure}",
+      shortExplanation: "The 13-judge bench in Kesavananda Bharati ruled that constitutional amending power cannot be used to damage its foundational identity.",
+      examTrapWarning: "Common mistake: Selecting Golaknath. Golaknath barred amending Fundamental Rights, but Kesavananda Bharati created the Basic Structure doctrine!"
+    },
+    {
+      id: "hum_fb_2",
+      subject: "Critical Logic & Reasoning",
+      topic: "Formal Fallacies in Deduction",
+      question: "Identify the formal logical fallacy: 'If it rains, the pitch becomes wet. The pitch is wet. Therefore, it rained.'",
+      options: ["Affirming the Consequent", "Denying the Antecedent", "Ad Hominem Attack", "Post Hoc Ergo Propter Hoc"],
+      correctIndex: 0,
+      latexEquation: "(P \\implies Q) \\land Q \\centernot\\implies P",
+      shortExplanation: "The pitch could be wet due to ground sprinklers. Inferring the condition P from the result Q is the formal fallacy of Affirming the Consequent.",
+      examTrapWarning: "Common mistake: Confusing Affirming the Consequent with Denying the Antecedent. Here the speaker observed the outcome Q, not not-P!"
+    },
+    {
+      id: "hum_fb_3",
+      subject: "Geography",
+      topic: "Planetary Atmospheric Circulation",
+      question: "Between the equator and 30\xB0 North/South latitude, which major atmospheric convection circulation cell operates?",
+      options: ["Hadley Cell", "Ferrel Cell", "Polar Cell", "Walker Circulation"],
+      correctIndex: 0,
+      latexEquation: "0^\\circ \\rightarrow 30^\\circ\\text{ Lat} \\implies \\text{Hadley Thermal Cell}",
+      shortExplanation: "Warm air rises at the Intertropical Convergence Zone (ITCZ) and sinks around the 30\xB0 subtropical high-pressure belt, forming the Hadley cell.",
+      examTrapWarning: "Common mistake: Selecting Ferrel cell. The Ferrel cell operates in mid-latitudes between 30\xB0 and 60\xB0!"
+    },
+    {
+      id: "hum_fb_4",
+      subject: "Polity & Law",
+      topic: "Fundamental Rights During Emergency",
+      question: "During a National Emergency proclaimed under Article 352, which Fundamental Rights CANNOT be suspended under any circumstances?",
+      options: ["Articles 20 and 21", "Articles 19 and 20", "Articles 14 and 19", "Article 32"],
+      correctIndex: 0,
+      latexEquation: "\\text{44th Amendment (1978)} \\implies \\text{Art 20 \\& 21 Immune}",
+      shortExplanation: "The 44th Constitutional Amendment (1978) established that protection in respect of conviction (Art 20) and right to life & personal liberty (Art 21) can never be suspended.",
+      examTrapWarning: "Common mistake: Thinking Article 19 remains immune. Article 19 is automatically suspended under external emergency!"
+    },
+    {
+      id: "hum_fb_5",
+      subject: "Critical Logic",
+      topic: "Causality vs Sequence Fallacy",
+      question: "Assuming that because event B occurred immediately after event A, event A must have caused event B is which logical error?",
+      options: ["Post hoc ergo propter hoc", "Strawman fallacy", "Begging the question", "Red herring fallacy"],
+      correctIndex: 0,
+      latexEquation: "\\text{Temporal Succession} \\neq \\text{Causal Mechanism}",
+      shortExplanation: "Chronological sequence alone does not establish causation without empirical mechanism, committing the 'post hoc' error.",
+      examTrapWarning: "Common mistake: Confusing post hoc with correlation fallacies. Post hoc specifically hinges on sequential timing ('after this, therefore because of this')."
+    },
+    {
+      id: "hum_fb_6",
+      subject: "Geography & Cartography",
+      topic: "Map Scale Ratios",
+      question: "Which of the following representative fractions (RF) represents the LARGEST scale map (showing greatest localized detail)?",
+      options: ["1 : 25,000", "1 : 100,000", "1 : 250,000", "1 : 1,000,000"],
+      correctIndex: 0,
+      latexEquation: "\\frac{1}{25,000} > \\frac{1}{1,000,000} \\implies \\text{Larger Fraction = Larger Scale}",
+      shortExplanation: "A larger numerical fraction represents a larger scale, displaying features in greater real-world size and detail per centimeter.",
+      examTrapWarning: "Common mistake: Selecting 1:1,000,000 because the denominator is larger. Larger denominator means a smaller fraction and a SMALLER scale!"
+    }
+  ],
+  middleSchool: [
+    {
+      id: "mid_fb_1",
+      subject: "Physical Science",
+      topic: "Speed vs Velocity in Circular Paths",
+      question: "A bicycle travels around a circular track at a constant speedometer reading of 20 km/h. Does the bicycle have constant velocity?",
+      options: ["No, because its direction of motion is continuously changing", "Yes, because its speed is constant", "Yes, because its acceleration is zero", "No, because its speed is zero"],
+      correctIndex: 0,
+      latexEquation: "\\vec{v} = v \\cdot \\hat{u} \\implies \\frac{d\\vec{v}}{dt} \\neq 0 \\quad (\\text{centripetal acceleration})",
+      shortExplanation: "Velocity is a vector having both speed and direction. Changing direction around a circle means velocity is constantly changing.",
+      examTrapWarning: "Common mistake: Assuming 'constant speed' equals 'constant velocity'. Any change in direction changes velocity and causes acceleration!"
+    },
+    {
+      id: "mid_fb_2",
+      subject: "Chemical Science",
+      topic: "The Logarithmic pH Scale",
+      question: "Solution A has a pH of 3 and Solution B has a pH of 6. How many times more acidic (higher H\u207A concentration) is Solution A than Solution B?",
+      options: ["1,000 times", "3 times", "30 times", "2 times"],
+      correctIndex: 0,
+      latexEquation: "\\frac{[\\text{H}^+]_A}{[\\text{H}^+]_B} = 10^{(6 - 3)} = 10^3 = 1,000",
+      shortExplanation: "Each step on the pH scale represents a 10-fold change in hydrogen ion concentration. A difference of 3 pH units means 10 \xD7 10 \xD7 10 = 1,000 times.",
+      examTrapWarning: "Common mistake: Subtracting 6 - 3 = 3 and selecting '3 times'. The pH scale is logarithmic, not linear!"
+    },
+    {
+      id: "mid_fb_3",
+      subject: "Life Science & Math",
+      topic: "Plant vs Animal Cell Organelles",
+      question: "Which organelle allows plant cells to manufacture their own food through photosynthesis but is absent in animal cells?",
+      options: ["Chloroplast", "Mitochondria", "Ribosome", "Endoplasmic Reticulum"],
+      correctIndex: 0,
+      latexEquation: "6\\,\\text{CO}_2 + 6\\,\\text{H}_2\\text{O} \\xrightarrow{\\text{Chlorophyll}} \\text{Glucose} + 6\\,\\text{O}_2",
+      shortExplanation: "Chloroplasts contain green chlorophyll pigments to trap light energy for photosynthesis and are exclusive to plant/algal cells.",
+      examTrapWarning: "Common mistake: Selecting mitochondria. Both plant and animal cells possess mitochondria for cellular respiration!"
+    },
+    {
+      id: "mid_fb_4",
+      subject: "Physical Science",
+      topic: "Reflection & Plane Mirror Image Distance",
+      question: "You stand 2 meters in front of a flat plane mirror. What is the total distance between you and your virtual image?",
+      options: ["4 meters", "2 meters", "1 meter", "0 meters"],
+      correctIndex: 0,
+      latexEquation: "d_{\\text{total}} = d_{\\text{object}} + d_{\\text{image}} = 2\\text{ m} + 2\\text{ m} = 4\\text{ m}",
+      shortExplanation: "The virtual image forms 2 meters behind the mirror's reflecting surface, making the distance from you to your image 2 + 2 = 4 meters.",
+      examTrapWarning: "Common mistake: Answering 2 meters (the distance to the mirror). The question asks for the total distance between you and your image!"
+    },
+    {
+      id: "mid_fb_5",
+      subject: "Chemical Science",
+      topic: "Physical vs Chemical Changes",
+      question: "Which of the following processes represents a chemical change (forming new substances with different bonds)?",
+      options: ["Rusting of an iron nail in damp air", "Melting of ice cubes into liquid water", "Dissolving sugar crystals in tea", "Boiling water into steam"],
+      correctIndex: 0,
+      latexEquation: "4\\,\\text{Fe} + 3\\,\\text{O}_2 + x\\,\\text{H}_2\\text{O} \\rightarrow 2\\,\\text{Fe}_2\\text{O}_3 \\cdot x\\,\\text{H}_2\\text{O}",
+      shortExplanation: "Rusting creates iron oxide, a completely new chemical compound that cannot be reversed by simple physical cooling.",
+      examTrapWarning: "Common mistake: Thinking dissolving sugar is chemical. Dissolving is a physical mixture that can be reversed by water evaporation!"
+    },
+    {
+      id: "mid_fb_6",
+      subject: "Life Science & Math",
+      topic: "Negative Exponents Arithmetic",
+      question: "What is the exact numerical fraction value of 5\u207B\xB2?",
+      options: ["1 / 25", "-25", "-10", "1 / 10"],
+      correctIndex: 0,
+      latexEquation: "5^{-2} = \\frac{1}{5^2} = \\frac{1}{25}",
+      shortExplanation: "A negative exponent indicates reciprocal division, not a negative product. 5\u207B\xB2 = 1 / (5\xB2) = 1 / 25.",
+      examTrapWarning: "Common mistake: Multiplying 5 \xD7 (-2) = -10, or placing a negative sign to get -25. Negative powers flip to denominator!"
+    }
+  ]
+};
+function getCanonicalDailyBooster(dateKey) {
+  const parts = (dateKey || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]).split("-").map(Number);
+  const year = parts[0] || 2026;
+  const month = parts[1] || 1;
+  const day = parts[2] || 1;
+  const dayOfYear = Math.floor((Date.UTC(year, month - 1, day) - Date.UTC(year, 0, 0)) / 864e5);
+  const pool = triviaFallbackDatabase.stem;
+  const poolLen = pool.length;
+  const idx1 = Math.abs(dayOfYear * 3) % poolLen;
+  const idx2 = (idx1 + 1) % poolLen;
+  const idx3 = (idx1 + 2) % poolLen;
+  return {
+    dayNumber: dayOfYear,
+    theme: "Daily Exam Trap Booster",
+    questions: [pool[idx1], pool[idx2], pool[idx3]]
+  };
+}
+function pickUnseenFallbackQuestions(streamKey, count, excludeQuestions) {
+  const normalizeStr = (s) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  const excludesSet = new Set((excludeQuestions || []).map((q) => normalizeStr(q)));
+  const isQuestionSeen = (qText) => {
+    const norm = normalizeStr(qText);
+    if (!norm) return false;
+    if (excludesSet.has(norm)) return true;
+    for (const ex of excludesSet) {
+      if (ex.length > 15 && (norm.includes(ex) || ex.includes(norm))) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const primaryPool = triviaFallbackDatabase[streamKey] || triviaFallbackDatabase.stem;
+  let unseen = primaryPool.filter((q) => !isQuestionSeen(q.question));
+  if (unseen.length < count) {
+    const otherPools = Object.entries(triviaFallbackDatabase).filter(([key]) => key !== streamKey).flatMap(([, list]) => list);
+    const moreUnseen = otherPools.filter((q) => !isQuestionSeen(q.question));
+    unseen = [...unseen, ...moreUnseen];
+  }
+  const poolCopy = [...unseen.length > 0 ? unseen : primaryPool];
+  for (let i = poolCopy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [poolCopy[i], poolCopy[j]] = [poolCopy[j], poolCopy[i]];
+  }
+  return poolCopy.slice(0, Math.max(3, count));
+}
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country, isBonus, count } = req.body;
+    const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country, isBonus, count, dateKey } = req.body;
     const requestedCount = Math.max(3, Math.min(10, Number(count) || 3));
+    const currentDateKey = dateKey || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const isBonusSession = isBonus === true || isBonus === "true";
+    if (!isBonusSession) {
+      if (dailySharedTriviaCache[currentDateKey]) {
+        const cachedBooster = dailySharedTriviaCache[currentDateKey];
+        return res.json({
+          booster: cachedBooster,
+          questions: cachedBooster.questions,
+          trivia: cachedBooster.questions[0],
+          isCached: true
+        });
+      }
+      const canonicalBooster = getCanonicalDailyBooster(currentDateKey);
+      dailySharedTriviaCache[currentDateKey] = canonicalBooster;
+      return res.json({
+        booster: canonicalBooster,
+        questions: canonicalBooster.questions,
+        trivia: canonicalBooster.questions[0]
+      });
+    }
     const studentGrade = gradeLevel || studyLevel || "11th Grade";
     const studentStream = academicStream || "STEM / Science & Engineering";
     const studentCountry = country || "Global";
@@ -5808,332 +6181,6 @@ app.post("/api/generate-trivia", async (req, res) => {
     const isCommerce = streamLower.includes("commerce") || streamLower.includes("business") || streamLower.includes("econ") || streamLower.includes("account");
     const isHumanities = streamLower.includes("human") || streamLower.includes("art") || streamLower.includes("law") || streamLower.includes("pol");
     const isSTEM = !isCommerce && !isHumanities && !isMiddleSchool;
-    const fallbackDatabase2 = {
-      stem: [
-        {
-          id: "stem_fb_1",
-          subject: "Physics",
-          topic: "Kinematics & Freefall Acceleration",
-          question: "A ball is projected vertically upward. At its maximum height, what is the magnitude and direction of its acceleration?",
-          options: ["0 m/s\xB2", "9.8 m/s\xB2 downward", "9.8 m/s\xB2 upward", "Cannot be determined without launch mass"],
-          correctIndex: 1,
-          latexEquation: "a = -g \\approx -9.8\\text{ m/s}^2 \\quad (\\text{constant downward})",
-          shortExplanation: "Velocity is momentarily zero at the apex, but the gravitational acceleration pulls downward constantly at 9.8 m/s\xB2.",
-          examTrapWarning: "Common mistake: Confusing instantaneous velocity with acceleration. Speed is zero, but gravitational force never switches off!"
-        },
-        {
-          id: "stem_fb_2",
-          subject: "Chemistry",
-          topic: "Thermodynamics & Real Gas Deviation",
-          question: "Under which specific physical conditions does a real gas exhibit its MAXIMUM deviation from ideal gas behavior?",
-          options: ["High temperature and low pressure", "Low temperature and high pressure", "High temperature and high pressure", "Low temperature and low pressure"],
-          correctIndex: 1,
-          latexEquation: "\\left(P + \\frac{an^2}{V^2}\\right)(V - nb) = nRT",
-          shortExplanation: "Low temperature slows molecules (amplifying intermolecular attractions) while high pressure reduces free volume, maximizing van der Waals deviations.",
-          examTrapWarning: "Common mistake: Inverting the relationship. Real gases behave MOST ideally at high temperature and low pressure, NOT at low temp / high pressure!"
-        },
-        {
-          id: "stem_fb_3",
-          subject: "Biology / Mathematics",
-          topic: "Cellular Respiration & ATP Yield",
-          question: "Which organelle is responsible for synthesizing ATP through aerobic cellular respiration in eukaryotic cells?",
-          options: ["Ribosome", "Mitochondria", "Chloroplast", "Endoplasmic Reticulum"],
-          correctIndex: 1,
-          latexEquation: "\\text{Glucose} + 6\\,\\text{O}_2 \\rightarrow 6\\,\\text{CO}_2 + 6\\,\\text{H}_2\\text{O} + 36\\,\\text{ATP}",
-          shortExplanation: "Mitochondria generate cellular ATP via the citric acid cycle and oxidative phosphorylation on the cristae inner membrane.",
-          examTrapWarning: "Common mistake: Confusing chloroplasts (which generate carbohydrates via photosynthesis in plants) with mitochondria (the universal powerhouses)."
-        },
-        {
-          id: "stem_fb_4",
-          subject: "Physics",
-          topic: "Projectile Trajectory Curvature",
-          question: "A projectile is launched with velocity u at angle \u03B8. At the highest point of its trajectory, what is its radius of curvature?",
-          options: ["u\xB2 / g", "(u\xB2 cos\xB2\u03B8) / g", "(u\xB2 sin\xB2\u03B8) / g", "Infinity"],
-          correctIndex: 1,
-          latexEquation: "R = \\frac{v^2}{a_\\perp} = \\frac{(u\\cos\\theta)^2}{g}",
-          shortExplanation: "At the apex, velocity is purely horizontal (u cos \u03B8) and normal acceleration is g, yielding R = (u\xB2 cos\xB2\u03B8)/g.",
-          examTrapWarning: "Common mistake: Selecting u\xB2/g by forgetting that speed at vertex is u cos \u03B8, not initial speed u!"
-        },
-        {
-          id: "stem_fb_5",
-          subject: "Chemistry",
-          topic: "Coordination Chemistry & Nitrosyl",
-          question: "In the brown ring coordination complex [Fe(H2O)5(NO)]SO4, what is the formal oxidation state of Iron (Fe)?",
-          options: ["+2", "+3", "+1", "0"],
-          correctIndex: 2,
-          latexEquation: "[\\text{Fe}^{+1}(\\text{H}_2\\text{O})_5(\\text{NO}^+)]\\text{SO}_4^{2-}",
-          shortExplanation: "Nitric oxide coordinates as the nitrosonium ion (NO\u207A), transferring an electron to iron so Fe adopts a +1 oxidation state.",
-          examTrapWarning: "Common mistake: Assuming NO is a neutral ligand and concluding Fe is +2. In the brown ring test, NO is NO\u207A!"
-        },
-        {
-          id: "stem_fb_6",
-          subject: "Biology / Mathematics",
-          topic: "Plant Physiology & C4 Fixation",
-          question: "In C4 plants, what is the primary stable 4-carbon product formed following initial atmospheric CO2 fixation in mesophyll cells?",
-          options: ["Oxaloacetate (OAA)", "3-Phosphoglycerate (3-PGA)", "Malate", "Aspartate"],
-          correctIndex: 0,
-          latexEquation: "\\text{PEP} + \\text{CO}_2 + \\text{H}_2\\text{O} \\xrightarrow{\\text{PEPcase}} \\text{Oxaloacetate (4C)}",
-          shortExplanation: "PEP carboxylase fixes CO2 to produce Oxaloacetate (4C), which is subsequently reduced to malate.",
-          examTrapWarning: "Common mistake: Selecting 3-PGA (which is the C3 pathway first product) or Malate (which is the transported form, not the first product)!"
-        },
-        {
-          id: "stem_fb_7",
-          subject: "Physics",
-          topic: "Spring Potential Energy Under Equal Force",
-          question: "Two ideal springs with spring constants k1 and k2 (k1 > k2) are stretched by applying equal forces F. Which spring stores more energy?",
-          options: ["Spring 1 (k1)", "Spring 2 (k2)", "Both store equal energy", "Depends on spring unstretched length"],
-          correctIndex: 1,
-          latexEquation: "U = \\frac{F^2}{2k} \\implies U \\propto \\frac{1}{k} \\quad (\\text{for constant } F)",
-          shortExplanation: "When force is identical, stored energy is inversely proportional to k (U = F\xB2/2k). The softer spring (k2) stores more energy.",
-          examTrapWarning: "Common mistake: Using U = 1/2 k x\xB2 and assuming larger k gives larger energy. That formula applies when extension x is identical, not force F!"
-        },
-        {
-          id: "stem_fb_8",
-          subject: "Chemistry",
-          topic: "Molecular Geometry & Dipole Moment",
-          question: "Which of the following molecules possesses polar covalent bonds but has an overall net dipole moment of exactly zero (\u03BC = 0)?",
-          options: ["SF4", "XeF4", "ClF3", "H2O"],
-          correctIndex: 1,
-          latexEquation: "\\text{XeF}_4: \\text{sp}^3\\text{d}^2 \\text{ (Square Planar Geometry)} \\implies \\vec{\\mu} = 0",
-          shortExplanation: "XeF4 has 4 bond pairs and 2 axial lone pairs in a square planar geometry, causing bond dipoles and lone pairs to cancel symmetrically.",
-          examTrapWarning: "Common mistake: Confusing XeF4 with SF4. SF4 has a see-saw geometry with non-zero dipole moment!"
-        },
-        {
-          id: "stem_fb_9",
-          subject: "Biology / Mathematics",
-          topic: "Human Physiology & Coagulation Cascade",
-          question: "During the blood coagulation cascade, which enzyme complex directly catalyzes the conversion of inactive Prothrombin into active Thrombin?",
-          options: ["Thrombokinase (Prothrombinase)", "Thrombin", "Fibrinogen", "Heparin"],
-          correctIndex: 0,
-          latexEquation: "\\text{Prothrombin} \\xrightarrow{\\text{Thrombokinase} + \\text{Ca}^{2+}} \\text{Thrombin}",
-          shortExplanation: "Thrombokinase (Factor Xa + Va + Ca\xB2\u207A) cleaves prothrombin into thrombin, which then converts fibrinogen into fibrin threads.",
-          examTrapWarning: "Common mistake: Selecting Thrombin or Fibrin. Thrombin is the product of the conversion, not the activating enzyme!"
-        }
-      ],
-      commerce: [
-        {
-          id: "comm_fb_1",
-          subject: "Accountancy",
-          topic: "Forfeiture of Shares",
-          question: "When shares issued at a premium are forfeited for non-payment of call money, which amount is debited to the Share Capital Account?",
-          options: ["Called-up nominal face value", "Total issue price including premium", "Paid-up amount only", "Current market value of the shares"],
-          correctIndex: 0,
-          latexEquation: "\\text{Share Capital Dr.} = \\text{Number of Shares} \\times \\text{Called-up Face Value}",
-          shortExplanation: "Share capital is always credited with called-up nominal value, so upon forfeiture it must be debited with called-up nominal value, excluding premium.",
-          examTrapWarning: "Common mistake: Debiting the premium along with face value into Share Capital. If premium is already collected, it can never be touched or debited here!"
-        },
-        {
-          id: "comm_fb_2",
-          subject: "Economics",
-          topic: "Price Elasticity Sign Interpretation",
-          question: "If price elasticity of demand is calculated as -1.8, how is the responsiveness of consumers technically categorized?",
-          options: ["Inelastic", "Elastic (magnitude > 1)", "Unitary elastic", "Perfectively inelastic"],
-          correctIndex: 1,
-          latexEquation: "e_d = \\left|\\frac{\\% \\Delta Q}{\\% \\Delta P}\\right| = |-1.8| = 1.8 > 1 \\implies \\text{Elastic}",
-          shortExplanation: "The negative sign reflects the law of downward-sloping demand. In elasticity analysis, magnitude |e_d| = 1.8 indicates elastic demand.",
-          examTrapWarning: "Common mistake: Treating -1.8 as mathematically less than 1 (inelastic). The negative sign is purely directional!"
-        },
-        {
-          id: "comm_fb_3",
-          subject: "Business Studies",
-          topic: "Working Capital Operating Cycle",
-          question: "Which of the following business decisions directly shortens the working capital operating cycle of a firm?",
-          options: ["Increasing inventory turnover velocity", "Extending longer credit terms to buyers", "Reducing credit period taken from suppliers", "Stockpiling larger raw material buffers"],
-          correctIndex: 0,
-          latexEquation: "\\text{Operating Cycle} = \\text{Raw Mat. Days} + \\text{WIP Days} + \\text{Debtor Days} - \\text{Creditor Days}",
-          shortExplanation: "Faster conversion of inventory into sales reduces inventory holding days, directly shortening the cash-to-cash operating cycle.",
-          examTrapWarning: "Common mistake: Thinking reducing supplier credit shortens the cycle. Paying suppliers faster actually INCREASES the cash working capital gap!"
-        },
-        {
-          id: "comm_fb_4",
-          subject: "Accountancy",
-          topic: "Cash Flow Statement Categorization",
-          question: "Under standard Accounting Standards, dividend paid by a financing enterprise is classified under which cash flow activity?",
-          options: ["Financing activity", "Operating activity", "Investing activity", "Extraordinary activity"],
-          correctIndex: 0,
-          latexEquation: "\\text{Dividend Paid} \\implies \\text{Outflow from Financing Activity}",
-          shortExplanation: "Regardless of whether a company is financial or non-financial, dividend paid is always classified as a Financing activity because it relates to capital providers.",
-          examTrapWarning: "Common mistake: Classifying dividend paid as operating for finance firms. Interest paid can be operating for finance companies, but dividend paid is ALWAYS financing!"
-        },
-        {
-          id: "comm_fb_5",
-          subject: "Economics",
-          topic: "Production Possibility Curve Curvature",
-          question: "Why is a standard Production Possibility Curve (PPC) typically concave to the origin?",
-          options: ["Increasing marginal opportunity cost", "Constant marginal opportunity cost", "Decreasing marginal returns to scale", "Perfect resource substitutability"],
-          correctIndex: 0,
-          latexEquation: "\\text{MOC} = \\frac{\\Delta \\text{Loss}}{\\Delta \\text{Gain}} \\uparrow \\implies \\text{Concave Curve}",
-          shortExplanation: "Resources are not equally efficient in the production of all goods, so transferring resources increases the opportunity cost per unit sacrificed.",
-          examTrapWarning: "Common mistake: Confusing convex indifference curves (diminishing MRS) with concave PPCs (increasing marginal opportunity cost)!"
-        },
-        {
-          id: "comm_fb_6",
-          subject: "Business Studies",
-          topic: "Capital Structure & Financial Leverage",
-          question: "Trading on equity (financial leverage) produces favorable returns for equity shareholders ONLY when:",
-          options: ["Return on Investment (ROI) exceeds Cost of Debt", "Cost of Debt exceeds Return on Investment", "Tax rate is exactly zero", "Debt-to-equity ratio is zero"],
-          correctIndex: 0,
-          latexEquation: "\\text{ROI} > K_d \\implies \\text{EPS Increases with Debt}",
-          shortExplanation: "When the company earns a higher return on borrowed funds than the interest rate paid, the surplus expands Earnings Per Share (EPS).",
-          examTrapWarning: "Common mistake: Believing adding debt always increases equity returns. If ROI falls below interest cost, financial leverage turns disastrously negative!"
-        }
-      ],
-      humanities: [
-        {
-          id: "hum_fb_1",
-          subject: "Polity & Constitution",
-          topic: "Basic Structure Doctrine",
-          question: "In which landmark verdict did the Supreme Court establish that Parliament cannot amend the 'Basic Structure' of the Constitution?",
-          options: ["Kesavananda Bharati v. State of Kerala (1973)", "Golaknath v. State of Punjab (1967)", "Minerva Mills v. Union of India (1980)", "Maneka Gandhi v. Union of India (1978)"],
-          correctIndex: 0,
-          latexEquation: "\\text{Article 368} \\neq \\text{Power to Destroy Basic Structure}",
-          shortExplanation: "The 13-judge bench in Kesavananda Bharati ruled that constitutional amending power cannot be used to damage its foundational identity.",
-          examTrapWarning: "Common mistake: Selecting Golaknath. Golaknath barred amending Fundamental Rights, but it was Kesavananda Bharati that created the Basic Structure doctrine!"
-        },
-        {
-          id: "hum_fb_2",
-          subject: "Critical Logic & Reasoning",
-          topic: "Formal Fallacies in Deduction",
-          question: "Identify the formal logical fallacy: 'If it rains, the pitch becomes wet. The pitch is wet. Therefore, it rained.'",
-          options: ["Affirming the Consequent", "Denying the Antecedent", "Ad Hominem Attack", "Post Hoc Ergo Propter Hoc"],
-          correctIndex: 0,
-          latexEquation: "(P \\implies Q) \\land Q \\centernot\\implies P",
-          shortExplanation: "The pitch could be wet due to ground sprinklers. Inferring the condition P from the result Q is the formal fallacy of Affirming the Consequent.",
-          examTrapWarning: "Common mistake: Confusing Affirming the Consequent with Denying the Antecedent. Here the speaker observed the outcome Q, not not-P!"
-        },
-        {
-          id: "hum_fb_3",
-          subject: "Geography",
-          topic: "Planetary Atmospheric Circulation",
-          question: "Between the equator and 30\xB0 North/South latitude, which major atmospheric convection circulation cell operates?",
-          options: ["Hadley Cell", "Ferrel Cell", "Polar Cell", "Walker Circulation"],
-          correctIndex: 0,
-          latexEquation: "0^\\circ \\rightarrow 30^\\circ\\text{ Lat} \\implies \\text{Hadley Thermal Cell}",
-          shortExplanation: "Warm air rises at the Intertropical Convergence Zone (ITCZ) and sinks around the 30\xB0 subtropical high-pressure belt, forming the Hadley cell.",
-          examTrapWarning: "Common mistake: Selecting Ferrel cell. The Ferrel cell operates in mid-latitudes between 30\xB0 and 60\xB0!"
-        },
-        {
-          id: "hum_fb_4",
-          subject: "Polity & Law",
-          topic: "Fundamental Rights During Emergency",
-          question: "During a National Emergency proclaimed under Article 352, which Fundamental Rights CANNOT be suspended under any circumstances?",
-          options: ["Articles 20 and 21", "Articles 19 and 20", "Articles 14 and 19", "Article 32"],
-          correctIndex: 0,
-          latexEquation: "\\text{44th Amendment (1978)} \\implies \\text{Art 20 \\& 21 Immune}",
-          shortExplanation: "The 44th Constitutional Amendment (1978) established that protection in respect of conviction (Art 20) and right to life & personal liberty (Art 21) can never be suspended.",
-          examTrapWarning: "Common mistake: Thinking Article 19 remains immune. Article 19 is automatically suspended under external emergency!"
-        },
-        {
-          id: "hum_fb_5",
-          subject: "Critical Logic",
-          topic: "Causality vs Sequence Fallacy",
-          question: "Assuming that because event B occurred immediately after event A, event A must have caused event B is which logical error?",
-          options: ["Post hoc ergo propter hoc", "Strawman fallacy", "Begging the question", "Red herring fallacy"],
-          correctIndex: 0,
-          latexEquation: "\\text{Temporal Succession} \\neq \\text{Causal Mechanism}",
-          shortExplanation: "Chronological sequence alone does not establish causation without empirical mechanism, committing the 'post hoc' error.",
-          examTrapWarning: "Common mistake: Confusing post hoc with correlation fallacies. Post hoc specifically hinges on sequential timing ('after this, therefore because of this')."
-        },
-        {
-          id: "hum_fb_6",
-          subject: "Geography & Cartography",
-          topic: "Map Scale Ratios",
-          question: "Which of the following representative fractions (RF) represents the LARGEST scale map (showing greatest localized detail)?",
-          options: ["1 : 25,000", "1 : 100,000", "1 : 250,000", "1 : 1,000,000"],
-          correctIndex: 0,
-          latexEquation: "\\frac{1}{25,000} > \\frac{1}{1,000,000} \\implies \\text{Larger Fraction = Larger Scale}",
-          shortExplanation: "A larger numerical fraction represents a larger scale, displaying features in greater real-world size and detail per centimeter.",
-          examTrapWarning: "Common mistake: Selecting 1:1,000,000 because the denominator is larger. Larger denominator means a smaller fraction and a SMALLER scale!"
-        }
-      ],
-      middleSchool: [
-        {
-          id: "mid_fb_1",
-          subject: "Physical Science",
-          topic: "Speed vs Velocity in Circular Paths",
-          question: "A bicycle travels around a circular track at a constant speedometer reading of 20 km/h. Does the bicycle have constant velocity?",
-          options: ["No, because its direction of motion is continuously changing", "Yes, because its speed is constant", "Yes, because its acceleration is zero", "No, because its speed is zero"],
-          correctIndex: 0,
-          latexEquation: "\\vec{v} = v \\cdot \\hat{u} \\implies \\frac{d\\vec{v}}{dt} \\neq 0 \\quad (\\text{centripetal acceleration})",
-          shortExplanation: "Velocity is a vector having both speed and direction. Changing direction around a circle means velocity is constantly changing.",
-          examTrapWarning: "Common mistake: Assuming 'constant speed' equals 'constant velocity'. Any change in direction changes velocity and causes acceleration!"
-        },
-        {
-          id: "mid_fb_2",
-          subject: "Chemical Science",
-          topic: "The Logarithmic pH Scale",
-          question: "Solution A has a pH of 3 and Solution B has a pH of 6. How many times more acidic (higher H\u207A concentration) is Solution A than Solution B?",
-          options: ["1,000 times", "3 times", "30 times", "2 times"],
-          correctIndex: 0,
-          latexEquation: "\\frac{[\\text{H}^+]_A}{[\\text{H}^+]_B} = 10^{(6 - 3)} = 10^3 = 1,000",
-          shortExplanation: "Each step on the pH scale represents a 10-fold change in hydrogen ion concentration. A difference of 3 pH units means 10 \xD7 10 \xD7 10 = 1,000 times.",
-          examTrapWarning: "Common mistake: Subtracting 6 - 3 = 3 and selecting '3 times'. The pH scale is logarithmic, not linear!"
-        },
-        {
-          id: "mid_fb_3",
-          subject: "Life Science & Math",
-          topic: "Plant vs Animal Cell Organelles",
-          question: "Which organelle allows plant cells to manufacture their own food through photosynthesis but is absent in animal cells?",
-          options: ["Chloroplast", "Mitochondria", "Ribosome", "Endoplasmic Reticulum"],
-          correctIndex: 0,
-          latexEquation: "6\\,\\text{CO}_2 + 6\\,\\text{H}_2\\text{O} \\xrightarrow{\\text{Chlorophyll}} \\text{Glucose} + 6\\,\\text{O}_2",
-          shortExplanation: "Chloroplasts contain green chlorophyll pigments to trap light energy for photosynthesis and are exclusive to plant/algal cells.",
-          examTrapWarning: "Common mistake: Selecting mitochondria. Both plant and animal cells possess mitochondria for cellular respiration!"
-        },
-        {
-          id: "mid_fb_4",
-          subject: "Physical Science",
-          topic: "Reflection & Plane Mirror Image Distance",
-          question: "You stand 2 meters in front of a flat plane mirror. What is the total distance between you and your virtual image?",
-          options: ["4 meters", "2 meters", "1 meter", "0 meters"],
-          correctIndex: 0,
-          latexEquation: "d_{\\text{total}} = d_{\\text{object}} + d_{\\text{image}} = 2\\text{ m} + 2\\text{ m} = 4\\text{ m}",
-          shortExplanation: "The virtual image forms 2 meters behind the mirror's reflecting surface, making the distance from you to your image 2 + 2 = 4 meters.",
-          examTrapWarning: "Common mistake: Answering 2 meters (the distance to the mirror). The question asks for the total distance between you and your image!"
-        },
-        {
-          id: "mid_fb_5",
-          subject: "Chemical Science",
-          topic: "Physical vs Chemical Changes",
-          question: "Which of the following processes represents a chemical change (forming new substances with different bonds)?",
-          options: ["Rusting of an iron nail in damp air", "Melting of ice cubes into liquid water", "Dissolving sugar crystals in tea", "Boiling water into steam"],
-          correctIndex: 0,
-          latexEquation: "4\\,\\text{Fe} + 3\\,\\text{O}_2 + x\\,\\text{H}_2\\text{O} \\rightarrow 2\\,\\text{Fe}_2\\text{O}_3 \\cdot x\\,\\text{H}_2\\text{O}",
-          shortExplanation: "Rusting creates iron oxide, a completely new chemical compound that cannot be reversed by simple physical cooling.",
-          examTrapWarning: "Common mistake: Thinking dissolving sugar is chemical. Dissolving is a physical mixture that can be reversed by water evaporation!"
-        },
-        {
-          id: "mid_fb_6",
-          subject: "Life Science & Math",
-          topic: "Negative Exponents Arithmetic",
-          question: "What is the exact numerical fraction value of 5\u207B\xB2?",
-          options: ["1 / 25", "-25", "-10", "1 / 10"],
-          correctIndex: 0,
-          latexEquation: "5^{-2} = \\frac{1}{5^2} = \\frac{1}{25}",
-          shortExplanation: "A negative exponent indicates reciprocal division, not a negative product. 5\u207B\xB2 = 1 / (5\xB2) = 1 / 25.",
-          examTrapWarning: "Common mistake: Multiplying 5 \xD7 (-2) = -10, or placing a negative sign to get -25. Negative powers flip to denominator!"
-        }
-      ]
-    };
-    const pickUnseenFallbackQuestions = (streamKey, count2) => {
-      const primaryPool = fallbackDatabase2[streamKey] || fallbackDatabase2.stem;
-      let unseen = primaryPool.filter((q) => !isQuestionSeen(q.question));
-      if (unseen.length < count2) {
-        const otherPools = Object.entries(fallbackDatabase2).filter(([key]) => key !== streamKey).flatMap(([, list]) => list);
-        const moreUnseen = otherPools.filter((q) => !isQuestionSeen(q.question));
-        unseen = [...unseen, ...moreUnseen];
-      }
-      const selected = [];
-      const poolCopy = [...unseen.length > 0 ? unseen : primaryPool];
-      for (let i = poolCopy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [poolCopy[i], poolCopy[j]] = [poolCopy[j], poolCopy[i]];
-      }
-      while (selected.length < count2 && poolCopy.length > 0) {
-        selected.push(poolCopy.pop());
-      }
-      return selected;
-    };
     let targetStreamKey = "stem";
     if (isCommerce) targetStreamKey = "commerce";
     else if (isHumanities) targetStreamKey = "humanities";
@@ -6174,13 +6221,13 @@ STRICT SUBJECT MODEL:
     const currentDayOfYear = Math.floor((Date.now() - new Date((/* @__PURE__ */ new Date()).getFullYear(), 0, 0).getTime()) / 1e3 / 60 / 60 / 24);
     let attempts = 0;
     let finalBooster = null;
-    while (attempts < 3) {
+    while (attempts < 2) {
       attempts++;
       const promptText = `You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
 Target: High-Yield Micro-Assessment focusing on "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
 Curricular Subject Breakdown:
 ${subjectCurriculumGuidance}
-${topic && topic.trim().length > 0 ? `Specific Focus Theme: ${topic}` : `Theme: High-Yield Exam Traps (Day of Year: ${currentDayOfYear}, Seed: ${randomSeed})`}
+${topic && topic.trim().length > 0 ? `Specific Focus Theme: ${topic}` : `Theme: High-Yield Exam Traps (Seed: ${randomSeed})`}
 ${studentCountry ? `Curricular Context: Aligned with standard national/competitive syllabus for ${studentCountry}.` : ""}
 ${excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0 ? `FORBIDDEN QUESTIONS (DO NOT REPEAT OR PARAPHRASE ANY OF THESE): ${JSON.stringify(excludeQuestions.slice(-60))}` : ""}
 
@@ -6246,16 +6293,16 @@ Return strictly a valid JSON object matching the requested schema with exactly $
         if (validQuestions.length >= requestedCount) {
           finalBooster = {
             dayNumber: parsed.dayNumber || currentDayOfYear,
-            theme: parsed.theme || "Daily Exam Trap Booster",
+            theme: parsed.theme || "Personalized Exam Trap Practice",
             questions: validQuestions.slice(0, requestedCount)
           };
           break;
-        } else if (validQuestions.length > 0 && attempts === 3) {
+        } else if (validQuestions.length > 0) {
           const needed = requestedCount - validQuestions.length;
-          const supplement = pickUnseenFallbackQuestions(targetStreamKey, needed);
+          const supplement = pickUnseenFallbackQuestions(targetStreamKey, needed, excludeQuestions);
           finalBooster = {
             dayNumber: parsed.dayNumber || currentDayOfYear,
-            theme: parsed.theme || "Daily Exam Trap Booster",
+            theme: parsed.theme || "Personalized Exam Trap Practice",
             questions: [...validQuestions, ...supplement].slice(0, requestedCount)
           };
           break;
@@ -6269,11 +6316,21 @@ Return strictly a valid JSON object matching the requested schema with exactly $
         trivia: finalBooster.questions[0]
       });
     }
-    throw new Error("Failed to generate required count of non-repeating trivia questions after multiple attempts");
+    const fallbackList = pickUnseenFallbackQuestions(targetStreamKey, requestedCount, excludeQuestions);
+    return res.json({
+      booster: {
+        dayNumber: currentDayOfYear,
+        theme: "Personalized Exam Trap Practice",
+        questions: fallbackList
+      },
+      questions: fallbackList,
+      trivia: fallbackList[0],
+      isFallback: true
+    });
   } catch (error) {
-    console.error("Trivia generation error (falling back to unseen stream pool):", error);
-    const streamLower = (req.body.academicStream || "").toLowerCase();
-    const gradeLower = (req.body.gradeLevel || req.body.studyLevel || "").toLowerCase();
+    console.warn("Trivia generation error (falling back to unseen stream pool safely):", error);
+    const streamLower = (req.body.academicStream || req.body.stream || "").toLowerCase();
+    const gradeLower = (req.body.gradeLevel || req.body.studyLevel || req.body.userGrade || "").toLowerCase();
     const isMiddleSchool = gradeLower.includes("6") || gradeLower.includes("7") || gradeLower.includes("8") || gradeLower.includes("9") || gradeLower.includes("10");
     const isCommerce = streamLower.includes("commerce") || streamLower.includes("business") || streamLower.includes("econ") || streamLower.includes("account");
     const isHumanities = streamLower.includes("human") || streamLower.includes("art") || streamLower.includes("law") || streamLower.includes("pol");
@@ -6282,38 +6339,15 @@ Return strictly a valid JSON object matching the requested schema with exactly $
     else if (isHumanities) targetStreamKey = "humanities";
     else if (isMiddleSchool) targetStreamKey = "middleSchool";
     const requestedCount = Math.max(3, Math.min(10, Number(req.body.count) || 3));
-    const normalizeStr = (s) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-    const excludesSet = new Set((req.body.excludeQuestions || []).map((q) => normalizeStr(q)));
-    const isQuestionSeen = (qText) => {
-      const norm = normalizeStr(qText);
-      if (!norm || norm.length < 5) return false;
-      if (excludesSet.has(norm)) return true;
-      for (const ex of excludesSet) {
-        if (ex.length > 20 && (norm.includes(ex) || ex.includes(norm))) {
-          return true;
-        }
-      }
-      return false;
-    };
-    const primaryPool = (fallbackDatabase[targetStreamKey] || fallbackDatabase.stem).filter((q) => !isQuestionSeen(q.question));
-    const fallbackQuestions = [...primaryPool];
-    if (fallbackQuestions.length < requestedCount) {
-      const others = Object.entries(fallbackDatabase).filter(([k]) => k !== targetStreamKey).flatMap(([, v]) => v).filter((q) => !isQuestionSeen(q.question));
-      fallbackQuestions.push(...others);
-    }
-    for (let i = fallbackQuestions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [fallbackQuestions[i], fallbackQuestions[j]] = [fallbackQuestions[j], fallbackQuestions[i]];
-    }
-    const finalFbQuestions = fallbackQuestions.slice(0, requestedCount);
+    const fallbackList = pickUnseenFallbackQuestions(targetStreamKey, requestedCount, req.body.excludeQuestions);
     res.json({
       booster: {
         dayNumber: 1,
         theme: "Exam Trap Avoidance Booster",
-        questions: finalFbQuestions
+        questions: fallbackList
       },
-      questions: finalFbQuestions,
-      trivia: finalFbQuestions[0],
+      questions: fallbackList,
+      trivia: fallbackList[0],
       isFallback: true
     });
   }

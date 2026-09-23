@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ArrowLeft, 
   Share2, 
@@ -40,6 +40,10 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { db, auth } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import GlobalMarkdown from './GlobalMarkdown';
+import { 
+  getCanonicalDailyBooster, 
+  getClientDeterministicBonusQuestions 
+} from '../utils/dailyTriviaData';
 
 interface DailyTriviaProps {
   onBack: () => void;
@@ -185,13 +189,13 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
     return getTodayCompletedBooster(todayKey, gradeLevel, academicStream);
   }, [todayKey, gradeLevel, academicStream]);
 
-  // Track-aware key for caching today's booster questions
-  const todayQuestionsKey = `daily_booster_today_${todayKey}_${gradeLevel}_${academicStream}`;
+  // Standard daily key for caching today's booster questions (same for all users on this calendar date)
+  const todayQuestionsKey = `daily_booster_today_${todayKey}`;
 
-  // Main state
-  const [booster, setBooster] = useState<DailyBoosterPayload | null>(() => {
+  // Synchronously check if today's questions were already generated or cached in localStorage
+  const initialCachedBooster = useMemo(() => {
     if (initialCompletedData?.booster) return initialCompletedData.booster;
-    const todayCached = safeGetItem(todayQuestionsKey) || safeGetItem(`daily_booster_today_${todayKey}`);
+    const todayCached = safeGetItem(todayQuestionsKey) || safeGetItem(`daily_booster_today_${todayKey}_${gradeLevel}_${academicStream}`);
     if (todayCached) {
       try {
         const parsed = JSON.parse(todayCached);
@@ -201,9 +205,15 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
       } catch {}
     }
     return null;
-  });
+  }, [initialCompletedData, todayQuestionsKey, todayKey, gradeLevel, academicStream]);
+
+  // Main state - fresh users who haven't completed quiz start directly at question 0 (Card 1 of 3)
+  const [booster, setBooster] = useState<DailyBoosterPayload | null>(initialCachedBooster);
   const [currentIndex, setCurrentIndex] = useState<number>(() => {
-    return (initialCompletedData?.booster?.questions?.length || 3) - 1;
+    if (initialCompletedData) {
+      return (initialCompletedData.booster?.questions?.length || 3) - 1;
+    }
+    return 0; // Fresh user starts directly at question 1 (index 0)
   });
   const [responses, setResponses] = useState<QuestionUserResponse[]>(() => {
     return initialCompletedData?.responses || [];
@@ -215,7 +225,8 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
     return !!initialCompletedData;
   });
   const [loading, setLoading] = useState<boolean>(() => {
-    return !initialCompletedData;
+    // Only show loading if neither completed data nor cached booster is synchronously available
+    return !initialCompletedData && !initialCachedBooster;
   });
   const [triviaError, setTriviaError] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
@@ -332,13 +343,11 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
     }
   };
 
+  // Track whether initial auto-load has triggered to avoid duplicate fetches or deadlock
+  const hasTriggeredLoadRef = useRef(false);
+
   // Fetch or Load Daily Booster
   const loadDailyBooster = async (forceNewBonus: boolean = false, forcedTopic?: string, questionCount: number = 3) => {
-    if (isOffline) {
-      setLoading(false);
-      return;
-    }
-
     const finalCount = forceNewBonus ? (questionCount || 3) : 3;
     setBonusCount(finalCount);
 
@@ -360,7 +369,7 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
         return;
       }
 
-      // Check if today's questions were already generated today
+      // Check if today's questions were already generated & cached in localStorage
       const existingTodayQuestions = safeGetItem(todayQuestionsKey) || safeGetItem(`daily_booster_today_${todayKey}`);
       if (existingTodayQuestions) {
         try {
@@ -369,6 +378,7 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
             setBooster(parsed);
             setIsBonusSession(false);
             setLoading(false);
+            setCurrentIndex(0);
             return;
           }
         } catch (e) {
@@ -377,16 +387,7 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
       }
     }
 
-    // Check coins if non-pro
-    if (!isProUser() && !forceNewBonus) {
-      const currentCoins = getCoins();
-      if (currentCoins < 1) {
-        window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "Daily Trivia Booster", cost: 1 } }));
-        onBack();
-        return;
-      }
-    }
-
+    // Daily 3 questions are 100% FREE for all users every day - no paywall, no coin deduction!
     setLoading(true);
     setTriviaError(null);
     setCurrentIndex(0);
@@ -398,11 +399,15 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
 
     try {
       const activeTopic = forcedTopic !== undefined ? forcedTopic : customTopic;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       const response = await fetch(getApiUrl('/api/generate-trivia'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           gradeLevel,
           academicStream,
@@ -411,12 +416,15 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
           excludeQuestions: excludeList.slice(-100),
           country,
           isBonus: forceNewBonus,
-          count: finalCount
+          count: finalCount,
+          dateKey: todayKey
         }),
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error('Server error');
+        throw new Error(`Server returned ${response.status}`);
       }
 
       const data = await response.json();
@@ -427,10 +435,6 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
       };
 
       if (loadedBooster && Array.isArray(loadedBooster.questions) && loadedBooster.questions.length > 0) {
-        if (!isProUser() && !forceNewBonus) {
-          deductCoins(1, "Daily Trivia Booster");
-        }
-
         setBooster(loadedBooster);
         setIsBonusSession(forceNewBonus);
 
@@ -448,8 +452,22 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
         throw new Error("Invalid booster payload received");
       }
     } catch (error) {
-      console.error('Failed to generate daily booster:', error);
-      setTriviaError("Unable to load today's booster. Please check connection and try again.");
+      console.warn('Failed to load trivia from server, applying deterministic fallback:', error);
+      // Fast deterministic fallback: guarantees the user NEVER gets stuck on infinite loading!
+      if (!forceNewBonus) {
+        const canonicalDaily = getCanonicalDailyBooster(todayKey);
+        setBooster(canonicalDaily);
+        setIsBonusSession(false);
+        safeSetItem(todayQuestionsKey, JSON.stringify(canonicalDaily));
+        safeSetItem(`daily_booster_today_${todayKey}`, JSON.stringify(canonicalDaily));
+      } else {
+        const bonusFallback = getClientDeterministicBonusQuestions(academicStream, finalCount, excludeList);
+        setBooster(bonusFallback);
+        setIsBonusSession(true);
+        const newExcludes = Array.from(new Set([...excludeList, ...bonusFallback.questions.map(q => q.question)])).slice(-500);
+        setExcludeList(newExcludes);
+        localStorage.setItem('study_trivia_excludes', JSON.stringify(newExcludes));
+      }
     } finally {
       setLoading(false);
     }
@@ -473,13 +491,14 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
           }
         }
       } else {
-        // If not completed and no booster in state, load today's booster
-        if (!booster && !loading) {
+        // If not completed and no booster in state, trigger load immediately
+        if (!booster && !hasTriggeredLoadRef.current) {
+          hasTriggeredLoadRef.current = true;
           loadDailyBooster(false);
         }
       }
     }
-  }, [isOpen, todayKey, gradeLevel, academicStream]);
+  }, [isOpen, todayKey, gradeLevel, academicStream, booster]);
 
   // Handle Option Selection
   const handleSelectOption = (optionIndex: number) => {
@@ -860,24 +879,24 @@ Try it free: ${window.location.origin}`;
           )}
         </AnimatePresence>
 
-        {/* State 1: Offline View */}
-        {isOffline ? (
+        {/* State 1: Offline View (only if no booster questions are available in memory/cache) */}
+        {isOffline && !booster ? (
           <div className="bg-white rounded-3xl border border-zinc-200/80 p-8 shadow-xs flex flex-col items-center justify-center text-center my-auto">
             <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-4 text-2xl">
               🔌
             </div>
             <h2 className="text-base font-black text-zinc-900">You Are Offline</h2>
             <p className="text-xs text-zinc-500 mt-2 leading-relaxed max-w-xs">
-              Daily Trivia Booster generates high-yield exam traps dynamically. Please check your internet connection to continue.
+              Daily Trivia Booster is loading today's offline emergency questions. Please reconnect to access dynamic online traps.
             </p>
             <button
               onClick={() => loadDailyBooster(false)}
               className="mt-6 px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-xs font-extrabold shadow-sm active:scale-95 transition-all"
             >
-              Retry Connection
+              Load Offline Booster
             </button>
           </div>
-        ) : triviaError ? (
+        ) : triviaError && !booster ? (
           <div className="bg-white rounded-3xl border border-zinc-200/80 p-8 shadow-xs flex flex-col items-center justify-center text-center my-auto">
             <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-4 text-2xl">
               ⚠️

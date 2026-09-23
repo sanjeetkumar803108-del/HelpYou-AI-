@@ -34,6 +34,9 @@ import { Network } from '@capacitor/network';
 import { getCoins, deductCoins, isProUser } from '../utils/coins';
 import { addStudyXP } from '../utils/gamification';
 import { getApiUrl } from '../utils/api';
+import { safeGetItem, safeSetItem } from '../utils/storage';
+import { db, auth } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import GlobalMarkdown from './GlobalMarkdown';
 
 interface DailyTriviaProps {
@@ -108,16 +111,42 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
   const [xpAwarded, setXpAwarded] = useState<number>(0);
   const [activeReviewTrapIndex, setActiveReviewTrapIndex] = useState<number | null>(null);
 
-  // Streaks and Freezes
+  // Streaks and Freezes - 100% in sync with Profile & App-wide Streak
   const [currentStreak, setCurrentStreak] = useState<number>(() => {
-    const val = parseInt(localStorage.getItem('study_punches') || localStorage.getItem('study_streak_days') || '1', 10);
-    return isNaN(val) || val < 1 ? 1 : val;
+    const val = Number(safeGetItem('study_punches') || safeGetItem('study_streak_days') || '0');
+    return isNaN(val) ? 0 : val;
   });
   const [streakFreezes, setStreakFreezes] = useState<number>(() => {
-    const val = parseInt(localStorage.getItem('study_streak_freezes') || '0', 10);
+    const val = parseInt(safeGetItem('study_streak_freezes') || '0', 10);
     return isNaN(val) ? 0 : val;
   });
   const [awardedNewFreeze, setAwardedNewFreeze] = useState<boolean>(false);
+
+  // Sync real-time streak updates with Profile, App.tsx and Firestore
+  useEffect(() => {
+    const syncStreak = () => {
+      const val = Number(safeGetItem('study_punches') || safeGetItem('study_streak_days') || '0');
+      setCurrentStreak(isNaN(val) ? 0 : val);
+    };
+
+    const handleStreakUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail !== undefined) {
+        const val = Number(customEvent.detail || 0);
+        setCurrentStreak(isNaN(val) ? 0 : val);
+      } else {
+        syncStreak();
+      }
+    };
+
+    window.addEventListener('study-streak-updated', handleStreakUpdate);
+    window.addEventListener('storage', syncStreak);
+
+    return () => {
+      window.removeEventListener('study-streak-updated', handleStreakUpdate);
+      window.removeEventListener('storage', syncStreak);
+    };
+  }, []);
 
   // Exclude list to prevent repeat traps
   const [excludeList, setExcludeList] = useState<string[]>(() => {
@@ -197,6 +226,10 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
           setCurrentIndex(2);
           setLoading(false);
           setIsBonusSession(false);
+          const realStreak = Number(safeGetItem('study_punches') || safeGetItem('study_streak_days') || '0');
+          if (realStreak > 0) {
+            setCurrentStreak(realStreak);
+          }
           return;
         }
       } catch (err) {
@@ -350,54 +383,74 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     const xpResult = addStudyXP(50, 'Daily Trivia Booster');
     setXpAwarded(xpResult.awardedAmount || 50);
 
-    // Update streaks and check 7-day freeze milestone
+    // Synchronize with App-Wide Real Study Streak (exact same as Profile & StreakDetailsPage)
     const today = todayKey;
-    const lastDate = localStorage.getItem('study_booster_last_completed_date');
-    let streak = parseInt(localStorage.getItem('study_punches') || '1', 10);
-    if (isNaN(streak) || streak < 1) streak = 1;
+    const lastPunchDate = safeGetItem('study_last_punch_date');
+    let streak = Number(safeGetItem('study_punches') || safeGetItem('study_streak_days') || '0');
 
     let freezeMilestone = false;
 
-    if (lastDate !== today) {
-      if (lastDate) {
+    if (lastPunchDate !== today) {
+      if (lastPunchDate) {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
 
-        if (lastDate === yKey) {
-          streak += 1;
+        if (lastPunchDate === yKey) {
+          streak = streak + 1;
         } else {
           // Missed a day: check if user has a streak freeze token
-          const currentFreezes = parseInt(localStorage.getItem('study_streak_freezes') || '0', 10);
+          const currentFreezes = parseInt(safeGetItem('study_streak_freezes') || '0', 10);
           if (currentFreezes > 0) {
-            localStorage.setItem('study_streak_freezes', String(currentFreezes - 1));
+            safeSetItem('study_streak_freezes', String(currentFreezes - 1));
             setStreakFreezes(currentFreezes - 1);
-            streak += 1; // streak protected by freeze token!
+            streak = streak + 1; // streak protected by freeze token!
           } else {
             streak = 1; // reset streak
           }
         }
+      } else {
+        streak = streak > 0 ? streak : 1;
       }
 
-      localStorage.setItem('study_punches', String(streak));
-      localStorage.setItem('study_streak_days', String(streak));
-      localStorage.setItem('study_booster_last_completed_date', today);
+      safeSetItem('study_punches', String(streak));
+      safeSetItem('study_streak_days', String(streak));
+      safeSetItem('study_last_punch_date', today);
+      safeSetItem('study_booster_last_completed_date', today);
       setCurrentStreak(streak);
 
       // Reward 1 Streak Freeze token every 7 consecutive days
       if (streak > 0 && streak % 7 === 0) {
-        const updatedFreezes = parseInt(localStorage.getItem('study_streak_freezes') || '0', 10) + 1;
-        localStorage.setItem('study_streak_freezes', String(updatedFreezes));
+        const updatedFreezes = parseInt(safeGetItem('study_streak_freezes') || '0', 10) + 1;
+        safeSetItem('study_streak_freezes', String(updatedFreezes));
         setStreakFreezes(updatedFreezes);
         setAwardedNewFreeze(true);
         freezeMilestone = true;
       }
+
+      // Synchronize across whole app so Profile & Streak details update instantly
+      window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: streak }));
+
+      // Sync with Firestore user doc if logged in
+      if (auth.currentUser) {
+        setDoc(doc(db, 'users', auth.currentUser.uid), {
+          currentStreak: streak,
+          lastActiveDate: today
+        }, { merge: true }).catch(err => console.warn("DailyTrivia: Firestore streak sync notice:", err));
+      }
+    } else {
+      // Streak was already counted today by app check-in or prior task
+      // Keep real streak intact, never reset or overwrite with a different number!
+      if (streak === 0) streak = 1;
+      safeSetItem('study_booster_last_completed_date', today);
+      setCurrentStreak(streak);
+      window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: streak }));
     }
 
     // Save completed booster to localStorage for today
     if (!isBonusSession && booster) {
       const completedCacheKey = `daily_booster_completed_${todayKey}_${gradeLevel}_${academicStream}`;
-      localStorage.setItem(completedCacheKey, JSON.stringify({
+      safeSetItem(completedCacheKey, JSON.stringify({
         booster,
         responses,
         streak,

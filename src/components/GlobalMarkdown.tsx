@@ -236,46 +236,13 @@ function healSingleQuizLine(line: string): string {
   mixed = mixed.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
 
   // Wrap unquoted LaTeX expressions including function arguments like \sin(30^\circ) and \sqrt{3}\text{ m/s}
-  mixed = mixed.replace(/(?<![\w\\])([0-9a-zA-Z_^{}().\-]*\\[a-zA-Z]+(?:\([^)\n]*\)|\[[^\]\n]*\]|\{[^{}\n]*\})*(?:[0-9a-zA-Z_^{}().\-+\-*/=.\s\\]*\\text\{[^{}]*\})?)/g, (match) => {
+  mixed = mixed.replace(/(?<![\w\\])([0-9a-zA-Z_^{}().\-]*\\[a-zA-Z]+(?:\([^)\n]*\)|\[[^\]\n]*\]|\{[^{}\n]*\})*(?:[0-9a-zA-Z_^{}().+*=/.\s\\-]*\\text\{[^{}]*\})?)/g, (match) => {
     const trimmed = match.trim();
     if (trimmed.includes('\\') && !trimmed.startsWith('__MATH_BLOCK_')) {
       return `$${trimmed}$`;
     }
     return match;
   });
-
-  // Auto-wrap isolated superscripts outside math e.g. x^2, 10^5, mc^2
-  mixed = mixed.replace(/(?<![\w$\\])([a-zA-Z0-9)\]]+)\^(\{[^{}]+\}|-?[0-9]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1^$2$$');
-
-  // Auto-wrap isolated subscripts outside math e.g. v_0, v_{0x}, a_1
-  mixed = mixed.replace(/(?<![\w$\\])([a-zA-Z0-9)\]]+)_(\{[^{}]+\}|[0-9]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1_$2$$');
-
-  // Chemical formulas e.g. H2O, CO2, 6CO2, 6H2O outside math
-  mixed = mixed.replace(/(?<=\b|\d)([A-Z][a-z]?\d+(?:[A-Z][a-z]?\d*)*(?:\([A-Z][a-z]?\d*\)\d+)?)\b/g, (match) => {
-    if (match.startsWith('__MATH_BLOCK_')) return match;
-    const formatted = match.replace(/([A-Z][a-z]?)(\d+)/g, '$1_$2').replace(/\)(\d+)/g, ')_$1');
-    return `$\\text{${formatted}}$`;
-  });
-
-  // Restore protected math blocks
-  mixed = mixed.replace(/__MATH_BLOCK_(\d+)__/g, (_, idx) => mathBlocks[parseInt(idx)]);
-
-  // Clean any nested/broken tags created inside
-  mixed = mixed.replace(/\\left\(\s*\$([^$]+)\$\s*\\right\)/g, '\\left($1\\right)');
-  mixed = mixed.replace(/(\\frac\{)\$([^$]+)\$(\})/g, '$1$2$3');
-  mixed = mixed.replace(/(\{\s*)\$([^$]+)\$(\s*\})/g, '$1$2$3');
-  mixed = mixed.replace(/(\\sqrt(?:\[[^\]]*\])?\{)\$([^$]+)\$(\})/g, '$1$2$3');
-  mixed = mixed.replace(/(\\text\{)\$([^$]+)\$(\})/g, '$1$2$3');
-
-  // Clean adjacent math delimiters
-  mixed = mixed.replace(/\$\s*\$/g, ' ');
-  mixed = mixed.replace(/\${3,}/g, '$$');
-
-  // Balance single unclosed $ on this line
-  const dollars = (mixed.match(/\$/g) || []).length;
-  if (dollars % 2 !== 0) {
-    mixed += '$';
-  }
 
   return mixed;
 }
@@ -356,17 +323,12 @@ const defaultComponents = {
  * Robust, universal healer for superscripts, subscripts, and math expressions
  * for ANY feature using GlobalMarkdown across the entire app.
  * Heals:
- * 1. Numbers with numbers (10^5, 2^3, 10^-5)
- * 2. Letters with numbers (x^2, y^3, z^4)
- * 3. Letters with letters (e^x, a^b, x^n, e^-x, e^-t)
- * 4. Numbers with letters (2^n, 10^x, 2^k)
- * 5. Parenthesized base with powers ((x+1)^2, (a+b)^n, (3x-1)^4)
- * 6. Parenthesized exponents (e^(2x), 10^(x-1), 2^(n+1), a^(m+n))
- * 7. Negative exponents (x^-1, 10^-5, s^-1)
- * 8. Rational parenthesized expressions ((x^2+1)/x, (x^2-4)/(x+2))
- * 9. Subscripts with numbers and letters (x_1, y_0, v_0, k_B, a_n, x_i)
- * 10. Chemical formulas (H2O, CO2, H2SO4, Ca(OH)2, O2, N2)
- * 11. Protects code blocks (```...```) and inline code (`...`) 100%!
+ * 1. Unwrapped LaTeX equations and lines (e.g. V = 2\pi \int x f(x) dx) -> $$...$$
+ * 2. Parenthesized expressions with LaTeX (e.g. (2\pi x h(x))) -> ($2\pi x h(x)$)
+ * 3. Standalone LaTeX commands and operators (\frac, \sqrt, \sin, \cos, \theta, \pi, \int, \cdot)
+ * 4. Superscripts (x^2, 10^5, e^{-x^2}, 30^\circ), subscripts (v_0, x_1)
+ * 5. Chemical formulas (H2O, CO2, H2SO4)
+ * 6. Preserves code blocks and valid math blocks 100% without corrupting $$ delimiters!
  */
 export function healGlobalMarkdown(content: string): string {
   if (!content) return '';
@@ -380,52 +342,112 @@ export function healGlobalMarkdown(content: string): string {
     return token;
   });
 
-  // 2. Heal existing math expressions: convert e^(2x) -> e^{2x}, 10^-5 -> 10^{-5} inside $...$
-  text = text.replace(/(\$[^$]*\^)\(([^)]+)\)([^$]*\$)/g, '$1{$2}$3');
-  text = text.replace(/(\$[^$]*\^)-([0-9a-zA-Z]+)([^$]*\$)/g, '$1{-$2}$3');
-
-  // 3. Parenthesized Exponents outside math: e.g. e^(2x), 10^(x-1), (x+1)^(n-1), 2^(n+1), a^(m+n)
-  text = replaceOutsideMath(text, /((?:\([a-zA-Z0-9+\-·*\\/\s]+\)|\[[a-zA-Z0-9+\-·*\\/\s]+\]|[a-zA-Z0-9]+))\^\(([^)]+)\)/g, (_match, base, exp) => {
-    return `$${base}^{${exp}}$`;
+  // 2. Protect existing block math ($$...$$) and inline math ($...$)
+  const mathPlaceholders: string[] = [];
+  text = text.replace(/\$\$[\s\S]*?\$\$/g, (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(match);
+    return token;
+  });
+  text = text.replace(/\$[^$\n]+\$/g, (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(match);
+    return token;
   });
 
-  // 4. Negative Exponents outside math: e.g. 10^-5, 10^-3, x^-2, s^-1, e^-x, e^-t
-  text = replaceOutsideMath(text, /((?:\([a-zA-Z0-9+\-·*\\/\s]+\)|\[[a-zA-Z0-9+\-·*\\/\s]+\]|[a-zA-Z0-9]+))\^(-[0-9a-zA-Z]+)/g, (_match, base, exp) => {
-    return `$${base}^{${exp}}$`;
+  // 3. Line-level check: Is the entire line an unwrapped mathematical formula or equation?
+  // E.g.: "V = 2\pi \int_{a}^{b} x f(x) dx, \quad A(w) = w \cdot h(w)"
+  text = text.split('\n').map(line => {
+    const l = line.trim();
+    if (!l || l.includes('___CODE_BLOCK_') || l.includes('___MATH_BLOCK_')) return line;
+    
+    const hasLatex = /\\(?:frac|sqrt|int|sum|prod|lim|alpha|beta|gamma|delta|theta|lambda|mu|pi|rho|sigma|tau|phi|omega|cdot|times|quad|qquad|left|right|text|sin|cos|tan|partial|nabla|infty|approx|pm|neq|leq|geq)\b/.test(l);
+    if (!hasLatex) return line;
+
+    // Check english narrative words (words > 3 letters that are not LaTeX operator names)
+    const stripped = l.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\])*/g, '');
+    const words = stripped.match(/[a-zA-Z]{3,}/g) || [];
+    const narrativeWords = words.filter(w => !['sin','cos','tan','sec','csc','cot','log','ln','lim','exp','min','max','dx','dy','dt','left','right'].includes(w.toLowerCase()));
+
+    // If it has LaTeX and <= 2 narrative words, and has math characters
+    if (narrativeWords.length <= 2 && /[=+\-*/^_{}\\]/.test(l)) {
+      const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+      mathPlaceholders.push(`$$${l}$$`);
+      return token;
+    }
+    return line;
+  }).join('\n');
+
+  // 4. Standalone complex LaTeX expressions with 1-level nested braces:
+  // \frac{...}{...}, \sqrt{...}, \boxed{...}
+  text = text.replace(/(\\frac\{(?:[^{}]|\{[^{}]*\})*\}\{(?:[^{}]|\{[^{}]*\})*\}|\\sqrt(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\}|\\boxed\{(?:[^{}]|\{[^{}]*\})*\})/g, (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${match}$`);
+    return token;
   });
 
-  // 5. Rational expressions with powers outside math: e.g. (x^2+1)/x, (x^2-4)/(x+2)
-  text = replaceOutsideMath(text, /\((?:[a-zA-Z0-9\s+\-·*^_{}]+)\)\s*[\/+\-·*]\s*(?:\([a-zA-Z0-9\s+\-·*^_{}]+\)|[a-zA-Z0-9^_{}]+)/g, (match) => {
-    return `$${match.trim()}$`;
+  // 5. Standalone LaTeX integrals/sums/limits with sub/superscripts e.g. \int_{a}^{b}, \int_0^\infty, \sum_{i=1}^n
+  text = text.replace(/(\\(?:int|oint|sum|prod|lim|bigcup|bigcap)(?:_\{(?:[^{}]|\{[^{}]*\})*\}|_\S+)?(?:\^\{(?:[^{}]|\{[^{}]*\})*\}|\^\S+)?)/g, (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${match}$`);
+    return token;
   });
 
-  // 6. Standard Superscripts outside math (Numbers, Alphabet letters, Parenthesized base):
-  // Examples: x^2, y^3, 10^5, 2^n, 10^x, e^x, a^b, x^n, (x+1)^2, (a+b)^n, (3x-1)^4
-  text = replaceOutsideMath(text, /((?:\([a-zA-Z0-9+\-·*\\/\s]+\)|\[[a-zA-Z0-9+\-·*\\/\s]+\]|[a-zA-Z0-9]+))\^(\{?[a-zA-Z0-9]+}?)/g, (_match, base, exp) => {
-    return `$${base}^${exp}$`;
+  // 6. Math functions with arguments e.g. \sin(\theta), \cos(2x), \ln(x), \tan^2(\theta)
+  text = text.replace(/(\\(?:sin|cos|tan|sec|csc|cot|log|ln|exp)(?:\^[0-9a-zA-Z]+)?\s*(?:\([^\)\n]*\)|\{[^{}\n]*\}))/g, (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${match}$`);
+    return token;
   });
 
-  // 7. Standard Subscripts outside math:
-  // Single/two-letter variables with number or letter subscript: e.g. x_1, y_0, v_0, k_B, a_n, x_i, t_1
-  text = replaceOutsideMath(text, /\b([a-zA-Z][a-zA-Z]?)_([0-9a-zA-Z]+|\{[^{}]+\})\b/g, (_match, base, sub) => {
-    return `$${base}_${sub}$`;
+  // 7. Parenthesized expressions containing LaTeX commands: e.g. (2\pi x h(x))
+  text = text.replace(/\(([^\(\)\n]*\\[a-zA-Z]+[^\(\)\n]*(?:\([^\(\)\n]*\)[^\(\)\n]*)*)\)/g, (_match, inner) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${inner.trim()}$`);
+    return `(${token})`;
   });
 
-  // 8. Chemical formulas outside math: e.g. H2O, CO2, H2SO4, Ca(OH)2, O2, N2
-  text = replaceOutsideMath(text, /\b([A-Z][a-z]?\d+(?:[A-Z][a-z]?\d*)*(?:\([A-Z][a-z]?\d*\)\d+)?)\b/g, (match) => {
+  // 8. Standalone LaTeX mathematical symbols: \pi, \theta, \alpha, \beta, \cdot, \times, \circ, etc.
+  const LATEX_SYMBOLS = '\\\\(?:alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Delta|Theta|Lambda|Xi|Pi|Sigma|Phi|Psi|Omega|cdot|times|div|pm|mp|leq|geq|neq|approx|equiv|propto|sim|infty|partial|nabla|to|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow|sin|cos|tan|sec|csc|cot|log|ln|quad|qquad|hbar|circ|degree|prime)';
+  text = text.replace(new RegExp(`(${LATEX_SYMBOLS}\\b)`, 'g'), (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${match}$`);
+    return token;
+  });
+
+  // 9. Standard Superscripts outside math (e.g. 4x^2, e^{-x^2}, 10^5, x^n, 30^\circ)
+  text = text.replace(/(?<![\w$\\])([a-zA-Z0-9)\]]+)\^(\{[^{}]+\}|-?[0-9]+|\\[a-zA-Z]+|[a-zA-Z](?![a-zA-Z]))/g, (_match, base, exp) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${base}^${exp}$`);
+    return token;
+  });
+
+  // 10. Standard Subscripts outside math (e.g. v_0, x_1, k_B)
+  text = text.replace(/\b([a-zA-Z][a-zA-Z]?)_([0-9a-zA-Z]+|\{[^{}]+\})\b/g, (_match, base, sub) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${base}_${sub}$`);
+    return token;
+  });
+
+  // 11. Chemical formulas outside math: e.g. H2O, CO2, H2SO4, Ca(OH)2, O2, N2
+  text = text.replace(/\b([A-Z][a-z]?\d+(?:[A-Z][a-z]?\d*)*(?:\([A-Z][a-z]?\d*\)\d+)?)\b/g, (match) => {
+    if (match.startsWith('___MATH_') || match.startsWith('___CODE_')) return match;
     const formatted = match.replace(/([A-Z][a-z]?)(\d+)/g, '$1_$2').replace(/\)(\d+)/g, ')_$1');
-    return `$\\text{${formatted}}$`;
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$\\text{${formatted}}$`);
+    return token;
   });
 
-  // 9. Clean up adjacent / empty math delimiters
-  text = text.replace(/\$\$/g, '$');
-  text = text.replace(/\$\s*\$/g, ' ');
-  text = text.replace(/\$\$/g, '');
-  text = text.replace(/\$\s+\$/g, ' ');
+  // 12. Restore all Math Blocks using function replacers to 100% preserve literal $$
+  for (let i = 0; i < mathPlaceholders.length; i++) {
+    const val = mathPlaceholders[i];
+    text = text.replace(`___MATH_BLOCK_${i}___`, () => val);
+  }
 
-  // 10. Restore Code Blocks and Inline Code
+  // 13. Restore all Code Blocks
   for (let i = 0; i < codePlaceholders.length; i++) {
-    text = text.replace(`___CODE_BLOCK_${i}___`, codePlaceholders[i]);
+    const val = codePlaceholders[i];
+    text = text.replace(`___CODE_BLOCK_${i}___`, () => val);
   }
 
   return text;

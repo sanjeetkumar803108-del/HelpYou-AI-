@@ -1151,8 +1151,8 @@ DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimite
 {
   "topic_title": "Subject or Topic of the problem / concept",
   "format_type": "steps",
-  "key_formula": "The primary theoretical formula, governing law, or identity used in LaTeX (e.g. $$E = h\\nu$$ or $$\\sin(A \\pm B) = \\sin A \\cos B \\pm \\cos A \\sin B$$)",
-  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misconceptions students must avoid in exams",
+  "key_formula": "The primary theoretical formula, governing law, or identity strictly wrapped in double dollar signs $$...$$ in LaTeX (e.g. $$E = h\\nu$$ or $$V = 2\\pi \\int_{a}^{b} x f(x) dx$$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misconceptions students must avoid in exams. Wrap all mathematical expressions and formulas in single dollar signs (e.g. $2\\pi x h(x)$)",
   "solution_steps": [
     {
       "step_id": 1,

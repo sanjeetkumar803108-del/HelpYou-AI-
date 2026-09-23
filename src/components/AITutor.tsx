@@ -99,8 +99,8 @@ FORMAT:
 {
   "topic_title": "Subject or Topic Title (e.g. 'Quantum Physics for Freshmen', 'Integration by Parts')",
   "format_type": "steps",
-  "key_formula": "The primary theoretical formula, governing law, or core identity in LaTeX (e.g. $$E = h\\nu$$, $$\\lambda = \\frac{h}{p}$$, or $$\\int u \\, dv = uv - \\int v \\, du$$)",
-  "exam_trap": "A brief 1-2 sentence high-yield warning about common exam traps, misconceptions, or careless errors students make on this topic",
+  "key_formula": "The primary theoretical formula, governing law, or core identity strictly wrapped in double dollar signs $$...$$ in LaTeX (e.g. $$E = h\\nu$$, $$V = 2\\pi \\int_{a}^{b} x f(x) dx$$, or $$\\lambda = \\frac{h}{p}$$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common exam traps or misconceptions. Wrap all mathematical numbers, variables, or expressions in single dollar signs (e.g. $2\\pi x h(x)$ or $x = \\frac{1}{\\sqrt{2}}$)",
   "solution_steps": [
     {
       "step_id": 1,
@@ -129,8 +129,8 @@ FORMAT:
   "topic_title": "Topic or Concept Title",
   "format_type": "conversational",
   "markdown_content": "Full markdown response with clear headings, bullet points, explanations, or tables.",
-  "key_formula": "Primary formula or law in LaTeX if applicable (or null)",
-  "exam_trap": "Exam trap or caution point if applicable (or null)",
+  "key_formula": "Primary formula or law strictly wrapped in double dollar signs $$...$$ in LaTeX if applicable (or null)",
+  "exam_trap": "Exam trap or caution point with any formulas wrapped in single dollar signs $...$ if applicable (or null)",
   "suggestions": [
     "Follow-up question 1",
     "Follow-up question 2",
@@ -140,7 +140,7 @@ FORMAT:
 
 RULES:
 - Always populate "suggestions" with 3 context-aware study follow-up ideas.
-- Whenever using LaTeX for formulas, wrap in $$ or $ and double-escape backslashes in JSON (\\\\frac, \\\\sqrt, \\\\text).
+- Whenever using LaTeX for formulas, wrap in $$ or $ and double-escape backslashes in JSON (\\\\frac, \\\\sqrt, \\\\text). Wrap key_formula in $$...$$ and wrap inline equations/variables in exam_trap in $...$.
 - In the "suggestions" array: Wrap all mathematical formulas, variables with superscripts/exponents (e.g. $x^2$), or subscripts (e.g. $x_1$, $H_2O$) in single dollar signs ($...$). NEVER output raw un-delimited LaTeX or block ($$) math in suggestions.
 - NEVER wrap scientist names (e.g. Schrödinger, Newton, Einstein), English words, or possessive nouns in math mode ($). Only wrap actual mathematical symbols and equations.`;
 
@@ -185,8 +185,8 @@ Use this for ALL academic learning questions (concepts like Quantum Physics, Pho
 {
   "topic_title": "3–6 word topic title (e.g. 'Quantum Physics for Freshmen', 'Quadratic Roots via Formula')",
   "format_type": "steps",
-  "key_formula": "Primary formula, governing law, or core identity in LaTeX (e.g. $$E = h\\nu$$, $$\\sin(\\theta) = \\frac{\\text{Opposite}}{\\text{Hypotenuse}}$$, or null if purely conceptual)",
-  "exam_trap": "Brief 1-2 sentence high-yield warning about common exam traps, misconceptions, or sign mistakes",
+  "key_formula": "Primary formula, governing law, or core identity strictly wrapped in double dollar signs $$...$$ in LaTeX (e.g. $$E = h\\nu$$, $$V = 2\\pi \\int_{a}^{b} x f(x) dx$$, or null if purely conceptual)",
+  "exam_trap": "Brief 1-2 sentence high-yield warning about common exam traps or misconceptions. Wrap any math formulas or variables in single dollar signs (e.g. $2\\pi x h(x)$)",
   "solution_steps": [
     {
       "step_id": 1,
@@ -220,8 +220,8 @@ Use this ONLY for small talk / greetings or when the user explicitly asked for a
   "topic_title": "Short Topic Title (or null for simple greetings/small talk)",
   "format_type": "conversational",
   "markdown_content": "Your rich, formatted markdown response. Use standard markdown: bullet points (- or *), bold text (**text**), numbered lists (1. 2.), markdown tables, and LaTeX math ($...$ or $$...$$) where applicable. Embody user's requested persona and strictly obey their formatting instructions.",
-  "key_formula": "Optional core formula in LaTeX if relevant (or null)",
-  "exam_trap": "Optional exam trap or key warning if relevant (or null)",
+  "key_formula": "Optional core formula strictly wrapped in double dollar signs $$...$$ in LaTeX if relevant (or null)",
+  "exam_trap": "Optional exam trap or key warning with math wrapped in single dollar signs $...$ if relevant (or null)",
   "suggestions": [
     "Context-aware follow-up suggestion 1",
     "Context-aware follow-up suggestion 2",
@@ -246,6 +246,13 @@ function formatSpacedContent(text: string): string {
   cleaned = cleaned.replace(/(?<=[=+\-*/(\s]|^)([0-9a-zA-Z._\-]+|\\[a-zA-Z]+(?:\{[^{}]*\})+)\s*(?:\\quad|\\;|\\,|~|\s)*\\boxed\{\s*\1\s*\}/g, '\\boxed{$1}');
   cleaned = cleaned.replace(/=\s*([0-9a-zA-Z._\-]+|\\[a-zA-Z]+(?:\{[^{}]*\})+)\s*\${1,2}\s*\${1,2}\s*\\boxed\{\s*\1\s*\}/g, '= \\boxed{$1}');
   return cleaned;
+}
+
+function renderFormulaBlock(formula?: string): string {
+  if (!formula) return '';
+  const trimmed = formula.trim();
+  if (trimmed.startsWith('$')) return trimmed;
+  return `$$${trimmed}$$`;
 }
 
 const AITutorMessageItem = React.memo(function AITutorMessageItem({ 
@@ -573,7 +580,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
                         </span>
                       </div>
                       <div className="text-sm font-semibold text-zinc-900 overflow-x-auto py-0.5">
-                        <GlobalMarkdown>{parsedSolution.key_formula}</GlobalMarkdown>
+                        <GlobalMarkdown>{renderFormulaBlock(parsedSolution.key_formula)}</GlobalMarkdown>
                       </div>
                     </motion.div>
                   )}
@@ -591,9 +598,9 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
                           Exam Trap to Avoid
                         </span>
                       </div>
-                      <p className="text-xs text-amber-900 font-medium leading-relaxed m-0">
-                        {parsedSolution.exam_trap}
-                      </p>
+                      <div className="text-xs text-amber-900 font-medium leading-relaxed m-0 [&_p]:m-0 [&_p]:inline">
+                        <GlobalMarkdown>{parsedSolution.exam_trap}</GlobalMarkdown>
+                      </div>
                     </motion.div>
                   )}
                 </div>
@@ -668,7 +675,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
                         </span>
                       </div>
                       <div className="text-sm font-semibold text-zinc-900 overflow-x-auto py-0.5">
-                        <GlobalMarkdown>{parsedSolution.key_formula}</GlobalMarkdown>
+                        <GlobalMarkdown>{renderFormulaBlock(parsedSolution.key_formula)}</GlobalMarkdown>
                       </div>
                     </motion.div>
                   )}
@@ -686,9 +693,9 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
                           Exam Trap to Avoid
                         </span>
                       </div>
-                      <p className="text-xs text-amber-900 font-medium leading-relaxed m-0">
-                        {parsedSolution.exam_trap}
-                      </p>
+                      <div className="text-xs text-amber-900 font-medium leading-relaxed m-0 [&_p]:m-0 [&_p]:inline">
+                        <GlobalMarkdown>{parsedSolution.exam_trap}</GlobalMarkdown>
+                      </div>
                     </motion.div>
                   )}
                 </div>

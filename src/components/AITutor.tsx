@@ -95,6 +95,12 @@ Break the topic or solution down into 2 to 4 high-yield pedagogical cards:
 - Step 1: Core Concept, Definition & Intuitive Real-Life Hook
 - Step 2: Underlying Mechanism, Laws, Working Principles & Equations
 - Step 3: Real-World Applications, Why We Care, or Final Boxed Result
+MANDATORY STEP-BY-STEP FORMATTING PROTOCOL FOR ALL CALCULATIONS & CONTENT (NO CLUSTERED TEXT):
+1. LINE BREAK AFTER EVERY FULL STOP: Every single sentence, statement, or logical reason must end with a period/full stop (.) and be followed by a double line break (\n\n). NEVER write dense, cluttered paragraphs.
+2. DEDICATED BLOCK EQUATIONS: Every intermediate formula, derivative, integral, algebraic step, or substitution MUST be placed on its OWN standalone line wrapped in double dollar signs $$ ... $$.
+3. NEVER CRAM DERIVATIONS INLINE: Break multi-step derivations into distinct calculation lines separated by \n\n with clean transition phrases (e.g., "Differentiating with respect to w:", "Setting the derivative to 0 gives:", "Solving for w:").
+4. FINAL BOXED RESULT: For numerical or analytical answers, conclude with the boxed result on its own line: $$ 1 + 4 = \\boxed{5} $$. (CRITICAL: NEVER write the answer twice, never write '5 \\boxed{5}' or '= 5 \\boxed{5}').
+
 FORMAT:
 {
   "topic_title": "Subject or Topic Title (e.g. 'Quantum Physics for Freshmen', 'Integration by Parts')",
@@ -105,13 +111,13 @@ FORMAT:
     {
       "step_id": 1,
       "title": "Clear concise concept/step title",
-      "content": "Detailed explanation with formulas on dedicated block lines ($$). Every equation cleanly separated.",
+      "content": "Detailed step-by-step explanation. Every sentence must end with a full stop and double line break (\\n\\n). Every equation on its own standalone centered line in $$...$$.",
       "is_final_answer": false
     },
     {
       "step_id": 2,
       "title": "Final Analytical & Numerical Result / Summary",
-      "content": "Final step concluding directly. For calculations, conclude with the boxed result: $$1 + 4 = \\boxed{5}$$. (CRITICAL: NEVER write the answer twice, never write '5 \\boxed{5}' or '= 5 \\boxed{5}').",
+      "content": "Final step concluding directly. For calculations, conclude with the boxed result on its own line: $$\\text{Final Answer} = \\boxed{5}$$.",
       "is_final_answer": true
     }
   ],
@@ -182,6 +188,13 @@ You MUST output your response strictly in one of the two JSON formats below. Do 
 
 --- FORMAT TYPE A: "steps" (MANDATORY FOR ALL ACADEMIC CONCEPTS, LESSONS & NUMERICAL SOLVING) ---
 Use this for ALL academic learning questions (concepts like Quantum Physics, Photosynthesis, Kinematics, etc.) as well as numerical equations and problems.
+
+MANDATORY STEP-BY-STEP FORMATTING PROTOCOL (NO CLUSTERED WALLS OF TEXT):
+1. LINE BREAK AFTER EVERY FULL STOP: Every single sentence or logical reason must end with a full stop (.) and be followed by a double line break (\n\n). NEVER write dense, cluttered paragraphs.
+2. DEDICATED BLOCK EQUATIONS: Every intermediate formula, derivative, integral, algebraic step, or substitution MUST be placed on its OWN standalone line wrapped in double dollar signs $$ ... $$.
+3. NEVER CRAM DERIVATIONS INLINE: Break multi-step derivations into distinct calculation lines separated by \n\n with clean transition phrases.
+4. FINAL BOXED RESULT: For numerical or analytical answers, conclude with the boxed result on its own line: $$ \text{Answer} = \boxed{...} $$. (CRITICAL: NEVER write the answer twice, never write '5 \boxed{5}' or '= 5 \boxed{5}').
+
 {
   "topic_title": "3–6 word topic title (e.g. 'Quantum Physics for Freshmen', 'Quadratic Roots via Formula')",
   "format_type": "steps",
@@ -191,13 +204,13 @@ Use this for ALL academic learning questions (concepts like Quantum Physics, Pho
     {
       "step_id": 1,
       "title": "Clear concise concept/step title (e.g. 'Core Concept & The Small Scale World')",
-      "content": "Explanation with clear logic and centered block formulas ($$ ... $$) where applicable. Generous vertical spacing.",
+      "content": "Explanation with clear logic. Every sentence must end with a full stop and double line break (\\n\\n). Centered block formulas ($$ ... $$) on their own dedicated lines.",
       "is_final_answer": false
     },
     {
       "step_id": 2,
       "title": "Key Principles & Working Mechanisms",
-      "content": "Deep dive into core rules, equations, and mechanisms.",
+      "content": "Deep dive into core rules and equations. Separate intermediate calculation steps with \\n\\n.",
       "is_final_answer": false
     },
     {

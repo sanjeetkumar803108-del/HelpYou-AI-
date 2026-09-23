@@ -5,6 +5,7 @@ import { addStudyXP, trackQuestProgress } from './gamification';
 import { triggerVibration } from './vibrate';
 import { safeGetItem, safeSetItem } from './storage';
 import { sanitizePdfText } from './pdfSanitizer';
+import { formatMathAndSuperscripts } from './pdfTableRenderer';
 
 export interface FormulaItem {
   name: string;
@@ -24,12 +25,15 @@ export interface FormulaCategoryItem {
  */
 function cleanLatexForPdf(latex: string): string {
   if (!latex) return '';
-  return latex
+  let str = latex
+    .replace(/\\frac\{1\}\{2\}/g, '½')
+    .replace(/\\frac\{1\}\{4\}/g, '¼')
+    .replace(/\\frac\{3\}\{4\}/g, '¾')
     .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1) / ($2)')
     .replace(/\\sqrt\{([^}]+)\}/g, 'sqrt($1)')
-    .replace(/\\pm/g, '+/-')
-    .replace(/\\cdot/g, ' * ')
-    .replace(/\\times/g, ' * ')
+    .replace(/\\pm/g, '±')
+    .replace(/\\cdot/g, ' • ')
+    .replace(/\\times/g, ' × ')
     .replace(/\\int_\{([^}]+)\}\^\{([^}]+)\}/g, 'integral[$1 to $2]')
     .replace(/\\int/g, 'integral ')
     .replace(/\\sum_\{([^}]+)\}\^\{([^}]+)\}/g, 'sum[$1 to $2]')
@@ -46,9 +50,10 @@ function cleanLatexForPdf(latex: string): string {
     .replace(/\\binom\{([^}]+)\}\{([^}]+)\}/g, 'C($1, $2)')
     .replace(/\\left|\\right/g, '')
     .replace(/\\/g, '')
-    .replace(/\{|\}/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/\{|\}/g, '');
+
+  str = formatMathAndSuperscripts(str);
+  return str.replace(/\s+/g, ' ').trim();
 }
 
 /**

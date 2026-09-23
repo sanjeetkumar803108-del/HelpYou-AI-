@@ -21,7 +21,9 @@ import {
   RotateCcw, 
   Copy, 
   Brain,
-  ExternalLink
+  ExternalLink,
+  Target,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerVibration } from '../utils/vibrate';
@@ -41,6 +43,7 @@ import GlobalMarkdown from './GlobalMarkdown';
 
 interface DailyTriviaProps {
   onBack: () => void;
+  isOpen?: boolean;
 }
 
 export interface DailyBoosterQuestion {
@@ -66,7 +69,88 @@ export interface QuestionUserResponse {
   isCorrect: boolean;
 }
 
-export default function DailyTrivia({ onBack }: DailyTriviaProps) {
+/**
+ * Safely locates and validates today's completed official Daily Booster from cache.
+ * Checks the clean canonical key, legacy profile-specific key, prefix scan, and fallback.
+ */
+function getTodayCompletedBooster(
+  todayKey: string,
+  gradeLevel: string,
+  academicStream: string
+): { booster: DailyBoosterPayload; responses: QuestionUserResponse[]; streak?: number } | null {
+  // 1. Primary canonical key
+  const primaryKey = `daily_booster_completed_${todayKey}`;
+  const rawPrimary = safeGetItem(primaryKey);
+  if (rawPrimary) {
+    try {
+      const parsed = JSON.parse(rawPrimary);
+      if (parsed?.booster && Array.isArray(parsed?.responses) && parsed.responses.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn("Failed to parse primary completed booster:", e);
+    }
+  }
+
+  // 2. Legacy profile-specific key for backward compatibility
+  const legacyKey = `daily_booster_completed_${todayKey}_${gradeLevel}_${academicStream}`;
+  const rawLegacy = safeGetItem(legacyKey);
+  if (rawLegacy) {
+    try {
+      const parsed = JSON.parse(rawLegacy);
+      if (parsed?.booster && Array.isArray(parsed?.responses) && parsed.responses.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn("Failed to parse legacy completed booster:", e);
+    }
+  }
+
+  // 3. Scan all keys in localStorage starting with daily_booster_completed_${todayKey}
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(`daily_booster_completed_${todayKey}`)) {
+          const item = window.localStorage.getItem(key);
+          if (item) {
+            const parsed = JSON.parse(item);
+            if (parsed?.booster && Array.isArray(parsed?.responses) && parsed.responses.length > 0) {
+              return parsed;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Error scanning completed booster keys:", e);
+  }
+
+  // 4. Fallback: if today was marked completed and today's questions exist
+  const lastCompletedDate = safeGetItem('study_booster_last_completed_date');
+  if (lastCompletedDate === todayKey) {
+    const todayCached = safeGetItem(`daily_booster_today_${todayKey}`);
+    if (todayCached) {
+      try {
+        const parsed = JSON.parse(todayCached);
+        if (parsed?.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          const simulatedResponses = parsed.questions.map((q: DailyBoosterQuestion) => ({
+            selectedIndex: q.correctIndex,
+            isCorrect: true
+          }));
+          return {
+            booster: parsed,
+            responses: simulatedResponses
+          };
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
@@ -96,18 +180,50 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }, []);
 
+  // Synchronously look up today's completed booster so UI renders Scorecard immediately with 0ms delay!
+  const initialCompletedData = useMemo(() => {
+    return getTodayCompletedBooster(todayKey, gradeLevel, academicStream);
+  }, [todayKey, gradeLevel, academicStream]);
+
+  // Track-aware key for caching today's booster questions
+  const todayQuestionsKey = `daily_booster_today_${todayKey}_${gradeLevel}_${academicStream}`;
+
   // Main state
-  const [booster, setBooster] = useState<DailyBoosterPayload | null>(null);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [responses, setResponses] = useState<QuestionUserResponse[]>([]);
-  const [isRevealed, setIsRevealed] = useState<boolean>(false);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [booster, setBooster] = useState<DailyBoosterPayload | null>(() => {
+    if (initialCompletedData?.booster) return initialCompletedData.booster;
+    const todayCached = safeGetItem(todayQuestionsKey) || safeGetItem(`daily_booster_today_${todayKey}`);
+    if (todayCached) {
+      try {
+        const parsed = JSON.parse(todayCached);
+        if (parsed?.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          return parsed;
+        }
+      } catch {}
+    }
+    return null;
+  });
+  const [currentIndex, setCurrentIndex] = useState<number>(() => {
+    return (initialCompletedData?.booster?.questions?.length || 3) - 1;
+  });
+  const [responses, setResponses] = useState<QuestionUserResponse[]>(() => {
+    return initialCompletedData?.responses || [];
+  });
+  const [isRevealed, setIsRevealed] = useState<boolean>(() => {
+    return !!initialCompletedData;
+  });
+  const [isCompleted, setIsCompleted] = useState<boolean>(() => {
+    return !!initialCompletedData;
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    return !initialCompletedData;
+  });
   const [triviaError, setTriviaError] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [customTopic, setCustomTopic] = useState<string>('');
   const [isCustomizing, setIsCustomizing] = useState<boolean>(false);
   const [isBonusSession, setIsBonusSession] = useState<boolean>(false);
+  const [showBonusModal, setShowBonusModal] = useState<boolean>(false);
+  const [bonusCount, setBonusCount] = useState<number>(3);
   const [xpAwarded, setXpAwarded] = useState<number>(0);
   const [activeReviewTrapIndex, setActiveReviewTrapIndex] = useState<number | null>(null);
 
@@ -200,40 +316,64 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     if (isCustomizing) {
       setIsCustomizing(false);
     } else {
+      // If exiting while in a bonus session, restore the completed daily state so user returns to scorecard
+      if (isBonusSession) {
+        setIsBonusSession(false);
+        const todayCompleted = getTodayCompletedBooster(todayKey, gradeLevel, academicStream);
+        if (todayCompleted) {
+          setBooster(todayCompleted.booster);
+          setResponses(todayCompleted.responses);
+          setIsCompleted(true);
+          setIsRevealed(true);
+          setCurrentIndex((todayCompleted.booster.questions?.length || 3) - 1);
+        }
+      }
       onBack();
     }
   };
 
   // Fetch or Load Daily Booster
-  const loadDailyBooster = async (forceNewBonus: boolean = false, forcedTopic?: string) => {
+  const loadDailyBooster = async (forceNewBonus: boolean = false, forcedTopic?: string, questionCount: number = 3) => {
     if (isOffline) {
       setLoading(false);
       return;
     }
 
-    const completedCacheKey = `daily_booster_completed_${todayKey}_${gradeLevel}_${academicStream}`;
-    const savedCompletedData = localStorage.getItem(completedCacheKey);
+    const finalCount = forceNewBonus ? (questionCount || 3) : 3;
+    setBonusCount(finalCount);
 
-    // If not forcing a bonus session and user completed today's official booster, restore it
-    if (!forceNewBonus && savedCompletedData) {
-      try {
-        const parsedData = JSON.parse(savedCompletedData);
-        if (parsedData.booster && parsedData.responses) {
-          setBooster(parsedData.booster);
-          setResponses(parsedData.responses);
-          setIsCompleted(true);
-          setIsRevealed(true);
-          setCurrentIndex(2);
-          setLoading(false);
-          setIsBonusSession(false);
-          const realStreak = Number(safeGetItem('study_punches') || safeGetItem('study_streak_days') || '0');
-          if (realStreak > 0) {
-            setCurrentStreak(realStreak);
-          }
-          return;
+    // If not forcing a bonus session and user completed today's official booster, restore it directly!
+    if (!forceNewBonus) {
+      const completedData = getTodayCompletedBooster(todayKey, gradeLevel, academicStream);
+      if (completedData) {
+        setBooster(completedData.booster);
+        setResponses(completedData.responses);
+        setIsCompleted(true);
+        setIsRevealed(true);
+        setCurrentIndex((completedData.booster.questions?.length || 3) - 1);
+        setLoading(false);
+        setIsBonusSession(false);
+        const realStreak = Number(safeGetItem('study_punches') || safeGetItem('study_streak_days') || '0');
+        if (realStreak > 0) {
+          setCurrentStreak(realStreak);
         }
-      } catch (err) {
-        console.warn("Failed to parse saved daily booster:", err);
+        return;
+      }
+
+      // Check if today's questions were already generated today
+      const existingTodayQuestions = safeGetItem(todayQuestionsKey) || safeGetItem(`daily_booster_today_${todayKey}`);
+      if (existingTodayQuestions) {
+        try {
+          const parsed = JSON.parse(existingTodayQuestions);
+          if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+            setBooster(parsed);
+            setIsBonusSession(false);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn("Failed to parse cached today questions:", e);
+        }
       }
     }
 
@@ -268,9 +408,10 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
           academicStream,
           studyLevel,
           topic: activeTopic,
-          excludeQuestions: excludeList,
+          excludeQuestions: excludeList.slice(-100),
           country,
-          isBonus: forceNewBonus
+          isBonus: forceNewBonus,
+          count: finalCount
         }),
       });
 
@@ -293,8 +434,14 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
         setBooster(loadedBooster);
         setIsBonusSession(forceNewBonus);
 
-        // Update exclusion list with question texts
-        const newExcludes = [...excludeList, ...loadedBooster.questions.map(q => q.question)].slice(-150);
+        // Cache today's official questions so they aren't lost or regenerated
+        if (!forceNewBonus) {
+          safeSetItem(todayQuestionsKey, JSON.stringify(loadedBooster));
+          safeSetItem(`daily_booster_today_${todayKey}`, JSON.stringify(loadedBooster));
+        }
+
+        // Update exclusion list with question texts (store up to 500 items to permanently avoid repeats)
+        const newExcludes = Array.from(new Set([...excludeList, ...loadedBooster.questions.map(q => q.question)])).slice(-500);
         setExcludeList(newExcludes);
         localStorage.setItem('study_trivia_excludes', JSON.stringify(newExcludes));
       } else {
@@ -308,9 +455,31 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
     }
   };
 
+  // Keep scorecard restored if today is completed or fetch if missing
   useEffect(() => {
-    loadDailyBooster(false);
-  }, []);
+    if (isOpen !== false) {
+      const completedData = getTodayCompletedBooster(todayKey, gradeLevel, academicStream);
+      if (completedData) {
+        if (!isBonusSession) {
+          setBooster(completedData.booster);
+          setResponses(completedData.responses);
+          setIsCompleted(true);
+          setIsRevealed(true);
+          setCurrentIndex((completedData.booster.questions?.length || 3) - 1);
+          setLoading(false);
+          const realStreak = Number(safeGetItem('study_punches') || safeGetItem('study_streak_days') || '0');
+          if (realStreak > 0) {
+            setCurrentStreak(realStreak);
+          }
+        }
+      } else {
+        // If not completed and no booster in state, load today's booster
+        if (!booster && !loading) {
+          loadDailyBooster(false);
+        }
+      }
+    }
+  }, [isOpen, todayKey, gradeLevel, academicStream]);
 
   // Handle Option Selection
   const handleSelectOption = (optionIndex: number) => {
@@ -339,7 +508,8 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
       // Auto-save to Mistake Vault with Exam Trap Warning
       const wrongText = currentQuestion.options[optionIndex] || `Option ${optionIndex + 1}`;
       const correctText = currentQuestion.options[currentQuestion.correctIndex];
-      const reasoning = `Correct: ${correctText}. Trap Warning: ${currentQuestion.examTrapWarning} | Formula/Concept: ${currentQuestion.latexEquation || ''} | ${currentQuestion.shortExplanation}`;
+      const equationPart = currentQuestion.latexEquation ? ` | Formula/Concept: ${currentQuestion.latexEquation}` : '';
+      const reasoning = `Correct: ${correctText}. Trap Warning: ${currentQuestion.examTrapWarning}${equationPart} | ${currentQuestion.shortExplanation}`;
 
       saveMistakeToVault(
         'Daily Trivia',
@@ -449,13 +619,27 @@ export default function DailyTrivia({ onBack }: DailyTriviaProps) {
 
     // Save completed booster to localStorage for today
     if (!isBonusSession && booster) {
-      const completedCacheKey = `daily_booster_completed_${todayKey}_${gradeLevel}_${academicStream}`;
-      safeSetItem(completedCacheKey, JSON.stringify({
+      const completedData = {
         booster,
         responses,
         streak,
         completedAt: new Date().toISOString()
-      }));
+      };
+      const jsonStr = JSON.stringify(completedData);
+
+      // Primary canonical key (universal for today)
+      safeSetItem(`daily_booster_completed_${todayKey}`, jsonStr);
+
+      // Legacy key for backwards compatibility
+      const completedCacheKey = `daily_booster_completed_${todayKey}_${gradeLevel}_${academicStream}`;
+      safeSetItem(completedCacheKey, jsonStr);
+
+      // Cache today's questions
+      safeSetItem(todayQuestionsKey, JSON.stringify(booster));
+      safeSetItem(`daily_booster_today_${todayKey}`, JSON.stringify(booster));
+
+      // Mark completion date
+      safeSetItem('study_booster_last_completed_date', today);
     }
   };
 
@@ -717,9 +901,11 @@ Try it free: ${window.location.origin}`;
               />
               <Sparkles className="absolute w-5 h-5 text-amber-500 animate-pulse" />
             </div>
-            <h3 className="text-sm font-black text-zinc-900 text-center">Calibrating Daily Exam Traps...</h3>
+            <h3 className="text-sm font-black text-zinc-900 text-center">
+              {isBonusSession ? `Calibrating ${bonusCount} Bonus Practice Traps...` : "Calibrating Daily Exam Traps..."}
+            </h3>
             <p className="text-xs text-zinc-400 text-center mt-1.5 px-4 font-medium leading-relaxed">
-              Curating 3 rapid negative-marking traps tailored for {gradeLevel} {academicStream}.
+              Curating {isBonusSession ? bonusCount : 3} rapid negative-marking traps tailored for {gradeLevel} {academicStream}.
             </p>
           </div>
         ) : isCompleted ? (
@@ -749,9 +935,13 @@ Try it free: ${window.location.origin}`;
               <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-zinc-800">
                 <div className="bg-zinc-800/60 rounded-2xl p-3 border border-zinc-700/50">
                   <p className="text-[10px] text-zinc-400 font-bold uppercase">Traps Mastered</p>
-                  <p className="text-xl font-black text-emerald-400 mt-0.5">{masteredCount}/3</p>
+                  <p className="text-xl font-black text-emerald-400 mt-0.5">{masteredCount}/{booster?.questions.length || 3}</p>
                   <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">
-                    {masteredCount === 3 ? "Flawless Defense! 🌟" : masteredCount === 2 ? "Strong Accuracy! 💪" : "Good Practice! 🛡️"}
+                    {masteredCount === (booster?.questions.length || 3) 
+                      ? "Flawless Defense! 🌟" 
+                      : masteredCount >= Math.ceil((booster?.questions.length || 3) * 0.6) 
+                        ? "Strong Accuracy! 💪" 
+                        : "Good Practice! 🛡️"}
                   </p>
                 </div>
                 <div className="bg-zinc-800/60 rounded-2xl p-3 border border-zinc-700/50">
@@ -784,7 +974,7 @@ Try it free: ${window.location.origin}`;
             <div className="bg-white rounded-3xl border border-zinc-200/80 p-5 shadow-xs">
               <h3 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <BookOpen className="w-4 h-4 text-zinc-600" />
-                Today's 3-Trap Review
+                {isBonusSession ? `Bonus ${booster?.questions.length || 3}-Trap Review` : "Today's 3-Trap Review"}
               </h3>
 
               <div className="flex flex-col gap-2.5">
@@ -836,7 +1026,7 @@ Try it free: ${window.location.origin}`;
                           >
                             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5 text-xs text-amber-950 font-bold">
                               <span className="text-[10px] text-amber-800 uppercase tracking-wider block font-black mb-0.5">⚠️ Exam Trap:</span>
-                              {q.examTrapWarning}
+                              <GlobalMarkdown className="text-xs font-medium text-amber-900 leading-relaxed [&_p]:inline [&_p]:m-0">{q.examTrapWarning}</GlobalMarkdown>
                             </div>
 
                             {q.latexEquation && (
@@ -845,9 +1035,10 @@ Try it free: ${window.location.origin}`;
                               </div>
                             )}
 
-                            <p className="text-xs text-zinc-600 font-medium leading-relaxed">
-                              <strong className="text-zinc-900">Key Takeaway:</strong> {q.shortExplanation}
-                            </p>
+                            <div className="text-xs text-zinc-600 font-medium leading-relaxed">
+                              <strong className="text-zinc-900">Key Takeaway: </strong>
+                              <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{q.shortExplanation}</GlobalMarkdown>
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -857,12 +1048,12 @@ Try it free: ${window.location.origin}`;
               </div>
 
               {/* Mistake Vault notice */}
-              {masteredCount < 3 && (
+              {masteredCount < (booster?.questions.length || 3) && (
                 <div className="mt-4 bg-purple-50/80 border border-purple-200/70 rounded-2xl p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-base">📋</span>
                     <p className="text-xs font-bold text-purple-900">
-                      {3 - masteredCount} trap{3 - masteredCount > 1 ? 's' : ''} auto-saved to your Mistake Vault.
+                      {(booster?.questions.length || 3) - masteredCount} trap{(booster?.questions.length || 3) - masteredCount > 1 ? 's' : ''} auto-saved to your Mistake Vault.
                     </p>
                   </div>
                 </div>
@@ -880,15 +1071,31 @@ Try it free: ${window.location.origin}`;
               </button>
 
               <button
-                onClick={() => loadDailyBooster(true)}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-98 transition-all"
+                onClick={() => {
+                  triggerVibration(15);
+                  setShowBonusModal(true);
+                }}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-98 transition-all shadow-sm"
               >
-                <RefreshCw className="w-4 h-4" />
+                <Sparkles className="w-4 h-4 text-amber-400" />
                 Practice Bonus Booster (Unlimited)
               </button>
 
               <button
-                onClick={onBack}
+                onClick={() => {
+                  if (isBonusSession) {
+                    setIsBonusSession(false);
+                    const todayCompleted = getTodayCompletedBooster(todayKey, gradeLevel, academicStream);
+                    if (todayCompleted) {
+                      setBooster(todayCompleted.booster);
+                      setResponses(todayCompleted.responses);
+                      setIsCompleted(true);
+                      setIsRevealed(true);
+                      setCurrentIndex((todayCompleted.booster.questions?.length || 3) - 1);
+                    }
+                  }
+                  onBack();
+                }}
                 className="w-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 font-bold text-xs py-3 rounded-2xl transition-all active:scale-98"
               >
                 Back to Dashboard
@@ -913,19 +1120,19 @@ Try it free: ${window.location.origin}`;
                     Card {currentIndex + 1} of {booster.questions.length}
                   </span>
                   <span className="text-amber-600 font-black flex items-center gap-1">
-                    <Zap className="w-3.5 h-3.5" /> Rapid-Fire 90s
+                    <Zap className="w-3.5 h-3.5" /> {booster.questions.length <= 3 ? "Rapid-Fire 90s" : booster.questions.length <= 5 ? "Power Drill ~2.5m" : "Mastery Marathon ~5m"}
                   </span>
                 </div>
 
                 {/* Segmented Stepper */}
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="flex gap-1.5 w-full">
                   {booster.questions.map((_, i) => {
                     const isDone = i < currentIndex;
                     const isCurrent = i === currentIndex;
                     return (
                       <div
                         key={i}
-                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                        className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
                           isDone 
                             ? 'bg-emerald-500' 
                             : isCurrent 
@@ -1026,7 +1233,9 @@ Try it free: ${window.location.origin}`;
                           <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                           ⚠️ Exam Trap Breakdown:
                         </span>
-                        <p className="leading-relaxed">{currentQ.examTrapWarning}</p>
+                        <div className="leading-relaxed">
+                          <GlobalMarkdown className="text-xs font-medium text-amber-900 leading-relaxed [&_p]:inline [&_p]:m-0">{currentQ.examTrapWarning}</GlobalMarkdown>
+                        </div>
                       </div>
 
                       {/* Formula / Calculation */}
@@ -1040,7 +1249,9 @@ Try it free: ${window.location.origin}`;
                       {/* Short Explanation */}
                       <div className="bg-indigo-50/50 border border-indigo-100/70 rounded-2xl p-3 text-xs text-zinc-700 leading-relaxed">
                         <p className="text-[10px] text-indigo-900 uppercase font-black tracking-wider mb-0.5">💡 Core Takeaway:</p>
-                        <p>{currentQ.shortExplanation}</p>
+                        <div>
+                          <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs text-zinc-700">{currentQ.shortExplanation}</GlobalMarkdown>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -1069,6 +1280,127 @@ Try it free: ${window.location.origin}`;
           )
         )}
       </div>
+
+      {/* Question Selection Modal for Practice Bonus Booster (Options: 3, 5, 10) */}
+      <AnimatePresence>
+        {showBonusModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              transition={{ type: "spring", duration: 0.3, bounce: 0.2 }}
+              className="bg-white rounded-3xl border border-zinc-200/90 p-5 shadow-2xl max-w-sm w-full relative overflow-hidden"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setShowBonusModal(false)}
+                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Header */}
+              <div className="mb-4">
+                <div className="inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border border-purple-200/60 text-purple-700 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider mb-2">
+                  <Sparkles className="w-3 h-3 text-purple-600" />
+                  Unlimited Practice
+                </div>
+                <h3 className="text-base font-black text-zinc-900 tracking-tight">Select Number of Questions</h3>
+                <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                  Tailored for your <span className="font-bold text-zinc-700">{gradeLevel} ({academicStream})</span> profile.
+                </p>
+              </div>
+
+              {/* Exactly 3 Selection Options: 3, 5, 10 */}
+              <div className="flex flex-col gap-2.5">
+                {/* Option 1: 3 Questions */}
+                <button
+                  onClick={() => {
+                    triggerVibration(15);
+                    setShowBonusModal(false);
+                    loadDailyBooster(true, undefined, 3);
+                  }}
+                  className="group flex items-center justify-between p-3.5 rounded-2xl border-2 border-zinc-200/80 hover:border-amber-400 bg-zinc-50/60 hover:bg-amber-50/40 transition-all text-left active:scale-98 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-black text-base group-hover:scale-105 transition-transform">
+                      <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-zinc-900">3 Questions</span>
+                        <span className="text-[10px] bg-zinc-200/70 text-zinc-700 font-bold px-1.5 py-0.2 rounded-md">~90s</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 font-medium">Quick Sprint • 3 High-Yield Traps</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all" />
+                </button>
+
+                {/* Option 2: 5 Questions (Recommended) */}
+                <button
+                  onClick={() => {
+                    triggerVibration(15);
+                    setShowBonusModal(false);
+                    loadDailyBooster(true, undefined, 5);
+                  }}
+                  className="group relative flex items-center justify-between p-3.5 rounded-2xl border-2 border-purple-400 bg-purple-50/25 hover:bg-purple-50/45 transition-all text-left active:scale-98 cursor-pointer shadow-xs"
+                >
+                  <div className="absolute -top-2 right-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs">
+                    ★ POPULAR
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center font-black text-base group-hover:scale-105 transition-transform">
+                      <Target className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-zinc-900">5 Questions</span>
+                        <span className="text-[10px] bg-purple-200/60 text-purple-800 font-bold px-1.5 py-0.2 rounded-md">~2.5m</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 font-medium">Standard Drill • Core Concepts</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-purple-600 group-hover:translate-x-0.5 transition-all" />
+                </button>
+
+                {/* Option 3: 10 Questions */}
+                <button
+                  onClick={() => {
+                    triggerVibration(15);
+                    setShowBonusModal(false);
+                    loadDailyBooster(true, undefined, 10);
+                  }}
+                  className="group flex items-center justify-between p-3.5 rounded-2xl border-2 border-zinc-200/80 hover:border-emerald-400 bg-zinc-50/60 hover:bg-emerald-50/40 transition-all text-left active:scale-98 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-black text-base group-hover:scale-105 transition-transform">
+                      <Flame className="w-5 h-5 text-emerald-500 fill-emerald-500" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-zinc-900">10 Questions</span>
+                        <span className="text-[10px] bg-zinc-200/70 text-zinc-700 font-bold px-1.5 py-0.2 rounded-md">~5m</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 font-medium">Mastery Marathon • Deep Practice</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
+                </button>
+              </div>
+
+              {/* Cancel Button */}
+              <button
+                onClick={() => setShowBonusModal(false)}
+                className="w-full mt-3.5 py-2 text-center text-xs font-bold text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

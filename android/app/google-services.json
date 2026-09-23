@@ -7,6 +7,43 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:702005695603:android:f8043be8851fbb67a8c606",
+        "android_client_info": {
+          "package_name": "com.apexam.prep"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "702005695603-m4i5818ilif9hhe74mh2hfallm7rbb8o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apexam.prep",
+            "certificate_hash": "8424a02cd8671d52d0813597e5b07177ff1f74b8"
+          }
+        },
+        {
+          "client_id": "702005695603-6klm5rcidns30dqcl75701ura7klk4j3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChYhFRi_TGH4iVA4e9wrECF-NXd5gEdfY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "702005695603-6klm5rcidns30dqcl75701ura7klk4j3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:702005695603:android:aed5c7437c70b878a8c606",
         "android_client_info": {
           "package_name": "com.helpyou.ai"
@@ -19,6 +56,14 @@
           "android_info": {
             "package_name": "com.helpyou.ai",
             "certificate_hash": "8424a02cd8671d52d0813597e5b07177ff1f74b8"
+          }
+        },
+        {
+          "client_id": "702005695603-vd9rhem3r93eei8aq4ekvie4dg3kn23o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.helpyou.ai",
+            "certificate_hash": "4dfae6ddea3c96438f0ec0a4bc8ddc6fca4a8e4b"
           }
         },
         {

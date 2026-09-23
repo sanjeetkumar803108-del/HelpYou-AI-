@@ -76,6 +76,9 @@ app.all(["/api/health", "/health", "/api/status"], (req, res) => {
 });
 var sanitizeInput = (obj) => {
   if (typeof obj === "string") {
+    if (obj.startsWith("data:") || obj.length > 1e4) {
+      return obj;
+    }
     return (0, import_xss.default)(obj);
   }
   if (Array.isArray(obj)) {
@@ -95,65 +98,79 @@ app.use((req, res, next) => {
   next();
 });
 var summaryCache = /* @__PURE__ */ new Map();
+function sanitizeLaTeXInJSON(raw) {
+  if (!raw) return raw;
+  let inString = false;
+  let isEscaped = false;
+  let out = "";
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i];
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        if (char === '"' || char === "\\" || char === "/") {
+          out += "\\" + char;
+        } else if (char === "n") {
+          const isLatexCommand = /^(?:eq|abla|otin|atural|earrow|warrow|u\b|ot\b|eg\b|exists|sim|leq|geq)/.test(raw.slice(i + 1, i + 10));
+          out += isLatexCommand ? "\\\\n" : "\\n";
+        } else if (char === "r") {
+          const isLatexCommand = /^(?:ightarrow|ho\b|ight\b|angle\b|eal\b|m\b|oot\b|ceil\b|floor\b)/.test(raw.slice(i + 1, i + 12));
+          out += isLatexCommand ? "\\\\r" : "\\r";
+        } else if (char === "b") {
+          const isLatexCommand = /^(?:eta\b|egin\b|ar\b|ig\b|oldsymbol\b|inom\b|ot\b|ullet\b|f\b|mod\b|oxed\b|ackslash\b)/.test(raw.slice(i + 1, i + 12));
+          out += isLatexCommand ? "\\\\b" : "\\b";
+        } else if (char === "t") {
+          const isLatexCommand = /^(?:ext|imes|heta|an\b|au\b|o\b|ilde|ag|op\b|extbf|extit|herefore|frac)/.test(raw.slice(i + 1, i + 12));
+          out += isLatexCommand ? "\\\\t" : "\\t";
+        } else if (char === "f") {
+          const isLatexCommand = /^(?:rac|orall|lat|rown)/.test(raw.slice(i + 1, i + 8));
+          out += isLatexCommand ? "\\\\f" : "\\f";
+        } else if (char === "u") {
+          const next4 = raw.slice(i + 1, i + 5);
+          out += /^[0-9a-fA-F]{4}$/.test(next4) ? "\\u" : "\\\\u";
+        } else {
+          out += "\\\\" + char;
+        }
+      } else if (char === "\\") {
+        isEscaped = true;
+      } else if (char === '"') {
+        inString = false;
+        out += '"';
+      } else if (char === "\n") {
+        out += "\\n";
+      } else if (char === "\r") {
+        out += "\\r";
+      } else if (char === "	") {
+        out += "\\t";
+      } else {
+        out += char;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+      }
+      out += char;
+    }
+  }
+  if (isEscaped) {
+    out += "\\\\";
+  }
+  return out;
+}
 function repairJsonString(raw) {
   if (!raw) return "";
   let str = raw.trim();
   str = str.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  let inString = false;
-  let escaped = false;
-  const fixedChars = [];
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[i];
-    if (inString) {
-      if (escaped) {
-        const nextChar = str[i + 1] || "";
-        const isFollowedByLetter = /[a-zA-Z]/.test(nextChar);
-        if (/[\\"\/]/.test(ch)) {
-          fixedChars.push(ch);
-        } else if (/[bfnrt]/.test(ch) && !isFollowedByLetter) {
-          fixedChars.push(ch);
-        } else if (ch === "u") {
-          const hex = str.slice(i + 1, i + 5);
-          if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-            fixedChars.push(ch);
-          } else {
-            fixedChars[fixedChars.length - 1] = "\\\\";
-            fixedChars.push(ch);
-          }
-        } else {
-          fixedChars[fixedChars.length - 1] = "\\\\";
-          fixedChars.push(ch);
-        }
-        escaped = false;
-      } else if (ch === "\\") {
-        escaped = true;
-        fixedChars.push(ch);
-      } else if (ch === '"') {
-        inString = false;
-        fixedChars.push(ch);
-      } else if (ch === "\n") {
-        fixedChars.push("\\n");
-      } else if (ch === "\r") {
-        fixedChars.push("\\r");
-      } else if (ch === "	") {
-        fixedChars.push("\\t");
-      } else {
-        fixedChars.push(ch);
-      }
-    } else {
-      if (ch === '"') {
-        inString = true;
-      }
-      fixedChars.push(ch);
-    }
-  }
-  let result = fixedChars.join("");
-  result = result.replace(/,\s*([}\]])/g, "$1");
-  return result;
+  str = sanitizeLaTeXInJSON(str);
+  str = str.replace(/,\s*([}\]])/g, "$1");
+  return str;
 }
 function safeParseJSON(text, forceType = "none") {
   if (!text) return forceType === "array" ? [] : forceType === "object" ? {} : null;
-  const cleaned = text.trim();
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+  }
   const parse = (str) => {
     try {
       const parsed = JSON.parse(str);
@@ -164,52 +181,79 @@ function safeParseJSON(text, forceType = "none") {
         return parsed[0] || {};
       }
       return parsed;
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   };
   let result = parse(cleaned);
   if (result) return result;
-  let extracted = cleaned;
-  if (extracted.includes("```")) {
-    extracted = extracted.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
-    result = parse(extracted);
-    if (result) return result;
-  }
-  const repaired = repairJsonString(extracted);
-  result = parse(repaired);
+  const sanitized = sanitizeLaTeXInJSON(cleaned);
+  result = parse(sanitized);
   if (result) return result;
-  const objStart = extracted.indexOf("{");
-  const objEnd = extracted.lastIndexOf("}");
-  const arrStart = extracted.indexOf("[");
-  const arrEnd = extracted.lastIndexOf("]");
+  const objStart = sanitized.indexOf("{");
+  const objEnd = sanitized.lastIndexOf("}");
+  const arrStart = sanitized.indexOf("[");
+  const arrEnd = sanitized.lastIndexOf("]");
   const hasObj = objStart !== -1 && objEnd !== -1 && objEnd > objStart;
   const hasArr = arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart;
   if (hasObj && (!hasArr || objStart < arrStart)) {
-    const slice = extracted.slice(objStart, objEnd + 1);
-    result = parse(slice) || parse(repairJsonString(slice));
+    const slice = sanitized.slice(objStart, objEnd + 1);
+    result = parse(slice);
     if (result) return result;
   }
   if (hasArr) {
-    const slice = extracted.slice(arrStart, arrEnd + 1);
-    result = parse(slice) || parse(repairJsonString(slice));
+    const slice = sanitized.slice(arrStart, arrEnd + 1);
+    result = parse(slice);
     if (result) return result;
   }
-  try {
-    let closed = repairJsonString(extracted);
-    const openBraces = (closed.match(/\{/g) || []).length;
-    const closeBraces = (closed.match(/\}/g) || []).length;
-    const openBrackets = (closed.match(/\[/g) || []).length;
-    const closeBrackets = (closed.match(/\]/g) || []).length;
-    if (openBraces > closeBraces) {
-      closed += "}".repeat(openBraces - closeBraces);
+  const balanceAndParse = (str) => {
+    let state = "NORMAL";
+    const stack = [];
+    let out = "";
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      out += ch;
+      if (state === "NORMAL") {
+        if (ch === '"') state = "IN_STRING";
+        else if (ch === "{" || ch === "[") stack.push(ch);
+        else if (ch === "}" && stack[stack.length - 1] === "{") stack.pop();
+        else if (ch === "]" && stack[stack.length - 1] === "[") stack.pop();
+      } else if (state === "IN_STRING") {
+        if (ch === "\\") state = "ESCAPE";
+        else if (ch === '"') state = "NORMAL";
+      } else if (state === "ESCAPE") {
+        state = "IN_STRING";
+      }
     }
-    if (openBrackets > closeBrackets) {
-      closed += "]".repeat(openBrackets - closeBrackets);
+    let closed = out;
+    if (state === "ESCAPE") {
+      closed = closed.slice(0, -1) + '"';
+      state = "NORMAL";
+    } else if (state === "IN_STRING") {
+      closed += '"';
+      state = "NORMAL";
     }
-    result = parse(closed);
-    if (result) return result;
-  } catch (_) {
+    closed = closed.trim();
+    while (closed.endsWith(",") || closed.endsWith(":")) {
+      closed = closed.slice(0, -1).trim();
+    }
+    for (let i = stack.length - 1; i >= 0; i--) {
+      closed += stack[i] === "{" ? "}" : "]";
+    }
+    return parse(closed);
+  };
+  result = balanceAndParse(sanitized);
+  if (result) return result;
+  let lastCommaIdx = sanitized.lastIndexOf(",");
+  let attempts = 0;
+  while (lastCommaIdx > 0 && attempts < 10) {
+    const truncated = sanitized.slice(0, lastCommaIdx);
+    result = balanceAndParse(truncated);
+    if (result && (forceType === "array" && Array.isArray(result) && result.length > 0 || forceType !== "array")) {
+      return result;
+    }
+    lastCommaIdx = sanitized.lastIndexOf(",", lastCommaIdx - 1);
+    attempts++;
   }
   if (forceType === "array") return [];
   if (forceType === "object") return {};
@@ -593,9 +637,9 @@ ${text}`.trim() },
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
     "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
     "gemini-3.5-flash",
-    "gemini-3.6-flash"
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest"
   ].filter((value, index, self) => self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -701,6 +745,10 @@ ${text}`.trim() },
     }
   }
   if (lastError) {
+    if (anyQuotaExceeded) {
+      lastError.message = "GEMINI_QUOTA_EXHAUSTED";
+      lastError.isRateLimit = true;
+    }
     throw lastError;
   }
   throw new Error("AI generation failed after multiple attempts");
@@ -926,7 +974,7 @@ eq cos^2 x. You MUST use Integration by Parts (u = x, dv = \frac{sin x}{1+cos^2 
   * PASS 2 (Forward Step-by-Step PEMDAS Execution): Apply strict Order of Operations (PEMDAS/BODMAS): Parentheses -> Exponents/Roots -> Multiplication/Division -> Addition/Subtraction. Show standard theoretical formulas, substitute exact values, and calculate intermediate values with dual representation (exact radical/fraction and 4-decimal precision).
   * PASS 3 (Reverse Sanity Check & Boundary Validation): Verify every arithmetic and trigonometric step (e.g. 90/6 = 15, cos(15\xB0) = (sqrt(6)+sqrt(2))/4 \u2248 0.9659, 90 * 0.9659 = 86.9333\xB0, sin(86.9333\xB0) \u2248 0.9985, arctan(1) = pi/4, arctan(0) = 0, arcsin(1) = pi/2, arccos(0) = pi/2, ln(1) = 0). Check mathematical ranges (e.g. |sin|, |cos| <= 1, probabilities in [0,1], non-negative square roots). Ensure 100% mathematical accuracy before outputting.
 - MANDATORY LINE-BY-LINE FORMATTING & SPACING PROTOCOL (NO CLUSTERED TEXT):
-  * LINE BREAK AFTER EVERY SENTENCE: Never write long, crammed multi-sentence paragraphs. Every single sentence, explanation, or calculation must be on its OWN line, separated by a blank line (\\n\\n).
+  * LINE BREAK AFTER EVERY FULL STOP & SENTENCE: Never write long, crammed multi-sentence paragraphs. Every single sentence, statement, explanation, or calculation must end with a period/full stop (.) and be on its OWN line, separated by a blank line (\\n\\n).
   * NO BULLET SYMBOLS: Do NOT use bullet signs (no "\u2022", no "-", no "*", no "1.", no "2."). Arrange points cleanly and spacious using blank lines (\\n\\n) between sentences.
   * STANDALONE BLOCK MATH EQUATIONS: Always put mathematical formulas, algebraic derivations, and intermediate numerical results on their OWN dedicated centered block lines using $$ ... $$. Never compress complex equations inline within long sentences.
   * MAXIMUM CLARITY & BREATHING ROOM: Ensure generous vertical spacing so mobile students can effortlessly read and absorb every single line without confusion.
@@ -937,8 +985,8 @@ eq cos^2 x. You MUST use Integration by Parts (u = x, dv = \frac{sin x}{1+cos^2 
 {
   "topic_title": "Subject or Topic of the problem / concept",
   "format_type": "steps",
-  "key_formula": "The primary theoretical formula, governing law, or identity used in LaTeX (e.g. $$E = h\\nu$$ or $$\\sin(A \\pm B) = \\sin A \\cos B \\pm \\cos A \\sin B$$)",
-  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misconceptions students must avoid in exams",
+  "key_formula": "The primary theoretical formula, governing law, or identity strictly wrapped in double dollar signs $$...$$ in LaTeX (e.g. $$E = h\\nu$$ or $$V = 2\\pi \\int_{a}^{b} x f(x) dx$$)",
+  "exam_trap": "A brief 1-2 sentence high-yield warning about common calculation traps, sign errors, or misconceptions students must avoid in exams. Wrap all mathematical expressions and formulas in single dollar signs (e.g. $2\\pi x h(x)$)",
   "solution_steps": [
     {
       "step_id": 1,
@@ -3117,90 +3165,45 @@ app.post("/api/generate-questions", async (req, res) => {
     const count = req.body.count;
     const stream = req.body.stream;
     const country = req.body.country;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 25);
     const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || "academic curriculum"}`;
     const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
 Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-ended) practice questions along with official examiner marking rubrics and score allocations.
 
 CRITICAL ARCHITECTURE RULES:
 
-1. SUBJECT & DOMAIN INTEGRITY (ABSOLUTE RULE - ZERO CROSS-CONTAMINATION):
-   - Automatically detect the true academic subject of the given topic:
-     * LITERATURE & LANGUAGES (e.g., English, Hindi, Stories, Poems, Plays, Fiction, Authors like Lencho / "A Letter to God", Shakespeare, Nelson Mandela, etc.):
-       - Format questions strictly as authentic literature board exam questions: Character sketches, thematic analysis, irony, narrative conflict, moral dilemma, author's message, contextual significance, or poetic devices.
-       - NEVER inject science, mathematics, statistics, or engineering jargon (NEVER use words like "stochastic modeling", "data-driven systems", "algorithmic", "variables") into literature! Questions must be 100% grounded in the text, characters, and literary analysis.
-     * SCIENCES (Physics, Chemistry, Biology):
-       - Focus on scientific mechanisms, "Give scientific reasons why...", experimental observations, cause-and-effect, balanced chemical reactions, and real-world scientific applications.
-     * MATHEMATICS:
-       - Focus on analytical problem-solving, step-by-step proofs, derivations, and conceptual theorems. Use clean LaTeX ($...$) for equations.
-     * SOCIAL SCIENCES & HUMANITIES (History, Civics, Geography, Economics, Psychology):
-       - Focus on historical consequences, constitutional provisions, socio-economic factors, spatial patterns, and critical evaluations.
-     * COMMERCE & MANAGEMENT (Business, Accountancy, Economics):
-       - Focus on market dynamics, financial principles, policy impacts, and case study evaluations.
-     * COMPUTER SCIENCE / CODING:
-       - Focus on logic design, algorithmic efficiency, data structures, and software principles.
+1. SUBJECT & DOMAIN INTEGRITY:
+   - Automatically detect the true academic subject of the given topic (Literature, Science, Mathematics, Social Sciences, Commerce, Computer Science).
+   - Use clean LaTeX ($...$) for all math and science formulas (e.g. $F = ma$, $H_2O$, $V = IR$).
 
-2. REAL EXAM QUESTION VARIETY (DO NOT FORCE PART A / PART B):
-   - In real board and university exams, questions are VARIED and NATURAL. They are NOT robotically split into Part A / Part B for every question!
+2. REAL EXAM QUESTION VARIETY:
    - Provide a realistic, diverse blend across the ${requestedCount} questions:
-     * Standalone Short/Medium Conceptual Questions (2\u20133 Marks): Clear, focused single questions testing understanding, cause, or definition (e.g., "Why did Lencho write a letter to God, and why was he displeased upon receiving the money?").
-     * Standalone Long Analytical / Essay / Evaluative Questions (5\u20136 Marks): Comprehensive questions testing Higher Order Thinking Skills (HOTS), character sketches, thematic critique, or deep derivations (e.g., "Analyze the irony in the story 'A Letter to God'. How did the postmaster's kindness lead to an unexpected reaction from Lencho?").
-     * Structured Multi-Part Questions (e.g., (a) and (b)): Use sub-parts ONLY when naturally appropriate (e.g., in a multi-step science problem or when asking for a definition followed by an application). When sub-parts are used, format them cleanly with double line breaks: "(a) ... \\n\\n(b) ...".
-   - Under NO circumstances should all questions have "Part A:" and "Part B:". Most questions in an authentic exam paper are standalone, direct subjective questions!
+     * Standalone Short/Medium Conceptual Questions (2\u20133 Marks).
+     * Standalone Long Analytical / Evaluative Questions (5\u20136 Marks).
+     * Multi-part questions ((a) and (b)) only when naturally appropriate.
 
 3. GRADE & CURRICULUM CALIBRATION:
-   - Target Grade: ${gradeLevel}.
-   - The vocabulary, conceptual depth, and mark expectations must strictly match this academic level. Do NOT make secondary/high school questions into graduate-level research papers.
+   - Target Grade: ${gradeLevel}. Match vocabulary and difficulty strictly to this grade level.
 
-4. COMPREHENSIVE MASTER MODEL ANSWER ('expectedAnswer'):
-   - Provide an exhaustive, step-by-step master model answer / official solution in 'expectedAnswer'.
-   - For mathematical, physics, and calculation problems: Provide the full derivation, explicit step-by-step working, substituted values, and final highlighted result with appropriate units.
-   - For literature, language, and social science problems: Provide a complete, structured multi-paragraph model answer containing textual evidence, thematic depth, and nuanced explanation.
-   - For multi-part questions ((a), (b)): Provide clear, separate complete solutions for each part.
-   - (Note: This master model answer will be compiled into the exported PDF's final Answer Key & Solutions section).
+4. MODEL ANSWER ('expectedAnswer'):
+   - Provide a high-yield, step-by-step model solution in 'expectedAnswer' (1-2 clear, focused paragraphs or explicit mathematical steps). Keep it concise, educational, and direct.
 
-5. OFFICIAL MARKING RUBRIC & SCORE BREAKDOWN ('keyRubricPoints'):
-   - Provide an array of 3-5 real grading criteria with EXPLICIT SCORE ALLOCATIONS (e.g., "[1 Mark]", "[1.5 Marks]", "[2 Marks]") that an examiner uses to evaluate students' answers.
-   - Points must specify the exact conceptual checkpoint and its mark value:
-     * e.g., "[1 Mark] Correct definition and mathematical formula of Ohm's Law ($V = IR$) under constant temperature"
-     * e.g., "[1.5 Marks] High melting point ($3380^\\circ\\\\text{C}$) and high resistivity of tungsten filament"
-     * e.g., "[0.5 Mark] Chemical inertness of argon/nitrogen gas preventing oxidation"
-   - Points must be strictly subject-relevant.
+5. OFFICIAL MARKING RUBRIC ('keyRubricPoints'):
+   - Provide an array of 2-4 key scoring criteria with explicit mark allocations (e.g. "[1 Mark] Correct formula...", "[1 Mark] Final calculated value with units...").
 
 6. STRICT JSON OUTPUT FORMAT:
    - Return ONLY a valid JSON object with the key "questions".
-   - Do NOT wrap in markdown backticks or include conversational text.
+   - Do NOT wrap in markdown blockquotes or include commentary.
 
-Use this exact JSON structure:
+JSON structure:
 {
   "questions": [
     {
-      "question": "Why did Lencho describe the falling raindrops as 'new coins'? How did his feelings change when the weather took a turn for the worse?",
-      "expectedAnswer": "Lencho was an industrious farmer whose family depended entirely on the harvest of his cornfield, which urgently needed rain. When large clouds began to pour, he was filled with joy and compared the big drops to 10-cent pieces and the little drops to 5-cent pieces, seeing them as coins of prosperity that would guarantee a rich yield.\\n\\nHowever, his happiness turned to sorrow when strong winds brought a heavy hailstorm that battered the valley for an hour. The hail left the field completely white as if covered with salt, destroying all the corn and flowers. Lencho's heart was filled with deep grief and despair, realizing that without help, his family would go hungry that year.",
+      "question": "Question text here...",
+      "expectedAnswer": "Concise step-by-step model answer here...",
       "keyRubricPoints": [
-        "[1 Mark] Comparison of big drops to 10-cent pieces and small drops to 5-cent pieces",
-        "[1 Mark] Expectation of a bountiful harvest and financial prosperity",
-        "[1 Mark] Sudden onset of violent hailstorm destroying entire crop fields",
-        "[1 Mark] Lencho's deep sorrow and despair regarding family's survival"
-      ]
-    },
-    {
-      "question": "How does the story 'A Letter to God' highlight the irony in human nature through the postmaster's kind gesture and Lencho's reaction?",
-      "expectedAnswer": "The supreme irony of the story lies in Lencho's unwavering faith in God contrasting with his profound distrust of human beings. When the postmaster read Lencho's letter to God requesting 100 pesos, he was deeply moved and resolved not to shake the man's faith. Through genuine selflessness, the postmaster and his staff collected and sent 70 pesos.\\n\\nYet when Lencho counted only 70 pesos, he was convinced God could never make a mistake or deny his request. Consequently, he assumed the post office employees were a 'bunch of crooks' who stole the missing 30 pesos. The poignant irony is that Lencho condemned the very people who sacrificed their own money to help him, illustrating how rigid dogmatic faith can blind a person to genuine human kindness.",
-      "keyRubricPoints": [
-        "[1.5 Marks] Postmaster and postal staff collecting 70 pesos out of selflessness to preserve faith",
-        "[1.5 Marks] Lencho's absolute conviction that God would not make a mistake",
-        "[1 Mark] Lencho branding the benefactors as a 'bunch of crooks' for missing 30 pesos",
-        "[1 Mark] Irony of distrusting the very humans who assisted him"
-      ]
-    },
-    {
-      "question": "(a) State Ohm's Law and write its mathematical formula.\\n\\n(b) Explain why an electric bulb's filament is made of tungsten and why inert gases are filled inside the bulb.",
-      "expectedAnswer": "(a) Ohm's Law states that the electric current ($I$) flowing through a metallic conductor is directly proportional to the potential difference ($V$) across its ends, provided physical conditions like temperature remain constant.\\nFormula: $V \\\\propto I \\\\implies V = IR$, where $R$ is resistance.\\n\\n(b) Tungsten is used for bulb filaments because it possesses an exceptionally high melting point ($3380^\\circ\\\\text{C}$) and high electrical resistivity, allowing it to glow white-hot without melting. Chemically inactive gases like argon and nitrogen are filled inside the bulb to prevent oxidation of the incandescent tungsten filament, thereby prolonging the bulb's lifespan.",
-      "keyRubricPoints": [
-        "[1 Mark] Definition and formula of Ohm's Law ($V = IR$) with constant temperature condition",
-        "[1.5 Marks] High melting point ($3380^\\circ\\\\text{C}$) and high resistivity of tungsten filament",
-        "[0.5 Mark] Use of chemically inert gases (argon/nitrogen) to prevent filament oxidation"
+        "[1 Mark] Key concept 1",
+        "[1 Mark] Key concept 2"
       ]
     }
   ]
@@ -3217,9 +3220,9 @@ ${userStreamDirective}
 ${userCountryDirective}
 Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic and grade.
 For each question, provide:
-1. An authentic exam-style subjective question in 'question'.
-2. A complete, high-quality step-by-step model solution in 'expectedAnswer' (to be compiled into the PDF Answer Key).
-3. An official examiner marking scheme with explicit mark allocations in 'keyRubricPoints'.${avoidDirective}`;
+1. 'question': Authentic exam question.
+2. 'expectedAnswer': Concise model solution.
+3. 'keyRubricPoints': 2-4 point marking rubric.${avoidDirective}`;
     let generatedText = "";
     try {
       const response = await safeGenerateContent({
@@ -3232,7 +3235,7 @@ For each question, provide:
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           maxOutputTokens: 8192,
-          temperature: 0.65
+          temperature: 0.6
         }
       });
       generatedText = response.text || "";
@@ -3248,7 +3251,7 @@ For each question, provide:
         keyRubricPoints: Array.isArray(q.keyRubricPoints) ? q.keyRubricPoints : []
       };
     });
-    const parsed = safeParseJSON(generatedText, "object");
+    let parsed = safeParseJSON(generatedText, "object");
     if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
       return res.json({ questions: sanitizeQuestions(parsed.questions) });
     } else if (Array.isArray(parsed) && parsed.length > 0) {
@@ -3256,6 +3259,10 @@ For each question, provide:
     } else if (parsed && typeof parsed === "object") {
       const found = Object.values(parsed).find((v) => Array.isArray(v) && v.length > 0);
       if (found) return res.json({ questions: sanitizeQuestions(found) });
+    }
+    parsed = safeParseJSON(generatedText, "array");
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return res.json({ questions: sanitizeQuestions(parsed) });
     }
     throw new Error("Failed to generate a valid subjective questions structure.");
   } catch (error) {
@@ -4867,7 +4874,7 @@ Use this exact JSON structure:
     "question": "Which of the following best characterizes the key mechanism of [Concept]?",
     "options": ["A) Statement 1", "B) Statement 2", "C) Statement 3", "D) Statement 4"],
     "correctAnswer": "A) Statement 1",
-    "explanation": "Clear educational breakdown justifying why the correct option is true and why the distractors are incorrect."
+    "explanation": "Concise 1-2 sentence educational breakdown justifying why the correct option is true."
   }
 ]`;
     const avoidList = Array.isArray(req.body.avoidPrompts) ? req.body.avoidPrompts.filter(Boolean).slice(0, 10) : [];
@@ -4885,7 +4892,8 @@ ${avoidList.map((p, i) => `  [${i + 1}] ${p.slice(0, 100)}`).join("\n")}` : "";
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          temperature: 0.75
+          maxOutputTokens: 8192,
+          temperature: 0.6
         }
       });
       quizText = response.text || "";
@@ -4896,6 +4904,10 @@ ${avoidList.map((p, i) => `  [${i + 1}] ${p.slice(0, 100)}`).join("\n")}` : "";
     const parsed = safeParseJSON(quizText, "array");
     if (Array.isArray(parsed) && parsed.length > 0) {
       return res.json({ quiz: parsed });
+    }
+    if (parsed && typeof parsed === "object") {
+      const arr = Object.values(parsed).find((v) => Array.isArray(v) && v.length > 0);
+      if (arr) return res.json({ quiz: arr });
     }
     throw new Error("Failed to generate a valid quiz structure.");
   } catch (error) {
@@ -5276,6 +5288,9 @@ app.post("/api/fix-mistake", async (req, res) => {
 You are the Lead Master of Academic Conceptual Clarity & Mistake Correction.
 Your job is to analyze a student's academic mistake and provide a structured 3-part conceptual breakdown calibrated for a student in Grade: ${gradeLevel || "Standard"}.
 Be direct, encouraging, precise, and crystal-clear.
+
+CRITICAL MATHEMATICAL & SCIENTIFIC NOTATION (LATEX) RULE:
+Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...). Always format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $v = u + at$, $9.8\\text{ m/s}^2$. NEVER output raw carets (^) without LaTeX delimiters. For chemistry and subscripts, write $\\text{H}_2\\text{O}$, $\\text{CO}_2$, $\\text{O}_2$.
 
 STRICT JSON OUTPUT FORMAT (Return ONLY a single valid JSON object, NO markdown wrappers):
 {
@@ -5768,116 +5783,441 @@ Return strictly the JSON structure above.`;
 });
 app.post("/api/generate-trivia", async (req, res) => {
   try {
-    const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country, isBonus } = req.body;
+    const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country, isBonus, count } = req.body;
+    const requestedCount = Math.max(3, Math.min(10, Number(count) || 3));
     const studentGrade = gradeLevel || studyLevel || "11th Grade";
     const studentStream = academicStream || "STEM / Science & Engineering";
     const studentCountry = country || "Global";
     const normalizeStr = (s) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
     const excludesSet = new Set((excludeQuestions || []).map((q) => normalizeStr(q)));
+    const isQuestionSeen = (qText) => {
+      const norm = normalizeStr(qText);
+      if (!norm || norm.length < 5) return false;
+      if (excludesSet.has(norm)) return true;
+      for (const ex of excludesSet) {
+        if (ex.length > 20 && (norm.includes(ex) || ex.includes(norm))) {
+          return true;
+        }
+      }
+      return false;
+    };
     const gradeDirective = getGradePedagogicalDirective(studentGrade, studentStream, studentCountry);
     const streamLower = studentStream.toLowerCase();
     const gradeLower = studentGrade.toLowerCase();
-    const isSTEM = streamLower.includes("stem") || streamLower.includes("sci") || streamLower.includes("eng") || streamLower.includes("med") || streamLower.includes("pcm") || streamLower.includes("pcb");
+    const isMiddleSchool = gradeLower.includes("6") || gradeLower.includes("7") || gradeLower.includes("8") || gradeLower.includes("9") || gradeLower.includes("10");
     const isCommerce = streamLower.includes("commerce") || streamLower.includes("business") || streamLower.includes("econ") || streamLower.includes("account");
     const isHumanities = streamLower.includes("human") || streamLower.includes("art") || streamLower.includes("law") || streamLower.includes("pol");
-    const isMiddleSchool = gradeLower.includes("6") || gradeLower.includes("7") || gradeLower.includes("8") || gradeLower.includes("9") || gradeLower.includes("10");
+    const isSTEM = !isCommerce && !isHumanities && !isMiddleSchool;
+    const fallbackDatabase2 = {
+      stem: [
+        {
+          id: "stem_fb_1",
+          subject: "Physics",
+          topic: "Kinematics & Freefall Acceleration",
+          question: "A ball is projected vertically upward. At its maximum height, what is the magnitude and direction of its acceleration?",
+          options: ["0 m/s\xB2", "9.8 m/s\xB2 downward", "9.8 m/s\xB2 upward", "Cannot be determined without launch mass"],
+          correctIndex: 1,
+          latexEquation: "a = -g \\approx -9.8\\text{ m/s}^2 \\quad (\\text{constant downward})",
+          shortExplanation: "Velocity is momentarily zero at the apex, but the gravitational acceleration pulls downward constantly at 9.8 m/s\xB2.",
+          examTrapWarning: "Common mistake: Confusing instantaneous velocity with acceleration. Speed is zero, but gravitational force never switches off!"
+        },
+        {
+          id: "stem_fb_2",
+          subject: "Chemistry",
+          topic: "Thermodynamics & Real Gas Deviation",
+          question: "Under which specific physical conditions does a real gas exhibit its MAXIMUM deviation from ideal gas behavior?",
+          options: ["High temperature and low pressure", "Low temperature and high pressure", "High temperature and high pressure", "Low temperature and low pressure"],
+          correctIndex: 1,
+          latexEquation: "\\left(P + \\frac{an^2}{V^2}\\right)(V - nb) = nRT",
+          shortExplanation: "Low temperature slows molecules (amplifying intermolecular attractions) while high pressure reduces free volume, maximizing van der Waals deviations.",
+          examTrapWarning: "Common mistake: Inverting the relationship. Real gases behave MOST ideally at high temperature and low pressure, NOT at low temp / high pressure!"
+        },
+        {
+          id: "stem_fb_3",
+          subject: "Biology / Mathematics",
+          topic: "Cellular Respiration & ATP Yield",
+          question: "Which organelle is responsible for synthesizing ATP through aerobic cellular respiration in eukaryotic cells?",
+          options: ["Ribosome", "Mitochondria", "Chloroplast", "Endoplasmic Reticulum"],
+          correctIndex: 1,
+          latexEquation: "\\text{Glucose} + 6\\,\\text{O}_2 \\rightarrow 6\\,\\text{CO}_2 + 6\\,\\text{H}_2\\text{O} + 36\\,\\text{ATP}",
+          shortExplanation: "Mitochondria generate cellular ATP via the citric acid cycle and oxidative phosphorylation on the cristae inner membrane.",
+          examTrapWarning: "Common mistake: Confusing chloroplasts (which generate carbohydrates via photosynthesis in plants) with mitochondria (the universal powerhouses)."
+        },
+        {
+          id: "stem_fb_4",
+          subject: "Physics",
+          topic: "Projectile Trajectory Curvature",
+          question: "A projectile is launched with velocity u at angle \u03B8. At the highest point of its trajectory, what is its radius of curvature?",
+          options: ["u\xB2 / g", "(u\xB2 cos\xB2\u03B8) / g", "(u\xB2 sin\xB2\u03B8) / g", "Infinity"],
+          correctIndex: 1,
+          latexEquation: "R = \\frac{v^2}{a_\\perp} = \\frac{(u\\cos\\theta)^2}{g}",
+          shortExplanation: "At the apex, velocity is purely horizontal (u cos \u03B8) and normal acceleration is g, yielding R = (u\xB2 cos\xB2\u03B8)/g.",
+          examTrapWarning: "Common mistake: Selecting u\xB2/g by forgetting that speed at vertex is u cos \u03B8, not initial speed u!"
+        },
+        {
+          id: "stem_fb_5",
+          subject: "Chemistry",
+          topic: "Coordination Chemistry & Nitrosyl",
+          question: "In the brown ring coordination complex [Fe(H2O)5(NO)]SO4, what is the formal oxidation state of Iron (Fe)?",
+          options: ["+2", "+3", "+1", "0"],
+          correctIndex: 2,
+          latexEquation: "[\\text{Fe}^{+1}(\\text{H}_2\\text{O})_5(\\text{NO}^+)]\\text{SO}_4^{2-}",
+          shortExplanation: "Nitric oxide coordinates as the nitrosonium ion (NO\u207A), transferring an electron to iron so Fe adopts a +1 oxidation state.",
+          examTrapWarning: "Common mistake: Assuming NO is a neutral ligand and concluding Fe is +2. In the brown ring test, NO is NO\u207A!"
+        },
+        {
+          id: "stem_fb_6",
+          subject: "Biology / Mathematics",
+          topic: "Plant Physiology & C4 Fixation",
+          question: "In C4 plants, what is the primary stable 4-carbon product formed following initial atmospheric CO2 fixation in mesophyll cells?",
+          options: ["Oxaloacetate (OAA)", "3-Phosphoglycerate (3-PGA)", "Malate", "Aspartate"],
+          correctIndex: 0,
+          latexEquation: "\\text{PEP} + \\text{CO}_2 + \\text{H}_2\\text{O} \\xrightarrow{\\text{PEPcase}} \\text{Oxaloacetate (4C)}",
+          shortExplanation: "PEP carboxylase fixes CO2 to produce Oxaloacetate (4C), which is subsequently reduced to malate.",
+          examTrapWarning: "Common mistake: Selecting 3-PGA (which is the C3 pathway first product) or Malate (which is the transported form, not the first product)!"
+        },
+        {
+          id: "stem_fb_7",
+          subject: "Physics",
+          topic: "Spring Potential Energy Under Equal Force",
+          question: "Two ideal springs with spring constants k1 and k2 (k1 > k2) are stretched by applying equal forces F. Which spring stores more energy?",
+          options: ["Spring 1 (k1)", "Spring 2 (k2)", "Both store equal energy", "Depends on spring unstretched length"],
+          correctIndex: 1,
+          latexEquation: "U = \\frac{F^2}{2k} \\implies U \\propto \\frac{1}{k} \\quad (\\text{for constant } F)",
+          shortExplanation: "When force is identical, stored energy is inversely proportional to k (U = F\xB2/2k). The softer spring (k2) stores more energy.",
+          examTrapWarning: "Common mistake: Using U = 1/2 k x\xB2 and assuming larger k gives larger energy. That formula applies when extension x is identical, not force F!"
+        },
+        {
+          id: "stem_fb_8",
+          subject: "Chemistry",
+          topic: "Molecular Geometry & Dipole Moment",
+          question: "Which of the following molecules possesses polar covalent bonds but has an overall net dipole moment of exactly zero (\u03BC = 0)?",
+          options: ["SF4", "XeF4", "ClF3", "H2O"],
+          correctIndex: 1,
+          latexEquation: "\\text{XeF}_4: \\text{sp}^3\\text{d}^2 \\text{ (Square Planar Geometry)} \\implies \\vec{\\mu} = 0",
+          shortExplanation: "XeF4 has 4 bond pairs and 2 axial lone pairs in a square planar geometry, causing bond dipoles and lone pairs to cancel symmetrically.",
+          examTrapWarning: "Common mistake: Confusing XeF4 with SF4. SF4 has a see-saw geometry with non-zero dipole moment!"
+        },
+        {
+          id: "stem_fb_9",
+          subject: "Biology / Mathematics",
+          topic: "Human Physiology & Coagulation Cascade",
+          question: "During the blood coagulation cascade, which enzyme complex directly catalyzes the conversion of inactive Prothrombin into active Thrombin?",
+          options: ["Thrombokinase (Prothrombinase)", "Thrombin", "Fibrinogen", "Heparin"],
+          correctIndex: 0,
+          latexEquation: "\\text{Prothrombin} \\xrightarrow{\\text{Thrombokinase} + \\text{Ca}^{2+}} \\text{Thrombin}",
+          shortExplanation: "Thrombokinase (Factor Xa + Va + Ca\xB2\u207A) cleaves prothrombin into thrombin, which then converts fibrinogen into fibrin threads.",
+          examTrapWarning: "Common mistake: Selecting Thrombin or Fibrin. Thrombin is the product of the conversion, not the activating enzyme!"
+        }
+      ],
+      commerce: [
+        {
+          id: "comm_fb_1",
+          subject: "Accountancy",
+          topic: "Forfeiture of Shares",
+          question: "When shares issued at a premium are forfeited for non-payment of call money, which amount is debited to the Share Capital Account?",
+          options: ["Called-up nominal face value", "Total issue price including premium", "Paid-up amount only", "Current market value of the shares"],
+          correctIndex: 0,
+          latexEquation: "\\text{Share Capital Dr.} = \\text{Number of Shares} \\times \\text{Called-up Face Value}",
+          shortExplanation: "Share capital is always credited with called-up nominal value, so upon forfeiture it must be debited with called-up nominal value, excluding premium.",
+          examTrapWarning: "Common mistake: Debiting the premium along with face value into Share Capital. If premium is already collected, it can never be touched or debited here!"
+        },
+        {
+          id: "comm_fb_2",
+          subject: "Economics",
+          topic: "Price Elasticity Sign Interpretation",
+          question: "If price elasticity of demand is calculated as -1.8, how is the responsiveness of consumers technically categorized?",
+          options: ["Inelastic", "Elastic (magnitude > 1)", "Unitary elastic", "Perfectively inelastic"],
+          correctIndex: 1,
+          latexEquation: "e_d = \\left|\\frac{\\% \\Delta Q}{\\% \\Delta P}\\right| = |-1.8| = 1.8 > 1 \\implies \\text{Elastic}",
+          shortExplanation: "The negative sign reflects the law of downward-sloping demand. In elasticity analysis, magnitude |e_d| = 1.8 indicates elastic demand.",
+          examTrapWarning: "Common mistake: Treating -1.8 as mathematically less than 1 (inelastic). The negative sign is purely directional!"
+        },
+        {
+          id: "comm_fb_3",
+          subject: "Business Studies",
+          topic: "Working Capital Operating Cycle",
+          question: "Which of the following business decisions directly shortens the working capital operating cycle of a firm?",
+          options: ["Increasing inventory turnover velocity", "Extending longer credit terms to buyers", "Reducing credit period taken from suppliers", "Stockpiling larger raw material buffers"],
+          correctIndex: 0,
+          latexEquation: "\\text{Operating Cycle} = \\text{Raw Mat. Days} + \\text{WIP Days} + \\text{Debtor Days} - \\text{Creditor Days}",
+          shortExplanation: "Faster conversion of inventory into sales reduces inventory holding days, directly shortening the cash-to-cash operating cycle.",
+          examTrapWarning: "Common mistake: Thinking reducing supplier credit shortens the cycle. Paying suppliers faster actually INCREASES the cash working capital gap!"
+        },
+        {
+          id: "comm_fb_4",
+          subject: "Accountancy",
+          topic: "Cash Flow Statement Categorization",
+          question: "Under standard Accounting Standards, dividend paid by a financing enterprise is classified under which cash flow activity?",
+          options: ["Financing activity", "Operating activity", "Investing activity", "Extraordinary activity"],
+          correctIndex: 0,
+          latexEquation: "\\text{Dividend Paid} \\implies \\text{Outflow from Financing Activity}",
+          shortExplanation: "Regardless of whether a company is financial or non-financial, dividend paid is always classified as a Financing activity because it relates to capital providers.",
+          examTrapWarning: "Common mistake: Classifying dividend paid as operating for finance firms. Interest paid can be operating for finance companies, but dividend paid is ALWAYS financing!"
+        },
+        {
+          id: "comm_fb_5",
+          subject: "Economics",
+          topic: "Production Possibility Curve Curvature",
+          question: "Why is a standard Production Possibility Curve (PPC) typically concave to the origin?",
+          options: ["Increasing marginal opportunity cost", "Constant marginal opportunity cost", "Decreasing marginal returns to scale", "Perfect resource substitutability"],
+          correctIndex: 0,
+          latexEquation: "\\text{MOC} = \\frac{\\Delta \\text{Loss}}{\\Delta \\text{Gain}} \\uparrow \\implies \\text{Concave Curve}",
+          shortExplanation: "Resources are not equally efficient in the production of all goods, so transferring resources increases the opportunity cost per unit sacrificed.",
+          examTrapWarning: "Common mistake: Confusing convex indifference curves (diminishing MRS) with concave PPCs (increasing marginal opportunity cost)!"
+        },
+        {
+          id: "comm_fb_6",
+          subject: "Business Studies",
+          topic: "Capital Structure & Financial Leverage",
+          question: "Trading on equity (financial leverage) produces favorable returns for equity shareholders ONLY when:",
+          options: ["Return on Investment (ROI) exceeds Cost of Debt", "Cost of Debt exceeds Return on Investment", "Tax rate is exactly zero", "Debt-to-equity ratio is zero"],
+          correctIndex: 0,
+          latexEquation: "\\text{ROI} > K_d \\implies \\text{EPS Increases with Debt}",
+          shortExplanation: "When the company earns a higher return on borrowed funds than the interest rate paid, the surplus expands Earnings Per Share (EPS).",
+          examTrapWarning: "Common mistake: Believing adding debt always increases equity returns. If ROI falls below interest cost, financial leverage turns disastrously negative!"
+        }
+      ],
+      humanities: [
+        {
+          id: "hum_fb_1",
+          subject: "Polity & Constitution",
+          topic: "Basic Structure Doctrine",
+          question: "In which landmark verdict did the Supreme Court establish that Parliament cannot amend the 'Basic Structure' of the Constitution?",
+          options: ["Kesavananda Bharati v. State of Kerala (1973)", "Golaknath v. State of Punjab (1967)", "Minerva Mills v. Union of India (1980)", "Maneka Gandhi v. Union of India (1978)"],
+          correctIndex: 0,
+          latexEquation: "\\text{Article 368} \\neq \\text{Power to Destroy Basic Structure}",
+          shortExplanation: "The 13-judge bench in Kesavananda Bharati ruled that constitutional amending power cannot be used to damage its foundational identity.",
+          examTrapWarning: "Common mistake: Selecting Golaknath. Golaknath barred amending Fundamental Rights, but it was Kesavananda Bharati that created the Basic Structure doctrine!"
+        },
+        {
+          id: "hum_fb_2",
+          subject: "Critical Logic & Reasoning",
+          topic: "Formal Fallacies in Deduction",
+          question: "Identify the formal logical fallacy: 'If it rains, the pitch becomes wet. The pitch is wet. Therefore, it rained.'",
+          options: ["Affirming the Consequent", "Denying the Antecedent", "Ad Hominem Attack", "Post Hoc Ergo Propter Hoc"],
+          correctIndex: 0,
+          latexEquation: "(P \\implies Q) \\land Q \\centernot\\implies P",
+          shortExplanation: "The pitch could be wet due to ground sprinklers. Inferring the condition P from the result Q is the formal fallacy of Affirming the Consequent.",
+          examTrapWarning: "Common mistake: Confusing Affirming the Consequent with Denying the Antecedent. Here the speaker observed the outcome Q, not not-P!"
+        },
+        {
+          id: "hum_fb_3",
+          subject: "Geography",
+          topic: "Planetary Atmospheric Circulation",
+          question: "Between the equator and 30\xB0 North/South latitude, which major atmospheric convection circulation cell operates?",
+          options: ["Hadley Cell", "Ferrel Cell", "Polar Cell", "Walker Circulation"],
+          correctIndex: 0,
+          latexEquation: "0^\\circ \\rightarrow 30^\\circ\\text{ Lat} \\implies \\text{Hadley Thermal Cell}",
+          shortExplanation: "Warm air rises at the Intertropical Convergence Zone (ITCZ) and sinks around the 30\xB0 subtropical high-pressure belt, forming the Hadley cell.",
+          examTrapWarning: "Common mistake: Selecting Ferrel cell. The Ferrel cell operates in mid-latitudes between 30\xB0 and 60\xB0!"
+        },
+        {
+          id: "hum_fb_4",
+          subject: "Polity & Law",
+          topic: "Fundamental Rights During Emergency",
+          question: "During a National Emergency proclaimed under Article 352, which Fundamental Rights CANNOT be suspended under any circumstances?",
+          options: ["Articles 20 and 21", "Articles 19 and 20", "Articles 14 and 19", "Article 32"],
+          correctIndex: 0,
+          latexEquation: "\\text{44th Amendment (1978)} \\implies \\text{Art 20 \\& 21 Immune}",
+          shortExplanation: "The 44th Constitutional Amendment (1978) established that protection in respect of conviction (Art 20) and right to life & personal liberty (Art 21) can never be suspended.",
+          examTrapWarning: "Common mistake: Thinking Article 19 remains immune. Article 19 is automatically suspended under external emergency!"
+        },
+        {
+          id: "hum_fb_5",
+          subject: "Critical Logic",
+          topic: "Causality vs Sequence Fallacy",
+          question: "Assuming that because event B occurred immediately after event A, event A must have caused event B is which logical error?",
+          options: ["Post hoc ergo propter hoc", "Strawman fallacy", "Begging the question", "Red herring fallacy"],
+          correctIndex: 0,
+          latexEquation: "\\text{Temporal Succession} \\neq \\text{Causal Mechanism}",
+          shortExplanation: "Chronological sequence alone does not establish causation without empirical mechanism, committing the 'post hoc' error.",
+          examTrapWarning: "Common mistake: Confusing post hoc with correlation fallacies. Post hoc specifically hinges on sequential timing ('after this, therefore because of this')."
+        },
+        {
+          id: "hum_fb_6",
+          subject: "Geography & Cartography",
+          topic: "Map Scale Ratios",
+          question: "Which of the following representative fractions (RF) represents the LARGEST scale map (showing greatest localized detail)?",
+          options: ["1 : 25,000", "1 : 100,000", "1 : 250,000", "1 : 1,000,000"],
+          correctIndex: 0,
+          latexEquation: "\\frac{1}{25,000} > \\frac{1}{1,000,000} \\implies \\text{Larger Fraction = Larger Scale}",
+          shortExplanation: "A larger numerical fraction represents a larger scale, displaying features in greater real-world size and detail per centimeter.",
+          examTrapWarning: "Common mistake: Selecting 1:1,000,000 because the denominator is larger. Larger denominator means a smaller fraction and a SMALLER scale!"
+        }
+      ],
+      middleSchool: [
+        {
+          id: "mid_fb_1",
+          subject: "Physical Science",
+          topic: "Speed vs Velocity in Circular Paths",
+          question: "A bicycle travels around a circular track at a constant speedometer reading of 20 km/h. Does the bicycle have constant velocity?",
+          options: ["No, because its direction of motion is continuously changing", "Yes, because its speed is constant", "Yes, because its acceleration is zero", "No, because its speed is zero"],
+          correctIndex: 0,
+          latexEquation: "\\vec{v} = v \\cdot \\hat{u} \\implies \\frac{d\\vec{v}}{dt} \\neq 0 \\quad (\\text{centripetal acceleration})",
+          shortExplanation: "Velocity is a vector having both speed and direction. Changing direction around a circle means velocity is constantly changing.",
+          examTrapWarning: "Common mistake: Assuming 'constant speed' equals 'constant velocity'. Any change in direction changes velocity and causes acceleration!"
+        },
+        {
+          id: "mid_fb_2",
+          subject: "Chemical Science",
+          topic: "The Logarithmic pH Scale",
+          question: "Solution A has a pH of 3 and Solution B has a pH of 6. How many times more acidic (higher H\u207A concentration) is Solution A than Solution B?",
+          options: ["1,000 times", "3 times", "30 times", "2 times"],
+          correctIndex: 0,
+          latexEquation: "\\frac{[\\text{H}^+]_A}{[\\text{H}^+]_B} = 10^{(6 - 3)} = 10^3 = 1,000",
+          shortExplanation: "Each step on the pH scale represents a 10-fold change in hydrogen ion concentration. A difference of 3 pH units means 10 \xD7 10 \xD7 10 = 1,000 times.",
+          examTrapWarning: "Common mistake: Subtracting 6 - 3 = 3 and selecting '3 times'. The pH scale is logarithmic, not linear!"
+        },
+        {
+          id: "mid_fb_3",
+          subject: "Life Science & Math",
+          topic: "Plant vs Animal Cell Organelles",
+          question: "Which organelle allows plant cells to manufacture their own food through photosynthesis but is absent in animal cells?",
+          options: ["Chloroplast", "Mitochondria", "Ribosome", "Endoplasmic Reticulum"],
+          correctIndex: 0,
+          latexEquation: "6\\,\\text{CO}_2 + 6\\,\\text{H}_2\\text{O} \\xrightarrow{\\text{Chlorophyll}} \\text{Glucose} + 6\\,\\text{O}_2",
+          shortExplanation: "Chloroplasts contain green chlorophyll pigments to trap light energy for photosynthesis and are exclusive to plant/algal cells.",
+          examTrapWarning: "Common mistake: Selecting mitochondria. Both plant and animal cells possess mitochondria for cellular respiration!"
+        },
+        {
+          id: "mid_fb_4",
+          subject: "Physical Science",
+          topic: "Reflection & Plane Mirror Image Distance",
+          question: "You stand 2 meters in front of a flat plane mirror. What is the total distance between you and your virtual image?",
+          options: ["4 meters", "2 meters", "1 meter", "0 meters"],
+          correctIndex: 0,
+          latexEquation: "d_{\\text{total}} = d_{\\text{object}} + d_{\\text{image}} = 2\\text{ m} + 2\\text{ m} = 4\\text{ m}",
+          shortExplanation: "The virtual image forms 2 meters behind the mirror's reflecting surface, making the distance from you to your image 2 + 2 = 4 meters.",
+          examTrapWarning: "Common mistake: Answering 2 meters (the distance to the mirror). The question asks for the total distance between you and your image!"
+        },
+        {
+          id: "mid_fb_5",
+          subject: "Chemical Science",
+          topic: "Physical vs Chemical Changes",
+          question: "Which of the following processes represents a chemical change (forming new substances with different bonds)?",
+          options: ["Rusting of an iron nail in damp air", "Melting of ice cubes into liquid water", "Dissolving sugar crystals in tea", "Boiling water into steam"],
+          correctIndex: 0,
+          latexEquation: "4\\,\\text{Fe} + 3\\,\\text{O}_2 + x\\,\\text{H}_2\\text{O} \\rightarrow 2\\,\\text{Fe}_2\\text{O}_3 \\cdot x\\,\\text{H}_2\\text{O}",
+          shortExplanation: "Rusting creates iron oxide, a completely new chemical compound that cannot be reversed by simple physical cooling.",
+          examTrapWarning: "Common mistake: Thinking dissolving sugar is chemical. Dissolving is a physical mixture that can be reversed by water evaporation!"
+        },
+        {
+          id: "mid_fb_6",
+          subject: "Life Science & Math",
+          topic: "Negative Exponents Arithmetic",
+          question: "What is the exact numerical fraction value of 5\u207B\xB2?",
+          options: ["1 / 25", "-25", "-10", "1 / 10"],
+          correctIndex: 0,
+          latexEquation: "5^{-2} = \\frac{1}{5^2} = \\frac{1}{25}",
+          shortExplanation: "A negative exponent indicates reciprocal division, not a negative product. 5\u207B\xB2 = 1 / (5\xB2) = 1 / 25.",
+          examTrapWarning: "Common mistake: Multiplying 5 \xD7 (-2) = -10, or placing a negative sign to get -25. Negative powers flip to denominator!"
+        }
+      ]
+    };
+    const pickUnseenFallbackQuestions = (streamKey, count2) => {
+      const primaryPool = fallbackDatabase2[streamKey] || fallbackDatabase2.stem;
+      let unseen = primaryPool.filter((q) => !isQuestionSeen(q.question));
+      if (unseen.length < count2) {
+        const otherPools = Object.entries(fallbackDatabase2).filter(([key]) => key !== streamKey).flatMap(([, list]) => list);
+        const moreUnseen = otherPools.filter((q) => !isQuestionSeen(q.question));
+        unseen = [...unseen, ...moreUnseen];
+      }
+      const selected = [];
+      const poolCopy = [...unseen.length > 0 ? unseen : primaryPool];
+      for (let i = poolCopy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [poolCopy[i], poolCopy[j]] = [poolCopy[j], poolCopy[i]];
+      }
+      while (selected.length < count2 && poolCopy.length > 0) {
+        selected.push(poolCopy.pop());
+      }
+      return selected;
+    };
+    let targetStreamKey = "stem";
+    if (isCommerce) targetStreamKey = "commerce";
+    else if (isHumanities) targetStreamKey = "humanities";
+    else if (isMiddleSchool) targetStreamKey = "middleSchool";
     let subjectCurriculumGuidance = "";
     if (isSTEM) {
       subjectCurriculumGuidance = `
-STRICT 3-CARD SUBJECT MODEL FOR STEM (11th/12th / Competitive Exams like JEE/NEET/SAT/AP):
-- Card 1: Physics (Mechanics, Vectors, Gravitation, Waves, or Kinematics targeting mathematical approximation, signs, or inverse-square scaling traps).
-- Card 2: Chemistry (Physical, Inorganic, or Organic targeting periodic exceptions, hybridization traps, equilibrium Le Chatelier shifts, or reagent traps).
-- Card 3: Biology or Mathematics (For Bio: Cell bio, Biomolecules, or Physiology with confusable biochemical pathways & nomenclature like NADH vs NADPH; For Math: Limits, modulus/sign traps, or trigonometric domain/range traps).`;
+STRICT SUBJECT MODEL FOR STEM (${studentGrade} / JEE / NEET / SAT / AP):
+- Card 1: Physics (Mechanics, Optics, Thermodynamics, Modern Physics, Rotational Motion, or Kinematics targeting mathematical sign or inverse-square traps).
+- Card 2: Chemistry (Physical, Inorganic, or Organic targeting periodic exceptions, hybridization traps, equilibrium Le Chatelier shifts, or reaction reagent traps).
+- Card 3: Biology or Mathematics (For Bio: Cell bio, Biomolecules, Genetics, or Physiology with confusable biochemical pathways; For Math: Limits, calculus, vectors, or probability traps).`;
     } else if (isCommerce) {
       subjectCurriculumGuidance = `
-STRICT 3-CARD SUBJECT MODEL FOR COMMERCE:
-- Card 1: Accountancy (Debit/Credit rules, Depreciation calculation traps, Capital vs Revenue expenditure traps).
-- Card 2: Economics (Price elasticity sign traps, Opportunity cost paradoxes, GDP vs Real GDP deflator traps).
-- Card 3: Business Studies / Financial Math (Statutory compliance, working capital traps, interest formula traps).`;
+STRICT SUBJECT MODEL FOR COMMERCE (${studentGrade}):
+- Card 1: Accountancy (Debit/Credit rules, Depreciation calculation traps, Share forfeiture/capital reserve, Cash Flow operating vs financing).
+- Card 2: Economics (Price elasticity sign traps, Opportunity cost paradoxes, GDP vs Real GDP deflator traps, National income double counting).
+- Card 3: Business Studies / Financial Math (Capital structure leverage risk, working capital operating cycle, interest formula traps, Consumer Protection Act).`;
     } else if (isHumanities) {
       subjectCurriculumGuidance = `
-STRICT 3-CARD SUBJECT MODEL FOR HUMANITIES / ARTS / LAW:
-- Card 1: History / Polity (Constitutional amendment traps, landmark case traps, chronological sequence traps).
-- Card 2: Critical Logic & Reasoning (Syllogism traps, correlation vs causation fallacies, deductive validity traps).
-- Card 3: Geography / Economics (Cartographic scale traps, climate wind circulation traps, resource allocation traps).`;
+STRICT SUBJECT MODEL FOR HUMANITIES / ARTS / LAW (${studentGrade}):
+- Card 1: History / Polity (Constitutional amendment traps, landmark case traps, Fundamental Rights emergency immunity, chronological sequence traps).
+- Card 2: Critical Logic & Reasoning (Formal syllogism traps, affirming the consequent, post hoc fallacies, correlation vs causation).
+- Card 3: Geography / Economics (Cartographic scale RF traps, planetary wind Hadley/Ferrel cells, climate circulation, resource allocation).`;
     } else if (isMiddleSchool) {
       subjectCurriculumGuidance = `
-STRICT 3-CARD SUBJECT MODEL FOR FOUNDATIONAL SCIENCE & MATH:
-- Card 1: Physical Science (Speed vs velocity, light reflection/refraction sign traps, density and buoyant force traps).
-- Card 2: Chemical Science (Acids/bases pH traps, physical vs chemical change traps, reaction balancing traps).
-- Card 3: Biology & Quantitative Reasoning (Plant vs animal cell traps, exponent rules, or fraction percentage traps).`;
+STRICT SUBJECT MODEL FOR FOUNDATIONAL SCIENCE & MATH (${studentGrade}):
+- Card 1: Physical Science (Speed vs velocity, light reflection/refraction sign traps, density and buoyant force traps, plane mirror image distance).
+- Card 2: Chemical Science (Acids/bases logarithmic pH traps, physical vs chemical change traps, reaction balancing traps, atomic structure).
+- Card 3: Biology & Quantitative Reasoning (Plant vs animal cell traps, negative exponent reciprocal rules, fraction percentage traps).`;
     } else {
       subjectCurriculumGuidance = `
-STRICT 3-CARD SUBJECT MODEL:
+STRICT SUBJECT MODEL:
 - Card 1: Science / Quantitative Reasoning (Algebraic or physical scaling traps).
 - Card 2: Conceptual Logic (Counter-intuitive scientific or logical principles).
 - Card 3: Analytical Problem Solving (Common cognitive fallacies or terminology confusion traps).`;
     }
+    const randomSeed = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const currentDayOfYear = Math.floor((Date.now() - new Date((/* @__PURE__ */ new Date()).getFullYear(), 0, 0).getTime()) / 1e3 / 60 / 60 / 24);
     let attempts = 0;
     let finalBooster = null;
     while (attempts < 3) {
       attempts++;
       const promptText = `You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
-Target: High-Yield Daily Micro-Assessment (Under 90 Seconds) focusing on "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
+Target: High-Yield Micro-Assessment focusing on "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
+Curricular Subject Breakdown:
 ${subjectCurriculumGuidance}
-${topic && topic.trim().length > 0 ? `Specific Focus Theme: ${topic}` : `Theme: High-Yield Exam Traps`}
+${topic && topic.trim().length > 0 ? `Specific Focus Theme: ${topic}` : `Theme: High-Yield Exam Traps (Day of Year: ${currentDayOfYear}, Seed: ${randomSeed})`}
 ${studentCountry ? `Curricular Context: Aligned with standard national/competitive syllabus for ${studentCountry}.` : ""}
-${excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0 ? `Do NOT repeat these recently asked questions: ${JSON.stringify(excludeQuestions.slice(-30))}` : ""}
+${excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0 ? `FORBIDDEN QUESTIONS (DO NOT REPEAT OR PARAPHRASE ANY OF THESE): ${JSON.stringify(excludeQuestions.slice(-60))}` : ""}
 
-STRICT RULES:
-- Tone: Academic, sharp, motivating.
-- Generate EXACTLY 3 multiple-choice micro-questions.
+CRITICAL ZERO-REPETITION MANDATE:
+- Generate EXACTLY ${requestedCount} multiple-choice micro-questions.
+- Do NOT repeat ANY question from the forbidden list above.
+- NEVER use generic textbook clich\xE9 questions (do NOT use Earth radius contraction by 1.5%, do NOT use Chlorine vs Fluorine electron gain enthalpy, do NOT use Krebs cycle NADH vs NADPH).
+- Formulate completely novel, creative, curriculum-authentic questions calibrated specifically for ${studentGrade} (${studentStream}).
 - Keep question length STRICTLY under 25 words.
 - Options: Exactly 4 distinct, plausible options.
 - Explanations must not exceed 40 words.
-- Include 'latexEquation' with valid KaTeX math/chemical formulas (e.g. g = \\frac{GM}{R^2}).
+- Include 'latexEquation' with valid KaTeX math/chemical formulas (e.g. g = \\frac{GM}{R^2} or \\mathrm{CO_2}).
 - Always include 'examTrapWarning' explicitly pointing out the exact careless trap where 80%+ of students lose negative marks.
 
 STRICT OUTPUT JSON FORMAT:
 {
-  "dayNumber": 1,
-  "theme": "Exam Traps & Negative-Marking Avoidance",
+  "dayNumber": ${currentDayOfYear},
+  "theme": "Dynamic Exam Trap Mastery",
   "questions": [
     {
       "id": "q1",
-      "subject": "Physics",
-      "topic": "Gravitation",
-      "question": "If the radius of the Earth contracts by 1.5% while its total mass remains constant, the acceleration due to gravity on its surface (g) will:",
-      "options": ["Decrease by 1.5%", "Increase by 1.5%", "Increase by approx. 3.0%", "Decrease by approx. 3.0%"],
-      "correctIndex": 2,
-      "latexEquation": "g = \\frac{GM}{R^2} \\implies \\frac{\\Delta g}{g} \\approx -2\\left(\\frac{\\Delta R}{R}\\right)",
-      "shortExplanation": "When radius contracts (\u0394R/R = -1.5%), g increases by +3.0%. Inverse-square laws double percentage variation.",
-      "examTrapWarning": "Common mistake: Forgetting the exponent -2 in the denominator and selecting +1.5%. Inverse-square laws double the percentage change!"
-    },
-    {
-      "id": "q2",
-      "subject": "Chemistry",
-      "topic": "Periodic Properties",
-      "question": "Which element exhibits the most negative (most exothermic) electron gain enthalpy (\u0394egH)?",
-      "options": ["Fluorine (F)", "Chlorine (Cl)", "Bromine (Br)", "Oxygen (O)"],
+      "subject": "<Subject 1 appropriate to student stream>",
+      "topic": "<Specific Trap Topic 1>",
+      "question": "<Novel exam trap question strictly under 25 words>",
+      "options": ["<Distractor A>", "<Correct Answer>", "<Distractor C>", "<Distractor D>"],
       "correctIndex": 1,
-      "latexEquation": "|\\Delta_{\\text{eg}}H_{\\text{Cl}}| > |\\Delta_{\\text{eg}}H_{\\text{F}}|",
-      "shortExplanation": "Chlorine's larger 3p orbital minimizes electron repulsion compared to Fluorine's compact 2p subshell.",
-      "examTrapWarning": "Common mistake: Choosing Fluorine due to highest electronegativity. Fluorine's compact 2p shell repels incoming electrons, giving Chlorine the highest value!"
-    },
-    {
-      "id": "q3",
-      "subject": "Biology",
-      "topic": "Cellular Respiration",
-      "question": "During aerobic cellular respiration in eukaryotic cells, which electron-carrying coenzyme is produced during the Krebs cycle to shuttle electrons to Complex I?",
-      "options": ["NADH", "NADPH", "FADH2", "Cytochrome c"],
-      "correctIndex": 0,
-      "latexEquation": "\\text{Krebs Cycle} \\rightarrow 3\\,\\text{NADH} + 1\\,\\text{FADH}_2 + 1\\,\\text{GTP}",
-      "shortExplanation": "NADH is synthesized in catabolic pathways (Krebs cycle). NADPH operates strictly in anabolic biosynthetic pathways.",
-      "examTrapWarning": "Common mistake: Confusing NADH with NADPH ('P' for Photosynthesis/Phosphate in anabolic pathways). Examiners deliberately put NADPH to penalize speed-readers!"
+      "latexEquation": "<Proper KaTeX formula>",
+      "shortExplanation": "<Precise conceptual rationale under 40 words>",
+      "examTrapWarning": "<Careless trap warning explicitly showing why 80%+ students pick the wrong option>"
     }
   ]
 }`;
       const systemInstruction = `${gradeDirective}
 
 You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
-Generate exactly 3 multiple-choice micro-questions targeting "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
-Return strictly a valid JSON object matching the requested schema.`;
+Generate exactly ${requestedCount} multiple-choice micro-questions targeting "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
+Return strictly a valid JSON object matching the requested schema with exactly ${requestedCount} items in the "questions" array.`;
       const response = await safeGenerateContent({
         gradeLevel: studentGrade,
         stream: studentStream,
@@ -5891,154 +6231,89 @@ Return strictly a valid JSON object matching the requested schema.`;
       });
       const triviaText = response.text || "";
       const parsed = safeParseJSON(triviaText, "object");
-      if (parsed && Array.isArray(parsed.questions) && parsed.questions.length >= 3) {
-        const validQuestions = parsed.questions.filter(
-          (q) => q && q.question && Array.isArray(q.options) && q.options.length >= 3 && typeof q.correctIndex === "number"
-        );
-        if (validQuestions.length >= 3) {
+      if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+        const validQuestions = [];
+        const seenInCurrentRun = /* @__PURE__ */ new Set();
+        for (const q of parsed.questions) {
+          if (q && q.question && typeof q.question === "string" && Array.isArray(q.options) && q.options.length === 4 && typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.correctIndex < 4) {
+            const norm = normalizeStr(q.question);
+            if (!isQuestionSeen(q.question) && !seenInCurrentRun.has(norm)) {
+              seenInCurrentRun.add(norm);
+              validQuestions.push(q);
+            }
+          }
+        }
+        if (validQuestions.length >= requestedCount) {
           finalBooster = {
-            dayNumber: parsed.dayNumber || 1,
+            dayNumber: parsed.dayNumber || currentDayOfYear,
             theme: parsed.theme || "Daily Exam Trap Booster",
-            questions: validQuestions.slice(0, 3)
+            questions: validQuestions.slice(0, requestedCount)
+          };
+          break;
+        } else if (validQuestions.length > 0 && attempts === 3) {
+          const needed = requestedCount - validQuestions.length;
+          const supplement = pickUnseenFallbackQuestions(targetStreamKey, needed);
+          finalBooster = {
+            dayNumber: parsed.dayNumber || currentDayOfYear,
+            theme: parsed.theme || "Daily Exam Trap Booster",
+            questions: [...validQuestions, ...supplement].slice(0, requestedCount)
           };
           break;
         }
       }
     }
-    if (finalBooster) {
+    if (finalBooster && finalBooster.questions.length >= requestedCount) {
       return res.json({
         booster: finalBooster,
         questions: finalBooster.questions,
         trivia: finalBooster.questions[0]
       });
     }
-    throw new Error("Failed to generate a valid 3-question trivia booster after multiple attempts");
+    throw new Error("Failed to generate required count of non-repeating trivia questions after multiple attempts");
   } catch (error) {
-    console.error("Trivia generation error:", error);
-    const fallbackSets = [
-      {
-        dayNumber: 1,
-        theme: "Day 1 Trap Master: Mechanics, Trends & Pathways",
-        questions: [
-          {
-            id: "q1",
-            subject: "Physics",
-            topic: "Gravitation & Inverse Square",
-            question: "If the radius of the Earth contracts by 1.5% while its total mass remains constant, the acceleration due to gravity on its surface (g) will:",
-            options: ["Decrease by 1.5%", "Increase by 1.5%", "Increase by approx. 3.0%", "Decrease by approx. 3.0%"],
-            correctIndex: 2,
-            latexEquation: "g = \\frac{GM}{R^2} = GM \\cdot R^{-2} \\implies \\frac{\\Delta g}{g} \\approx -2\\left(\\frac{\\Delta R}{R}\\right)",
-            shortExplanation: "When radius contracts (\u0394R/R = -1.5%), g increases by +3.0%. Inverse-square laws double the percentage variation.",
-            examTrapWarning: "Common mistake: Forgetting the exponent -2 in the denominator and selecting +1.5%. Inverse-square laws double percentage changes!"
-          },
-          {
-            id: "q2",
-            subject: "Chemistry",
-            topic: "Periodic Trends & Electron Gain",
-            question: "Which element exhibits the most negative (most exothermic) electron gain enthalpy (\u0394egH)?",
-            options: ["Fluorine (F)", "Chlorine (Cl)", "Bromine (Br)", "Oxygen (O)"],
-            correctIndex: 1,
-            latexEquation: "|\\Delta_{\\text{eg}}H_{\\text{Cl}}| > |\\Delta_{\\text{eg}}H_{\\text{F}}|",
-            shortExplanation: "Chlorine's larger 3p orbital minimizes inter-electronic repulsion compared to Fluorine's compact 2p subshell.",
-            examTrapWarning: "Common mistake: Choosing Fluorine due to highest electronegativity. Fluorine's compact 2p subshell causes strong electron-electron repulsion!"
-          },
-          {
-            id: "q3",
-            subject: "Biology",
-            topic: "Respiration & Coenzymes",
-            question: "During aerobic cellular respiration in eukaryotic cells, which electron-carrying coenzyme is produced during the Krebs cycle to shuttle electrons to Complex I?",
-            options: ["NADH", "NADPH", "FADH2", "Cytochrome c"],
-            correctIndex: 0,
-            latexEquation: "\\text{Krebs Cycle} \\rightarrow 3\\,\\text{NADH} + 1\\,\\text{FADH}_2 + 1\\,\\text{GTP}",
-            shortExplanation: "NADH is synthesized in catabolic pathways (Krebs cycle). NADPH operates strictly in anabolic biosynthetic pathways.",
-            examTrapWarning: "Common mistake: Confusing NADH with NADPH ('P' for Photosynthesis / Phosphorylation in anabolic pathways). Deliberately placed to catch speed-readers!"
-          }
-        ]
-      },
-      {
-        dayNumber: 2,
-        theme: "Day 2 Trap Master: Curvature, Oxidation & Botany",
-        questions: [
-          {
-            id: "q1",
-            subject: "Physics",
-            topic: "Projectile Motion Curvature",
-            question: "A projectile is launched with velocity u at angle \u03B8. At the highest point of its trajectory, what is its radius of curvature?",
-            options: ["u\xB2 / g", "(u\xB2 cos\xB2\u03B8) / g", "(u\xB2 sin\xB2\u03B8) / g", "Infinity"],
-            correctIndex: 1,
-            latexEquation: "R = \\frac{v^2}{a_\\perp} = \\frac{(u\\cos\\theta)^2}{g}",
-            shortExplanation: "At the peak, velocity is purely horizontal (u cos \u03B8) and normal acceleration is g, giving R = (u\xB2 cos\xB2\u03B8)/g.",
-            examTrapWarning: "Common mistake: Selecting u\xB2/g by forgetting that speed at the vertex is u cos \u03B8, not initial speed u!"
-          },
-          {
-            id: "q2",
-            subject: "Chemistry",
-            topic: "Coordination Chemistry & Nitrosyl",
-            question: "In the brown ring complex [Fe(H2O)5(NO)]SO4, what is the formal oxidation state of Iron (Fe)?",
-            options: ["+2", "+3", "+1", "0"],
-            correctIndex: 2,
-            latexEquation: "[\\text{Fe}^{+1}(\\text{H}_2\\text{O})_5(\\text{NO}^+)]\\text{SO}_4^{2-}",
-            shortExplanation: "Nitric oxide coordinates as nitrosonium ion (NO\u207A), transferring an electron to iron so Fe has a +1 oxidation state.",
-            examTrapWarning: "Common mistake: Assuming NO is a neutral ligand and concluding Fe is +2. In the brown ring test, NO is NO\u207A!"
-          },
-          {
-            id: "q3",
-            subject: "Biology",
-            topic: "Plant Physiology & C4 Pathway",
-            question: "In C4 plants, what is the primary stable 4-carbon product formed following initial atmospheric CO2 fixation in mesophyll cells?",
-            options: ["Oxaloacetate (OAA)", "3-Phosphoglycerate (3-PGA)", "Malate", "Aspartate"],
-            correctIndex: 0,
-            latexEquation: "\\text{PEP} + \\text{CO}_2 + \\text{H}_2\\text{O} \\xrightarrow{\\text{PEPcase}} \\text{Oxaloacetate (4C)}",
-            shortExplanation: "PEP carboxylase fixes CO2 to produce Oxaloacetate (4C), which is subsequently reduced to malate.",
-            examTrapWarning: "Common mistake: Selecting 3-PGA (which is the C3 pathway first product) or Malate (which is the transported form, not the first direct product)!"
-          }
-        ]
-      },
-      {
-        dayNumber: 3,
-        theme: "Day 3 Trap Master: Energy, Geometry & Clotting",
-        questions: [
-          {
-            id: "q1",
-            subject: "Physics",
-            topic: "Spring Potential Energy Ratio",
-            question: "Two ideal springs with spring constants k1 and k2 (k1 > k2) are stretched by applying equal forces F. Which spring stores more potential energy?",
-            options: ["Spring 1 (k1)", "Spring 2 (k2)", "Both store equal energy", "Depends on spring length"],
-            correctIndex: 1,
-            latexEquation: "U = \\frac{F^2}{2k} \\implies U \\propto \\frac{1}{k} \\quad (\\text{for constant } F)",
-            shortExplanation: "When force is constant, stored energy is inversely proportional to k (U = F\xB2/2k). The softer spring (k2) stores more energy.",
-            examTrapWarning: "Common mistake: Using U = 1/2 k x\xB2 and assuming larger k gives larger energy. That formula applies when extension x is identical, not force F!"
-          },
-          {
-            id: "q2",
-            subject: "Chemistry",
-            topic: "Molecular Geometry & Dipole Moment",
-            question: "Which of the following molecules possesses polar covalent bonds but has an overall dipole moment of exactly zero (\u03BC = 0)?",
-            options: ["SF4", "XeF4", "ClF3", "H2O"],
-            correctIndex: 1,
-            latexEquation: "\\text{XeF}_4: \\text{sp}^3\\text{d}^2 \\text{ (Square Planar Geometry)} \\implies \\vec{\\mu} = 0",
-            shortExplanation: "XeF4 has 4 bond pairs and 2 axial lone pairs in a square planar geometry, causing bond dipoles and lone pairs to cancel symmetrically.",
-            examTrapWarning: "Common mistake: Confusing XeF4 with SF4. SF4 has a see-saw geometry with non-zero dipole moment!"
-          },
-          {
-            id: "q3",
-            subject: "Biology",
-            topic: "Human Physiology & Coagulation Cascade",
-            question: "During blood coagulation cascade, which enzyme complex directly catalyzes the conversion of inactive Prothrombin into active Thrombin?",
-            options: ["Thrombokinase (Prothrombinase)", "Thrombin", "Fibrinogen", "Heparin"],
-            correctIndex: 0,
-            latexEquation: "\\text{Prothrombin} \\xrightarrow{\\text{Thrombokinase} + \\text{Ca}^{2+}} \\text{Thrombin}",
-            shortExplanation: "Thrombokinase (Factor Xa + Va + Ca\xB2\u207A) cleaves prothrombin into thrombin, which then converts fibrinogen into fibrin threads.",
-            examTrapWarning: "Common mistake: Selecting Thrombin or Fibrin. Thrombin is the product of the conversion, not the activating enzyme!"
-          }
-        ]
+    console.error("Trivia generation error (falling back to unseen stream pool):", error);
+    const streamLower = (req.body.academicStream || "").toLowerCase();
+    const gradeLower = (req.body.gradeLevel || req.body.studyLevel || "").toLowerCase();
+    const isMiddleSchool = gradeLower.includes("6") || gradeLower.includes("7") || gradeLower.includes("8") || gradeLower.includes("9") || gradeLower.includes("10");
+    const isCommerce = streamLower.includes("commerce") || streamLower.includes("business") || streamLower.includes("econ") || streamLower.includes("account");
+    const isHumanities = streamLower.includes("human") || streamLower.includes("art") || streamLower.includes("law") || streamLower.includes("pol");
+    let targetStreamKey = "stem";
+    if (isCommerce) targetStreamKey = "commerce";
+    else if (isHumanities) targetStreamKey = "humanities";
+    else if (isMiddleSchool) targetStreamKey = "middleSchool";
+    const requestedCount = Math.max(3, Math.min(10, Number(req.body.count) || 3));
+    const normalizeStr = (s) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    const excludesSet = new Set((req.body.excludeQuestions || []).map((q) => normalizeStr(q)));
+    const isQuestionSeen = (qText) => {
+      const norm = normalizeStr(qText);
+      if (!norm || norm.length < 5) return false;
+      if (excludesSet.has(norm)) return true;
+      for (const ex of excludesSet) {
+        if (ex.length > 20 && (norm.includes(ex) || ex.includes(norm))) {
+          return true;
+        }
       }
-    ];
-    const fallback = fallbackSets[Math.floor(Math.random() * fallbackSets.length)];
+      return false;
+    };
+    const primaryPool = (fallbackDatabase[targetStreamKey] || fallbackDatabase.stem).filter((q) => !isQuestionSeen(q.question));
+    const fallbackQuestions = [...primaryPool];
+    if (fallbackQuestions.length < requestedCount) {
+      const others = Object.entries(fallbackDatabase).filter(([k]) => k !== targetStreamKey).flatMap(([, v]) => v).filter((q) => !isQuestionSeen(q.question));
+      fallbackQuestions.push(...others);
+    }
+    for (let i = fallbackQuestions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [fallbackQuestions[i], fallbackQuestions[j]] = [fallbackQuestions[j], fallbackQuestions[i]];
+    }
+    const finalFbQuestions = fallbackQuestions.slice(0, requestedCount);
     res.json({
-      booster: fallback,
-      questions: fallback.questions,
-      trivia: fallback.questions[0],
+      booster: {
+        dayNumber: 1,
+        theme: "Exam Trap Avoidance Booster",
+        questions: finalFbQuestions
+      },
+      questions: finalFbQuestions,
+      trivia: finalFbQuestions[0],
       isFallback: true
     });
   }

@@ -4,7 +4,7 @@ import confetti from 'canvas-confetti';
 import { 
   ArrowLeft, Brain, Trash2, Sparkles, Loader2, BookOpen, 
   CheckCircle2, XCircle, RefreshCw, AlertCircle, Bookmark, HelpCircle,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Calculator, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy } from 'firebase/firestore';
@@ -12,6 +12,7 @@ import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { getUserProfileData } from '../utils/profile';
+import GlobalMarkdown, { formatQuizMath, healUnitSuperscripts } from './GlobalMarkdown';
 
 interface MistakeVaultProps {
   onBack: () => void;
@@ -37,6 +38,131 @@ interface PracticeQuestion {
   options: string[];
   correctIndex: number;
   explanation: string;
+}
+
+interface ParsedVaultConcept {
+  correctText: string;
+  trapWarning: string;
+  formula: string;
+  explanation: string;
+  isStructured: boolean;
+}
+
+function parseVaultConcept(raw: string): ParsedVaultConcept {
+  if (!raw) return { correctText: '', trapWarning: '', formula: '', explanation: '', isStructured: false };
+
+  const result: ParsedVaultConcept = {
+    correctText: '',
+    trapWarning: '',
+    formula: '',
+    explanation: '',
+    isStructured: false
+  };
+
+  const text = raw.trim();
+
+  // 1. Compound Trivia format with pipe delimiters:
+  // E.g. "Correct: 9.8 m/s^2 downward. Trap Warning: Common mistake: Assuming... | Formula/Concept: v = u + at, \quad a = -g \approx -9.8 \text{ m/s}^2 | Velocity is zero..."
+  if (text.includes('|') || text.includes('Formula/Concept:') || text.includes('Trap Warning:')) {
+    const pipeParts = text.split('|').map(p => p.trim()).filter(Boolean);
+
+    for (const part of pipeParts) {
+      if (/^Formula(?:\/Concept)?:\s*/i.test(part)) {
+        result.formula = part.replace(/^Formula(?:\/Concept)?:\s*/i, '').trim();
+      } else if (/^Trap Warning:\s*/i.test(part)) {
+        result.trapWarning = part.replace(/^Trap Warning:\s*/i, '').trim();
+      } else if (/^Correct:\s*/i.test(part)) {
+        // May contain "Trap Warning:" inside this same part if not pipe-separated
+        const subTrapMatch = part.match(/^(Correct:\s*[^.]+?\.)\s*Trap Warning:\s*(.+)$/i);
+        if (subTrapMatch) {
+          result.correctText = subTrapMatch[1].trim();
+          result.trapWarning = subTrapMatch[2].trim();
+        } else {
+          result.correctText = part.trim();
+        }
+      } else if (!result.explanation) {
+        result.explanation = part.trim();
+      } else {
+        result.explanation += ' ' + part.trim();
+      }
+    }
+
+    if (!result.trapWarning && result.correctText.includes('Trap Warning:')) {
+      const idx = result.correctText.indexOf('Trap Warning:');
+      result.trapWarning = result.correctText.slice(idx + 'Trap Warning:'.length).trim();
+      result.correctText = result.correctText.slice(0, idx).trim();
+    }
+
+    if (result.formula || result.trapWarning || result.correctText) {
+      result.isStructured = true;
+    }
+  }
+
+  // 2. Legacy "🚨 Watch Out! (Common Trap):" format
+  if (!result.isStructured && text.includes('🚨 Watch Out!')) {
+    const parts = text.split(/🚨 Watch Out! \(Common Trap\):?/);
+    result.isStructured = true;
+    result.correctText = parts[0]?.trim() || '';
+    result.trapWarning = parts[1]?.trim() || '';
+  }
+
+  return result;
+}
+
+function VaultConceptView({ concept }: { concept: string }) {
+  const parsed = parseVaultConcept(concept);
+
+  if (!parsed.isStructured) {
+    return (
+      <div className="text-xs font-semibold text-zinc-800 leading-relaxed">
+        <GlobalMarkdown>{concept}</GlobalMarkdown>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {/* 1. Official Correct Answer */}
+      {parsed.correctText && (
+        <div className="text-xs font-bold text-zinc-900 leading-relaxed">
+          <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{parsed.correctText}</GlobalMarkdown>
+        </div>
+      )}
+
+      {/* 2. Exam Trap Warning Callout */}
+      {parsed.trapWarning && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5 text-xs text-amber-950 font-bold">
+          <div className="flex items-center gap-1 text-[10px] text-amber-800 uppercase tracking-wider font-black mb-0.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>⚠️ Exam Trap Warning:</span>
+          </div>
+          <GlobalMarkdown className="text-xs font-medium text-amber-900 leading-relaxed [&_p]:inline [&_p]:m-0">
+            {parsed.trapWarning}
+          </GlobalMarkdown>
+        </div>
+      )}
+
+      {/* 3. Dedicated KaTeX Formula / Concept Block */}
+      {parsed.formula && (
+        <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3 text-center text-xs font-semibold text-zinc-900 overflow-x-auto shadow-2xs">
+          <div className="text-[9px] font-black uppercase tracking-wider text-purple-700 flex items-center justify-center gap-1 mb-1">
+            <Calculator className="w-3 h-3 text-purple-600 shrink-0" />
+            <span>Key Formula & Concept</span>
+          </div>
+          <GlobalMarkdown className="text-xs font-mono">
+            {parsed.formula.startsWith('$') ? parsed.formula : `$$${parsed.formula}$$`}
+          </GlobalMarkdown>
+        </div>
+      )}
+
+      {/* 4. Core Conceptual Takeaway */}
+      {parsed.explanation && (
+        <div className="text-xs text-zinc-700 font-medium leading-relaxed">
+          <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0">{parsed.explanation}</GlobalMarkdown>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function MistakeVault({ onBack }: MistakeVaultProps) {
@@ -401,9 +527,11 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                             }
                           </span>
                         </div>
-                        <h4 className="text-sm font-bold text-zinc-900 leading-snug">
-                          {item.question}
-                        </h4>
+                        <div className="text-sm font-bold text-zinc-900 leading-snug">
+                          <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-sm font-bold text-zinc-900 leading-snug">
+                            {item.question}
+                          </GlobalMarkdown>
+                        </div>
                       </div>
                     </div>
 
@@ -411,39 +539,20 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                     <div className="px-5 py-4 bg-white space-y-3 border-b border-zinc-100">
                       <div className="flex flex-col gap-2 items-start">
                         <span className="text-[9px] font-extrabold uppercase tracking-widest text-red-500 shrink-0">Your Input:</span>
-                        <div className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold shadow-sm ${
                           item.wrongInput.toLowerCase().includes("misconception") || item.wrongInput.toLowerCase().includes("trap")
                             ? "bg-red-50 text-red-800 border border-red-100/50" 
                             : "bg-red-50 text-red-700 border border-red-100"
                         }`}>
-                          <XCircle className="w-3 h-3 shrink-0" />
-                          <span>{item.wrongInput}</span>
+                          <XCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span className="break-words">{healUnitSuperscripts(item.wrongInput)}</span>
                         </div>
                       </div>
 
                       {!hasFix && (
-                        <div className="space-y-1">
-                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600 block">Correct Answer:</span>
-                          <div className="text-xs font-semibold text-zinc-800 leading-relaxed">
-                            {item.correctConcept.includes("🚨 Watch Out!") ? (
-                              (() => {
-                                const parts = item.correctConcept.split(/🚨 Watch Out! \(Common Trap\):?/);
-                                const explanation = parts[1]?.trim();
-                                if (!explanation) return null;
-                                return (
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-1 text-red-600 font-black text-[9px] uppercase tracking-wider">
-                                      <AlertCircle className="w-3 h-3" />
-                                      <span>🚨 Watch Out! (Common Trap):</span>
-                                    </div>
-                                    <p className="text-zinc-700">{explanation}</p>
-                                  </div>
-                                );
-                              })()
-                            ) : (
-                              item.correctConcept
-                            )}
-                          </div>
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600 block">Correct Principle:</span>
+                          <VaultConceptView concept={item.correctConcept} />
                         </div>
                       )}
                     </div>
@@ -459,23 +568,29 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                         >
                           <div className="space-y-1">
                             <span className="text-[9px] font-extrabold uppercase tracking-widest text-red-500 block">Why it happened:</span>
-                            <p className="text-xs font-semibold text-zinc-800 leading-relaxed">
-                              {item.aiFix?.why_it_happened}
-                            </p>
+                            <div className="text-xs font-semibold text-zinc-800 leading-relaxed">
+                              <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-semibold text-zinc-800">
+                                {item.aiFix?.why_it_happened || ''}
+                              </GlobalMarkdown>
+                            </div>
                           </div>
 
                           <div className="space-y-1">
                             <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600 block">The Correct Fix:</span>
-                            <p className="text-xs font-semibold text-zinc-800 leading-relaxed">
-                              {item.aiFix?.the_fix}
-                            </p>
+                            <div className="text-xs font-semibold text-zinc-800 leading-relaxed">
+                              <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-semibold text-zinc-800">
+                                {item.aiFix?.the_fix || ''}
+                              </GlobalMarkdown>
+                            </div>
                           </div>
 
                           <div className="space-y-1">
                             <span className="text-[9px] font-extrabold uppercase tracking-widest text-blue-600 block">Pro Memory Trick:</span>
-                            <p className="text-xs font-semibold text-zinc-800 leading-relaxed">
-                              {item.aiFix?.pro_memory_trick}
-                            </p>
+                            <div className="text-xs font-semibold text-zinc-800 leading-relaxed">
+                              <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-semibold text-zinc-800">
+                                {item.aiFix?.pro_memory_trick || ''}
+                              </GlobalMarkdown>
+                            </div>
                           </div>
                         </motion.div>
                       )}
@@ -522,9 +637,11 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                           ) : !practiceComplete ? (
                             <div className="space-y-4">
                               {/* Question Text */}
-                              <p className="text-xs font-bold text-zinc-950 leading-relaxed">
-                                {practiceQuestions[currentQuestionIdx]?.question || 'Practice Question'}
-                              </p>
+                              <div className="text-xs font-bold text-zinc-950 leading-relaxed">
+                                <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-bold text-zinc-950">
+                                  {formatQuizMath(practiceQuestions[currentQuestionIdx]?.question || 'Practice Question')}
+                                </GlobalMarkdown>
+                              </div>
 
                               {/* Options Grid */}
                               <div className="grid grid-cols-1 gap-2.5">
@@ -558,7 +675,11 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                                       <span className="w-5 h-5 rounded-full border border-current flex items-center justify-center shrink-0 text-[10px] font-black">
                                         {String.fromCharCode(65 + oIdx)}
                                       </span>
-                                      <span className="flex-1 pt-0.5">{option}</span>
+                                      <span className="flex-1 pt-0.5">
+                                        <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-bold">
+                                          {formatQuizMath(option)}
+                                        </GlobalMarkdown>
+                                      </span>
                                       {isAnswerSubmitted && isCorrect && (
                                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                                       )}
@@ -581,9 +702,11 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                                     <Sparkles className="w-3.5 h-3.5" />
                                     <span>AI Tutor Explanation</span>
                                   </span>
-                                  <p className="text-[11px] font-semibold text-zinc-700 leading-relaxed">
-                                    {practiceQuestions[currentQuestionIdx].explanation}
-                                  </p>
+                                  <div className="text-[11px] font-semibold text-zinc-700 leading-relaxed">
+                                    <GlobalMarkdown className="text-[11px] font-semibold text-zinc-700 leading-relaxed [&_p]:inline [&_p]:m-0">
+                                      {formatQuizMath(practiceQuestions[currentQuestionIdx].explanation)}
+                                    </GlobalMarkdown>
+                                  </div>
                                 </motion.div>
                               )}
 

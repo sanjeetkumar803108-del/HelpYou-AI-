@@ -16,6 +16,13 @@ import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
 import { sanitizePdfText } from '../utils/pdfSanitizer';
+import {
+  isTableLine,
+  isTableSeparator,
+  renderPdfTable,
+  renderPdfDiagramBlock,
+  formatMathAndSuperscripts
+} from '../utils/pdfTableRenderer';
 import SafePdfViewer from './SafePdfViewer';
 import AdvancedLoader from './AdvancedLoader';
 import GlobalMarkdown from './GlobalMarkdown';
@@ -799,7 +806,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     // List Questions
     for (let i = 0; i < qs.length; i++) {
       const qItem = qs[i];
-      const qText = sanitizePdfText(normalizeQuestionBreaks(getQuestionText(qItem)));
+      const qText = formatMathAndSuperscripts(sanitizePdfText(normalizeQuestionBreaks(getQuestionText(qItem))));
       const questionText = `${i + 1}. ${qText}`;
       
       // Wrap question text
@@ -877,7 +884,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       const rubricPoints = qObj?.keyRubricPoints && Array.isArray(qObj.keyRubricPoints) ? qObj.keyRubricPoints : [];
 
       // -- Question label
-      const qLabelText = sanitizePdfText(`Q${i + 1}. ${normalizeQuestionBreaks(getQuestionText(qItem))}`);
+      const qLabelText = formatMathAndSuperscripts(sanitizePdfText(`Q${i + 1}. ${normalizeQuestionBreaks(getQuestionText(qItem))}`));
       const wrappedQLabel: string[] = doc.splitTextToSize(qLabelText, contentWidth - 5);
 
       if (currentY + wrappedQLabel.length * 5.5 + 25 > pageHeight - 20) {
@@ -912,17 +919,63 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         doc.text('Official Model Solution & Step-by-Step Answer:', margin + 2, currentY);
         currentY += 5.5;
 
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(40, 40, 40);
-
-        const paragraphs = rawExpected.split('\n');
-        for (const para of paragraphs) {
-          const trimmedPara = sanitizePdfText(para.trim());
-          if (!trimmedPara) {
+        const rawParagraphs = rawExpected.split('\n');
+        for (let p = 0; p < rawParagraphs.length; p++) {
+          const rawPara = rawParagraphs[p].trim();
+          if (!rawPara) {
             currentY += 2.5;
             continue;
           }
+
+          // Check for code / diagram block
+          if (rawPara.startsWith('```')) {
+            const diagramLines: string[] = [];
+            p++;
+            while (p < rawParagraphs.length && !rawParagraphs[p].trim().startsWith('```')) {
+              diagramLines.push(rawParagraphs[p]);
+              p++;
+            }
+            currentY = renderPdfDiagramBlock(doc, diagramLines, currentY, {
+              margin: margin + 4,
+              contentWidth: contentWidth - 8,
+              pageHeight,
+              accentColor: [16, 110, 60],
+              onPageBreak: () => {
+                doc.addPage();
+                pageCount++;
+                addFooter(pageCount);
+              }
+            });
+            continue;
+          }
+
+          // Check for table
+          if (isTableLine(rawPara)) {
+            const tableLines: string[] = [rawPara];
+            while (p + 1 < rawParagraphs.length && (isTableLine(rawParagraphs[p + 1]) || isTableSeparator(rawParagraphs[p + 1]))) {
+              p++;
+              tableLines.push(rawParagraphs[p]);
+            }
+            currentY = renderPdfTable(doc, tableLines, currentY, {
+              margin: margin + 4,
+              contentWidth: contentWidth - 8,
+              pageHeight,
+              headerBg: [16, 110, 60], // Emerald Green for solutions
+              onPageBreak: () => {
+                doc.addPage();
+                pageCount++;
+                addFooter(pageCount);
+              }
+            });
+            continue;
+          }
+
+          let trimmedPara = sanitizePdfText(rawPara);
+          trimmedPara = formatMathAndSuperscripts(trimmedPara);
+          doc.setFont('Helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(40, 40, 40);
+
           const wrappedPara: string[] = doc.splitTextToSize(trimmedPara, contentWidth - 8);
           for (const line of wrappedPara) {
             if (currentY > pageHeight - 20) {
@@ -942,7 +995,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       if (rubricPoints.length > 0) {
         rubricLines.push('Examiner Marking Scheme & Score Breakdown:');
         rubricPoints.forEach(pt => {
-          rubricLines.push(`• ${sanitizePdfText(pt.trim())}`);
+          rubricLines.push(`• ${formatMathAndSuperscripts(sanitizePdfText(pt.trim()))}`);
         });
       } else if (!rawExpected) {
         rubricLines.push('• Evaluation based on conceptual clarity, accurate principles, and complete reasoning.');

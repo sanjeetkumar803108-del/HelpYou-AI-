@@ -30,6 +30,14 @@ const CONTENT_TYPES = [
   { id: 'Blog', label: 'Blog', icon: Edit3 },
 ];
 
+import {
+  isTableLine,
+  isTableSeparator,
+  renderPdfTable,
+  renderPdfDiagramBlock,
+  formatMathAndSuperscripts
+} from '../utils/pdfTableRenderer';
+
 export function generateContentPDFBlob(
   type: string,
   topicTitle: string,
@@ -68,7 +76,9 @@ export function generateContentPDFBlob(
   currentY += 9;
 
   // Document Title (sanitized from emojis)
-  const titleText = sanitizePdfText(topicTitle && topicTitle.trim() ? topicTitle.trim() : `${type} Document`);
+  const titleText = formatMathAndSuperscripts(
+    sanitizePdfText(topicTitle && topicTitle.trim() ? topicTitle.trim() : `${type} Document`)
+  );
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(24, 24, 27);
@@ -110,9 +120,45 @@ export function generateContentPDFBlob(
     const trimmed = block.trim();
     if (!trimmed) continue;
 
-    // Check for Markdown Headings
+    // 1. Check for Code Block or Visual Diagram
+    if (trimmed.startsWith('```')) {
+      const diagramLines = trimmed.split('\n');
+      currentY = renderPdfDiagramBlock(doc, diagramLines, currentY, {
+        margin,
+        contentWidth,
+        pageHeight,
+        accentColor: [8, 145, 178], // Cyan
+        onPageBreak: () => {
+          doc.addPage();
+          pageCount++;
+          addFooter(pageCount);
+        }
+      });
+      continue;
+    }
+
+    // 2. Check for Markdown Table
+    const blockLines = trimmed.split('\n');
+    const tableLines = blockLines.filter(l => isTableLine(l) || isTableSeparator(l));
+    if (tableLines.length >= 2 && blockLines.some(l => isTableSeparator(l))) {
+      currentY = renderPdfTable(doc, tableLines, currentY, {
+        margin,
+        contentWidth,
+        pageHeight,
+        headerBg: [8, 145, 178], // Cyan Accent
+        onPageBreak: () => {
+          doc.addPage();
+          pageCount++;
+          addFooter(pageCount);
+        }
+      });
+      continue;
+    }
+
+    // 3. Check for Markdown Headings
     if (trimmed.startsWith('#')) {
-      const headingText = sanitizePdfText(trimmed.replace(/^#+\s*/, '').replace(/[*_`]/g, ''));
+      let headingText = sanitizePdfText(trimmed.replace(/^#+\s*/, '').replace(/[*_`]/g, ''));
+      headingText = formatMathAndSuperscripts(headingText);
       const level = (trimmed.match(/^#+/) || ['#'])[0].length;
       
       if (currentY > pageHeight - 25) {
@@ -136,7 +182,7 @@ export function generateContentPDFBlob(
       continue;
     }
 
-    // Poem Stanzas Rendering
+    // 4. Poem Stanzas Rendering
     if (type === 'Poem') {
       const poemLines = trimmed.split('\n');
       doc.setFont('Times', 'italic');
@@ -144,7 +190,8 @@ export function generateContentPDFBlob(
       doc.setTextColor(30, 30, 30);
 
       for (const pLine of poemLines) {
-        const cleanLine = sanitizePdfText(pLine.replace(/[*_`]/g, ''));
+        let cleanLine = sanitizePdfText(pLine.replace(/[*_`]/g, ''));
+        cleanLine = formatMathAndSuperscripts(cleanLine);
         if (currentY > pageHeight - 22) {
           doc.addPage();
           pageCount++;
@@ -158,8 +205,9 @@ export function generateContentPDFBlob(
       continue;
     }
 
-    // Normal or Academic Essay Paragraphs
-    const cleanPara = sanitizePdfText(trimmed.replace(/[*_`]/g, ''));
+    // 5. Normal or Academic Essay Paragraphs & Lists
+    let cleanPara = sanitizePdfText(trimmed.replace(/[*_`]/g, ''));
+    cleanPara = formatMathAndSuperscripts(cleanPara);
     const isAcademic = tone.toUpperCase() === 'ACADEMIC' || format.includes('APA') || format.includes('MLA');
     
     doc.setFont('Helvetica', 'normal');

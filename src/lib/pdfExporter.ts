@@ -1,6 +1,13 @@
 import { jsPDF } from 'jspdf';
 import { savePDFMobile } from '../utils/mobileSaver';
 import { sanitizePdfText } from '../utils/pdfSanitizer';
+import {
+  isTableLine,
+  isTableSeparator,
+  renderPdfTable,
+  renderPdfDiagramBlock,
+  formatMathAndSuperscripts
+} from '../utils/pdfTableRenderer';
 
 /**
  * Generates the jsPDF document instance and returns it as a Blob.
@@ -87,6 +94,49 @@ export function generateNotesPDFBlob(title: string, markdownContent: string, act
       continue;
     }
 
+    // 1. Detect code blocks, ASCII diagrams, or schematics
+    if (rawLine.startsWith('```')) {
+      const diagramLines: string[] = [];
+      i++; // Skip opening ```
+      while (i < rawLines.length && !rawLines[i].trim().startsWith('```')) {
+        diagramLines.push(rawLines[i]);
+        i++;
+      }
+      currentY = renderPdfDiagramBlock(doc, diagramLines, currentY, {
+        margin,
+        contentWidth,
+        pageHeight,
+        accentColor: [124, 58, 237],
+        onPageBreak: () => {
+          doc.addPage();
+          pageCount++;
+          addFooter(pageCount);
+        }
+      });
+      continue;
+    }
+
+    // 2. Detect markdown tables
+    if (isTableLine(rawLine)) {
+      const tableLines: string[] = [rawLine];
+      while (i + 1 < rawLines.length && (isTableLine(rawLines[i + 1]) || isTableSeparator(rawLines[i + 1]))) {
+        i++;
+        tableLines.push(rawLines[i]);
+      }
+      currentY = renderPdfTable(doc, tableLines, currentY, {
+        margin,
+        contentWidth,
+        pageHeight,
+        headerBg: [124, 58, 237], // Purple
+        onPageBreak: () => {
+          doc.addPage();
+          pageCount++;
+          addFooter(pageCount);
+        }
+      });
+      continue;
+    }
+
     // Default styles for body text
     let fontSize = 10.5;
     let fontStyle = 'normal';
@@ -131,6 +181,7 @@ export function generateNotesPDFBlob(title: string, markdownContent: string, act
     cleanLine = cleanLine.replace(/__(.*?)__/g, '$1');
     cleanLine = cleanLine.replace(/_(.*?)_/g, '$1');
     cleanLine = cleanLine.replace(/`(.*?)`/g, '$1');
+    cleanLine = formatMathAndSuperscripts(cleanLine);
     cleanLine = sanitizePdfText(cleanLine);
 
     // Setup typography context in jsPDF

@@ -12,6 +12,13 @@ export function sanitizePdfText(text: string): string {
 
   let str = text;
 
+  // Protect code/diagram blocks so monospace indentation and ASCII characters are preserved
+  const codeBlocks: string[] = [];
+  str = str.replace(/```[\s\S]*?```/g, (match) => {
+    codeBlocks.push(match);
+    return `__PDF_CODE_BLOCK_${codeBlocks.length - 1}__`;
+  });
+
   // 0. LaTeX / KaTeX Sanitizer — convert math to readable plain text FIRST
   //    so downstream steps never see raw LaTeX commands as garbled output.
 
@@ -24,13 +31,39 @@ export function sanitizePdfText(text: string): string {
   str = str.replace(/\\\(([\s\S]*?)\\\)/g, function(_m, inner) { return inner.trim(); });
 
   // 0c. Structural LaTeX: fractions, roots, superscripts, subscripts
-  // Fractions: \frac{a}{b} -> (a)/(b)  [two passes for nested]
+  // Common fractions into clean Unicode glyphs
+  str = str
+    .replace(/\\frac\{1\}\{2\}/g, '½')
+    .replace(/\\frac\{1\}\{4\}/g, '¼')
+    .replace(/\\frac\{3\}\{4\}/g, '¾');
+  // General fractions: \frac{a}{b} -> (a)/(b)  [two passes for nested]
   str = str.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)');
   str = str.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)');
   // Square root
   str = str.replace(/\\sqrt\{([^{}]*)\}/g, 'sqrt($1)');
   str = str.replace(/\\sqrt\s+(\S+)/g, 'sqrt($1)');
-  // Superscript/subscript braces
+
+  // Common units and powers to real superscripts (supported in WinAnsi)
+  str = str
+    .replace(/m\/s\^2\b/g, 'm/s²')
+    .replace(/m\/s\^\{2\}/g, 'm/s²')
+    .replace(/cm\^3\b/g, 'cm³')
+    .replace(/cm\^\{3\}/g, 'cm³')
+    .replace(/m\^2\b/g, 'm²')
+    .replace(/m\^\{2\}/g, 'm²')
+    .replace(/m\^3\b/g, 'm³')
+    .replace(/m\^\{3\}/g, 'm³')
+    .replace(/km\^2\b/g, 'km²')
+    .replace(/km\^\{2\}/g, 'km²')
+    .replace(/kg\/m\^3\b/g, 'kg/m³')
+    .replace(/\^2\b/g, '²')
+    .replace(/\^3\b/g, '³')
+    .replace(/\^1\b/g, '¹')
+    .replace(/\^\{2\}/g, '²')
+    .replace(/\^\{3\}/g, '³')
+    .replace(/\^\{1\}/g, '¹');
+
+  // General superscript/subscript braces
   str = str.replace(/\^\{([^{}]*)\}/g, '^$1');
   str = str.replace(/_\{([^{}]*)\}/g, '_$1');
 
@@ -53,10 +86,10 @@ export function sanitizePdfText(text: string): string {
     .replace(/\\equiv\b/g, '=').replace(/\\propto\b/g, 'proportional to')
     .replace(/\\infty\b/g, 'infinity');
 
-  // 0f. Operators
+  // 0f. Operators (preserve native WinAnsi characters ×, ÷, ±)
   str = str
-    .replace(/\\times\b/g, 'x').replace(/\\cdot\b/g, '.')
-    .replace(/\\div\b/g, '/').replace(/\\pm\b/g, '+/-').replace(/\\mp\b/g, '-/+')
+    .replace(/\\times\b/g, '×').replace(/\\cdot\b/g, '•')
+    .replace(/\\div\b/g, '÷').replace(/\\pm\b/g, '±').replace(/\\mp\b/g, '-/+')
     .replace(/\\int\b/g, 'integral').replace(/\\sum\b/g, 'sum').replace(/\\prod\b/g, 'product')
     .replace(/\\partial\b/g, 'd').replace(/\\nabla\b/g, 'del');
 
@@ -163,16 +196,14 @@ export function sanitizePdfText(text: string): string {
     .replace(/9\uFE0F?\u20E3/gu, '9. ')
     .replace(/\u{1F51F}/gu, '10. ');
 
-  // 2b. Unicode Superscript & Subscript characters — must be mapped BEFORE Step 3,
-  //     because jsPDF standard fonts (Helvetica, Times, Courier) cannot render these glyphs.
-  //     Superscripts: ⁰¹²³⁴⁵⁶⁷⁸⁹ and ⁻⁺ⁿⁱ
-  const superscriptMap: Record<string, string> = {
-    '\u2070': '^0', '\u00B9': '^1', '\u00B2': '^2', '\u00B3': '^3',
-    '\u2074': '^4', '\u2075': '^5', '\u2076': '^6', '\u2077': '^7',
-    '\u2078': '^8', '\u2079': '^9', '\u207B': '^-', '\u207A': '^+',
-    '\u207F': '^n', '\u2071': '^i',
+  // 2b. Unicode Superscript & Subscript characters
+  // NOTE: ¹ (\u00B9), ² (\u00B2), and ³ (\u00B3) ARE natively supported in WinAnsi/Helvetica!
+  // We keep them as real superscripts, and map only non-WinAnsi superscripts.
+  const nonWinAnsiSuperscripts: Record<string, string> = {
+    '\u2070': '^0', '\u2074': '^4', '\u2075': '^5', '\u2076': '^6',
+    '\u2077': '^7', '\u2078': '^8', '\u2079': '^9', '\u207B': '^-',
+    '\u207A': '^+', '\u207F': '^n', '\u2071': '^i',
   };
-  //     Subscripts: ₀₁₂₃₄₅₆₇₈₉ and ₊₋ₐₑₒₓₙ
   const subscriptMap: Record<string, string> = {
     '\u2080': '_0', '\u2081': '_1', '\u2082': '_2', '\u2083': '_3',
     '\u2084': '_4', '\u2085': '_5', '\u2086': '_6', '\u2087': '_7',
@@ -180,7 +211,7 @@ export function sanitizePdfText(text: string): string {
     '\u2090': '_a', '\u2091': '_e', '\u2092': '_o', '\u2093': '_x',
     '\u2099': '_n',
   };
-  for (const [ch, rep] of Object.entries(superscriptMap)) {
+  for (const [ch, rep] of Object.entries(nonWinAnsiSuperscripts)) {
     str = str.split(ch).join(rep);
   }
   for (const [ch, rep] of Object.entries(subscriptMap)) {
@@ -207,9 +238,6 @@ export function sanitizePdfText(text: string): string {
     .replace(/≠/g, '!=')
     .replace(/≤/g, '<=')
     .replace(/≥/g, '>=')
-    .replace(/±/g, '+/-')
-    .replace(/×/g, 'x')
-    .replace(/÷/g, '/')
     .replace(/√/g, 'sqrt')
     .replace(/∫/g, 'integral');
 
@@ -235,11 +263,18 @@ export function sanitizePdfText(text: string): string {
   }
 
   // 7. Clean up redundant spaces, extra blank lines, and repeated bullet points
+  // IMPORTANT: Only collapse multiple spaces *between words*, preserving line indentation for graphs & diagrams!
   str = str
     .replace(/•\s*•+/g, '•')
-    .replace(/[ \t]+/g, ' ')
+    .replace(/([^\s\t])[ \t]{2,}/g, '$1 ')
     .replace(/\n\s*\n\s*\n+/g, '\n\n')
     .trim();
+
+  // Restore protected code/diagram blocks
+  str = str.replace(/__PDF_CODE_BLOCK_(\d+)__/g, (_m, idxStr) => {
+    const idx = parseInt(idxStr, 10);
+    return codeBlocks[idx] || '';
+  });
 
   return str;
 }

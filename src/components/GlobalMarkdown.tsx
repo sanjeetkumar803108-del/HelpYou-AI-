@@ -12,15 +12,41 @@ interface GlobalMarkdownProps {
   components?: any;
 }
 
+const SUPERSCRIPTS_MAP: Record<string, string> = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+  '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+  'n': 'ⁿ', 'i': 'ⁱ'
+};
+
+/**
+ * Universal Unicode superscript converter for physics/chemistry units and exponents.
+ * Transforms 'm/s^2' -> 'm/s²', 'cm^3' -> 'cm³', 's^-1' -> 's⁻¹' etc.
+ */
+export function healUnitSuperscripts(content: string): string {
+  if (!content) return '';
+  let str = String(content);
+  // Match units with caret exponents outside LaTeX delimiters: m/s^2, km/h^2, cm^3, m^2, kg/m^3, s^-1, etc.
+  str = str.replace(/(\b[a-zA-Z]+(?:\/[a-zA-Z]+)?)\^([0-9+\-n]+)\b/g, (_match, unit, exp) => {
+    const superExp = exp.split('').map((ch: string) => SUPERSCRIPTS_MAP[ch] || ch).join('');
+    return `${unit}${superExp}`;
+  });
+  return str;
+}
+
 /**
  * Normalizes and heals math/chemical equations for student-friendly crystal-clear KaTeX rendering:
  * 1. Restores escaped/eaten ASCII control codes (\x0D carriage return -> \r, \x09 tab -> \t, etc.)
- * 2. Repairs broken arrow commands like "ightarrow" -> "\rightarrow"
- * 3. Ensures unmatched $$ block delimiters are cleanly balanced to prevent red error leaks.
+ * 2. Normalizes double-escaped LaTeX commands (\\text -> \text, \\quad -> \quad)
+ * 3. Repairs broken arrow commands like "ightarrow" -> "\rightarrow"
+ * 4. Ensures unmatched $$ block delimiters are cleanly balanced to prevent red error leaks.
  */
 export function cleanMarkdownMath(content: string): string {
   if (!content) return '';
-  let text = String(content);
+  let text = healUnitSuperscripts(String(content));
+
+  // Deduplicate accidental double backslashes before known LaTeX commands
+  text = text.replace(/\\\\(text|frac|sqrt|quad|qquad|approx|rightarrow|leftarrow|Rightarrow|Leftarrow|cdot|times|pm|left|right|theta|pi|alpha|beta|gamma|delta|lambda|mu|sigma|omega|Delta|Omega|sin|cos|tan|log|ln|lim|sum|int|partial|boxed|mathbf|mathrm)\b/g, '\\$1');
 
   // 1. Repair escaped or eaten control characters in LaTeX math formulas using exact ASCII hex codes:
   // \x0D = carriage return (\r)
@@ -235,8 +261,8 @@ function healSingleQuizLine(line: string): string {
   // Convert raw * to \cdot between math variables
   mixed = mixed.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
 
-  // Wrap unquoted LaTeX expressions including function arguments like \sin(30^\circ) and \sqrt{3}\text{ m/s}
-  mixed = mixed.replace(/(?<![\w\\])([0-9a-zA-Z_^{}().\-]*\\[a-zA-Z]+(?:\([^)\n]*\)|\[[^\]\n]*\]|\{[^{}\n]*\})*(?:[0-9a-zA-Z_^{}().+*=/.\s\\-]*\\text\{[^{}]*\})?)/g, (match) => {
+  // Wrap unquoted LaTeX expressions including function arguments like \sin(30^\circ) and \sqrt{3}\text{ m/s}^2
+  mixed = mixed.replace(/(?<![\w\\])([0-9a-zA-Z_^{}().\-]*\\[a-zA-Z]+(?:\([^)\n]*\)|\[[^\]\n]*\]|\{[^{}\n]*\})*(?:[0-9a-zA-Z_^{}().+*=/.\s\\-]*\\text\{[^{}]*\}(?:\^\{[^{}]*\}|\^[0-9a-zA-Z]+|_\{[^{}]*\}|_[0-9a-zA-Z]+)?)?)/g, (match) => {
     const trimmed = match.trim();
     if (trimmed.includes('\\') && !trimmed.startsWith('__MATH_BLOCK_')) {
       return `$${trimmed}$`;
@@ -355,6 +381,18 @@ export function healGlobalMarkdown(content: string): string {
     return token;
   });
 
+  // 2.5. Explicit formula prefixes with greedy capture until pipe, semicolon, or newline:
+  // e.g. "Formula/Concept: v = u + at, \quad a = -g \approx -9.8 \text{ m/s}^2 |"
+  text = text.replace(/((?:Formula(?:\/Concept)?|Equation|Identity|Reaction):\s*)([^|\n]+)(\s*\||\s*$)/gi, (match, prefix, formula, suffix) => {
+    if (/\\[a-zA-Z]+|[=+\-*/^_]/.test(formula)) {
+      let trimmed = formula.trim().replace(/^\$+|\$+$/g, '').trim();
+      const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+      mathPlaceholders.push(`$${trimmed}$`);
+      return `${prefix}${token}${suffix}`;
+    }
+    return match;
+  });
+
   // 3. Line-level check: Is the entire line an unwrapped mathematical formula or equation?
   // E.g.: "V = 2\pi \int_{a}^{b} x f(x) dx, \quad A(w) = w \cdot h(w)"
   text = text.split('\n').map(line => {
@@ -381,6 +419,13 @@ export function healGlobalMarkdown(content: string): string {
   // 4. Standalone complex LaTeX expressions with 1-level nested braces:
   // \frac{...}{...}, \sqrt{...}, \boxed{...}
   text = text.replace(/(\\frac\{(?:[^{}]|\{[^{}]*\})*\}\{(?:[^{}]|\{[^{}]*\})*\}|\\sqrt(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\}|\\boxed\{(?:[^{}]|\{[^{}]*\})*\})/g, (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${match}$`);
+    return token;
+  });
+
+  // 4b. Standalone LaTeX text or font commands with trailing exponents/subscripts: e.g. \text{ m/s}^2, \mathbf{F}
+  text = text.replace(/(\\(?:text|mathbf|mathrm|mathit|vec|hat|bar|tilde)\{(?:[^{}]|\{[^{}]*\})*\}(?:\^\{[^{}]*\}|\^[0-9a-zA-Z]+|_\{[^{}]*\}|_[0-9a-zA-Z]+)?)/g, (match) => {
     const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
     mathPlaceholders.push(`$${match}$`);
     return token;
@@ -430,25 +475,92 @@ export function healGlobalMarkdown(content: string): string {
   });
 
   // 11. Chemical formulas outside math: e.g. H2O, CO2, H2SO4, Ca(OH)2, O2, N2
-  text = text.replace(/\b([A-Z][a-z]?\d+(?:[A-Z][a-z]?\d*)*(?:\([A-Z][a-z]?\d*\)\d+)?)\b/g, (match) => {
+  text = text.replace(/\b([A-Z][a-z]?(?:\d+|[A-Z][a-z]*\d*)*(?:\([A-Z][a-z]*\)\d*)?)\b/g, (match) => {
     if (match.startsWith('___MATH_') || match.startsWith('___CODE_')) return match;
+    if (!/\d/.test(match)) return match; // Must contain at least one subscript number to be a formula like CO2, H2O, O2
     const formatted = match.replace(/([A-Z][a-z]?)(\d+)/g, '$1_$2').replace(/\)(\d+)/g, ')_$1');
     const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
-    mathPlaceholders.push(`$\\text{${formatted}}$`);
+    mathPlaceholders.push(`$\\mathrm{${formatted}}$`);
     return token;
   });
 
-  // 12. Restore all Math Blocks using function replacers to 100% preserve literal $$
+  // 12. Smart Step-by-Step & Full-Stop Spacing Engine
+  // A. Protect common abbreviations with periods so they are never accidentally split
+  const abbrList: [RegExp, string][] = [
+    [/(\be\.g\.)/gi, '___ABBR_EG___'],
+    [/(\bi\.e\.)/gi, '___ABBR_IE___'],
+    [/(\bvs\.)/gi, '___ABBR_VS___'],
+    [/(\betc\.)/gi, '___ABBR_ETC___'],
+    [/(\bDr\.)/gi, '___ABBR_DR___'],
+    [/(\bProf\.)/gi, '___ABBR_PROF___'],
+    [/(\bFig\.)/gi, '___ABBR_FIG___'],
+    [/(\bEq\.)/gi, '___ABBR_EQ___'],
+    [/(\bNo\.)/gi, '___ABBR_NO___'],
+    [/(\bal\.)/gi, '___ABBR_AL___'],
+    [/(\bapprox\.)/gi, '___ABBR_APPROX___'],
+  ];
+  const restoredAbbrs: string[] = [];
+  abbrList.forEach(([regex]) => {
+    text = text.replace(regex, (m) => {
+      const token = `___ABBR_${restoredAbbrs.length}___`;
+      restoredAbbrs.push(m);
+      return token;
+    });
+  });
+
+  // B. Line break after full stops, exclamation marks, question marks
+  // Matches dot/exclamation/question mark (not a decimal point) followed by space and start of next sentence or formula
+  text = text.replace(/(?<!\d)([.?!])\s+(?=[A-Z\u0900-\u097F$#*—\(\["'___MATH_BLOCK_]|(?:Setting|Now|The\s+(?:first|second|third)|Since|Therefore|Hence|Thus|Substituting)\b)/g, '$1\n\n');
+
+  // C. Colons followed strictly by a block math equation or calculation line
+  text = text.replace(/(?<=:)\s+(?=(?:___MATH_BLOCK_|\$\$|[a-zA-Z0-9_^{}().\-]+\s*=))/g, '\n\n');
+
+  // D. Calculation Transition Phrases (ensure they start on their own line with generous spacing)
+  const transitions = [
+    /(?<=[^.\n])\s+(Setting\s+[^.\n]+?\s+gives)/g,
+    /(?<=[^.\n])\s+(Now,?\s+check)/g,
+    /(?<=[^.\n])\s+(The\s+(?:first|second|third)\s+derivative\s+is)/g,
+    /(?<=[^.\n])\s+(Since\s+the\s+[^.\n]+)/g,
+    /(?<=[^.\n])\s+(Therefore,?\s+)/g,
+    /(?<=[^.\n])\s+(Hence,?\s+)/g,
+    /(?<=[^.\n])\s+(Thus,?\s+)/g,
+    /(?<=[^.\n])\s+(Substituting\s+[^.\n]+?\s+into)/g
+  ];
+  transitions.forEach(tr => {
+    text = text.replace(tr, '\n\n$1');
+  });
+
+  // E. Restore abbreviations
+  for (let i = 0; i < restoredAbbrs.length; i++) {
+    text = text.replace(`___ABBR_${i}___`, () => restoredAbbrs[i]);
+  }
+
+  // 13. Restore all Math Blocks using function replacers to 100% preserve literal $$
   for (let i = 0; i < mathPlaceholders.length; i++) {
     const val = mathPlaceholders[i];
     text = text.replace(`___MATH_BLOCK_${i}___`, () => val);
   }
 
-  // 13. Restore all Code Blocks
+  // 14. Restore all Code Blocks
   for (let i = 0; i < codePlaceholders.length; i++) {
     const val = codePlaceholders[i];
     text = text.replace(`___CODE_BLOCK_${i}___`, () => val);
   }
+
+  // 15. Promote standalone derivation and calculation lines to centered block math ($$...$$)
+  text = text.split('\n\n').map(block => {
+    const b = block.trim();
+    const match = b.match(/^\$([^$]+)\$(\.?)$/);
+    if (match) {
+      const inner = match[1].trim();
+      if (/[=+\-*/]/.test(inner) && inner.length > 5) {
+        return `$$${inner}$$`;
+      }
+    }
+    return block;
+  }).join('\n\n');
+
+  text = text.replace(/\n{3,}/g, '\n\n').trim();
 
   return text;
 }

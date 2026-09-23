@@ -1259,7 +1259,7 @@ export default function App() {
             </div>
             <div className={activeTool === 'dailytrivia' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
               <ErrorBoundary>
-                <DailyTrivia onBack={() => setActiveTool(null)} />
+                <DailyTrivia isOpen={activeTool === 'dailytrivia'} onBack={() => setActiveTool(null)} />
               </ErrorBoundary>
             </div>
             <div className={activeTool === 'livetutorsearch' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>

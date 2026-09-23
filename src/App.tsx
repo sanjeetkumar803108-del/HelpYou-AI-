@@ -349,6 +349,7 @@ export default function App() {
     };
     const handleOpenProfile = () => {
       console.log('Received open-profile-modal event');
+      setActiveTool(null);
       setActiveTab('profile');
     };
     const handleShowMobileToast = (e: Event) => {
@@ -1028,11 +1029,13 @@ export default function App() {
   }, []);
 
   const handleOpenProfileFromDashboard = useCallback(() => {
+    setActiveTool(null);
     setActiveTab('profile');
   }, []);
 
   const handleOpenLoginFromDashboard = useCallback(() => {
     if (auth.currentUser || user) {
+      setActiveTool(null);
       setActiveTab('profile');
       return;
     }
@@ -1041,8 +1044,10 @@ export default function App() {
 
   const handleSelectToolFromDashboard = useCallback((tool: string) => {
     if (tool === 'tab:scanner') {
+      setActiveTool(null);
       setActiveTab('scanner');
     } else if (tool === 'tab:aitutor') {
+      setActiveTool(null);
       setActiveTab('aitutor');
     } else {
       setActiveTool(tool);
@@ -1109,6 +1114,7 @@ export default function App() {
             <button 
               onClick={() => {
                 triggerVibration(15);
+                setActiveTool(null);
                 setActiveTab('profile');
               }}
               className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors shadow-sm border border-zinc-200/40"
@@ -1125,12 +1131,13 @@ export default function App() {
         </header>
       )}
       
-      <main className={`w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 ${(activeTab === 'scanner' || activeTab === 'aitutor' || activeTab === 'teacher' || activeTool !== null) ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto pb-20'} bg-[#FAF9F6]`} style={{ position: 'relative' }}>
+      <main className={`w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 ${(activeTab === 'scanner' || activeTab === 'aitutor' || activeTab === 'teacher' || (activeTab === 'notes' && activeTool !== null)) ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto pb-20'} bg-[#FAF9F6]`} style={{ position: 'relative' }}>
         {/* Scanner Tab */}
         <div className={activeTab === 'scanner' ? 'h-full flex flex-col' : 'hidden'}>
           <ErrorBoundary>
             <Suspense fallback={<FullPageSkeleton />}>
               <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
+                setActiveTool(null);
                 setActiveTab(tab);
               }} />
             </Suspense>
@@ -1146,8 +1153,8 @@ export default function App() {
           </ErrorBoundary>
         </div>
 
-        {/* Home/Notes Tab — always keep mounted so tools stay alive on tab switch */}
-        <div className={(activeTab === 'notes' || activeTool !== null) ? 'h-full flex flex-col' : 'hidden'}>
+        {/* Home/Notes Tab — only visible when activeTab === 'notes' */}
+        <div className={activeTab === 'notes' ? 'h-full flex flex-col' : 'hidden'}>
           <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
             <ErrorBoundary>
               <Suspense fallback={<FullPageSkeleton />}>
@@ -1183,6 +1190,7 @@ export default function App() {
                   isVip={isVip}
                   onOpenVip={() => setShowVipModal(true)}
                   onNavigateToTab={(tab) => {
+                    setActiveTool(null);
                     setActiveTab(tab);
                   }}
                 />
@@ -1230,6 +1238,7 @@ export default function App() {
                 <Calculator 
                   onBack={() => setActiveTool(null)} 
                   onNavigateToTab={(tab) => {
+                    setActiveTool(null);
                     setActiveTab(tab);
                   }} 
                 />
@@ -1241,6 +1250,7 @@ export default function App() {
                   <QuestionGenerator 
                     onBack={() => setActiveTool(null)} 
                     onNavigateToTab={(tab) => {
+                      setActiveTool(null);
                       setActiveTab(tab);
                     }} 
                   />
@@ -1269,8 +1279,10 @@ export default function App() {
                   onClose={() => setActiveTool(null)} 
                   onSelectTool={(tool) => {
                     if (tool === 'tab:scanner') {
+                      setActiveTool(null);
                       setActiveTab('scanner');
                     } else if (tool === 'tab:aitutor') {
+                      setActiveTool(null);
                       setActiveTab('aitutor');
                     } else {
                       setActiveTool(tool);
@@ -1295,7 +1307,10 @@ export default function App() {
                 user={user}
                 isVip={isVip}
                 setIsVip={handleSetIsVip}
-                onClose={() => setActiveTab('notes')} 
+                onClose={() => {
+                  setActiveTool(null);
+                  setActiveTab('notes');
+                }} 
                 isDarkMode={isDarkMode}
                 onToggleDarkMode={toggleDarkMode}
                 isTabMode={true}
@@ -1318,8 +1333,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Bottom nav is always visible — tools overlay on top via absolute positioning.
-           Tapping another tab while a tool is open hides the tool's tab but keeps it mounted. */}
+      {/* Bottom nav is always visible */}
       <nav className="absolute bottom-0 w-full border-t pb-safe z-20 transition-all duration-300 bg-white/90 border-zinc-200/60 backdrop-blur-2xl">
         <div className="flex justify-around items-center px-2 py-0.5">
           <NavItem 
@@ -1327,6 +1341,7 @@ export default function App() {
             label="Home" 
             isActive={activeTab === 'notes'} 
             onClick={() => {
+              setActiveTool(null);
               setActiveTab('notes');
             }} 
             isLightTheme={!isDarkMode}
@@ -1335,21 +1350,30 @@ export default function App() {
             icon={<Camera className="w-5 h-5" />} 
             label="Scan" 
             isActive={activeTab === 'scanner'} 
-            onClick={() => setActiveTab('scanner')} 
+            onClick={() => {
+              setActiveTool(null);
+              setActiveTab('scanner');
+            }} 
             isLightTheme={!isDarkMode}
           />
           <NavItem 
             icon={<Sparkles className="w-5 h-5" />} 
             label="Tutor" 
             isActive={activeTab === 'aitutor'} 
-            onClick={() => setActiveTab('aitutor')} 
+            onClick={() => {
+              setActiveTool(null);
+              setActiveTab('aitutor');
+            }} 
             isLightTheme={!isDarkMode}
           />
           <NavItem 
             icon={<UserCircle className="w-5 h-5" />} 
             label="Profile" 
             isActive={activeTab === 'profile'} 
-            onClick={() => setActiveTab('profile')} 
+            onClick={() => {
+              setActiveTool(null);
+              setActiveTab('profile');
+            }} 
             isLightTheme={!isDarkMode}
           />
         </div>

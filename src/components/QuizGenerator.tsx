@@ -2053,8 +2053,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                 </div>
 
                 {/* Grid of Preset Options */}
-                <div className="grid grid-cols-3 gap-3">
-                  {[5, 10, 15].map((num) => {
+                <div className="grid grid-cols-4 gap-2">
+                  {[5, 10, 15, 20].map((num) => {
                     const isSelected = configCount === num;
                     return (
                       <button
@@ -2064,14 +2064,14 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           triggerVibration(10);
                           setConfigCount(num);
                         }}
-                        className={`py-4 rounded-2xl font-black text-lg border transition-all active:scale-[0.97] cursor-pointer flex flex-col items-center justify-center ${
+                        className={`py-3.5 rounded-2xl font-black text-base border transition-all active:scale-[0.97] cursor-pointer flex flex-col items-center justify-center ${
                           isSelected
                             ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-600/20'
                             : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
                         }`}
                       >
-                        <span className="text-xl">{num}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider mt-0.5 ${
+                        <span className="text-lg">{num}</span>
+                        <span className={`text-[8px] font-bold uppercase tracking-wider mt-0.5 ${
                           isSelected ? 'text-indigo-100' : 'text-zinc-400'
                         }`}>Questions</span>
                       </button>

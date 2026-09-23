@@ -1668,7 +1668,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                 </div>
 
                 <div className="grid grid-cols-4 gap-2.5">
-                  {[3, 5, 10, 15].map((num) => (
+                  {[5, 10, 15, 20].map((num) => (
                     <button
                       key={num}
                       type="button"

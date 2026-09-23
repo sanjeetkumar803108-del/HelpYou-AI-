@@ -53,7 +53,11 @@ app.all(["/api/health", "/health", "/api/status"], (req, res) => {
 // 2. Global Input Sanitization Middleware (Injection Prevention)
 const sanitizeInput = (obj: any): any => {
   if (typeof obj === 'string') {
-    return xss(obj); // Strips <script> and dangerous HTML
+    // Never run XSS regex on base64 images, data URIs, or large payloads (prevents CPU freezes & OOM)
+    if (obj.startsWith('data:') || obj.length > 10000) {
+      return obj;
+    }
+    return xss(obj);
   }
   if (Array.isArray(obj)) {
     return obj.map(item => sanitizeInput(item));
@@ -83,78 +87,100 @@ const summaryCache = new Map<string, any>();
  * Repairs unescaped LaTeX backslashes, unescaped newlines/tabs inside quotes,
  * and trailing commas so JSON.parse never crashes on AI-generated math/science strings.
  */
-function repairJsonString(raw: string): string {
-  if (!raw) return '';
-  let str = raw.trim();
-
-  // Strip markdown code fences
-  str = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+/**
+ * Sanitizes single-escaped LaTeX backslashes (\frac, \sqrt, \times, \pm, \int, \theta, etc.)
+ * and raw control characters inside JSON strings so JSON.parse never crashes.
+ */
+function sanitizeLaTeXInJSON(raw: string): string {
+  if (!raw) return raw;
 
   let inString = false;
-  let escaped = false;
-  const fixedChars: string[] = [];
+  let isEscaped = false;
+  let out = '';
 
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[i];
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i];
 
     if (inString) {
-      if (escaped) {
-        const nextChar = str[i + 1] || '';
-        const isFollowedByLetter = /[a-zA-Z]/.test(nextChar);
-
-        if (/[\\"\/]/.test(ch)) {
-          fixedChars.push(ch);
-        } else if (/[bfnrt]/.test(ch) && !isFollowedByLetter) {
-          fixedChars.push(ch);
-        } else if (ch === 'u') {
-          const hex = str.slice(i + 1, i + 5);
-          if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-            fixedChars.push(ch);
-          } else {
-            fixedChars[fixedChars.length - 1] = '\\\\';
-            fixedChars.push(ch);
-          }
+      if (isEscaped) {
+        isEscaped = false;
+        if (char === '"' || char === '\\' || char === '/') {
+          out += '\\' + char;
+        } else if (char === 'n') {
+          const isLatexCommand = /^(?:eq|abla|otin|atural|earrow|warrow|u\b|ot\b|eg\b|exists|sim|leq|geq)/.test(raw.slice(i + 1, i + 10));
+          out += isLatexCommand ? '\\\\n' : '\\n';
+        } else if (char === 'r') {
+          const isLatexCommand = /^(?:ightarrow|ho\b|ight\b|angle\b|eal\b|m\b|oot\b|ceil\b|floor\b)/.test(raw.slice(i + 1, i + 12));
+          out += isLatexCommand ? '\\\\r' : '\\r';
+        } else if (char === 'b') {
+          const isLatexCommand = /^(?:eta\b|egin\b|ar\b|ig\b|oldsymbol\b|inom\b|ot\b|ullet\b|f\b|mod\b|oxed\b|ackslash\b)/.test(raw.slice(i + 1, i + 12));
+          out += isLatexCommand ? '\\\\b' : '\\b';
+        } else if (char === 't') {
+          const isLatexCommand = /^(?:ext|imes|heta|an\b|au\b|o\b|ilde|ag|op\b|extbf|extit|herefore|frac)/.test(raw.slice(i + 1, i + 12));
+          out += isLatexCommand ? '\\\\t' : '\\t';
+        } else if (char === 'f') {
+          const isLatexCommand = /^(?:rac|orall|lat|rown)/.test(raw.slice(i + 1, i + 8));
+          out += isLatexCommand ? '\\\\f' : '\\f';
+        } else if (char === 'u') {
+          const next4 = raw.slice(i + 1, i + 5);
+          out += /^[0-9a-fA-F]{4}$/.test(next4) ? '\\u' : '\\\\u';
         } else {
-          // Unescaped LaTeX command like \Delta, \frac, \vec, \alpha, etc.
-          fixedChars[fixedChars.length - 1] = '\\\\';
-          fixedChars.push(ch);
+          out += '\\\\' + char;
         }
-        escaped = false;
-      } else if (ch === '\\') {
-        escaped = true;
-        fixedChars.push(ch);
-      } else if (ch === '"') {
+      } else if (char === '\\') {
+        isEscaped = true;
+      } else if (char === '"') {
         inString = false;
-        fixedChars.push(ch);
-      } else if (ch === '\n') {
-        fixedChars.push('\\n');
-      } else if (ch === '\r') {
-        fixedChars.push('\\r');
-      } else if (ch === '\t') {
-        fixedChars.push('\\t');
+        out += '"';
+      } else if (char === '\n') {
+        out += '\\n';
+      } else if (char === '\r') {
+        out += '\\r';
+      } else if (char === '\t') {
+        out += '\\t';
       } else {
-        fixedChars.push(ch);
+        out += char;
       }
     } else {
-      if (ch === '"') {
+      if (char === '"') {
         inString = true;
       }
-      fixedChars.push(ch);
+      out += char;
     }
   }
 
-  let result = fixedChars.join('');
-  result = result.replace(/,\s*([}\]])/g, '$1');
-  return result;
+  if (isEscaped) {
+    out += '\\\\';
+  }
+
+  return out;
 }
 
 /**
- * Robust JSON extraction and parsing utility.
- * Handles cases where models output markdown blocks, unescaped LaTeX backslashes, or control characters.
+ * Repairs unescaped LaTeX backslashes, unescaped newlines/tabs inside quotes,
+ * and trailing commas so JSON.parse never crashes on AI-generated math/science strings.
+ */
+function repairJsonString(raw: string): string {
+  if (!raw) return '';
+  let str = raw.trim();
+  str = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  str = sanitizeLaTeXInJSON(str);
+  str = str.replace(/,\s*([}\]])/g, '$1');
+  return str;
+}
+
+/**
+ * Robust JSON extraction, balancing, and parsing utility.
+ * Balances unclosed strings, brackets, and braces so truncated responses still parse cleanly.
  */
 function safeParseJSON(text: string, forceType: 'object' | 'array' | 'none' = 'none'): any {
   if (!text) return forceType === 'array' ? [] : (forceType === 'object' ? {} : null);
-  const cleaned = text.trim();
+  let cleaned = text.trim();
+
+  // Strip code fences
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+  }
 
   const parse = (str: string) => {
     try {
@@ -166,68 +192,101 @@ function safeParseJSON(text: string, forceType: 'object' | 'array' | 'none' = 'n
         return parsed[0] || {};
       }
       return parsed;
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   };
 
-  // 1. Try direct parse
+  // 1. Direct parse attempt
   let result = parse(cleaned);
   if (result) return result;
 
-  // 2. Try cleaning markdown markers
-  let extracted = cleaned;
-  if (extracted.includes("```")) {
-    extracted = extracted.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
-    result = parse(extracted);
-    if (result) return result;
-  }
-
-  // 3. Try LaTeX and control character repair on cleaned text
-  const repaired = repairJsonString(extracted);
-  result = parse(repaired);
+  // 2. LaTeX sanitized parse
+  const sanitized = sanitizeLaTeXInJSON(cleaned);
+  result = parse(sanitized);
   if (result) return result;
 
-  // 4. Extract using structural patterns (find first { or [ and last } or ])
-  const objStart = extracted.indexOf('{');
-  const objEnd = extracted.lastIndexOf('}');
-  const arrStart = extracted.indexOf('[');
-  const arrEnd = extracted.lastIndexOf(']');
+  // 3. Extract using structural bounds
+  const objStart = sanitized.indexOf('{');
+  const objEnd = sanitized.lastIndexOf('}');
+  const arrStart = sanitized.indexOf('[');
+  const arrEnd = sanitized.lastIndexOf(']');
 
   const hasObj = objStart !== -1 && objEnd !== -1 && objEnd > objStart;
   const hasArr = arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart;
 
   if (hasObj && (!hasArr || objStart < arrStart)) {
-    const slice = extracted.slice(objStart, objEnd + 1);
-    result = parse(slice) || parse(repairJsonString(slice));
+    const slice = sanitized.slice(objStart, objEnd + 1);
+    result = parse(slice);
     if (result) return result;
   }
 
   if (hasArr) {
-    const slice = extracted.slice(arrStart, arrEnd + 1);
-    result = parse(slice) || parse(repairJsonString(slice));
+    const slice = sanitized.slice(arrStart, arrEnd + 1);
+    result = parse(slice);
     if (result) return result;
   }
 
-  // 5. If JSON was truncated or cut off, attempt bracket closure repair
-  try {
-    let closed = repairJsonString(extracted);
-    const openBraces = (closed.match(/\{/g) || []).length;
-    const closeBraces = (closed.match(/\}/g) || []).length;
-    const openBrackets = (closed.match(/\[/g) || []).length;
-    const closeBrackets = (closed.match(/\]/g) || []).length;
+  // 4. State-machine balancing for truncated streaming / token-limit JSON
+  const balanceAndParse = (str: string) => {
+    let state = 'NORMAL';
+    const stack: string[] = [];
+    let out = '';
 
-    if (openBraces > closeBraces) {
-      closed += '}'.repeat(openBraces - closeBraces);
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      out += ch;
+      if (state === 'NORMAL') {
+        if (ch === '"') state = 'IN_STRING';
+        else if (ch === '{' || ch === '[') stack.push(ch);
+        else if (ch === '}' && stack[stack.length - 1] === '{') stack.pop();
+        else if (ch === ']' && stack[stack.length - 1] === '[') stack.pop();
+      } else if (state === 'IN_STRING') {
+        if (ch === '\\') state = 'ESCAPE';
+        else if (ch === '"') state = 'NORMAL';
+      } else if (state === 'ESCAPE') {
+        state = 'IN_STRING';
+      }
     }
-    if (openBrackets > closeBrackets) {
-      closed += ']'.repeat(openBrackets - closeBrackets);
-    }
-    result = parse(closed);
-    if (result) return result;
-  } catch (_) {}
 
-  // Final fallback: if we need an array/object but everything failed
+    let closed = out;
+    if (state === 'ESCAPE') {
+      closed = closed.slice(0, -1) + '"';
+      state = 'NORMAL';
+    } else if (state === 'IN_STRING') {
+      closed += '"';
+      state = 'NORMAL';
+    }
+
+    closed = closed.trim();
+    while (closed.endsWith(',') || closed.endsWith(':')) {
+      closed = closed.slice(0, -1).trim();
+    }
+
+    for (let i = stack.length - 1; i >= 0; i--) {
+      closed += stack[i] === '{' ? '}' : ']';
+    }
+
+    return parse(closed);
+  };
+
+  result = balanceAndParse(sanitized);
+  if (result) return result;
+
+  // 5. Backwards comma recovery: if last item was cut in half, drop partial tail and balance
+  let lastCommaIdx = sanitized.lastIndexOf(',');
+  let attempts = 0;
+  while (lastCommaIdx > 0 && attempts < 10) {
+    const truncated = sanitized.slice(0, lastCommaIdx);
+    result = balanceAndParse(truncated);
+    if (result && ((forceType === 'array' && Array.isArray(result) && result.length > 0) || (forceType !== 'array'))) {
+      return result;
+    }
+    lastCommaIdx = sanitized.lastIndexOf(',', lastCommaIdx - 1);
+    attempts++;
+  }
+
+  // Final fallback
   if (forceType === 'array') return [];
   if (forceType === 'object') return {};
   throw new Error("Could not parse JSON from AI response");
@@ -704,9 +763,9 @@ ${pedagogicalDirective}`;
       : [
           requestedModel,
           "gemini-3.5-flash-lite",
-          "gemini-flash-lite-latest",
           "gemini-3.5-flash",
-          "gemini-3.6-flash"
+          "gemini-flash-latest",
+          "gemini-flash-lite-latest"
         ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -861,6 +920,10 @@ ${pedagogicalDirective}`;
   }
 
   if (lastError) {
+    if (anyQuotaExceeded) {
+      lastError.message = "GEMINI_QUOTA_EXHAUSTED";
+      lastError.isRateLimit = true;
+    }
     throw lastError;
   }
   throw new Error("AI generation failed after multiple attempts");
@@ -3558,7 +3621,7 @@ app.post("/api/generate-questions", async (req, res) => {
     const count = req.body.count;
     const stream = req.body.stream;
     const country = req.body.country;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 15);
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 25);
     const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || 'academic curriculum'}`;
 
     const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
@@ -3566,83 +3629,38 @@ Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-
 
 CRITICAL ARCHITECTURE RULES:
 
-1. SUBJECT & DOMAIN INTEGRITY (ABSOLUTE RULE - ZERO CROSS-CONTAMINATION):
-   - Automatically detect the true academic subject of the given topic:
-     * LITERATURE & LANGUAGES (e.g., English, Hindi, Stories, Poems, Plays, Fiction, Authors like Lencho / "A Letter to God", Shakespeare, Nelson Mandela, etc.):
-       - Format questions strictly as authentic literature board exam questions: Character sketches, thematic analysis, irony, narrative conflict, moral dilemma, author's message, contextual significance, or poetic devices.
-       - NEVER inject science, mathematics, statistics, or engineering jargon (NEVER use words like "stochastic modeling", "data-driven systems", "algorithmic", "variables") into literature! Questions must be 100% grounded in the text, characters, and literary analysis.
-     * SCIENCES (Physics, Chemistry, Biology):
-       - Focus on scientific mechanisms, "Give scientific reasons why...", experimental observations, cause-and-effect, balanced chemical reactions, and real-world scientific applications.
-     * MATHEMATICS:
-       - Focus on analytical problem-solving, step-by-step proofs, derivations, and conceptual theorems. Use clean LaTeX ($...$) for equations.
-     * SOCIAL SCIENCES & HUMANITIES (History, Civics, Geography, Economics, Psychology):
-       - Focus on historical consequences, constitutional provisions, socio-economic factors, spatial patterns, and critical evaluations.
-     * COMMERCE & MANAGEMENT (Business, Accountancy, Economics):
-       - Focus on market dynamics, financial principles, policy impacts, and case study evaluations.
-     * COMPUTER SCIENCE / CODING:
-       - Focus on logic design, algorithmic efficiency, data structures, and software principles.
+1. SUBJECT & DOMAIN INTEGRITY:
+   - Automatically detect the true academic subject of the given topic (Literature, Science, Mathematics, Social Sciences, Commerce, Computer Science).
+   - Use clean LaTeX ($...$) for all math and science formulas (e.g. $F = ma$, $H_2O$, $V = IR$).
 
-2. REAL EXAM QUESTION VARIETY (DO NOT FORCE PART A / PART B):
-   - In real board and university exams, questions are VARIED and NATURAL. They are NOT robotically split into Part A / Part B for every question!
+2. REAL EXAM QUESTION VARIETY:
    - Provide a realistic, diverse blend across the ${requestedCount} questions:
-     * Standalone Short/Medium Conceptual Questions (2–3 Marks): Clear, focused single questions testing understanding, cause, or definition (e.g., "Why did Lencho write a letter to God, and why was he displeased upon receiving the money?").
-     * Standalone Long Analytical / Essay / Evaluative Questions (5–6 Marks): Comprehensive questions testing Higher Order Thinking Skills (HOTS), character sketches, thematic critique, or deep derivations (e.g., "Analyze the irony in the story 'A Letter to God'. How did the postmaster's kindness lead to an unexpected reaction from Lencho?").
-     * Structured Multi-Part Questions (e.g., (a) and (b)): Use sub-parts ONLY when naturally appropriate (e.g., in a multi-step science problem or when asking for a definition followed by an application). When sub-parts are used, format them cleanly with double line breaks: "(a) ... \\n\\n(b) ...".
-   - Under NO circumstances should all questions have "Part A:" and "Part B:". Most questions in an authentic exam paper are standalone, direct subjective questions!
+     * Standalone Short/Medium Conceptual Questions (2–3 Marks).
+     * Standalone Long Analytical / Evaluative Questions (5–6 Marks).
+     * Multi-part questions ((a) and (b)) only when naturally appropriate.
 
 3. GRADE & CURRICULUM CALIBRATION:
-   - Target Grade: ${gradeLevel}.
-   - The vocabulary, conceptual depth, and mark expectations must strictly match this academic level. Do NOT make secondary/high school questions into graduate-level research papers.
+   - Target Grade: ${gradeLevel}. Match vocabulary and difficulty strictly to this grade level.
 
-4. COMPREHENSIVE MASTER MODEL ANSWER ('expectedAnswer'):
-   - Provide an exhaustive, step-by-step master model answer / official solution in 'expectedAnswer'.
-   - For mathematical, physics, and calculation problems: Provide the full derivation, explicit step-by-step working, substituted values, and final highlighted result with appropriate units.
-   - For literature, language, and social science problems: Provide a complete, structured multi-paragraph model answer containing textual evidence, thematic depth, and nuanced explanation.
-   - For multi-part questions ((a), (b)): Provide clear, separate complete solutions for each part.
-   - (Note: This master model answer will be compiled into the exported PDF's final Answer Key & Solutions section).
+4. MODEL ANSWER ('expectedAnswer'):
+   - Provide a high-yield, step-by-step model solution in 'expectedAnswer' (1-2 clear, focused paragraphs or explicit mathematical steps). Keep it concise, educational, and direct.
 
-5. OFFICIAL MARKING RUBRIC & SCORE BREAKDOWN ('keyRubricPoints'):
-   - Provide an array of 3-5 real grading criteria with EXPLICIT SCORE ALLOCATIONS (e.g., "[1 Mark]", "[1.5 Marks]", "[2 Marks]") that an examiner uses to evaluate students' answers.
-   - Points must specify the exact conceptual checkpoint and its mark value:
-     * e.g., "[1 Mark] Correct definition and mathematical formula of Ohm's Law ($V = IR$) under constant temperature"
-     * e.g., "[1.5 Marks] High melting point ($3380^\\circ\\\\text{C}$) and high resistivity of tungsten filament"
-     * e.g., "[0.5 Mark] Chemical inertness of argon/nitrogen gas preventing oxidation"
-   - Points must be strictly subject-relevant.
+5. OFFICIAL MARKING RUBRIC ('keyRubricPoints'):
+   - Provide an array of 2-4 key scoring criteria with explicit mark allocations (e.g. "[1 Mark] Correct formula...", "[1 Mark] Final calculated value with units...").
 
 6. STRICT JSON OUTPUT FORMAT:
    - Return ONLY a valid JSON object with the key "questions".
-   - Do NOT wrap in markdown backticks or include conversational text.
+   - Do NOT wrap in markdown blockquotes or include commentary.
 
-Use this exact JSON structure:
+JSON structure:
 {
   "questions": [
     {
-      "question": "Why did Lencho describe the falling raindrops as 'new coins'? How did his feelings change when the weather took a turn for the worse?",
-      "expectedAnswer": "Lencho was an industrious farmer whose family depended entirely on the harvest of his cornfield, which urgently needed rain. When large clouds began to pour, he was filled with joy and compared the big drops to 10-cent pieces and the little drops to 5-cent pieces, seeing them as coins of prosperity that would guarantee a rich yield.\\n\\nHowever, his happiness turned to sorrow when strong winds brought a heavy hailstorm that battered the valley for an hour. The hail left the field completely white as if covered with salt, destroying all the corn and flowers. Lencho's heart was filled with deep grief and despair, realizing that without help, his family would go hungry that year.",
+      "question": "Question text here...",
+      "expectedAnswer": "Concise step-by-step model answer here...",
       "keyRubricPoints": [
-        "[1 Mark] Comparison of big drops to 10-cent pieces and small drops to 5-cent pieces",
-        "[1 Mark] Expectation of a bountiful harvest and financial prosperity",
-        "[1 Mark] Sudden onset of violent hailstorm destroying entire crop fields",
-        "[1 Mark] Lencho's deep sorrow and despair regarding family's survival"
-      ]
-    },
-    {
-      "question": "How does the story 'A Letter to God' highlight the irony in human nature through the postmaster's kind gesture and Lencho's reaction?",
-      "expectedAnswer": "The supreme irony of the story lies in Lencho's unwavering faith in God contrasting with his profound distrust of human beings. When the postmaster read Lencho's letter to God requesting 100 pesos, he was deeply moved and resolved not to shake the man's faith. Through genuine selflessness, the postmaster and his staff collected and sent 70 pesos.\\n\\nYet when Lencho counted only 70 pesos, he was convinced God could never make a mistake or deny his request. Consequently, he assumed the post office employees were a 'bunch of crooks' who stole the missing 30 pesos. The poignant irony is that Lencho condemned the very people who sacrificed their own money to help him, illustrating how rigid dogmatic faith can blind a person to genuine human kindness.",
-      "keyRubricPoints": [
-        "[1.5 Marks] Postmaster and postal staff collecting 70 pesos out of selflessness to preserve faith",
-        "[1.5 Marks] Lencho's absolute conviction that God would not make a mistake",
-        "[1 Mark] Lencho branding the benefactors as a 'bunch of crooks' for missing 30 pesos",
-        "[1 Mark] Irony of distrusting the very humans who assisted him"
-      ]
-    },
-    {
-      "question": "(a) State Ohm's Law and write its mathematical formula.\\n\\n(b) Explain why an electric bulb's filament is made of tungsten and why inert gases are filled inside the bulb.",
-      "expectedAnswer": "(a) Ohm's Law states that the electric current ($I$) flowing through a metallic conductor is directly proportional to the potential difference ($V$) across its ends, provided physical conditions like temperature remain constant.\\nFormula: $V \\\\propto I \\\\implies V = IR$, where $R$ is resistance.\\n\\n(b) Tungsten is used for bulb filaments because it possesses an exceptionally high melting point ($3380^\\circ\\\\text{C}$) and high electrical resistivity, allowing it to glow white-hot without melting. Chemically inactive gases like argon and nitrogen are filled inside the bulb to prevent oxidation of the incandescent tungsten filament, thereby prolonging the bulb's lifespan.",
-      "keyRubricPoints": [
-        "[1 Mark] Definition and formula of Ohm's Law ($V = IR$) with constant temperature condition",
-        "[1.5 Marks] High melting point ($3380^\\circ\\\\text{C}$) and high resistivity of tungsten filament",
-        "[0.5 Mark] Use of chemically inert gases (argon/nitrogen) to prevent filament oxidation"
+        "[1 Mark] Key concept 1",
+        "[1 Mark] Key concept 2"
       ]
     }
   ]
@@ -3662,9 +3680,9 @@ ${userStreamDirective}
 ${userCountryDirective}
 Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic and grade.
 For each question, provide:
-1. An authentic exam-style subjective question in 'question'.
-2. A complete, high-quality step-by-step model solution in 'expectedAnswer' (to be compiled into the PDF Answer Key).
-3. An official examiner marking scheme with explicit mark allocations in 'keyRubricPoints'.${avoidDirective}`;
+1. 'question': Authentic exam question.
+2. 'expectedAnswer': Concise model solution.
+3. 'keyRubricPoints': 2-4 point marking rubric.${avoidDirective}`;
 
     let generatedText = "";
     try {
@@ -3678,7 +3696,7 @@ For each question, provide:
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           maxOutputTokens: 8192,
-          temperature: 0.65
+          temperature: 0.6
         }
       });
       generatedText = response.text || "";
@@ -3696,7 +3714,7 @@ For each question, provide:
       };
     });
 
-    const parsed = safeParseJSON(generatedText, 'object');
+    let parsed = safeParseJSON(generatedText, 'object');
     if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
       return res.json({ questions: sanitizeQuestions(parsed.questions) });
     } else if (Array.isArray(parsed) && parsed.length > 0) {
@@ -3704,6 +3722,12 @@ For each question, provide:
     } else if (parsed && typeof parsed === 'object') {
       const found = Object.values(parsed).find(v => Array.isArray(v) && v.length > 0);
       if (found) return res.json({ questions: sanitizeQuestions(found as any[]) });
+    }
+
+    // Secondary attempt with array mode in case the model returned a top-level array
+    parsed = safeParseJSON(generatedText, 'array');
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return res.json({ questions: sanitizeQuestions(parsed) });
     }
 
     throw new Error("Failed to generate a valid subjective questions structure.");
@@ -5438,7 +5462,7 @@ Use this exact JSON structure:
     "question": "Which of the following best characterizes the key mechanism of [Concept]?",
     "options": ["A) Statement 1", "B) Statement 2", "C) Statement 3", "D) Statement 4"],
     "correctAnswer": "A) Statement 1",
-    "explanation": "Clear educational breakdown justifying why the correct option is true and why the distractors are incorrect."
+    "explanation": "Concise 1-2 sentence educational breakdown justifying why the correct option is true."
   }
 ]`;
 
@@ -5458,7 +5482,8 @@ Use this exact JSON structure:
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          temperature: 0.75
+          maxOutputTokens: 8192,
+          temperature: 0.6
         }
       });
       quizText = response.text || "";
@@ -5470,6 +5495,10 @@ Use this exact JSON structure:
     const parsed = safeParseJSON(quizText, 'array');
     if (Array.isArray(parsed) && parsed.length > 0) {
       return res.json({ quiz: parsed });
+    }
+    if (parsed && typeof parsed === 'object') {
+      const arr = Object.values(parsed).find(v => Array.isArray(v) && v.length > 0);
+      if (arr) return res.json({ quiz: arr });
     }
 
     throw new Error("Failed to generate a valid quiz structure.");

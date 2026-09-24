@@ -12,14 +12,22 @@
 }
 
 @layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
   html, body {
     touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   body {
     background-color: #FAF9F6;
     color: #18181b;
+  }
+  main, .momentum-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 }
 

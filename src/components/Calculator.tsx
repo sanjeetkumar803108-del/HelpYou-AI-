@@ -874,7 +874,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
         </div>
       </header>
 
-      <div className="flex-1 p-6 flex flex-col gap-6 max-w-md mx-auto w-full">
+      <div className="flex-1 px-6 pt-6 pb-36 flex flex-col gap-6 max-w-md mx-auto w-full">
         {/* Left Side: Standard Calculator */}
         <div className="flex-1 flex flex-col bg-white rounded-[2rem] border border-zinc-200/60 p-6 shadow-sm">
           {/* Display screen */}
@@ -1143,7 +1143,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
                       <BookOpen className="w-5 h-5 text-amber-500" />
                       Quick Formulas
                     </h2>
-                    <p className="text-[11px] text-zinc-500 font-medium mt-1">Tap any formula to insert into calculator</p>
+                    <p className="text-[11px] text-zinc-500 font-medium mt-1">Tap to insert</p>
                   </div>
                   <button
                     onClick={() => {

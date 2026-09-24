@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Sparkles, ArrowLeft, Loader2, Globe, CheckCircle2, 
   Lightbulb, FileText, Check, ChevronRight, History, X, Trash2, 
-  Calendar, Lock, ExternalLink, Copy, RefreshCw, Newspaper,
+  Calendar, Lock, ExternalLink, RefreshCw, Newspaper,
   Atom, BookOpen, Layers, Share2, Compass, AlertCircle,
   Zap, ShieldCheck, Bookmark, CheckSquare, Flame
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import { detectAndLogMistake } from '../utils/mistakes';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query as fsQuery, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import GlobalMarkdown from './GlobalMarkdown';
+import { shareTextMobile } from '../utils/mobileSaver';
 
 interface LiveTutorSearchProps {
   onBack: () => void;
@@ -269,7 +270,6 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const [error, setError] = useState<string | null>(null);
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
   const [showNotesBlending, setShowNotesBlending] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [highlightedSourceIdx, setHighlightedSourceIdx] = useState<number | null>(null);
   const [activeCitationSource, setActiveCitationSource] = useState<{ index: number; source: DetailedSource } | null>(null);
 
@@ -485,24 +485,6 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     }));
   };
 
-  const copyReportToClipboard = () => {
-    if (!searchResponse) return;
-    triggerVibration(15);
-    const updates = Array.isArray(searchResponse.live_updates)
-      ? searchResponse.live_updates.join('\n\n')
-      : searchResponse.live_updates;
-
-    const steps = (searchResponse.action_steps || []).map((s, i) => `${i + 1}. ${s}`).join('\n');
-    const sources = (searchResponse.source_links || []).map(l => `- ${l}`).join('\n');
-
-    const fullText = `# ${searchResponse.topic_title}\n\n${updates}\n\n### Actionable Steps\n${steps}\n\n### Pro Tip\n${searchResponse.pro_tips}\n\n### Verified Sources\n${sources}`;
-
-    navigator.clipboard.writeText(fullText).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
-  };
-
   const shareReport = async () => {
     if (!searchResponse) return;
     triggerVibration(15);
@@ -511,21 +493,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
       : searchResponse.live_updates;
 
     const textToShare = `${searchResponse.topic_title}\n\n${updates}`.trim();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: searchResponse.topic_title,
-          text: textToShare
-        });
-        return;
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
-      }
-    }
-    navigator.clipboard.writeText(textToShare).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
+    await shareTextMobile(searchResponse.topic_title, textToShare);
   };
 
   const scrollToSource = (index1Based: number) => {
@@ -645,17 +613,9 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
             <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
           </button>
           <div>
-            <h2 className="text-base font-black text-zinc-900 flex items-center gap-2 leading-tight">
-              <span>Deep Search AI</span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                LIVE 3.0
-              </span>
+            <h2 className="text-lg font-black text-zinc-950 tracking-tight leading-tight">
+              DEEP SEARCH AI
             </h2>
-            <p className="text-[10px] text-zinc-400 font-bold flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-blue-500" />
-              100% Grounded Academic & Web Intelligence
-            </p>
           </div>
         </div>
 
@@ -668,13 +628,6 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                 className="w-10 h-10 rounded-2xl flex items-center justify-center bg-zinc-100 hover:bg-blue-50 hover:text-blue-600 text-zinc-700 transition-all active:scale-95 cursor-pointer"
               >
                 <Share2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={copyReportToClipboard}
-                title="Copy Full Report"
-                className="w-10 h-10 rounded-2xl flex items-center justify-center bg-zinc-100 hover:bg-emerald-50 hover:text-emerald-600 text-zinc-700 transition-all active:scale-95 cursor-pointer"
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-600 stroke-[3]" /> : <Copy className="w-4 h-4" />}
               </button>
             </>
           )}
@@ -699,7 +652,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
       </header>
 
       {/* Main Scroll Content Area */}
-      <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-5 pt-6 pb-36 space-y-6">
         {showHistory ? (
           <div className="max-w-md mx-auto space-y-4">
             <div className="flex items-center justify-between mb-2">
@@ -778,22 +731,22 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                   e.preventDefault();
                   handleSearch();
                 }} 
-                className="space-y-3.5"
+                className="w-full"
               >
                 <div className="relative flex items-center">
                   <input
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search any 2026 news, exam dates, syllabus, or hard doubts..."
-                    className="w-full pl-4 pr-26 py-4 bg-zinc-50/80 border border-zinc-200/90 rounded-2xl text-sm font-bold text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all shadow-inner"
+                    placeholder="Search any 2026 news, exam dates, syllabus, or doubts..."
+                    className="w-full pl-4 pr-16 py-3.5 bg-zinc-50/80 border border-zinc-200/90 rounded-2xl text-sm font-bold text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all shadow-inner"
                   />
 
                   {query && (
                     <button
                       type="button"
                       onClick={() => setQuery('')}
-                      className="absolute right-16 text-zinc-400 hover:text-zinc-600 p-1 cursor-pointer"
+                      className="absolute right-13 text-zinc-400 hover:text-zinc-600 p-1 cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -802,79 +755,15 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                   <button
                     type="submit"
                     disabled={loading || !query.trim()}
-                    className="absolute right-2 top-2 bottom-2 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:bg-zinc-100 disabled:from-zinc-100 disabled:to-zinc-100 text-white disabled:text-zinc-400 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                    title="Search"
+                    className="absolute right-2 top-2 bottom-2 w-10 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:bg-zinc-100 disabled:from-zinc-100 disabled:to-zinc-100 text-white disabled:text-zinc-400 flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm"
                   >
                     {loading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <>
-                        <Search className="w-4 h-4 stroke-[3]" />
-                        <span>Search</span>
-                      </>
+                      <Search className="w-4 h-4 stroke-[2.5]" />
                     )}
                   </button>
-                </div>
-
-                {/* Search Mode Filters */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                  {[
-                    { id: 'all', label: 'All Sources', icon: <Globe className="w-3 h-3" /> },
-                    { id: 'news', label: 'Breaking News & Dates', icon: <Newspaper className="w-3 h-3" /> },
-                    { id: 'stem', label: 'STEM & Formulas', icon: <Atom className="w-3 h-3" /> },
-                    { id: 'history', label: 'History & Cases', icon: <BookOpen className="w-3 h-3" /> }
-                  ].map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => {
-                        triggerVibration(8);
-                        setSelectedCategory(mode.id as any);
-                      }}
-                      className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                        selectedCategory === mode.id
-                          ? 'bg-blue-50 border-blue-300 text-blue-700 font-black shadow-2xs'
-                          : 'bg-zinc-50 border-zinc-200/80 text-zinc-600 hover:bg-zinc-100'
-                      }`}
-                    >
-                      {mode.icon}
-                      <span>{mode.label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Local Context Blending Accordion */}
-                <div className="pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerVibration(10);
-                      setShowNotesBlending(!showNotesBlending);
-                    }}
-                    className="text-xs font-bold text-zinc-500 hover:text-blue-600 flex items-center gap-1.5 transition-colors py-1 cursor-pointer"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-blue-500" />
-                    <span>{showNotesBlending ? "Hide syllabus / local context blending" : "Blend local syllabus / study notes"}</span>
-                    <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${showNotesBlending ? "rotate-90 text-blue-500" : ""}`} />
-                  </button>
-
-                  <AnimatePresence>
-                    {showNotesBlending && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden mt-2"
-                      >
-                        <textarea
-                          value={localNotes}
-                          onChange={(e) => setLocalNotes(e.target.value)}
-                          placeholder="Paste syllabus chapters, target college, or class notes here. The live search report will be customized for your exact academic background..."
-                          rows={3}
-                          className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs font-semibold text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-blue-500 transition-all leading-relaxed resize-none"
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
               </form>
             </motion.div>
@@ -974,50 +863,14 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                   className="space-y-6"
                 >
                   {/* Topic Title & Executive Relevance Card */}
-                  <div className="bg-white rounded-3xl p-5 sm:p-6 border-l-4 border-l-blue-600 border border-zinc-200/80 shadow-sm space-y-3.5">
-                    {/* Top Row: Category tag and Match Score Badge */}
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-[11px] font-black tracking-wider text-blue-600 uppercase flex items-center gap-1.5">
-                        <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                        Academic Grounded Report
-                      </span>
-
-                      {searchResponse.match_score && (
-                        <div className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 flex items-center gap-1.5 shadow-2xs shrink-0">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="text-[11px] font-black text-emerald-700">
-                            {searchResponse.match_score} Match
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Full-width Title: 2-3 clean readable lines */}
-                    <h3 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight leading-snug break-words">
+                  <div className="bg-white rounded-3xl p-5 sm:p-6 border-l-4 border-l-blue-600 border border-zinc-200/80 shadow-sm space-y-4">
+                    {/* Full-width Title: clean readable lines */}
+                    <h3 className="text-base sm:text-lg font-black text-zinc-900 tracking-tight leading-snug break-words">
                       {searchResponse.topic_title}
                     </h3>
 
-                    {/* Metadata Summary Pill Bar */}
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-blue-50 text-blue-700 border border-blue-200/60">
-                        ⚡ Real-Time Web Grounded
-                      </span>
-                      {searchResponse.detailed_sources && (
-                        <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/60">
-                          📚 {searchResponse.detailed_sources.length} Peer / Academic Sources
-                        </span>
-                      )}
-                      <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-zinc-100 text-zinc-700 border border-zinc-200">
-                        ⏱️ Comprehensive Read
-                      </span>
-                    </div>
-
-                    {/* Live Updates & In-Depth Paragraphs */}
-                    <div className="space-y-3 pt-2">
-                      <div className="flex items-center gap-2 text-xs font-black text-zinc-700 uppercase tracking-wider">
-                        <Globe className="w-4 h-4 text-blue-600" />
-                        <span>Verified Real-Time Analysis</span>
-                      </div>
+                    {/* Live Updates & In-Depth Content */}
+                    <div className="space-y-3">
 
                       <div className="text-zinc-850 text-xs sm:text-[13px] leading-relaxed bg-zinc-50/60 p-4 sm:p-5 rounded-2xl border border-zinc-200/70 space-y-4 select-text">
                         {Array.isArray(searchResponse.live_updates) ? (
@@ -1198,11 +1051,11 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                   </div>
                   
                   <div className="space-y-1.5 max-w-sm">
-                    <h3 className="text-lg font-black text-zinc-900 tracking-tight">
-                      Deep Search AI Engine 3.0
+                    <h3 className="text-xl font-black text-zinc-900 tracking-tight">
+                      DEEP SEARCH AI
                     </h3>
                     <p className="text-xs font-semibold text-zinc-500 leading-relaxed">
-                      Instant multi-source web intelligence, 2026 exam notifications, breaking discoveries, and rigorous academic derivations with verified citations.
+                      Instant verified real-time research, 2026 news, exam dates, and derivations.
                     </p>
                   </div>
 

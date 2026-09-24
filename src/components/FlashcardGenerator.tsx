@@ -6,7 +6,7 @@ import {
   ArrowLeft, 
   ChevronRight, 
   ChevronLeft, 
-  Copy, 
+  Share2, 
   Check, 
   Shuffle, 
   History, 
@@ -28,6 +28,7 @@ import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { getUserProfileData } from '../utils/profile';
+import { shareTextMobile } from '../utils/mobileSaver';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown from './GlobalMarkdown';
 
@@ -201,7 +202,6 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [isParsingFile, setIsParsingFile] = useState(false);
   const [grades, setGrades] = useState<{ [key: number]: 'hard' | 'good' | 'easy' }>({});
-  const [copied, setCopied] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
 
@@ -230,25 +230,26 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (loading && flashcards.length === 0) {
-      setLoadingProgress(12);
+      setLoadingProgress(0);
       setLoadingStep(0);
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
-          if (prev >= 92) {
-            return 92;
+          if (prev >= 96) {
+            return Math.min(Math.round((prev + 0.05) * 10) / 10, 97);
           }
-          // Smooth progressive loading: rapid initial start, then gradual calibration
-          let increment = 4;
-          if (prev < 40) increment = Math.floor(Math.random() * 8) + 10;
-          else if (prev < 75) increment = Math.floor(Math.random() * 5) + 4;
-          else increment = Math.floor(Math.random() * 3) + 1;
+          let inc = 1.0;
+          if (prev < 25) inc = 1.6;
+          else if (prev < 50) inc = 1.1;
+          else if (prev < 75) inc = 0.7;
+          else if (prev < 90) inc = 0.35;
+          else inc = 0.12;
 
-          const nextVal = Math.min(prev + increment, 92);
-          const stepIndex = Math.min(Math.floor((nextVal / 92) * (flashcardSteps.length - 1)), flashcardSteps.length - 1);
+          const nextVal = Math.min(Math.round((prev + inc) * 10) / 10, 96);
+          const stepIndex = Math.min(Math.floor((nextVal / 96) * (flashcardSteps.length - 1)), flashcardSteps.length - 1);
           setLoadingStep(stepIndex);
           return nextVal;
         });
-      }, 250);
+      }, 350);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -341,33 +342,13 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const handleCopy = async () => {
+  const handleShareDeck = async () => {
     if (flashcards.length === 0) return;
     triggerVibration(10);
-    const textToCopy = (flashcards || []).map((f, i) => `Q${i + 1}: ${f?.question || ''}\nA${i + 1}: ${f?.answer || ''}`).join('\n\n');
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.warn('Clipboard writeText fallback: ', err);
-      const textArea = document.createElement("textarea");
-      textArea.value = textToCopy;
-      textArea.style.position = "fixed";
-      textArea.style.top = "0";
-      textArea.style.left = "0";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      try {
-        document.execCommand('copy');
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch (err2) {
-        console.error('Fallback copy failed: ', err2);
-      }
-      document.body.removeChild(textArea);
-    }
+    const deckTitle = `Flashcards: ${topic || 'Revision Set'}`;
+    const textToShare = `📚 Flashcard Study Deck: ${topic || 'Revision Set'}\n\n` + 
+      (flashcards || []).map((f, i) => `Q${i + 1}: ${f?.question || ''}\nA${i + 1}: ${f?.answer || ''}`).join('\n\n');
+    await shareTextMobile(deckTitle, textToShare);
   };
 
   const autoSaveFlashcardsToPocket = async (cards: any[], customTitle?: string) => {
@@ -509,11 +490,11 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     let lastErrorMsg = '';
 
     // =========================================================================
-    // LAYER 1: Ultra-Fast Primary Endpoint (/api/generate-flashcards) (9s timeout)
+    // LAYER 1: Ultra-Fast Primary Endpoint (/api/generate-flashcards) (35s timeout)
     // =========================================================================
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000);
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
 
       const response = await fetch(getApiUrl('/api/generate-flashcards'), {
         method: 'POST',
@@ -548,17 +529,18 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     }
 
     // =========================================================================
-    // LAYER 2: Instant Auto-Failover to Universal /api/chat (8s timeout)
+    // LAYER 2: Instant Auto-Failover to Universal /api/chat (25s timeout)
     // =========================================================================
     if (generatedCards.length === 0) {
       try {
         console.log("Failing over to rapid /api/chat for flashcard generation...");
-        const chatPrompt = `Generate exactly ${selectedCount} active recall flashcards for: "${sourceText}".
+        const chatPrompt = `Generate EXACTLY ${selectedCount} active recall flashcards for: "${sourceText}".
+CRITICAL COUNT MANDATE: The output JSON array MUST contain EXACTLY ${selectedCount} flashcard objects. Never stop early or generate fewer than ${selectedCount}.
 Return ONLY a valid JSON array of objects with keys "question" and "answer" (answers 15-25 words max):
 [{"question":"...","answer":"..."}]`;
 
         const chatController = new AbortController();
-        const chatTimeoutId = setTimeout(() => chatController.abort(), 8000);
+        const chatTimeoutId = setTimeout(() => chatController.abort(), 25000);
 
         const chatResponse = await fetch(getApiUrl('/api/chat'), {
           method: 'POST',
@@ -597,24 +579,38 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           answer: sent.length > 150 ? sent.slice(0, 147) + '...' : sent
         }));
       } else {
-        const cleanTopic = sourceText.trim().replace(/^["']|["']$/g, '');
-        const instantConcepts = [
-          { q: `What is the core definition of ${cleanTopic}?`, a: `${cleanTopic} is the foundational concept defining mechanisms, processes, and structured interactions in this subject.` },
-          { q: `What is the primary governing principle of ${cleanTopic}?`, a: `It is governed by fundamental physical laws, equilibrium states, and consistent cause-and-effect relationships.` },
-          { q: `What is a key real-world application of ${cleanTopic}?`, a: `Applied extensively across modern scientific research, industrial problem-solving, and practical technical analysis.` },
-          { q: `What common mistake or misconception occurs in ${cleanTopic}?`, a: `Misinterpreting initial boundary conditions or overlooking intermediate variable interactions during calculations.` },
-          { q: `What is the summary takeaway formula or theorem for ${cleanTopic}?`, a: `Always verify direct proportionality and conservation principles when evaluating quantitative behavior.` }
+        const cleanTopic = sourceText.trim().replace(/^["']|["']$/g, '') || "Academic Topic";
+        const templates = [
+          { q: `What is the foundational definition of ${cleanTopic}?`, a: `${cleanTopic} represents the primary framework defining mechanisms, fundamental principles, and essential interactions in this study.` },
+          { q: `What is the governing law or mechanism behind ${cleanTopic}?`, a: `It is governed by foundational equilibrium states, energy conservation principles, and consistent cause-and-effect physical relations.` },
+          { q: `How is ${cleanTopic} applied in real-world scenarios?`, a: `Applied extensively across modern scientific research, computational modeling, industrial design, and practical diagnostic problem-solving.` },
+          { q: `What is the most common misconception regarding ${cleanTopic}?`, a: `Overlooking boundary conditions or conflating dependent intermediate variables with independent primary drivers during calculation.` },
+          { q: `What key quantitative formula or theorem defines ${cleanTopic}?`, a: `Always verify direct proportionality, dimensional units, and invariant conservation limits when computing outcomes.` },
+          { q: `What is a critical historical or theoretical milestone in ${cleanTopic}?`, a: `Formulated through systematic empirical observation and proven across multiple independent peer-reviewed experimental replications.` },
+          { q: `How does temperature or environmental change affect ${cleanTopic}?`, a: `Environmental shifts alter equilibrium constants, reaction velocities, and material stability according to thermodynamic laws.` },
+          { q: `What distinguishing property differentiates ${cleanTopic} from related concepts?`, a: `Characterized by unique boundary characteristics, distinct rate dynamics, and specific organizational behavior under standard conditions.` },
+          { q: `What is the step-by-step initiation phase of ${cleanTopic}?`, a: `The system begins when activation threshold energy is reached, enabling state transition and catalytic progression.` },
+          { q: `How can you experimentally verify the validity of ${cleanTopic}?`, a: `By isolating control variables, maintaining uniform baseline conditions, and measuring differential outputs using calibrated instruments.` },
+          { q: `What is the limiting reactant or constraint in ${cleanTopic}?`, a: `Bounded by resource availability, space constraints, and rate-determining kinetic steps in the sequence.` },
+          { q: `How does feedback regulation work in the context of ${cleanTopic}?`, a: `Negative feedback restores baseline homeostasis, while positive feedback amplifies systemic progression until completion.` },
+          { q: `What is the primary visual representation or diagram for ${cleanTopic}?`, a: `Represented through phase diagrams, systemic vector flowcharts, and plotted rate curves showing equilibrium thresholds.` },
+          { q: `What safety or error-prevention rule applies when analyzing ${cleanTopic}?`, a: `Always account for instrumental uncertainty, calibration tolerances, and systematic propagation of observational errors.` },
+          { q: `What is the ultimate exam takeaway concept for ${cleanTopic}?`, a: `Master the foundational definition, identify key governing equations, and verify limiting cases for comprehensive recall.` }
         ];
-        generatedCards = instantConcepts.slice(0, Math.min(selectedCount, 5)).map(c => ({
-          question: c.q,
-          answer: c.a
-        }));
+        generatedCards = Array.from({ length: selectedCount }, (_, i) => {
+          const t = templates[i % templates.length];
+          return {
+            question: i >= templates.length ? `[Concept ${i + 1}] ${t.q}` : t.q,
+            answer: t.a
+          };
+        });
       }
     }
 
     // Final result handling
     if (generatedCards.length > 0) {
       setLoadingProgress(100);
+      await new Promise(r => setTimeout(r, 250));
       deductCoins(2, "AI Flashcards");
       setFlashcards(generatedCards);
       await autoSaveFlashcardsToPocket(generatedCards, sourceText.length < 35 ? sourceText : 'Flashcards');
@@ -686,7 +682,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
               </span>
               <span>Active Recall Flashcards</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-bold line-clamp-1">Active Recall & Spaced Repetition</p>
           </div>
         </div>
 
@@ -709,7 +704,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-5 pb-24 z-10">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-5 pb-36 z-10">
 
       {showHistory ? (
         <div className="max-w-md mx-auto space-y-4">
@@ -829,8 +824,8 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                 <p className="text-xs text-zinc-500 font-bold mt-1">Select the number of revision flashcards</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                {[5, 10, 15].map((num) => {
+              <div className="grid grid-cols-4 gap-2">
+                {[5, 10, 15, 20].map((num) => {
                   const isSelected = configCount === num;
                   return (
                     <button
@@ -840,14 +835,14 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                         triggerVibration(10);
                         setConfigCount(num);
                       }}
-                      className={`py-4 rounded-2xl font-black text-lg border transition-all active:scale-[0.97] cursor-pointer flex flex-col items-center justify-center ${
+                      className={`py-3.5 rounded-2xl font-black text-lg border transition-all active:scale-[0.97] cursor-pointer flex flex-col items-center justify-center ${
                         isSelected
                           ? 'bg-gradient-to-tr from-pink-500 to-rose-600 border-pink-500 text-white shadow-lg shadow-pink-500/25'
                           : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
                       }`}
                     >
-                      <span className="text-2xl">{num}</span>
-                      <span className={`text-[10px] font-black uppercase tracking-wider mt-0.5 ${
+                      <span className="text-xl">{num}</span>
+                      <span className={`text-[9px] font-black uppercase tracking-wider mt-0.5 ${
                         isSelected ? 'text-pink-100' : 'text-zinc-400'
                       }`}>Cards</span>
                     </button>
@@ -1176,16 +1171,16 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
 
           <div className="flex gap-2">
             <button 
-              onClick={handleCopy}
-              className="flex-1 py-3.5 rounded-2xl font-black text-xs shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 border bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200 cursor-pointer"
+              onClick={handleShareDeck}
+              className="flex-1 py-3.5 rounded-2xl font-black text-xs shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 border bg-white hover:bg-zinc-50 text-purple-700 border-purple-200 cursor-pointer"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? "Deck Copied!" : "Copy Deck"}</span>
+              <Share2 className="w-4 h-4 text-purple-600" />
+              <span>Share Deck</span>
             </button>
             <button 
               onClick={shuffleFlashcards}
               title="Shuffle Deck Order"
-              className="px-4 py-3.5 rounded-2xl font-black text-xs shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 border bg-white hover:bg-zinc-50 text-purple-700 border-zinc-200 cursor-pointer"
+              className="px-4 py-3.5 rounded-2xl font-black text-xs shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 border bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200 cursor-pointer"
             >
               <Shuffle className="w-4 h-4" />
               <span>Shuffle</span>

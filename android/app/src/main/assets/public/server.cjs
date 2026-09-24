@@ -630,16 +630,15 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(import_genai.Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.5-flash-lite";
-  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
-    requestedModel = "gemini-3.5-flash-lite";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-flash-lite-latest";
+  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5") || requestedModel === "gemini-flash-latest")) {
+    requestedModel = "gemini-flash-lite-latest";
   }
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
+    "gemini-flash-lite-latest",
     "gemini-3.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-flash-latest",
-    "gemini-flash-lite-latest"
+    "gemini-3.5-flash"
   ].filter((value, index, self) => self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -1189,11 +1188,9 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     const shouldStream = stream === "true" || stream === true;
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
         "gemini-flash-lite-latest",
-        "gemini-flash-latest",
-        "gemini-3.6-flash"
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash"
       ];
       const now = Date.now();
       const activeModels = [];
@@ -1386,7 +1383,12 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     const stream = req.body.stream || req.body.academic_stream;
     const country = req.body.country || req.body.academic_country;
     const format = req.body.format || "bullet";
-    const pedagogicalDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
+    const profileContext = req.body.profileContext || "";
+    let pedagogicalDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
+    if (profileContext) {
+      pedagogicalDirective += `
+STUDENT PROFILE CONTEXT: ${profileContext}`;
+    }
     if (!req.file && !textInput) {
       return res.status(400).json({ error: "No PDF file or text content provided" });
     }
@@ -1544,7 +1546,7 @@ IF FORMAT IS "Explain Like I'm 5":
 4. Use short paragraphs to make it visually friendly for beginners.`;
     }
     if (action !== "audio") {
-      promptText += "\n\nOUTPUT QUALITY RULES:\n1. Use ONLY standard markdown: ## headings, ### subheadings, - bullet lists, **bold**, *italic*.\n2. Each bullet point MUST be on its OWN separate line. Never put multiple points on the same line.\n3. NO LaTeX, no '$', no '$$', no '\\\\frac'. Write math as plain text (e.g., A = P(1 + r/n)^(nt)).\n4. NO emojis or special unicode characters.\n5. Ensure there is a blank line before and after every heading and before and after every list.";
+      promptText += "\n\nOUTPUT QUALITY RULES:\n1. Use ONLY standard markdown: ## headings, ### subheadings, - bullet lists, **bold**, *italic*.\n2. Each bullet point MUST be on its OWN separate line. Never put multiple points on the same line.\n3. MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX): When content includes mathematical equations, scientific notation, or formulas, ALWAYS format them using standard LaTeX: '$...$' for inline (e.g., $E = mc^2$, $F = ma$) or '$$...$$' on their own lines for display equations so they render beautifully with KaTeX.\n4. Ensure there is a blank line before and after every heading and before and after every list.";
     } else {
       promptText += "\n\nCRITICAL FORMATTING INSTRUCTIONS: Output ONLY standard, plain ASCII-compatible conversational text. You are STRICTLY FORBIDDEN from using emojis, LaTeX math blocks, special characters, or markdown formatting (like bold, italics, bullet points, or hashtags) as they interfere with text-to-speech rendering.";
     }
@@ -1576,10 +1578,9 @@ ${extractedText}` };
       return res.status(400).json({ error: "Document content is too short or empty to process." });
     }
     const summarizeModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-3.5-flash",
       "gemini-flash-lite-latest",
-      "gemini-flash-latest"
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash"
     ];
     let summaryText = "";
     let summarizeError = null;
@@ -1589,11 +1590,12 @@ ${extractedText}` };
           gradeLevel,
           stream,
           country,
+          profileContext,
           model,
           contents: contentsPayload,
           config: {
             responseMimeType,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 2500,
             temperature: 0.3
           }
         });
@@ -1695,7 +1697,7 @@ ${chunkText}` }] }],
 });
 app.post("/api/grade-essay", async (req, res) => {
   try {
-    const { text, curriculum, subject, gradeLevel, stream, country, images } = req.body;
+    const { text, curriculum, subject, gradeLevel, stream, country, profileContext, images } = req.body;
     const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
     if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
@@ -1703,7 +1705,11 @@ app.post("/api/grade-essay", async (req, res) => {
     const aiClient = getAI();
     const curr = curriculum || "AP (Advanced Placement)";
     const subj = subject || "General Essay";
-    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream || curr, country);
+    let gradeDirective = getGradePedagogicalDirective(gradeLevel, stream || curr, country);
+    if (profileContext) {
+      gradeDirective += `
+STUDENT PROFILE CONTEXT: ${profileContext}`;
+    }
     let rubricInstructions = "";
     let scoreHeader = "";
     if (curr.includes("AP")) {
@@ -1823,14 +1829,18 @@ ${pointDeductionTemplate}
 [If the essay is mechanically flawless, write: "Zero mechanical or grammatical errors detected. Outstanding prose precision."]
 
 ### OVERALL VERDICT
-[A supportive, motivating 2-sentence summary providing a clear roadmap for their next revision.]`;
-    const originalModel = "gemini-3.6-flash";
+[A supportive, motivating 2-sentence summary providing a clear roadmap for their next revision.]
+
+MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX):
+- When evaluating essays that include scientific, mathematical, or economic principles (e.g. in Biology, Environmental Science, Economics, Chemistry, or Physics), ALWAYS format formulas, variables, and reactions using standard LaTeX: '$...$' for inline (e.g., $E = mc^2$, $PED = \frac{%Delta Q}{%Delta P}$, $	ext{CO}_2$) and '$$...$$' on separate lines for block equations. Never write broken characters.
+
+GIBBERISH / RANDOM TYPING GUARD:
+- If the submitted text consists of random typing, keyboard mashing, or lacks coherent sentences, output under the score header: "The submitted text does not contain a coherent essay or recognizable arguments. Please submit a valid written essay to receive full rubric assessment and constructive feedback."`;
+    const originalModel = "gemini-flash-lite-latest";
     let modelsToTry = [
-      "gemini-3.5-flash-lite",
-      "gemini-3.5-flash",
       "gemini-flash-lite-latest",
-      "gemini-flash-latest",
-      "gemini-3.6-flash"
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash"
     ];
     const now = Date.now();
     const activeModels = [];
@@ -1871,9 +1881,9 @@ ${pointDeductionTemplate}
         const streamConfig = {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           temperature: 0.15,
-          maxOutputTokens: 8192
+          maxOutputTokens: 3e3
         };
-        if (model.includes("thinking") || model.includes("3.5") || model.includes("2.5") || model.includes("flash")) {
+        if (model.includes("thinking") || model.includes("2.5")) {
           streamConfig.thinkingConfig = { thinkingBudget: 0 };
         }
         streamResponse = await aiClient.models.generateContentStream({
@@ -1930,6 +1940,7 @@ ${pointDeductionTemplate}
           gradeLevel,
           stream,
           country,
+          profileContext,
           model: "gemini-3.5-flash-lite",
           contents: [{
             parts: [
@@ -1942,8 +1953,7 @@ ${accumulatedOutput}` }] : []
           config: {
             systemInstruction: { parts: [{ text: systemInstruction }] },
             temperature: 0.15,
-            maxOutputTokens: 8192,
-            thinkingConfig: { thinkingBudget: 0 }
+            maxOutputTokens: 8192
           }
         });
         if (recoveryRes.text) {
@@ -2243,6 +2253,9 @@ app.post("/api/generate-flashcards", async (req, res) => {
 Act as an Elite Cognitive Scientist and Active Recall Specialist.
 Your mission is to generate exactly ${requestedCount} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || "Standard"}.
 
+CRITICAL COUNT MANDATE:
+The output JSON array MUST contain EXACTLY ${requestedCount} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount} cards, and never omit questions. The output array length MUST be ${requestedCount}.
+
 CRITICAL ACTIVE RECALL & CONCISE LENGTH RULES:
 1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept appropriate to their grade level.
 2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise, punchy, and between 15 to 25 words max. It must be an active recall mnemonic, definition, or key formula concept designed for rapid revision. NEVER output long multi-sentence paragraphs.
@@ -2270,17 +2283,16 @@ Format:
       model: "gemini-3.5-flash-lite",
       contents: [{
         role: "user",
-        parts: [{ text: `Generate exactly ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}:
+        parts: [{ text: `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount} cards:
 
 ${text}` }]
       }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json",
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
         temperature: 0.2
-      },
-      timeoutMs: 15e3
+      }
     });
     let outputText = response.text || "[]";
     let cards = safeParseJSON(outputText, "array");
@@ -2793,15 +2805,12 @@ app.post("/api/generate-content", async (req, res) => {
       const isMiddleOrEarlyHigh = g.includes("6th") || g.includes("7th") || g.includes("8th") || g.includes("9th") || g.includes("10th") || g.includes("middle") || g.includes("freshman") || g.includes("sophomore");
       if (isMiddleOrEarlyHigh && format !== "APA" && format !== "MLA") {
         formatSpecificRules = `
-- GRADE-APPROPRIATE ESSAY STRUCTURE: Structure the essay with a clear title (# Title), an engaging introductory paragraph with a simple, clear central idea (thesis statement), 2-4 focused body paragraphs with concrete real-world examples, and a warm, summarizing conclusion.
+- GRADE-APPROPRIATE ESSAY STRUCTURE: Structure the essay with an engaging title (# Title), an introductory paragraph with a simple, clear central thesis, 2-4 focused body paragraphs with concrete real-world examples, and a warm, summarizing conclusion.
 - ACCESSIBLE LANGUAGE: Keep sentences clear and vocabulary age-appropriate. DO NOT force APA 7th edition headers, student researcher metadata, or complex theoretical citations for middle school and early high school students unless explicitly requested.`;
-      } else {
+      } else if (format.includes("APA")) {
         formatSpecificRules = `
-- ESSAY SCHOLARSHIP & RIGOR: Avoid the simplistic 5-paragraph template. Synthesize theoretical frameworks, evaluate counter-arguments, and present persuasive, evidence-based academic reasoning.
-- MANDATORY IN-TEXT CITATIONS (APA / MLA / ACADEMIC): You MUST integrate authentic parenthetical in-text citations throughout the body paragraphs for every factual claim, statistical figure, scientific definition, or theoretical argument (e.g., (Author, Year) for APA; (Author Page) for MLA).
-- 1-TO-1 CITATION TO REFERENCE MAPPING: Every source listed in the References or Works Cited section at the end of the essay MUST appear at least once as an in-text citation inside the body text. Never produce a detached bibliography.
-- TITLE PAGE & SECTION HEADINGS:
-  * APA Format: Include a structured APA 7th Edition Title Block at the beginning:
+- APA 7TH EDITION ESSAY SCHOLARSHIP:
+  * Title Block at the beginning:
     # [Complete Descriptive Paper Title]
     **Author:** Student Researcher  
     **Affiliation:** Academic Department, [Institution]  
@@ -2809,75 +2818,108 @@ app.post("/api/generate-content", async (req, res) => {
     **Instructor:** Course Examiner  
     **Date:** ${(/* @__PURE__ */ new Date()).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}  
     ---
-    Use clear markdown headings (## Introduction, ## Critical Analysis, ## Synthesis & Counter-Perspectives, ## Conclusion, ## References).
-  * MLA Format: Include standard MLA 9th Edition Header:
+  * Structure into clear markdown headings (## Introduction, ## Literature Review / Critical Analysis, ## Synthesis & Discussion, ## Conclusion, ## References).
+  * MANDATORY IN-TEXT CITATIONS: Integrate parenthetical citations (e.g., (Author, Year)) for empirical claims and theories.
+  * 1-TO-1 CITATION MAPPING: Every reference in the ## References list must correspond to an in-text citation in the body.`;
+      } else if (format.includes("MLA")) {
+        formatSpecificRules = `
+- MLA 9TH EDITION ESSAY SCHOLARSHIP:
+  * MLA Header at top:
     Student Researcher  
     Course Examiner  
     Academic Writing & Research  
     ${(/* @__PURE__ */ new Date()).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}  
     ### [Centered Title of the Essay]  
     ---
-    Follow with standard body paragraphs and ## Works Cited.
-  * Standard Format: Title at top (# Title), followed by structured introduction, analytical body paragraphs, and conclusion.`;
+  * Structured analytical paragraphs with in-text parenthetical citations (e.g., (Author Page)).
+  * Conclude with ## Works Cited matching body citations.`;
+      } else {
+        formatSpecificRules = `
+- STANDARD ESSAY STRUCTURE:
+  * Compelling Title at the top (# Title).
+  * Engaging hook and explicit thesis statement in the introductory section.
+  * Rich, substantive body paragraphs evaluating mechanisms, counter-perspectives, and evidence.
+  * Strong concluding synthesis that leaves the reader with a lasting, insightful takeaway.
+  * Do NOT force formal citation codes or author blocks unless the prompt explicitly asks for citations.`;
       }
     } else if (type.toUpperCase() === "BLOG") {
       formatSpecificRules = `
-- Ground the text in reality. Use concrete examples, hypothetical case studies, or hard numbers (e.g., specific metrics, benchmarks, case studies).
-- Use punchy, scannable paragraphs and Markdown subheadings (###).`;
+- Ground the text in reality. Use concrete examples, relatable scenarios, or hard numbers.
+- Use punchy, scannable paragraphs, Markdown subheadings (###), and bulleted key takeaways.
+- Include an eye-catching title, an irresistible hook, and a memorable concluding call-to-action.`;
     } else if (type.toUpperCase() === "POEM") {
       formatSpecificRules = `
-- STRICT POEM & STANZA FORMATTING (ZERO PROSE MERGING): If the content type is Poem, you MUST output structured poetic verse with explicit line breaks.
+- STRICT POEM & STANZA FORMATTING (ZERO PROSE MERGING): Output structured poetic verse with explicit line breaks.
 - Separate every stanza with an empty line (\\n\\n).
 - Inside each stanza, every single line of poetry MUST end with a newline character (\\n).
 - NEVER output continuous prose or block paragraphs for a poem.
 - Employ vivid sensory imagery, evocative rhythm, distinct meter, and artistic line breaks.`;
     } else if (type.toUpperCase() === "PARAGRAPH") {
       formatSpecificRules = `
-- Deliver a single, highly concentrated, intellectually substantive block of thought without filler fluff.`;
+- Deliver a single, highly concentrated, intellectually substantive block of thought without filler fluff (150-250 words).
+- Crisp topic sentence, evidence-backed elaboration, and a definitive concluding insight.`;
     }
     let toneSpecificRules = "";
     if (tone.toUpperCase() === "ACADEMIC") {
       toneSpecificRules = `
 - Maintain objectivity, elevated scholarship, and formal structure appropriate to the student's grade level.
-- Synthesize key mechanisms with authoritative clarity.`;
+- Synthesize key mechanisms with authoritative clarity and precise terminology.`;
     } else if (tone.toUpperCase() === "PERSUASIVE") {
       toneSpecificRules = `
-- Write from the trenches. Be direct, authoritative, and logic-driven.
-- Convince the reader using realistic scenarios, empirical evidence, and sharp logic.`;
+- Write with conviction. Be direct, authoritative, and logic-driven.
+- Convince the reader using compelling reasoning, empirical examples, and sharp logic.`;
     } else if (tone.toUpperCase() === "CREATIVE") {
       toneSpecificRules = `
 - "Show, don't tell."
-- Focus on emotional resonance, setting the scene, and exploring the human condition.
+- Focus on emotional resonance, vivid sensory detail, and imaginative storytelling.
 - Avoid melodrama and clich\xE9d tropes.`;
     } else if (tone.toUpperCase() === "CASUAL") {
       toneSpecificRules = `
 - Write like a brilliant mentor or an engaging guide.
-- Be relatable, conversational, energetic, and highly engaging.`;
+- Be relatable, conversational, energetic, and highly engaging without being childish.`;
     }
     const systemInstruction = `${gradeDirective}
 
-You are an Elite Academic Author, Senior Essayist, and Master Literary Writer capable of adapting flawlessly to any format, tone, and student grade level (${gradeLevel || "Standard"}). Your primary goal is to generate high-quality, deeply engaging content while strictly adhering to formatting standards and avoiding formulaic "AI-speak."
+You are an Elite Academic Author, Senior Essayist, and Master Literary Writer capable of adapting flawlessly to any format, tone, and student grade level (${gradeLevel || "Standard"}). Your primary goal is to generate high-quality, deeply engaging content tailored to the student's specific academic profile.
 
 1. THE GLOBAL ANTI-ROBOT FILTER (Applies to ALL outputs):
 - BAN AI CLICH\xC9S: Never use overused words like "delve," "testament," "realm," "tapestry," "crucial," "foster," or "unassailable." Use natural, precise, and grade-appropriate vocabulary.
 - NO ROBOTIC TRANSITIONS: Eliminate mechanical transitions ("Firstly," "Furthermore," "In conclusion," "Ultimately"). Weave ideas together naturally.
 - NO ROBOTIC FILLER: Do not say "Here is your content" or "Certainly". Output ONLY the final content itself.
+- LANGUAGE ADAPTABILITY: If the topic prompt is entered in Hindi, Hinglish, Spanish, or any other language, compose the entire piece in that exact language with natural, authentic native phrasing and elevated literary quality.
 
-2. DYNAMIC FORMAT RULES (Adapt based on user's 'Content Type' selection):
+2. DYNAMIC FORMAT RULES:
 ${formatSpecificRules}
 
-3. DYNAMIC TONE RULES (Adapt based on user's 'Tone' selection):
+3. DYNAMIC TONE RULES:
 ${toneSpecificRules}`;
+    const isCreative = type.toUpperCase() === "POEM" || tone.toUpperCase() === "CREATIVE";
+    const temperature = isCreative ? 0.75 : tone.toUpperCase() === "PERSUASIVE" ? 0.5 : 0.35;
+    const studentContext = [
+      gradeLevel ? `Grade: ${gradeLevel}` : "",
+      stream ? `Track/Stream: ${stream}` : "",
+      country ? `Curriculum: ${country}` : ""
+    ].filter(Boolean).join(" | ");
+    const promptText = `TASK: Generate a high-quality ${type} on the topic below.
+TOPIC: ${topic}
+STUDENT PROFILE: ${studentContext || "Standard Academic Profile"}
+CONTENT TYPE: ${type}
+TONE: ${tone}
+FORMAT: ${format}
+
+CRITICAL EXECUTION:
+- Authentically tailor vocabulary, sentence complexity, and subject depth to the student's profile (${studentContext || "Standard"}).
+- Do not produce formulaic AI filler. Deliver a rich, complete, publication-grade piece ready for academic reading or assignment submission.`;
     const response = await safeGenerateContent({
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Generate a ${type} in ${format} format with a ${tone} tone for a student in Grade: ${gradeLevel || "Standard"}. Topic: ${topic}` }] },
+      model: "gemini-flash-lite-latest",
+      contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
-        maxOutputTokens: 8192,
-        temperature: 0.3
+        maxOutputTokens: 2500,
+        temperature
       }
     });
     const outputText = response.text || "No content generated.";
@@ -2893,14 +2935,18 @@ ${toneSpecificRules}`;
 });
 app.post("/api/grammar-enhance", async (req, res) => {
   try {
-    const { text, mode, gradeLevel, stream, country, images } = req.body;
-    const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
-    if (!text && (!images || !Array.isArray(images) || images.length === 0)) {
+    const { text, mode, gradeLevel, stream, country, profileContext, images } = req.body;
+    const trimmed = (text || "").trim();
+    if (!trimmed && (!images || !Array.isArray(images) || images.length === 0)) {
       return res.status(400).json({ error: "Missing text or images" });
     }
     const aiClient = getAI();
     const userMode = mode === "academic" ? "academic" : "fix";
-    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
+    let gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
+    if (profileContext) {
+      gradeDirective += `
+STUDENT PROFILE CONTEXT: ${profileContext}`;
+    }
     let modeInstruction = "";
     if (userMode === "fix") {
       modeInstruction = `MODE: Fix Grammar Only (Preserves user's original voice)
@@ -2917,6 +2963,18 @@ app.post("/api/grammar-enhance", async (req, res) => {
 You are an Elite Academic Writer, Expert English Editor, and Master Study Coach. Your job is to proofread, correct, and enhance the provided text based on the requested mode and the student's grade level (${gradeLevel || "Standard"}).
 
 ${modeInstruction}
+
+CRITICAL RULES:
+1. GIBBERISH / RANDOM TYPING:
+   - If the input consists purely of meaningless random characters, random keyboard mashing, or typing tests (e.g. 'Hikjn', 'asdfghj', 'qwerty', '12345'), politely return in "correctedText": "Please provide a valid sentence, paragraph, or essay to check and improve grammar.", with "fixes": ["No meaningful text was detected to correct."].
+
+2. MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX):
+   - If the student's text contains mathematical equations, physics formulas, scientific variables, or chemical reactions, ALWAYS PRESERVE THEM ACCURATELY.
+   - Retain or format equations using standard LaTeX syntax: '$...$' for inline math/formulas (e.g., $E = mc^2$, $F = ma$, $v = u + at$) and '$$...$$' on separate lines for block equations.
+   - NEVER strip, corrupt, or alter LaTeX backslashes, superscripts, subscripts, or mathematical operators during grammatical correction.
+
+3. PRESERVE INTENT & FORMAT:
+   - Keep bullet points, paragraphs, and list structures intact.
 
 CRITICAL OUTPUT FORMAT:
 You must return your output strictly in JSON format matching the following schema. Do not output any markdown formatting, wrappers, or conversational text outside the JSON.
@@ -2942,20 +3000,42 @@ You must return your output strictly in JSON format matching the following schem
         });
       }
     }
-    const targetText = text || "Please read the text inside the attached image(s), correct any grammatical errors, and enhance it according to the chosen mode.";
+    const targetText = trimmed || "Please read the text inside the attached image(s), correct any grammatical errors, and enhance it according to the chosen mode.";
     contentParts.push({ text: targetText });
-    const response = await safeGenerateContent({
-      gradeLevel,
-      stream,
-      country,
-      model: "gemini-3.5-flash-lite",
-      contents: { parts: contentParts },
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
+    const grammarModels = [
+      "gemini-flash-lite-latest",
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash"
+    ];
+    let response = null;
+    let grammarError = null;
+    for (const model of grammarModels) {
+      try {
+        response = await safeGenerateContent({
+          gradeLevel,
+          stream,
+          country,
+          profileContext,
+          model,
+          contents: { parts: contentParts },
+          config: {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            responseMimeType: "application/json"
+          }
+        });
+        if (response && response.text) {
+          grammarError = null;
+          break;
+        }
+      } catch (err) {
+        console.warn(`[grammar-enhance] Model ${model} failed, trying fallback:`, err?.message || err);
+        grammarError = err;
       }
-    });
-    const outputRaw = response.text || "{}";
+    }
+    if (!response && grammarError) {
+      throw grammarError;
+    }
+    const outputRaw = response?.text || "{}";
     let correctedText = "";
     let fixes = [];
     try {
@@ -3047,17 +3127,20 @@ app.post("/api/fetch-url-text", async (req, res) => {
 });
 app.post("/api/summarize-text", async (req, res) => {
   try {
-    const { text, format, gradeLevel, stream, country } = req.body;
-    if (!text) {
-      return res.status(400).json({ error: "No text provided" });
+    const { text, format, gradeLevel, stream, country, profileContext } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: "Please enter a topic or text to summarize." });
     }
-    const wordCount = text ? text.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
+    const trimmedText = text.trim();
+    if (trimmedText.length < 2) {
+      return res.json({ text: "Please enter a valid topic, paragraph, or paste your study notes to summarize." });
+    }
     const aiClient = getAI();
     const summaryFormat = format || "bullet";
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const blockedPhrases = ["403 forbidden", "access denied", "robot check", "captcha", "cloudflare"];
-    const lowercaseText = text.toLowerCase();
-    if (text.length < 20 || blockedPhrases.some((p) => lowercaseText.includes(p))) {
+    const lowercaseText = trimmedText.toLowerCase();
+    if (blockedPhrases.some((p) => lowercaseText.includes(p)) && (lowercaseText.includes("http") || lowercaseText.includes("www") || lowercaseText.includes("error") || lowercaseText.includes("403"))) {
       return res.json({ text: "Unable to read this link. The website's security is blocking our AI. Please copy and paste the article text directly into the box." });
     }
     let selectedFormatName = "Bullet Points";
@@ -3070,21 +3153,26 @@ app.post("/api/summarize-text", async (req, res) => {
 
 SYSTEM INSTRUCTION: EXPERT SUMMARISER
 
-You are an expert academic and professional summarizer. Your task is to extract key information from the provided text and format it STRICTLY according to the user's requested mode, tightly calibrated to the student's grade level (${gradeLevel || "Standard"}).
+You are an expert academic and professional summarizer. Your task is to extract key information from the provided text or topic and format it STRICTLY according to the user's requested mode, tightly calibrated to the student's grade level (${gradeLevel || "Standard"}).
 
 USER'S REQUESTED FORMAT: ${selectedFormatName}
 
-CRITICAL GLOBAL RULE:
-NEVER output a "Wall of Text". Always use proper line breaks and structure.
+CRITICAL RULES:
+1. TOPIC VS TEXT HANDLING:
+   - If the student provides a brief topic, concept name, or question (e.g. "Photosynthesis", "Newton's laws", "World War 2", "Ohm's Law"), synthesize and provide a comprehensive, high-yield academic summary explaining that topic in depth with clear definitions, principles, and key facts according to the requested format.
+   - If the input is a long article or document notes, extract and condense the core ideas without losing vital academic facts.
+   - If the input consists purely of meaningless random characters or typing tests (e.g., 'Hikjn', 'asdfghj', 'qwerty'), politely state: "Please provide a valid topic, paragraph, or paste your study notes to generate an accurate summary."
+
+2. NEVER output a "Wall of Text". Always use proper line breaks and structure.
 
 DYNAMIC FORMATTING RULES:
 
 IF FORMAT IS "Bullet Points":
-1. Start with ONE main heading using ## (e.g., ## Key Concepts from the Text).
+1. Start with ONE main heading using ## (e.g., ## Key Concepts & Summary).
 2. Then break the summary into logical topic sections. Use ### for each section heading.
 3. MANDATORY: Under each section heading, EVERY point MUST be on its OWN LINE starting with "- " (standard markdown list).
-4. CONCISE: Keep each bullet point under 2 sentences.
-5. NO NARRATIVE: Do not write intro or conclusion paragraphs. Start immediately with the main heading.
+4. CONCISE & HIGH-YIELD: Keep each bullet point under 2 sentences.
+5. NO NARRATIVE: Do not write conversational filler intro or conclusion paragraphs. Start immediately with the main heading.
 6. EXAMPLE OF EXPECTED FORMAT:
 
 ## Main Topic Summary
@@ -3100,27 +3188,29 @@ IF FORMAT IS "Bullet Points":
 - Second key fact about section two.
 
 IF FORMAT IS "Short TL;DR":
-1. Provide the absolute bottom-line of the text.
+1. Provide the absolute bottom-line of the text/topic.
 2. Structure it as one short "Executive Summary" paragraph (max 3-4 sentences).
 3. Follow it with a "Top 3 Takeaways" numbered list.
 4. Keep the tone professional, direct, and time-saving.
 
 IF FORMAT IS "Explain Like I'm 5":
-1. Break down complex jargon into grade-school level vocabulary.
+1. Break down complex jargon into friendly, intuitive vocabulary.
 2. Use at least one relatable, everyday analogy.
 3. Keep the tone extremely warm, engaging, and story-like.
 4. Use short paragraphs to make it visually friendly for beginners.
 
-OUTPUT QUALITY RULES:
+OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
 1. Use ONLY standard markdown: ## headings, ### subheadings, - bullet lists, **bold**, *italic*.
 2. Each bullet point MUST be on its OWN separate line. Never put multiple points on the same line.
-3. NO LaTeX, no '$', no '$$'. Write math as plain text (e.g., A = P(1 + r/n)^(nt)).
+3. MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX): When summarizing content involving mathematics, physics, or chemistry, ALWAYS format equations and mathematical variables using standard LaTeX syntax:
+   - Use '$...$' for inline math/formulas (e.g., $E = mc^2$, $F = ma$, $\\lambda = \\frac{h}{p}$).
+   - Use '$$...$$' on separate lines for standalone equations or multi-step derivations.
+   This ensures crisp, beautiful KaTeX rendering for the student.
 4. Ensure there is a blank line before and after every heading and list block.`;
     const textSumModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-3.5-flash",
       "gemini-flash-lite-latest",
-      "gemini-flash-latest"
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash"
     ];
     let textSummaryResult = "";
     let textSumError = null;
@@ -3130,9 +3220,10 @@ OUTPUT QUALITY RULES:
           gradeLevel,
           stream,
           country,
+          profileContext,
           model,
-          contents: { parts: [{ text }] },
-          config: { systemInstruction: { parts: [{ text: systemInstruction }] }, maxOutputTokens: 8192, temperature: 0.3 }
+          contents: { parts: [{ text: trimmedText }] },
+          config: { systemInstruction: { parts: [{ text: systemInstruction }] }, maxOutputTokens: 2500, temperature: 0.3 }
         });
         textSummaryResult = response.text || "";
         textSumError = null;
@@ -3165,7 +3256,7 @@ app.post("/api/generate-questions", async (req, res) => {
     const count = req.body.count;
     const stream = req.body.stream;
     const country = req.body.country;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 25);
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || "academic curriculum"}`;
     const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
 Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-ended) practice questions along with official examiner marking rubrics and score allocations.
@@ -3219,6 +3310,7 @@ Target Grade: ${gradeLevel}.
 ${userStreamDirective}
 ${userCountryDirective}
 Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic and grade.
+CRITICAL COUNT MANDATE: The output array MUST contain EXACTLY ${requestedCount} question objects. Never stop early or generate fewer than ${requestedCount}.
 For each question, provide:
 1. 'question': Authentic exam question.
 2. 'expectedAnswer': Concise model solution.
@@ -3229,12 +3321,12 @@ For each question, provide:
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-flash-lite-latest",
         contents: { parts: [{ text: userPrompt }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: 8192,
+          maxOutputTokens: Math.min(requestedCount * 450, 8192),
           temperature: 0.6
         }
       });
@@ -4887,12 +4979,12 @@ ${avoidList.map((p, i) => `  [${i + 1}] ${p.slice(0, 100)}`).join("\n")}` : "";
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Topic: ${topic}. Generate the ${requestedCount}-question JSON quiz now.${avoidDirective}` }] },
+        model: "gemini-flash-lite-latest",
+        contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: 8192,
+          maxOutputTokens: Math.min(requestedCount * 350, 8192),
           temperature: 0.6
         }
       });
@@ -4994,7 +5086,8 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
         }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          maxOutputTokens: 8192
         }
       });
     } else {
@@ -5018,7 +5111,8 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
         }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          maxOutputTokens: 8192
         }
       });
     }
@@ -5094,7 +5188,8 @@ Use this exact JSON structure:
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions for a student in Grade: ${gradeLevel || "Standard"}.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192
       }
     });
     let quizText = response.text || "";
@@ -5120,54 +5215,32 @@ The Gemini API is currently experiencing rate limits. Please try again in 60 sec
     res.status(500).json({ error: error.message || "Failed to generate quiz from image" });
   }
 });
-async function extractSearchKeywords(userQuery) {
-  try {
-    const aiClient = getAI();
-    const response = await aiClient.models.generateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: [{
-        parts: [{
-          text: `You are a search query optimizer for an elite educational AI. Given a user query (which might be in conversational Hindi, Hinglish, slang, or complex English), extract 2-3 crisp, highly-targeted English search keyword phrases for Google News and Wikipedia.
-
-User Query: "${userQuery}"
-
-Output strictly a valid JSON array of strings, e.g. ["keyword 1", "keyword 2"]. Absolutely zero conversational markdown or extra text.`
-        }]
-      }],
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.1
-      }
-    });
-    const parsed = safeParseJSON(response.text || "[]", "array");
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map((k) => String(k).trim()).filter(Boolean);
-    }
-  } catch (e) {
-    console.error("[extractSearchKeywords] Error:", e);
-  }
-  const clean = userQuery.replace(/^(bhai|tum|please|zara|karo|batao|explain|mujhe|janna|hai|deep|search|kya|hua|tha|pe|par|about)\s+/gi, "").trim();
-  return [clean || userQuery];
+function extractSearchKeywords(userQuery) {
+  const clean = userQuery.replace(/^(bhai|tum|please|zara|karo|batao|explain|mujhe|janna|hai|deep|search|what is|tell me|who is|when was|kya|kab|kaun|kitna|where|capital|kya hai|kiske|kisne|about|latest news on|give me information on)\s+/gi, "").trim();
+  const keywords = [];
+  if (clean && clean.length > 1) keywords.push(clean);
+  if (clean !== userQuery.trim() && userQuery.trim().length > 1) keywords.push(userQuery.trim());
+  return keywords.length > 0 ? keywords : [userQuery.trim()];
 }
 async function performLiveWebSearch(query, searchKeywords = [], userCountry = "United States") {
   const sources = [];
   const seenUrls = /* @__PURE__ */ new Set();
-  const queriesToSearch = Array.from(/* @__PURE__ */ new Set([
-    ...searchKeywords,
-    query.replace(/^(bhai|tum|please|zara|karo|batao|explain|mujhe|janna|hai|deep|search)\s+/gi, "").trim()
-  ])).filter((q) => q && q.length > 2).slice(0, 3);
+  const primaryClean = extractSearchKeywords(query)[0] || query;
+  const queriesToSearch = Array.from(/* @__PURE__ */ new Set([primaryClean, ...searchKeywords])).filter((q) => q && q.length > 1).slice(0, 2);
+  const isIndia = (userCountry || "").toLowerCase().includes("india");
+  const glParam = isIndia ? "IN" : "US";
+  const hlParam = isIndia ? "en-IN" : "en-US";
   const searchTasks = queriesToSearch.map(async (kw) => {
     const encoded = encodeURIComponent(kw);
     try {
-      const glParam = (userCountry || "").toLowerCase().includes("india") ? "IN" : "US";
-      const hlParam = glParam === "IN" ? "en-IN" : "en-US";
-      const rssRes = await fetchWithTimeout(`https://news.google.com/rss/search?q=${encoded}&hl=${hlParam}&gl=${glParam}&ceid=${glParam}:en`, {
+      const rssUrl = `https://news.google.com/rss/search?q=${encoded}&hl=${hlParam}&gl=${glParam}&ceid=${glParam}:en`;
+      const rssRes = await fetchWithTimeout(rssUrl, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-      }, 7e3);
+      }, 2500);
       if (rssRes.ok) {
         const xml = await rssRes.text();
         const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-        for (let i = 0; i < Math.min(5, items.length); i++) {
+        for (let i = 0; i < Math.min(6, items.length); i++) {
           const block = items[i][1];
           const title = (block.match(/<title>([\s\S]*?)<\/title>/)?.[1] || "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").trim();
           const link = (block.match(/<link>([\s\S]*?)<\/link>/)?.[1] || "").replace(/<!\[CDATA\[|\]\]>/g, "").trim();
@@ -5181,7 +5254,7 @@ async function performLiveWebSearch(query, searchKeywords = [], userCountry = "U
             sources.push({
               title,
               uri: link,
-              sourceName: source || "Live News",
+              sourceName: source || "Live Verified News Wire",
               snippet: richSnippet,
               pubDate,
               type: "news"
@@ -5190,87 +5263,30 @@ async function performLiveWebSearch(query, searchKeywords = [], userCountry = "U
         }
       }
     } catch (e) {
-      console.warn(`[performLiveWebSearch] Google News RSS error for "${kw}":`, e);
+      console.warn(`[performLiveWebSearch] News RSS notice for "${kw}":`, e.message || e);
     }
     try {
-      const crossrefUrl = `https://api.crossref.org/works?query=${encoded}&rows=2&sort=relevance`;
-      const crossrefRes = await fetchWithTimeout(crossrefUrl, {
-        headers: { "User-Agent": "HelpYouAI-AcademicSearch/1.0 (mailto:support@helpyou.ai)" }
-      }, 5e3);
-      if (crossrefRes.ok) {
-        const cData = await crossrefRes.json();
-        const cItems = cData.message?.items || [];
-        for (const item of cItems) {
-          const cTitle = Array.isArray(item.title) ? item.title[0] : item.title;
-          const cUrl = item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : "");
-          const journal = Array.isArray(item["container-title"]) ? item["container-title"][0] : item["container-title"] || "Peer-Reviewed Journal";
-          const year = item.issued?.["date-parts"]?.[0]?.[0] || "Recent";
-          if (cTitle && cUrl && !seenUrls.has(cUrl)) {
-            seenUrls.add(cUrl);
+      const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(kw.replace(/ /g, "_"))}`;
+      const sumRes = await fetchWithTimeout(summaryUrl, {
+        headers: { "User-Agent": "HelpYouAI-AcademicSearch/1.0" }
+      }, 2e3);
+      if (sumRes.ok) {
+        const sumData = await sumRes.json();
+        if (sumData.title && sumData.extract) {
+          const academicRefUrl = `https://www.britannica.com/search?query=${encodeURIComponent(sumData.title)}`;
+          if (!seenUrls.has(academicRefUrl)) {
+            seenUrls.add(academicRefUrl);
             sources.push({
-              title: `${cTitle} (${journal}, ${year})`,
-              uri: cUrl,
-              sourceName: journal,
-              snippet: `Peer-Reviewed Study: "${cTitle}". Published in ${journal} (${year}). DOI: ${item.DOI || "Indexed"}`,
-              type: "academic"
+              title: `${sumData.title} - Academic Encyclopedic Context`,
+              uri: academicRefUrl,
+              sourceName: "Encyclopaedia Britannica Academic",
+              snippet: sumData.extract,
+              type: "encyclopedia"
             });
           }
         }
       }
-    } catch (e) {
-      console.warn(`[performLiveWebSearch] Crossref error for "${kw}":`, e);
-    }
-    try {
-      const wikiSearchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encoded}&utf8=&format=json&srlimit=3`;
-      const wikiRes = await fetchWithTimeout(wikiSearchUrl, { headers: { "User-Agent": "HelpYouAI-Bot/1.0" } }, 7e3);
-      if (wikiRes.ok) {
-        const data = await wikiRes.json();
-        const items = data.query?.search || [];
-        for (const item of items) {
-          const pageTitle = item.title;
-          const pageUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(pageTitle.replace(/ /g, "_"))}`;
-          if (seenUrls.has(pageUrl)) continue;
-          seenUrls.add(pageUrl);
-          let extract = item.snippet.replace(/<[^>]+>/g, "");
-          try {
-            const sumRes = await fetchWithTimeout(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(pageTitle.replace(/ /g, "_"))}`, {
-              headers: { "User-Agent": "HelpYouAI-Bot/1.0" }
-            }, 4e3);
-            if (sumRes.ok) {
-              const sumData = await sumRes.json();
-              if (sumData.extract) extract = sumData.extract;
-            }
-          } catch (_) {
-          }
-          sources.push({
-            title: pageTitle,
-            uri: pageUrl,
-            sourceName: "Wikipedia Encyclopedia",
-            snippet: extract,
-            type: "encyclopedia"
-          });
-        }
-      }
-    } catch (e) {
-      console.warn(`[performLiveWebSearch] Wikipedia error for "${kw}":`, e);
-    }
-    try {
-      const ddgRes = await fetchWithTimeout(`https://api.duckduckgo.com/?q=${encoded}&format=json`, {}, 5e3);
-      if (ddgRes.ok) {
-        const ddg = await ddgRes.json();
-        if (ddg.Heading && ddg.AbstractURL && !seenUrls.has(ddg.AbstractURL)) {
-          seenUrls.add(ddg.AbstractURL);
-          sources.push({
-            title: ddg.Heading,
-            uri: ddg.AbstractURL,
-            sourceName: ddg.AbstractSource || "DuckDuckGo Knowledge",
-            snippet: ddg.Abstract || "",
-            type: "knowledge"
-          });
-        }
-      }
-    } catch (e) {
-      console.warn(`[performLiveWebSearch] DuckDuckGo error for "${kw}":`, e);
+    } catch (_) {
     }
   });
   await Promise.allSettled(searchTasks);
@@ -5555,83 +5571,75 @@ app.post("/api/live-study-tutor", async (req, res) => {
       return res.status(400).json({ error: "Missing search query" });
     }
     const rawQuery = rawQueryInput.trim();
-    const keywords = await extractSearchKeywords(rawQuery);
+    const keywords = extractSearchKeywords(rawQuery);
+    const isSmallOrDateQuery = rawQuery.split(/\s+/).length <= 8 || /\b(when|date|launch|born|died|kab|kitne|kitna|kaun|kisne|kisko|kaha|where|who is|what is|capital|full form|ceo|founder|prime minister|president|released|announced|exam date|admit card|score|result|headquarters|hq|established)\b/i.test(rawQuery);
     const searchResults = await performLiveWebSearch(rawQuery, keywords, country);
     const verifiedContextString = searchResults.map(
       (s, idx) => `[Source ${idx + 1}] Title: ${s.title}
 URL: ${s.uri}
-Publisher: ${s.sourceName}
+Publisher: ${s.sourceName} (${s.pubDate || "Recent"})
 Content Snippet: ${s.snippet}
 `
     ).join("\n---\n");
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicStream, country);
+    const currentDateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const systemInstruction = `${gradeDirective}
 
 You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
-Your mission is to process student queries and produce an elite, point-wise, in-depth academic research report grounded in real-time verified data, peer-reviewed journals, and accredited national educational repositories, calibrated for a student in Grade: ${gradeLevel || "Standard"}.
+Current Real-Time Date: ${currentDateStr}. Treat this as the absolute present moment.
+Your mission is to provide 100% accurate, up-to-date, grounded answers for student queries.
 
-CRITICAL ACADEMIC INTEGRITY & CITATION RULES:
-1. STRICT WIKIPEDIA HARD-BAN:
-   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output. Tier-1 academic institutions (US, UK, Canada, Australia, IB schools) strictly ban Wikipedia citations and penalize students.
+CRITICAL ADAPTIVE FORMATTING & BEHAVIOR DIRECTIVE:
+1. QUERY INTENT CLASSIFICATION:
+${isSmallOrDateQuery ? `   - [ACTIVE MODE: DIRECT & CONCISE ANSWER]
+     * The user has asked a date, small query, or specific factual question ("${rawQuery}").
+     * GIVE A DIRECT, SIMPLE, CRISP ANSWER. Do NOT output a lengthy thesis or artificial 4-section report.
+     * The very first line/bullet of "live_updates" MUST state the exact answer or date IMMEDIATELY in bold (e.g. "**Chandrayaan-3 was launched on July 14, 2023 at 2:35 PM IST.**" or in Hinglish: "**Chandrayaan-3 ko 14 July 2023 ko dopehar 2:35 baje launch kiya gaya tha.**").
+     * Follow with 2 to 3 concise, high-value bullet points explaining essential verified context with citations [1], [2].
+     * Keep "action_steps" to 1-2 practical takeaways.` : `   - [ACTIVE MODE: STRUCTURED POINT-WISE BREAKDOWN]
+     * The user has asked a broad, academic, or complex topic ("${rawQuery}").
+     * Provide an elite, point-wise, structured research report with small markdown subheadings and clear bullet points.
+     * Organize cleanly into 3-4 logical subheadings (e.g., "### \u{1F4CC} Core Background & Definition", "### \u{1F50D} Key Developments & Timeline", "### \u2696\uFE0F Real-World Impact & Analysis", "### \u{1F4A1} High-Yield Takeaways").
+     * Under each subheading, provide 2 to 3 detailed bullet points starting with bold anchors (* **Bold Anchor:** explanation [1]).`}
+
+2. REAL-TIME FACTUAL ACCURACY & CURRENT NEWS:
+   - Ground strictly in verified live context provided below.
+   - For latest news, dates, or current events, state exact real-world names, dates, organizations, or developments. Never guess or write vague summaries like "recently".
+
+3. STRICT WIKIPEDIA HARD-BAN:
+   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output.
    - Strictly prioritize peer-reviewed journals (.edu, .gov, Nature, Science, IEEE, NIH, JSTOR, Springer, Elsevier, Crossref DOI), authoritative encyclopedias (Encyclopaedia Britannica), accredited national education boards (CollegeBoard, NCERT, UCAS), and verified global news wires (Reuters, AP, BBC).
 
-2. MANDATORY INLINE CITATIONS PROTOCOL:
-   - Every single factual claim, statistic, date, quote, policy decision, exam notification, or scientific theorem in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...approved on January 14, 2026 [1]...", "...quantum coherence increased by 42% [2]...").
-   - Every citation number [1], [2], [3] MUST correspond directly to the 1-based index of the items in "source_links" and "detailed_sources". This guarantees students can map every single fact to its exact accredited source when writing essays.
+4. MANDATORY INLINE CITATIONS PROTOCOL:
+   - Every single factual claim, statistic, date, or event in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...approved on January 14, 2026 [1]...", "...launched on July 14, 2023 [1]...").
+   - Every citation number [1], [2] MUST correspond directly to the 1-based index in "source_links".
 
-3. REAL-WORLD SPECIFICITY & NAMED ENTITIES (ZERO VAGUE SUMMARIES):
-   - When citing real-time web sources for medical, tech, or current events, do NOT write vague summaries. You MUST explicitly name specific medicines/therapies, companies, clinical trials, or exact dates found in the search results.
-   - For Medical / Health Queries: You MUST explicitly name the specific medicines or therapies (e.g., Lecanemab/Leqembi, Donanemab/Kisunla, Tirzepatide/Mounjaro, CRISPR Casgevy), companies or institutions involved (e.g., Biogen, Eisai, Eli Lilly, Vertex, FDA, NIH), exact clinical trial names or phases (e.g., Phase 3 Clarity AD trial, SURPASS clinical trial program, NCT registry ID), and specific outcomes/endpoints.
-   - For Tech / Engineering Queries: You MUST explicitly state the exact models or architecture versions (e.g., Claude 3.7 Sonnet, Gemini 2.5 Flash, Llama 3.3 70B, GPT-4.5), chipsets/hardware (e.g., Nvidia B200 Blackwell, Apple M4 Max), performance benchmarks, and corporate labs.
-   - For Current Events / Educational Policies: You MUST state the exact government bodies, exam boards, or institutions (e.g., US Department of Education, NTA, CBSE, CollegeBoard), exact bills or acts, and exact dates (e.g., "January 14, 2026" or "March 2026") instead of vague words like "recently" or "in recent times".
-
-4. ONLY ONE MAIN HEADLINE:
-   - "topic_title" MUST be a crisp, elegant, concise headline of 3 to 6 words max (e.g. "Lecanemab Alzheimer's Therapy Approval", "JEE Main 2026 Registration Guide", "Quantum Entanglement Principles"). Avoid long multi-clause sentence titles.
-
-5. NEVER OUTPUT LARGE UNBROKEN PARAGRAPHS:
-   - All explanations MUST be strictly broken down into small, digestible subheadings and point-wise bullet points.
-   - Each entry in "live_updates" MUST start with a small markdown subheading (e.g. "### \u{1F4CC} Core Background & Overview", "### \u{1F50D} Detailed Timeline & Key Developments", "### \u2696\uFE0F Analytical Impact & Real-World Consequences", "### \u{1F4A1} High-Yield Student Takeaways").
-   - Under each subheading, provide 2 to 4 detailed bullet points starting with bold anchors and ending with inline citations (e.g. "* **FDA Approval Milestone:** On January 14, 2026, the FDA approved Biogen and Eisai's Leqembi (lecanemab-irmb) subcutaneous maintenance dose following the Phase 3 Clarity AD trial [1].").
-
-6. REGIONAL ACADEMIC ADAPTATION:
-   - The student is located in ${country}, Grade: ${gradeLevel}, Stream: ${academicStream}.
-   - Contextualize terminology, syllabus relevance, and exam boards according to their national curriculum (e.g., AP/SAT/CollegeBoard for USA, GCSE/A-Levels for UK, JEE/NEET/CBSE for India, VCE/HSC for Australia).
-
-7. STEM vs HUMANITIES RIGOR:
-   - STEM Queries (Physics, Chemistry, Math, Biology): Provide core formulas wrapped in LaTeX ($...$ or $$...$$), step-by-step derivations, and key parameters.
-   - Humanities/News Queries: Provide structured bullet points covering background origin, chronological milestones, institutional impact, and current status.
-
-8. LANGUAGE MATCHING:
-   - If the user wrote in Hinglish (e.g. "Bhai Jeju island pe kya hua tha"), write the entire response in natural, articulate, point-wise Hinglish with academic precision.
+5. LANGUAGE MATCHING:
+   - If the user wrote in Hinglish (e.g. "bhai Chandrayaan 3 kab launch hua tha"), write the entire response in natural, articulate, crisp Hinglish.
    - If Hindi, write Hindi. If English, write English.
 
-9. ZERO FAKE URLS:
-   - In "source_links", ONLY use exact verified URLs from context or accredited root domains (e.g., britannica.com, nature.com, nih.gov, ed.gov, ncert.nic.in). NEVER use Wikipedia.
+6. HEADLINE:
+   - "topic_title" MUST be a crisp, elegant headline of 3 to 6 words max.
 
 STRICT JSON OUTPUT FORMAT:
 {
   "topic_title": "Concise Main Headline (3-6 words)",
   "match_score": "98%",
   "live_updates": [
-    "### \u{1F4CC} Core Background & Overview\\n* **Foundational Context:** Clear, verified background facts supported by research [1].\\n* **Core Definition & Significance:** Key concepts students need to know for examination [2].",
-    "### \u{1F50D} Detailed Timeline & Key Developments\\n* **Chronological Milestones:** Specific dates, clinical trial stages, and verified occurrences [1].\\n* **Key Turning Points:** Critical discoveries or institutional policy shifts [2].",
-    "### \u2696\uFE0F Analytical Impact & Real-World Consequences\\n* **Institutional Findings:** Official commissions or syllabus implications [1].\\n* **Current 2026 Status:** Up-to-date verified status as of today with exact naming [2].",
-    "### \u{1F4A1} High-Yield Student Takeaways\\n* **Critical Exam Insights:** High-yield questions and summary synthesis [1].\\n* **Common Misconceptions:** Key distinctions to avoid exam traps [2]."
+    "markdown formatted text / bullet points with citations [1], [2]"
   ],
   "action_steps": [
-    "Step 1: Foundational Review - core concepts and essential timeline to master",
-    "Step 2: Analytical Deep-Dive - key turning points or core mechanisms",
-    "Step 3: Synthesis & Verification - review findings against accredited citations"
+    "Practical action step 1",
+    "Practical action step 2"
   ],
-  "pro_tips": "In-depth educator pro-tip highlighting common exam traps or memory anchors.",
+  "pro_tips": "In-depth educator pro-tip or memory anchor.",
   "related_queries": [
     "Follow-up research question 1",
-    "Follow-up research question 2",
-    "Follow-up research question 3"
+    "Follow-up research question 2"
   ],
   "source_links": [
-    "verified url from context 1",
-    "verified url from context 2"
+    "verified url 1",
+    "verified url 2"
   ]
 }`;
     const contentPrompt = `STUDENT SEARCH QUERY: "${rawQuery}"
@@ -5646,23 +5654,22 @@ ${studentNotes ? `STUDENT LOCAL STUDY NOTES / TARGET SYLLABUS:
 ${studentNotes}
 ` : ""}
 
-VERIFIED REAL-TIME ACADEMIC & RESEARCH DATA:
+VERIFIED REAL-TIME LIVE WEB CONTEXT:
 ${verifiedContextString || "No external search feeds returned. Synthesize using accurate, verified ground truth from peer-reviewed databases."}
 
-Conduct an elite, point-wise, structured academic research report with small markdown subheadings (### ...), bullet points, and mandatory inline bracketed citations ([1], [2]) mapping to verified references.
-CRITICAL MANDATORY CONSTRAINT: When citing real-time web sources for medical, tech, or current events, do NOT write vague summaries. You MUST explicitly name specific medicines/therapies, companies, clinical trials, or exact dates found in the search results.
-Return strictly the JSON structure above.`;
+${isSmallOrDateQuery ? "Generate a direct, simple, concise answer with the exact date/fact stated immediately in bold, followed by 2-3 crisp bullet points with inline citations." : "Generate an elite, point-wise, structured academic research report with small markdown subheadings (### ...) and bullet points with inline citations."}
+Return strictly the JSON structure specified above.`;
     const response = await safeGenerateContent({
       gradeLevel,
       stream: academicStream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-flash-lite-latest",
       contents: [{ parts: [{ text: contentPrompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json",
         temperature: 0.2,
-        maxOutputTokens: 8192
+        maxOutputTokens: isSmallOrDateQuery ? 650 : 1800
       }
     });
     let rawText = response.text || "";
@@ -6286,6 +6293,8 @@ Return strictly a valid JSON object matching the requested schema with exactly $
             const norm = normalizeStr(q.question);
             if (!isQuestionSeen(q.question) && !seenInCurrentRun.has(norm)) {
               seenInCurrentRun.add(norm);
+              q.examTrapWarning = q.examTrapWarning || q.trapWarning || q.exam_trap_warning || q.trap || "Watch out for common sign or formula pitfalls on this concept.";
+              q.shortExplanation = q.shortExplanation || q.explanation || q.reason || "Review the core definition and step-by-step formula.";
               validQuestions.push(q);
             }
           }

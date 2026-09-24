@@ -568,7 +568,6 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
               <FileImage className="w-5 h-5 text-blue-600 mr-2 shrink-0" />
               <span>PDF Ready</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Your document has been compiled successfully</p>
           </div>
         </div>
 
@@ -780,9 +779,11 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
               <FileImage className="w-5 h-5 text-blue-600 mr-2 shrink-0" />
               <span>Image to PDF</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">
-              {images.length > 0 ? `${images.length} photos selected` : 'Select gallery photos into one PDF'}
-            </p>
+            {images.length > 0 && (
+              <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">
+                {images.length} photos selected
+              </p>
+            )}
           </div>
         </div>
 
@@ -809,7 +810,7 @@ export default function ImageToPDF({ onBack, onOpenHistory }: { onBack: () => vo
       </div>
 
       {/* SCROLLABLE BODY */}
-      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-6 z-10 relative">
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-36 z-10 relative">
         {images.length === 0 ? (
           <div 
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}

@@ -233,38 +233,32 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  // Background feature pre-warming: preloads feature chunks into browser cache when main thread is idle
+  // Background feature pre-warming: Gently preloads top tabs only when main thread is completely idle
   useEffect(() => {
-    const prewarmFeatures = () => {
-      const features = [
+    const prewarmIdle = () => {
+      const topFeatures = [
         () => import('./components/MagicScanner'),
         () => import('./components/AITutor'),
-        () => import('./components/LiveTutorSearch'),
-        () => import('./components/EssayGrader'),
-        () => import('./components/Calculator'),
-        () => import('./components/QuizGenerator'),
-        () => import('./components/QuestionGenerator'),
-        () => import('./components/DailyTrivia'),
-        () => import('./components/MistakeVault'),
-        () => import('./components/ContentGenerator'),
-        () => import('./components/GrammarEnhancer'),
-        () => import('./components/Summariser'),
-        () => import('./components/ImageToPDF'),
-        () => import('./components/PdfHistoryScreen'),
-        () => import('./components/TestPrep'),
-        () => import('./components/StreakDetailsPage'),
-        () => import('./components/CoinPage'),
-        () => import('./components/Profile'),
       ];
 
-      features.forEach((loadFn, idx) => {
+      const runIdle = (fn: () => void) => {
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(fn, { timeout: 4000 });
+        } else {
+          setTimeout(fn, 1500);
+        }
+      };
+
+      topFeatures.forEach((loadFn, idx) => {
         setTimeout(() => {
-          loadFn().catch(() => {});
-        }, 800 + idx * 150);
+          runIdle(() => {
+            loadFn().catch(() => {});
+          });
+        }, 3500 + idx * 3000);
       });
     };
 
-    const timer = setTimeout(prewarmFeatures, 1200);
+    const timer = setTimeout(prewarmIdle, 4000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -1334,7 +1328,7 @@ export default function App() {
       </main>
 
       {/* Bottom nav is always visible */}
-      <nav className="absolute bottom-0 w-full border-t pb-safe z-20 transition-all duration-300 bg-white/90 border-zinc-200/60 backdrop-blur-2xl">
+      <nav className={`absolute bottom-0 w-full border-t pb-safe z-20 transition-all duration-300 ${isDarkMode ? 'bg-zinc-950/95 border-zinc-800' : 'bg-white/95 border-zinc-200'} shadow-[0_-2px_15px_rgba(0,0,0,0.03)]`}>
         <div className="flex justify-around items-center px-2 py-0.5">
           <NavItem 
             icon={<Home className="w-5 h-5" />} 

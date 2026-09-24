@@ -131,8 +131,8 @@ export default function CoinPage({ onClose, onSelectTool, isVip: propIsVip }: Co
                 </div>
               </div>
               <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Your Study Coins</h1>
-              <p className="text-zinc-500 font-bold text-sm mt-1">
-                Refill by claiming rewards daily!
+              <p className="text-zinc-500 font-bold text-xs mt-1">
+                Claim daily rewards
               </p>
             </div>
 
@@ -144,7 +144,7 @@ export default function CoinPage({ onClose, onSelectTool, isVip: propIsVip }: Co
                 </div>
                 <div>
                   <h3 className="font-black text-zinc-900 text-base">Daily App Login Reward</h3>
-                  <p className="text-xs text-zinc-500 font-bold">Get free study coins every single day!</p>
+                  <p className="text-xs text-zinc-500 font-bold">Free daily coins</p>
                 </div>
               </div>
 
@@ -183,8 +183,8 @@ export default function CoinPage({ onClose, onSelectTool, isVip: propIsVip }: Co
                 <Sparkles className="w-5 h-5 fill-amber-400" />
               </div>
               <h2 className="text-lg font-black tracking-tight mb-1">Remove All Limits</h2>
-              <p className="text-[11px] text-zinc-400 font-bold leading-relaxed mb-4 max-w-xs mx-auto">
-                Stop counting coins. Upgrade to PRO for zero friction and completely unlimited AI learning power.
+              <p className="text-[11px] text-zinc-400 font-bold mb-4">
+                Unlimited AI access
               </p>
               <button 
                 onClick={() => {

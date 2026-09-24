@@ -380,7 +380,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     Snap. Learn. Master.
                   </h2>
                   <p className="text-xs font-semibold text-zinc-500 max-w-[290px] mx-auto leading-relaxed">
-                    Instantly scan complex Physics, Chemistry, Biology, or Math problems and watch the AI generate detailed, step-by-step explanations in seconds.
+                    Instant step-by-step solutions
                   </p>
                 </div>
               </motion.div>
@@ -437,7 +437,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     Learning in Your Native Voice
                   </h2>
                   <p className="text-xs font-semibold text-zinc-500 max-w-[290px] mx-auto leading-relaxed">
-                    Our smart AI Tutor automatically detects your language. Whether you ask in Spanish, French, or English, get crystal-clear answers in the exact language you understand best.
+                    Multi-language AI explanations
                   </p>
                 </div>
               </motion.div>
@@ -491,7 +491,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     Elite Tutoring, Unbeatable Pricing
                   </h2>
                   <p className="text-xs font-semibold text-zinc-500 max-w-[290px] mx-auto leading-relaxed">
-                    Get personalized 1-on-1 AI tutoring at less than 1% of the cost of traditional physical tutors. No hidden fees. Pure, unlimited learning power.
+                    Personalized 1-on-1 tutoring
                   </p>
                 </div>
               </motion.div>
@@ -513,7 +513,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     LEARN with Premium Tools
                   </h2>
                   <p className="text-[11px] font-semibold text-zinc-500 max-w-[280px] mx-auto leading-tight">
-                    How HelpYou AI compares to standard learning and school apps:
+                    Smart Feature Comparison
                   </p>
                 </div>
 

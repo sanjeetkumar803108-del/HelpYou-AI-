@@ -265,7 +265,7 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
               Unlock HelpYou AI Pro
             </h2>
             <p className="text-center text-white/90 font-bold text-xs">
-              {featureName ? `Upgrade to use ${featureName} without limits!` : "Never run out of study juice."}
+              {featureName ? `Unlimited ${featureName}` : "Unlimited AI Access"}
             </p>
           </div>
 
@@ -273,9 +273,9 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
           <div className="p-5 space-y-5">
             <div className="grid grid-cols-1 gap-2">
               {[
-                { icon: <Zap className="w-4 h-4 text-amber-500" />, title: "Unlimited Scans & Solutions", desc: "No daily limit on homework problems" },
-                { icon: <Sparkles className="w-4 h-4 text-purple-500" />, title: "Deep AI Reasoning Engine", desc: "Advanced step-by-step guidance on any topic" },
-                { icon: <Check className="w-4 h-4 text-green-500" />, title: "Real-time Priority Response", desc: "Supercharged speed for premium users" }
+                { icon: <Zap className="w-4 h-4 text-amber-500" />, title: "Unlimited Scans & Solutions", desc: "No daily limits" },
+                { icon: <Sparkles className="w-4 h-4 text-purple-500" />, title: "Deep AI Reasoning Engine", desc: "Step-by-step guidance" },
+                { icon: <Check className="w-4 h-4 text-green-500" />, title: "Real-time Priority Response", desc: "Fast turbo speed" }
               ].map((f, i) => (
                 <div key={i} className="flex items-start gap-3 p-2 bg-white border border-zinc-100/80 rounded-2xl">
                   <div className="p-1.5 bg-zinc-50 shadow-sm rounded-lg mt-0.5 shrink-0">

@@ -7,10 +7,11 @@ import { requestMicrophonePermission } from "../utils/nativePermissions";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Sparkles, Send, Mic, MicOff, Loader2, RefreshCw, Compass, Brain, 
-  ArrowRight, Copy, Check, Share2, ThumbsUp, ThumbsDown, Pause, Play,
+  ArrowRight, Check, Share2, ThumbsUp, ThumbsDown, Pause, Play,
   Plus, X, Image, Camera, FileText, Heart, HelpCircle, History, Trash2, BookOpen, ChevronDown, Lock, Square,
   AlertTriangle, Flag
 } from 'lucide-react';
+import { shareTextMobile } from '../utils/mobileSaver';
 import { motion, AnimatePresence } from 'motion/react';
 import { parsePartialJSON } from '../utils/partialJson';
 import GlobalMarkdown, { formatSuggestionMath } from './GlobalMarkdown';
@@ -445,7 +446,6 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
 
   const [displayedText, setDisplayedText] = useState(msg.displayedText || (msg.isTyping ? '' : cleanText));
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
   const onTypingCompleteRef = useRef(onTypingComplete);
   useEffect(() => {
@@ -506,38 +506,11 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
     return cleanText;
   }, [parsedSolution, isConversational, showTopicHeader, conversationalText, cleanText]);
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(textToShareOrCopy);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: parsedSolution?.topic_title || 'HelpYou AI Solution',
-          text: textToShareOrCopy,
-          url: window.location.href
-        });
-        setShared(true);
-        setTimeout(() => setShared(false), 2000);
-      } catch (err) {
-        console.warn(err);
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(`${textToShareOrCopy}\n\nShared via HelpYou AI`);
-        setShared(true);
-        setTimeout(() => setShared(false), 2000);
-      } catch (err) {
-        console.error(err);
-      }
-    }
+    const title = parsedSolution?.topic_title || 'HelpYou AI Solution';
+    await shareTextMobile(title, textToShareOrCopy);
+    setShared(true);
+    setTimeout(() => setShared(false), 2000);
   };
 
   return (
@@ -750,15 +723,6 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
         {/* Premium, fully functional action icons */}
         {msg.role === 'model' && (
           <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-zinc-150 text-zinc-400">
-            <button 
-              onClick={handleCopy}
-              className="p-1.5 rounded-lg hover:bg-zinc-100 hover:text-zinc-700 transition-all active:scale-95 flex items-center gap-1 text-[11px] font-bold"
-              title="Copy to clipboard"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
-            </button>
-
             <button 
               onClick={handleShare}
               className="p-1.5 rounded-lg hover:bg-zinc-100 hover:text-zinc-700 transition-all active:scale-95 flex items-center gap-1 text-[11px] font-bold"

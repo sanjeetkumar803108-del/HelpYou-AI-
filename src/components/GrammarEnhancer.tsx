@@ -1,7 +1,7 @@
 import { getApiUrl } from '../utils/api';
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  ArrowLeft, Loader2, Save, Wand2, Copy, CheckCircle, History, 
+  ArrowLeft, Loader2, Save, Wand2, History, 
   Trash2, Calendar, Camera, X, FileText, Share2, Download, Eye, Flag 
 } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
@@ -16,7 +16,7 @@ import { safeGetItem } from '../utils/storage';
 import { getUserProfileData } from '../utils/profile';
 import { compressImage } from '../utils/imageCompressor';
 import { generateNotesPDFBlob } from '../lib/pdfExporter';
-import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
+import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
 import { sanitizePdfText } from '../utils/pdfSanitizer';
 import SafePdfViewer from './SafePdfViewer';
 
@@ -32,7 +32,6 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<'fix' | 'academic'>('fix');
   const [fixes, setFixes] = useState<string[]>([]);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -141,13 +140,18 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       setLoadingStep(0);
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
-          if (prev >= 98) {
-            clearInterval(interval);
-            return 98;
+          if (prev >= 96) {
+            return Math.min(Math.round((prev + 0.05) * 10) / 10, 97);
           }
-          const increment = Math.floor(Math.random() * 8) + 5;
-          const nextVal = Math.min(prev + increment, 98);
-          const stepIndex = Math.min(Math.floor(nextVal / 20), enhancingSteps.length - 1);
+          let inc = 1.0;
+          if (prev < 25) inc = 1.6;
+          else if (prev < 50) inc = 1.1;
+          else if (prev < 75) inc = 0.7;
+          else if (prev < 90) inc = 0.35;
+          else inc = 0.12;
+
+          const nextVal = Math.min(Math.round((prev + inc) * 10) / 10, 96);
+          const stepIndex = Math.min(Math.floor((nextVal / 96) * (enhancingSteps.length - 1)), enhancingSteps.length - 1);
           setLoadingStep(stepIndex);
           return nextVal;
         });
@@ -254,6 +258,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
           gradeLevel: profile.gradeLevel, 
           stream: profile.stream,
           country: profile.country,
+          profileContext: profile.profileContext,
           images: uploadedImages 
         }),
         signal: controller.signal
@@ -274,6 +279,8 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         throw new Error("Server returned invalid response format");
       }
       const data = await response.json();
+      setLoadingProgress(100);
+      await new Promise(r => setTimeout(r, 250));
       
       // Deduct 1 coin
       deductCoins(1, "Grammar & Flow");
@@ -295,10 +302,15 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
             savedText += "\n\n### What we fixed:\n" + (receivedFixes || []).map((f: string) => `- ${f}`).join("\n");
           }
 
+          const snippet = (inputText || "Image Content").trim().replace(/\s+/g, ' ').substring(0, 28);
+          const historyTitle = snippet 
+            ? `Grammar: ${snippet}` 
+            : `Grammar & Flow (${mode === 'fix' ? 'Voice Preserved' : 'Academic'})`;
+
           await addDoc(collection(db, 'pocket_items'), {
             userId: auth.currentUser.uid,
             type: 'note',
-            title: `Grammar & Flow (${mode === 'fix' ? 'Voice Preserved' : 'Academic'})`,
+            title: historyTitle,
             text: savedText,
             createdAt: serverTimestamp()
           });
@@ -319,38 +331,19 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
     }
   };
 
-  const handleCopy = () => {
-    if (result) {
-      navigator.clipboard.writeText(result.trim());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   const handleShareOutput = async () => {
     if (!result) return;
     triggerVibration(10);
-    const cleanOutput = result.trim();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          text: cleanOutput
-        });
-        return;
-      } catch (e: any) {
-        if (e.name === 'AbortError') return;
-      }
-    }
-    // Fallback
-    navigator.clipboard.writeText(cleanOutput);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const snippet = (inputText || "Image Content").trim().replace(/\s+/g, ' ').substring(0, 24);
+    const title = snippet ? `Grammar: ${snippet}` : `Grammar & Flow - ${mode === 'fix' ? 'Enhanced' : 'Academic Rewrite'}`;
+    await shareTextMobile(title, result.trim());
   };
 
   const handleExportPDF = () => {
     if (!result) return;
     triggerVibration(10);
-    const title = `Grammar & Flow - ${mode === 'fix' ? 'Enhanced' : 'Academic Rewrite'}`;
+    const snippet = (inputText || "Image Content").trim().replace(/\s+/g, ' ').substring(0, 24);
+    const title = snippet ? `Grammar: ${snippet}` : `Grammar & Flow - ${mode === 'fix' ? 'Enhanced' : 'Academic Rewrite'}`;
     let fullContent = `## Enhanced Text\n\n${result}`;
     if (fixes && fixes.length > 0) {
       fullContent += `\n\n### What Was Fixed\n` + fixes.map(f => `- ${f}`).join('\n');
@@ -362,7 +355,8 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   const handlePreviewPDF = () => {
     if (!result) return;
     triggerVibration(10);
-    const title = `Grammar & Flow - ${mode === 'fix' ? 'Enhanced' : 'Academic Rewrite'}`;
+    const snippet = (inputText || "Image Content").trim().replace(/\s+/g, ' ').substring(0, 24);
+    const title = snippet ? `Grammar: ${snippet}` : `Grammar & Flow - ${mode === 'fix' ? 'Enhanced' : 'Academic Rewrite'}`;
     let fullContent = `## Enhanced Text\n\n${result}`;
     if (fixes && fixes.length > 0) {
       fullContent += `\n\n### What Was Fixed\n` + fixes.map(f => `- ${f}`).join('\n');
@@ -425,7 +419,6 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
               <Wand2 className="w-5 h-5 text-purple-600 mr-2 shrink-0" />
               <span>Grammar & Flow</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Fix grammar and enhance your writing naturally</p>
           </div>
         </div>
 
@@ -449,7 +442,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       </div>
 
       {/* SCROLLABLE BODY */}
-      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-24 z-10">
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-36 z-10">
 
       {showHistory ? (
         <div className="max-w-md mx-auto space-y-4">
@@ -546,7 +539,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                 className="w-full flex-1 p-4 rounded-2xl border border-zinc-150 bg-zinc-50/50 text-zinc-900 placeholder:text-zinc-400 resize-none focus:outline-none focus:border-purple-500 focus:bg-white transition-all text-sm leading-relaxed font-sans font-medium"
               />
               <div className="flex justify-between items-center text-xs text-zinc-400 mt-2 px-1 font-bold">
-                <span>{wordCount} words</span>
+                <span>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
                 {inputText && (
                   <button 
                     onClick={() => setInputText('')}
@@ -684,18 +677,11 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
         >
           {/* Enhanced Version Card */}
           <div className="bg-white rounded-[2rem] p-6 shadow-md border border-zinc-200 mb-4 relative flex-1 flex flex-col text-zinc-800">
-            <div className="flex justify-between items-center mb-4 border-b border-zinc-100 pb-3">
+            <div className="flex items-center mb-4 border-b border-zinc-100 pb-3">
                <h3 className="text-base font-bold text-purple-700 flex items-center gap-2">
                  <Wand2 className="w-4 h-4 text-purple-600" />
                  <span>Enhanced Version</span>
                </h3>
-               <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1.5 text-xs font-bold text-zinc-600 hover:text-zinc-900 transition-colors bg-zinc-50 hover:bg-zinc-100 px-3 py-1.5 rounded-lg border border-zinc-200 shadow-sm cursor-pointer"
-               >
-                  {copied ? <CheckCircle className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Copied' : 'Copy'}</span>
-               </button>
             </div>
             <div className="prose prose-sm max-w-none prose-p:leading-relaxed overflow-y-auto flex-1 select-text">
               <GlobalMarkdown>{result}</GlobalMarkdown>
@@ -712,7 +698,7 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
                 {(fixes || []).map((fix, idx) => (
                   <li key={idx} className="text-xs font-medium text-amber-950 flex items-start gap-2 leading-relaxed">
                     <span className="text-amber-500 select-none mt-0.5">•</span>
-                    <span>{sanitizePdfText(fix)}</span>
+                    <span className="flex-1 select-text"><GlobalMarkdown className="inline-block text-xs">{fix}</GlobalMarkdown></span>
                   </li>
                 ))}
               </ul>

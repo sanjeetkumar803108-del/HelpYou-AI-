@@ -4,17 +4,21 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>HelpYou AI - Magic AI Tutor</title>
   </head>
   <body>
     <div id="root"></div>
-    <script src="./vendor/pdfjs/pdf.min.js"></script>
+    <script defer src="./vendor/pdfjs/pdf.min.js"></script>
     <script>
-      try {
-        if (window.pdfjsLib) {
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js';
-        }
-      } catch (e) {}
+      window.addEventListener('DOMContentLoaded', function() {
+        try {
+          if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js';
+          }
+        } catch (e) {}
+      });
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -2,8 +2,8 @@ import { getApiUrl } from '../utils/api';
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Loader2, Save, PenTool, Type, FileText, Feather, 
-  Edit3, Copy, FileDown, Check, History, Trash2, Calendar, Share2, 
-  Sparkles, ExternalLink, Eye, Download, Flag
+  Edit3, FileDown, Check, History, Trash2, Calendar, Share2, 
+  Sparkles, ExternalLink, Eye, Download, Flag, Copy, X
 } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import ReportAIModal from './ReportAIModal';
@@ -11,7 +11,7 @@ import { motion } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
-import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
+import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
 import { sanitizePdfText } from '../utils/pdfSanitizer';
 import SafePdfViewer from './SafePdfViewer';
 import { deductCoins, getCoins } from '../utils/coins';
@@ -266,7 +266,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [previewPdfUri, setPreviewPdfUri] = useState<string | null>(null);
   const [previewPdfName, setPreviewPdfName] = useState<string>('');
@@ -304,6 +303,8 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   }, [previewPdfUri, showHistory, result]);
 
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const userProfile = getUserProfileData();
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -312,13 +313,18 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       setLoadingStep(0);
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
-          if (prev >= 98) {
-            clearInterval(interval);
-            return 98;
+          if (prev >= 96) {
+            return Math.min(Math.round((prev + 0.05) * 10) / 10, 97);
           }
-          const increment = Math.floor(Math.random() * 8) + 5;
-          const nextVal = Math.min(prev + increment, 98);
-          const stepIndex = Math.min(Math.floor(nextVal / 20), writingSteps.length - 1);
+          let inc = 1.0;
+          if (prev < 25) inc = 1.6;
+          else if (prev < 50) inc = 1.1;
+          else if (prev < 75) inc = 0.7;
+          else if (prev < 90) inc = 0.35;
+          else inc = 0.12;
+
+          const nextVal = Math.min(Math.round((prev + inc) * 10) / 10, 96);
+          const stepIndex = Math.min(Math.floor((nextVal / 96) * (writingSteps.length - 1)), writingSteps.length - 1);
           setLoadingStep(stepIndex);
           return nextVal;
         });
@@ -450,6 +456,8 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
         throw new Error("Server returned invalid response format");
       }
       const data = await response.json();
+      setLoadingProgress(100);
+      await new Promise(r => setTimeout(r, 250));
       
       deductCoins(1, "AI Writing Helper");
       setResult(data.text);
@@ -482,28 +490,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
     }
   };
 
-  const handleCopy = async () => {
-    if (!result) return;
-    triggerVibration(10);
-    try {
-      await navigator.clipboard.writeText(result);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      const textArea = document.createElement("textarea");
-      textArea.value = result;
-      document.body.appendChild(textArea);
-      textArea.select();
-      try {
-        document.execCommand('copy');
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch (err2) {
-        console.error('Fallback copy failed: ', err2);
-      }
-      document.body.removeChild(textArea);
-    }
-  };
 
   const handleViewPDF = async () => {
     if (!result) return;
@@ -579,22 +565,32 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
     triggerVibration(10);
     const shareTitle = `${selectedType}: ${topic.substring(0, 40)}`;
     const shareText = `📚 ${selectedType.toUpperCase()} - generated with HelpYou AI\n\nTopic: ${topic}\nTone: ${selectedTone} | Format: ${selectedType === 'Essay' ? selectedFormat : 'Standard'}\n\n${result}`;
+    await shareTextMobile(shareTitle, shareText);
+  };
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: shareTitle,
-          text: shareText
-        });
-      } catch (e: any) {
-        if (e.name !== 'AbortError') {
-          handleCopy();
-        }
+  const handleCopy = async () => {
+    if (!result) return;
+    triggerVibration(15);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(result);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = result;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
       }
-    } else {
-      handleCopy();
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text:', err);
     }
   };
+
+  const resultWords = result ? result.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+  const readingTimeMin = Math.max(1, Math.round(resultWords / 180));
 
   return (
     <div className="h-full flex flex-col relative text-zinc-900 bg-[#FAF9F6] overflow-hidden">
@@ -655,7 +651,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               <PenTool className="w-5 h-5 text-cyan-600 mr-2 shrink-0" />
               <span>Content Generator</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Essays, Blogs, Poems & Paragraphs</p>
           </div>
         </div>
 
@@ -679,10 +674,10 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       </div>
 
       {/* SCROLLABLE BODY */}
-      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-24 z-10">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-40 z-10">
 
       {showHistory ? (
-        <div className="max-w-md mx-auto space-y-4">
+        <div className="max-w-md mx-auto space-y-4 mb-12">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-extrabold text-sm text-zinc-500 uppercase tracking-wider">Your Written Pieces</h3>
             <span className="text-xs bg-zinc-100 text-zinc-600 font-bold px-2 py-0.5 rounded-full">{(Array.isArray(historyItems) ? historyItems : []).length} items</span>
@@ -753,7 +748,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center max-w-md mx-auto"
+          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center max-w-md mx-auto mb-12"
         >
           <div className="relative mb-8">
             <div className="absolute inset-0 bg-cyan-500/10 rounded-full blur-xl animate-pulse" />
@@ -784,12 +779,23 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
           </div>
         </motion.div>
       ) : !result ? (
-          <div className="flex-1 flex flex-col w-full max-w-md mx-auto">
-            <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-md">
+          <div className="flex-1 flex flex-col w-full max-w-md mx-auto mb-12">
+            <div className="bg-white border border-zinc-200 rounded-3xl p-4 sm:p-6 shadow-md">
+              {/* Active Student Profile Calibrator Badge */}
+              <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-100 rounded-2xl text-cyan-900 text-xs font-bold mb-3.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                  <span className="truncate">Calibrated for {userProfile.gradeLevel}</span>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-white border border-cyan-200 rounded-md text-cyan-700 shrink-0">
+                  {userProfile.stream ? (userProfile.stream.length > 15 ? userProfile.stream.substring(0, 15) + '...' : userProfile.stream) : 'Academic'}
+                </span>
+              </div>
+
               <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Content Type (Slide to select)</label>
               
               {/* Horizontal Slider Content Types */}
-              <div className="flex gap-3 overflow-x-auto pb-4 pt-1 mb-4 scrollbar-none snap-x snap-mandatory touch-pan-x">
+              <div className="flex gap-2.5 overflow-x-auto pb-2.5 pt-1 mb-3.5 scrollbar-none snap-x snap-mandatory touch-pan-x">
                 {CONTENT_TYPES.map((type) => {
                   const Icon = type.icon;
                   const isSelected = selectedType === type.id;
@@ -797,7 +803,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                     <button
                       key={type.id}
                       onClick={() => setSelectedType(type.id)}
-                      className={`snap-center shrink-0 flex items-center justify-center gap-2.5 w-36 p-4 rounded-2xl border transition-all cursor-pointer ${
+                      className={`snap-center shrink-0 flex items-center justify-center gap-2 w-32 py-2.5 px-3 rounded-2xl border transition-all cursor-pointer ${
                         isSelected 
                           ? 'bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-cyan-500/50 text-cyan-700 shadow-sm scale-[1.02] font-black' 
                           : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:border-zinc-300'
@@ -810,23 +816,35 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                 })}
               </div>
 
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Topic / Subject</label>
-              <div className="relative mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">Topic / Subject</label>
+                {topic.trim().length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setTopic('')}
+                    className="text-[11px] font-bold text-zinc-400 hover:text-red-500 transition-colors flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Clear</span>
+                  </button>
+                )}
+              </div>
+              <div className="relative mb-3.5">
                 <textarea
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="E.g., The impact of AI on modern education..."
-                  className="w-full p-4 pb-8 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 resize-none h-32 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-semibold text-sm leading-relaxed"
+                  className="w-full p-3.5 pr-8 pb-7 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 resize-none h-28 sm:h-32 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-semibold text-sm leading-relaxed"
                 />
-                <div className="absolute bottom-3 right-4 text-xs font-bold text-zinc-400">
+                <div className="absolute bottom-2.5 right-3 text-xs font-bold text-zinc-400">
                   {wordCount} words
                 </div>
               </div>
 
               {/* Tone Selection Row */}
-              <div className="mb-4">
+              <div className="mb-3">
                 <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Tone</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {["Academic", "Persuasive", "Creative", "Casual"].map((tone) => {
                     const isSelected = selectedTone === tone;
                     return (
@@ -849,9 +867,9 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
 
               {/* Academic Formats (Visible only if 'Essay' is selected) */}
               {selectedType === 'Essay' && (
-                <div className="mb-6">
+                <div className="mb-4">
                   <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Academic Format</label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {["Standard", "APA Format", "MLA Format"].map((fmt) => {
                       const isSelected = selectedFormat === fmt;
                       return (
@@ -874,7 +892,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               )}
               
               {error && (
-                <div className="bg-red-50 text-red-600 text-sm font-bold px-4 py-3 rounded-xl border border-red-100 mb-6">
+                <div className="bg-red-50 text-red-600 text-sm font-bold px-4 py-3 rounded-xl border border-red-100 mb-4">
                   {error}
                 </div>
               )}
@@ -882,9 +900,9 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               <button
                 onClick={handleGenerate}
                 disabled={!topic.trim() || loading}
-                className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-cyan-500/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center border border-cyan-500/20 cursor-pointer"
+                className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white py-3.5 sm:py-4 rounded-xl font-black text-base sm:text-lg shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center border border-cyan-500/20 cursor-pointer"
               >
-                {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : `Generate ${selectedType}`}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : `Generate ${selectedType}`}
               </button>
             </div>
           </div>
@@ -892,13 +910,17 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex-1 flex flex-col z-10 w-full max-w-lg mx-auto"
+            className="flex-1 flex flex-col z-10 w-full max-w-lg mx-auto mb-12"
           >
             {/* Document Header Panel */}
-            <div className="bg-zinc-100/90 border border-zinc-200 rounded-t-2xl px-5 py-3 text-xs font-semibold text-zinc-600 flex justify-between items-center">
-              <span className="font-extrabold text-zinc-700">{selectedType} Document</span>
-              <div className="flex items-center gap-1.5">
-                <span className="bg-white border border-zinc-200 text-zinc-700 px-2.5 py-0.5 rounded-full font-bold">
+            <div className="bg-zinc-100/90 border border-zinc-200 rounded-t-2xl px-4 py-3 text-xs font-semibold text-zinc-600 flex flex-wrap justify-between items-center gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-zinc-800">{selectedType} Document</span>
+                <span className="text-[11px] text-zinc-500 font-bold">• {resultWords} words</span>
+                <span className="text-[11px] text-zinc-500 font-bold">• {readingTimeMin} min read</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="bg-white border border-zinc-200 text-zinc-700 px-2.5 py-0.5 rounded-full font-bold text-[11px]">
                   {selectedTone}
                 </span>
                 {selectedType === 'Essay' && selectedFormat !== 'Standard' && (
@@ -906,34 +928,47 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                     {selectedFormat}
                   </span>
                 )}
+                <span className="bg-cyan-500/10 text-cyan-700 border border-cyan-500/20 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                  {userProfile.gradeLevel}
+                </span>
               </div>
             </div>
 
             {/* Generated Document Content with Format-Specific Typography */}
             {selectedType === 'Poem' ? (
-              <div className="bg-[#FAFAF8] rounded-b-2xl p-6 md:p-8 shadow-md border-x border-b border-zinc-200 mb-4 whitespace-pre-wrap font-serif italic text-zinc-800 leading-relaxed text-sm md:text-base select-text">
+              <div className="bg-[#FAFAF8] rounded-b-2xl p-5 md:p-8 shadow-sm border-x border-b border-zinc-200 mb-4 whitespace-pre-wrap font-serif italic text-zinc-800 leading-relaxed text-sm md:text-base select-text">
                 <GlobalMarkdown>{result || ''}</GlobalMarkdown>
               </div>
             ) : selectedType === 'Essay' && (selectedTone === 'Academic' || selectedFormat === 'APA Format' || selectedFormat === 'MLA Format') ? (
-              <div className="bg-white rounded-b-2xl p-6 md:p-8 shadow-md border-x border-b border-zinc-200 mb-4 prose prose-sm max-w-none prose-headings:font-black prose-headings:tracking-tight text-zinc-900 leading-loose [&>p]:indent-8 [&>p]:leading-loose text-justify select-text">
+              <div className="bg-white rounded-b-2xl p-5 md:p-8 shadow-sm border-x border-b border-zinc-200 mb-4 prose prose-sm max-w-none prose-headings:font-black prose-headings:tracking-tight text-zinc-900 leading-relaxed text-left [&>p]:mb-4 select-text">
                 <GlobalMarkdown>{result || ''}</GlobalMarkdown>
               </div>
             ) : (
-              <div className="bg-white rounded-b-2xl p-6 md:p-8 shadow-md border-x border-b border-zinc-200 mb-4 prose prose-sm max-w-none prose-headings:font-bold prose-headings:tracking-tight text-zinc-800 leading-relaxed select-text">
+              <div className="bg-white rounded-b-2xl p-5 md:p-8 shadow-sm border-x border-b border-zinc-200 mb-4 prose prose-sm max-w-none prose-headings:font-bold prose-headings:tracking-tight text-zinc-800 leading-relaxed text-left [&>p]:mb-4 select-text">
                 <GlobalMarkdown>{result || ''}</GlobalMarkdown>
               </div>
             )}
 
-            {/* Sleek Action Bar with View PDF, Share PDF, Share Text & Copy */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 bg-white border border-zinc-200 rounded-2xl p-3 shadow-sm">
+            {/* Sleek Action Bar with Copy Text, View PDF, Share PDF, and Share Text */}
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-3 bg-white border border-zinc-200 rounded-2xl p-2.5 shadow-sm">
+              {/* [📋 Copy Text] */}
+              <button
+                onClick={handleCopy}
+                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-[11px] text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
+                title="Copy full text to clipboard"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-zinc-600" />}
+                <span className={copied ? 'text-emerald-600 font-black' : ''}>{copied ? 'Copied!' : 'Copy'}</span>
+              </button>
+
               {/* [📄 View PDF] */}
               <button
                 onClick={handleViewPDF}
                 disabled={exporting}
-                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
+                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-[11px] text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
                 title="View formatted PDF"
               >
-                {exporting ? <Loader2 className="w-4 h-4 animate-spin text-cyan-600" /> : <Eye className="w-4 h-4 text-cyan-600" />}
+                {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-600" /> : <Eye className="w-3.5 h-3.5 text-cyan-600" />}
                 <span>View PDF</span>
               </button>
 
@@ -941,40 +976,21 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               <button
                 onClick={handleSharePDF}
                 disabled={exporting}
-                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-xl font-black text-xs shadow-md transition-all cursor-pointer select-none border-none"
+                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-xl font-black text-[11px] shadow-md transition-all cursor-pointer select-none border-none"
                 title="Share PDF file natively"
               >
-                <Share2 className="w-4 h-4 text-white" />
+                <Share2 className="w-3.5 h-3.5 text-white" />
                 <span>Share PDF</span>
               </button>
 
               {/* [💬 Share Text] */}
               <button
                 onClick={handleShareText}
-                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
+                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-[11px] text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
                 title="Share formatted text"
               >
-                <Share2 className="w-4 h-4 text-zinc-600" />
-                <span>Share Text</span>
-              </button>
-
-              {/* [📋 Copy to Clipboard] */}
-              <button
-                onClick={handleCopy}
-                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
-                title="Copy markdown text to clipboard"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4 text-emerald-600" />
-                    <span className="text-emerald-600 font-black">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 text-zinc-600" />
-                    <span>Copy</span>
-                  </>
-                )}
+                <Share2 className="w-3.5 h-3.5 text-zinc-600" />
+                <span>Text</span>
               </button>
             </div>
 
@@ -984,7 +1000,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                 triggerVibration(15);
                 setReportModalOpen(true);
               }}
-              className="w-full mb-3 py-3 px-3 bg-rose-50 hover:bg-rose-100 active:scale-95 border border-rose-200/60 rounded-xl font-bold text-xs text-rose-700 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none"
+              className="w-full mb-3 py-2.5 px-3 bg-rose-50 hover:bg-rose-100 active:scale-95 border border-rose-200/60 rounded-xl font-bold text-xs text-rose-700 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none"
               title="Report Inaccurate or Inappropriate Content"
             >
               <Flag className="w-3.5 h-3.5 text-rose-500" />
@@ -995,7 +1011,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               onClick={() => {
                 setResult(null);
               }}
-              className="w-full py-3.5 rounded-xl font-extrabold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm cursor-pointer active:scale-98"
+              className="w-full py-3.5 rounded-xl font-extrabold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm cursor-pointer active:scale-98 mb-12"
             >
               Create Another
             </button>

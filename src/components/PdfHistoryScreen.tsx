@@ -291,7 +291,6 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
                 {historyItems.length}
               </span>
             </div>
-            <p className="text-[10px] text-zinc-500 font-bold">Auto-captured documents</p>
           </div>
         </div>
 
@@ -307,7 +306,7 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
       </header>
 
       {/* SEARCH BAR & CONTENT */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-36 space-y-4">
         {historyItems.length > 0 && (
           <div className="relative">
             <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />

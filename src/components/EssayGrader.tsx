@@ -170,20 +170,22 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
       setLoadingStep(0);
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
-          if (prev >= 98) {
-            clearInterval(interval);
-            return 98;
+          if (prev >= 96) {
+            return Math.min(Math.round((prev + 0.05) * 10) / 10, 97);
           }
-          const increment = Math.floor(Math.random() * 8) + 5; // Increment by 5-13%
-          const nextVal = Math.min(prev + increment, 98);
-          
-          // Map progress value to steps
-          const stepIndex = Math.min(Math.floor(nextVal / 20), gradingSteps.length - 1);
+          let inc = 1.0;
+          if (prev < 25) inc = 1.6;
+          else if (prev < 50) inc = 1.1;
+          else if (prev < 75) inc = 0.7;
+          else if (prev < 90) inc = 0.35;
+          else inc = 0.12;
+
+          const nextVal = Math.min(Math.round((prev + inc) * 10) / 10, 96);
+          const stepIndex = Math.min(Math.floor((nextVal / 96) * (gradingSteps.length - 1)), gradingSteps.length - 1);
           setLoadingStep(stepIndex);
-          
           return nextVal;
         });
-      }, 250);
+      }, 350);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -265,6 +267,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
           gradeLevel: profile.gradeLevel, 
           stream: profile.stream,
           country: profile.country,
+          profileContext: profile.profileContext,
           images: uploadedImages 
         }),
       });
@@ -356,10 +359,13 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
       // Auto-save
       if (auth.currentUser && accumulatedText) {
         try {
+          const snippet = (essayText || "Essay Submission").trim().replace(/\s+/g, ' ').substring(0, 24);
+          const historyTitle = snippet ? `Essay: ${snippet} (${subject})` : `AI Essay Grader: ${subject} (${curriculum})`;
+
           await addDoc(collection(db, 'pocket_items'), {
             userId: auth.currentUser.uid,
             type: 'note',
-            title: `AI Essay Grader: ${subject} (${curriculum})`,
+            title: historyTitle,
             text: accumulatedText,
             createdAt: serverTimestamp()
           });
@@ -414,7 +420,6 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
               <PenTool className="w-5 h-5 text-indigo-600 mr-2 shrink-0" />
               <span>AI Essay Grader</span>
             </h2>
-            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Get elite feedback tailored to your specific curriculum</p>
           </div>
         </div>
 
@@ -438,7 +443,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* SCROLLABLE BODY */}
-      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-24 z-10">
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-36 z-10">
 
       {showHistory ? (
         <div className="max-w-md mx-auto space-y-4">
@@ -693,12 +698,12 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
             <textarea
               value={essayText}
               onChange={(e) => setEssayText(e.target.value)}
-              placeholder="Paste your essay here..."
+              placeholder="Paste your essay here (min 50 words) or upload images..."
               disabled={loading || scanning}
               className="flex-1 w-full min-h-[300px] p-5 pb-8 rounded-3xl border border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 resize-none focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm font-semibold text-sm leading-relaxed disabled:opacity-55"
             />
-            <div className={`absolute bottom-3 right-4 text-xs font-bold ${'text-zinc-400'}`}>
-              {wordCount} words
+            <div className={`absolute bottom-3 right-4 text-xs font-bold text-zinc-400`}>
+              {wordCount} {wordCount === 1 ? 'word' : 'words'}
             </div>
           </div>
 

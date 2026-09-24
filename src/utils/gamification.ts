@@ -48,13 +48,13 @@ export const STUDY_LEVELS: StudyLevel[] = [
 ];
 
 export const ALL_BADGES: AchievementBadge[] = [
-  { id: 'first_step', title: 'First Step', icon: '🚀', description: 'Begin your AI study journey', requiredXP: 50, unlocked: false, claimed: false },
+  { id: 'first_step', title: 'First Step', icon: '🚀', description: 'Begin your AI study journey', requiredXP: 60, unlocked: false, claimed: false },
   { id: 'math_wizard', title: 'Math Wizard', icon: '🧮', description: 'Solve equations with AI Calculator', requiredXP: 250, unlocked: false, claimed: false },
   { id: 'streak_warrior', title: 'Streak Warrior', icon: '🔥', description: 'Maintain high study discipline', requiredXP: 600, unlocked: false, claimed: false },
   { id: 'pdf_compiler', title: 'PDF Master', icon: '📄', description: 'Generate study documents & formula sheets', requiredXP: 1200, unlocked: false, claimed: false },
   { id: 'ai_tutor_fan', title: 'AI Prodigy', icon: '🧠', description: 'Master complex academic topics', requiredXP: 2500, unlocked: false, claimed: false },
-  { id: 'master', title: 'Master', icon: '👑', description: 'Achieve legendary study mastery', requiredXP: 5000, unlocked: false, claimed: false },
-  { id: 'grandmaster', title: 'Grandmaster', icon: '🌟', description: 'Complete 10,000 XP to unlock elite Grandmaster status and claim your surprise email reward', requiredXP: 10000, unlocked: false, claimed: false, specialReward: 'SUPRISED EMAIL' }
+  { id: 'master', title: 'Master', icon: '⚔️', description: 'Achieve exceptional study mastery', requiredXP: 5000, unlocked: false, claimed: false },
+  { id: 'grandmaster', title: 'Grandmaster', icon: '👑', description: 'Complete 10,000 XP to unlock elite Grandmaster status and claim your surprise email reward', requiredXP: 10000, unlocked: false, claimed: false, specialReward: 'SURPRISE EMAIL' }
 ];
 
 /**

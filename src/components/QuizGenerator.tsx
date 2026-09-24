@@ -5,7 +5,7 @@ import {
   RotateCcw, HelpCircle, Coins, ChevronDown, ChevronUp,
   TrendingUp, Timer, Percent, Clipboard, Target, ListChecks, Calendar,
   UploadCloud, FileText, Mic, MicOff, Camera, Image, Sparkles,
-  Share2, Download, Copy, Check, X, Lightbulb
+  Share2, Download, Check, X, Lightbulb, History, Clock, Trash2, Play
 } from 'lucide-react';
 import GlobalMarkdown, { formatQuizMath } from './GlobalMarkdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -22,6 +22,7 @@ import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
+import { shareImageMobile } from '../utils/mobileSaver';
 import AdvancedLoader from './AdvancedLoader';
 import {
   ResponsiveContainer, 
@@ -674,6 +675,14 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   const { deepFocus } = useSettings();
   const handleHeaderBack = () => {
     triggerVibration(10);
+    if (reviewingAttempt) {
+      setReviewingAttempt(null);
+      return;
+    }
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
     if (quizState === 'playing' || quizState === 'results') {
       setQuizState('initial');
       setQuiz([]);
@@ -704,11 +713,8 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   const askAILoading = !!askAILoadingMode;
   const askAICacheRef = useRef<Record<number, { hint?: string; step_by_step?: string }>>({});
   const [askAICache, setAskAICache] = useState<Record<number, { hint?: string; step_by_step?: string }>>({});
-  const [copiedAiHelp, setCopiedAiHelp] = useState(false);
-
   const handleOpenAskAI = (currentQ?: Question) => {
     triggerVibration(15);
-    setCopiedAiHelp(false);
     const cached = askAICacheRef.current[currentIndex] || askAICache[currentIndex];
     if (cached?.step_by_step || cached?.hint) {
       setAskAIMode(cached.step_by_step ? 'step_by_step' : 'hint');
@@ -883,17 +889,6 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
     }
   };
 
-  const handleCopyAIHelp = () => {
-    const text = askAICacheRef.current[currentIndex]?.[askAIMode === 'hint' ? 'hint' : 'step_by_step'] ||
-                 askAICache[currentIndex]?.[askAIMode === 'hint' ? 'hint' : 'step_by_step'];
-    if (text && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      triggerVibration(15);
-      setCopiedAiHelp(true);
-      showToast('📋 AI explanation copied to clipboard!', 'success');
-      setTimeout(() => setCopiedAiHelp(false), 2000);
-    }
-  };
 
   useEffect(() => {
     Network.getStatus().then((status) => {
@@ -1029,10 +1024,42 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any | null>(null);
   const [currentQuizRecordId, setCurrentQuizRecordId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const handleToggleHistory = () => {
+    triggerVibration(10);
+    if (!showHistory) {
+      fetchHistory();
+    }
+    setShowHistory((prev) => !prev);
+  };
+
+  const handleDeleteHistoryItem = async (e: React.MouseEvent, item: any) => {
+    e.stopPropagation();
+    triggerVibration(15);
+    try {
+      if (item.id && !item.id.startsWith('local_')) {
+        await deleteDoc(doc(db, 'quiz_results', item.id));
+      }
+      const localHistory = JSON.parse(safeGetItem('local_quiz_results') || '[]');
+      const filtered = localHistory.filter((h: any) => h.id !== item.id);
+      safeSetItem('local_quiz_results', JSON.stringify(filtered));
+      setHistory((prev) => prev.filter((h) => h.id !== item.id));
+      if (selectedHistoryItem?.id === item.id) {
+        setSelectedHistoryItem(null);
+      }
+      showToast('Quiz deleted from history', 'info');
+    } catch (err) {
+      console.error('Failed to delete quiz history item:', err);
+      showToast('Failed to delete quiz', 'error');
+    }
+  };
 
   useEffect(() => {
     const handleBackButton = (e: Event) => {
       const hasSubState = (
+        reviewingAttempt ||
+        showHistory ||
         quizState === 'playing' ||
         quizState === 'results' ||
         selectedHistoryItem ||
@@ -1047,7 +1074,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
     };
     window.addEventListener('appBackButton', handleBackButton);
     return () => window.removeEventListener('appBackButton', handleBackButton);
-  }, [quizState, selectedHistoryItem, activeTab, showConfig, showShareModal]);
+  }, [reviewingAttempt, showHistory, quizState, selectedHistoryItem, activeTab, showConfig, showShareModal]);
 
   const saveInitialQuizToHistory = async (generatedQuestions: Question[], topicName: string) => {
     const quizQuestions = generatedQuestions.map((q) => ({
@@ -1229,17 +1256,22 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
       setLoadingStep(0);
       interval = setInterval(() => {
         setLoadingProgress((prev) => {
-          if (prev >= 98) {
-            clearInterval(interval);
-            return 98;
+          if (prev >= 96) {
+            return Math.min(Math.round((prev + 0.05) * 10) / 10, 97);
           }
-          const increment = Math.floor(Math.random() * 7) + 4;
-          const nextVal = Math.min(prev + increment, 98);
-          const stepIndex = Math.min(Math.floor(nextVal / 20), quizSteps.length - 1);
+          let inc = 1.0;
+          if (prev < 25) inc = 1.6;
+          else if (prev < 50) inc = 1.1;
+          else if (prev < 75) inc = 0.7;
+          else if (prev < 90) inc = 0.35;
+          else inc = 0.12;
+
+          const nextVal = Math.min(Math.round((prev + inc) * 10) / 10, 96);
+          const stepIndex = Math.min(Math.floor((nextVal / 96) * (quizSteps.length - 1)), quizSteps.length - 1);
           setLoadingStep(stepIndex);
           return nextVal;
         });
-      }, 400);
+      }, 350);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -1442,6 +1474,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
 
       const data = await response.json();
       if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
+        setLoadingProgress(100);
+        await new Promise(r => setTimeout(r, 250));
         // Deduct 2 coins now that the output has been successfully generated by the AI
         deductCoins(2, "AI Quizzes");
 
@@ -1511,6 +1545,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
 
       const data = await response.json();
       if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
+        setLoadingProgress(100);
+        await new Promise(r => setTimeout(r, 250));
         // Deduct 2 coins now that the output has been successfully generated by the AI
         deductCoins(2, "AI Quizzes");
 
@@ -1589,6 +1625,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
 
       const data = await response.json();
       if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
+        setLoadingProgress(100);
+        await new Promise(r => setTimeout(r, 250));
         // Deduct 2 coins now that the output has been successfully generated by the AI
         deductCoins(2, "AI Quizzes");
 
@@ -2015,27 +2053,167 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
       )}
       {/* HEADER */}
       {!isGenerating && (
-        <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center gap-4 shrink-0">
-          <button
-            onClick={handleHeaderBack}
-            className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h2 className="text-lg md:text-xl font-bold flex items-center tracking-tight line-clamp-1 text-zinc-900">
-              <BookOpen className="w-5 h-5 text-indigo-600 mr-2 shrink-0" />
-              <span>AI Practice Quizzes</span>
-            </h2>
-            <p className="text-[11px] text-zinc-500 font-medium line-clamp-1">Elite Exam-Level Multiple Choice Practice</p>
+        <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-6 pb-4 px-6 z-30 border-b border-zinc-200/80 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <button
+              onClick={handleHeaderBack}
+              className="w-10 h-10 bg-white hover:bg-zinc-50 rounded-full flex items-center justify-center text-zinc-500 hover:text-zinc-900 shadow-sm border border-zinc-200 transition-colors shrink-0 cursor-pointer active:scale-95"
+              aria-label="Go Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-lg md:text-xl font-bold flex items-center tracking-tight line-clamp-1 text-zinc-900">
+                <BookOpen className="w-5 h-5 text-indigo-600 mr-2 shrink-0" />
+                <span className="truncate">AI Practice Quizzes</span>
+              </h2>
+            </div>
           </div>
+
+          {/* History Icon Button: Top-Right Corner, Icon only, no text */}
+          <button
+            type="button"
+            onClick={handleToggleHistory}
+            className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all cursor-pointer shrink-0 active:scale-95 ${
+              showHistory
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                : 'bg-white text-zinc-700 border-zinc-200/80 hover:text-indigo-600 hover:border-indigo-300 shadow-sm'
+            }`}
+            title="Quiz History"
+            aria-label="Quiz History"
+          >
+            <History className="w-5 h-5" />
+          </button>
         </div>
       )}
 
       {/* BODY CONTAINER */}
-      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-24 z-10 flex flex-col">
-        
-        {quizState === 'initial' && !loading && !pdfProcessing && !photoProcessing && (
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-36 z-10 flex flex-col">
+        {showHistory ? (
+          <motion.div
+            key="quiz-history-panel"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="flex-1 flex flex-col space-y-4 max-w-xl mx-auto w-full py-2"
+          >
+            <div className="flex items-center justify-between pb-1 border-b border-zinc-200/50">
+              <h3 className="font-black text-base text-zinc-900 tracking-tight flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-600" />
+                <span>Quiz Practice History</span>
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setShowHistory(false)}
+                className="text-xs font-extrabold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+              >
+                Close History
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                <AdvancedLoader type="skeleton" skeletonType="list" count={3} />
+              </div>
+            ) : safeHistory.length === 0 ? (
+              <div className="bg-white border border-zinc-200/80 rounded-3xl p-8 text-center shadow-sm space-y-3 my-auto">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600 text-2xl">
+                  📝
+                </div>
+                <h4 className="text-base font-black text-zinc-800">No Quiz History Yet</h4>
+                <p className="text-xs font-bold text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                  Generate and complete any curriculum, PDF, or textbook quiz to review all questions and explanations here anytime!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(false)}
+                  className="mt-2 px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Start a Practice Quiz</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {safeHistory.slice().reverse().map((item) => {
+                  const accuracy = typeof item.accuracy === 'number' ? item.accuracy : (
+                    item.totalQuestions > 0 ? Math.round((item.score / item.totalQuestions) * 100) : 0
+                  );
+                  const isHighScoring = accuracy >= 80;
+                  const questionCount = item.totalQuestions || item.questions?.length || 5;
+
+                  return (
+                    <motion.div
+                      key={item.id}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      onClick={() => {
+                        triggerVibration(10);
+                        setReviewingAttempt(item);
+                      }}
+                      className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer flex items-center justify-between gap-3 group relative overflow-hidden"
+                    >
+                      <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                        {/* Score Circle Badge */}
+                        <div className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center font-black shrink-0 border ${
+                          isHighScoring 
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-xs' 
+                            : 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-xs'
+                        }`}>
+                          <span className="text-xs leading-none">{item.score}/{questionCount}</span>
+                          <span className="text-[8px] font-bold opacity-80">{accuracy}%</span>
+                        </div>
+
+                        {/* Title and metadata */}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-extrabold text-sm text-zinc-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                            {getQuizTitle(item)}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-zinc-400">
+                            <span>
+                              {new Date(item.createdAt).toLocaleDateString(undefined, { 
+                                month: 'short', 
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            <span>•</span>
+                            <span className="text-zinc-600 font-extrabold">{questionCount} Questions</span>
+                            {item.averageTimePerQuestion && (
+                              <>
+                                <span>•</span>
+                                <span>{item.averageTimePerQuestion}s/q</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right side actions */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteHistoryItem(e, item)}
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Delete Quiz"
+                          aria-label="Delete Quiz"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <div className="w-7 h-7 rounded-full bg-zinc-50 group-hover:bg-indigo-50 flex items-center justify-center text-zinc-400 group-hover:text-indigo-600 transition-colors">
+                          <span className="text-xs font-black">&rsaquo;</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        ) : (
+          <>
+            {quizState === 'initial' && !loading && !pdfProcessing && !photoProcessing && (
           showConfig ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.96 }}
@@ -2229,7 +2407,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           </span>
                         </div>
                         <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
-                          Upload class notes to generate custom MCQs instantly. (Max 10MB, 50 Pages)
+                          Notes to MCQs
                         </p>
                       </div>
                     </div>
@@ -2297,7 +2475,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           </span>
                         </div>
                         <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
-                          Snap textbook pages to auto-generate a 5-question quiz.
+                          Snap to Quiz
                         </p>
                       </div>
                     </div>
@@ -2607,7 +2785,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* BAR CHART: DURATION PER QUESTION */}
-                      <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm md:col-span-2">
+                      <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm w-full">
                         <div className="flex justify-between items-start mb-3">
                           <div>
                             <h4 className="text-xs font-black text-zinc-800 flex items-center gap-1.5">
@@ -2658,181 +2836,9 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           </ResponsiveContainer>
                         </div>
                       </div>
-
-                      {/* SELECTED ATTEMPT INFO BOX */}
-                      <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm flex flex-col justify-between">
-                        <div>
-                          <span className="text-[9px] font-black uppercase text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">Selected Attempt</span>
-                          <h4 className="text-sm font-black text-zinc-800 mt-2 leading-snug">{getQuizTitle(activeQuiz)}</h4>
-                          <div className="flex items-center gap-1.5 text-zinc-500 font-semibold text-[11px] mt-1">
-                            <Calendar className="w-3.5 h-3.5" />
-                            <span>{new Date(activeQuiz.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 mt-4 pt-4 border-t border-zinc-100">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-zinc-500 font-bold">Accuracy Score</span>
-                            <span className="font-extrabold text-zinc-800">{activeQuiz.score} / {activeQuiz.totalQuestions} ({activeQuiz.accuracy}%)</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-zinc-500 font-bold">Average Speed</span>
-                            <span className="font-extrabold text-zinc-800">{activeQuiz.averageTimePerQuestion}s / question</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-zinc-500 font-bold">Status</span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                              activeQuiz.accuracy >= 80 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'
-                            }`}>{activeQuiz.accuracy >= 80 ? 'Mastered' : 'Reviewed'}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* QUESTIONS LIST REVIEW FOR SELECTED ATTEMPT */}
-                      <div className="md:col-span-3 bg-white border border-zinc-200/80 rounded-[2rem] p-6 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between border-b border-zinc-150 pb-3">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-2">
-                            <ListChecks className="w-4 h-4 text-indigo-500" />
-                            <span>Asked Questions & AI Solutions</span>
-                          </h4>
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-600 border border-indigo-100">
-                            {activeQuiz.score} / {activeQuiz.totalQuestions} Correct
-                          </span>
-                        </div>
-
-                        <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
-                          {getReviewQuestionsForAttempt(activeQuiz).map((q: any, idx: number) => {
-                            const userAnswer = q.userAnswer || "";
-                            const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userAnswer === q.correctAnswer);
-                            
-                            return (
-                              <div key={idx} className="p-4 rounded-2xl border border-zinc-150/80 bg-zinc-50/10 space-y-3">
-                                {/* Question Text */}
-                                <div className="flex gap-2 items-start">
-                                  <span className="w-5 h-5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-black flex items-center justify-center shrink-0">
-                                    {idx + 1}
-                                  </span>
-                                  <h5 className="text-xs font-black text-zinc-800 pt-0.5 leading-relaxed flex-1">
-                                    <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-black text-zinc-800">
-                                      {formatQuizMath(q.question)}
-                                    </GlobalMarkdown>
-                                  </h5>
-                                </div>
-
-                                {/* Options Grid */}
-                                <div className="grid grid-cols-1 gap-2 pl-7">
-                                  {q.options?.map((option: string, oIdx: number) => {
-                                    const isOptionUserAnswer = option === userAnswer;
-                                    const isOptionCorrect = option === q.correctAnswer;
-                                    
-                                    let optStyle = "border-zinc-200/60 bg-white text-zinc-600";
-                                    if (isOptionCorrect) {
-                                      optStyle = "border-emerald-500 bg-emerald-50/70 text-emerald-950 font-bold shadow-sm";
-                                    } else if (isOptionUserAnswer && !isCorrect) {
-                                      optStyle = "border-rose-500 bg-rose-50/70 text-rose-950 font-bold shadow-sm";
-                                    }
-
-                                    return (
-                                      <div
-                                        key={oIdx}
-                                        className={`border p-2.5 rounded-xl text-xs font-semibold flex items-start gap-2 ${optStyle}`}
-                                      >
-                                        <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[8px] font-black shrink-0">
-                                          {String.fromCharCode(65 + oIdx)}
-                                        </span>
-                                        <span className="flex-1">
-                                          <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-semibold">
-                                            {formatQuizMath(option)}
-                                          </GlobalMarkdown>
-                                        </span>
-                                        {isOptionCorrect && (
-                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                                        )}
-                                        {isOptionUserAnswer && !isCorrect && (
-                                          <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-
-                                {/* Explanation */}
-                                {q.explanation && (
-                                  <div className="pl-7">
-                                    <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-100/50 space-y-1">
-                                      <span className="text-[9px] font-black text-indigo-600 uppercase tracking-wider flex items-center gap-1">
-                                        <Sparkles className="w-3 h-3" />
-                                        <span>AI Tutor Explanation</span>
-                                      </span>
-                                      <div className="text-[10px] font-bold text-zinc-600 leading-relaxed">
-                                        <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-[10px] font-bold text-zinc-600">
-                                          {formatQuizMath(q.explanation)}
-                                        </GlobalMarkdown>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
                     </div>
                   );
                 })()}
-
-                {/* HISTORICAL SESSIONS LIST */}
-                <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-1.5">
-                    <Clipboard className="w-4 h-4 text-zinc-400" />
-                    <span>Learning Session History</span>
-                  </h4>
-
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {(safeHistory.length === 0 ? DEMO_HISTORY : safeHistory).slice().reverse().map((item) => {
-                      const list = safeHistory.length === 0 ? DEMO_HISTORY : safeHistory;
-                      const activeQuiz = selectedHistoryItem || (list.length > 0 ? list[list.length - 1] : null);
-                      const isSelected = activeQuiz && activeQuiz.id === item.id;
-                      
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            triggerVibration(10);
-                            setSelectedHistoryItem(item);
-                          }}
-                          className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all active:scale-[0.995] ${
-                            isSelected 
-                              ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' 
-                              : 'bg-zinc-50/20 border-zinc-200/50 hover:bg-zinc-50 hover:border-zinc-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
-                              item.accuracy >= 80 ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-500'
-                            }`}>
-                              {item.score}/{item.totalQuestions}
-                            </div>
-                            <div>
-                              <p className="font-extrabold text-xs text-zinc-800 line-clamp-1">{getQuizTitle(item)}</p>
-                              <p className="text-[10px] font-bold text-zinc-400 mt-0.5">
-                                {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <div className="text-right">
-                              <p className="font-black text-xs text-zinc-700">{item.accuracy}%</p>
-                              <p className="text-[9px] font-bold text-zinc-400 mt-0.5">{item.averageTimePerQuestion}s/q</p>
-                            </div>
-                            <span className="text-zinc-300 font-extrabold select-none">&rsaquo;</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
 
               </div>
             )}
@@ -3013,7 +3019,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
             </div>
           </motion.div>
         )}
-
+          </>
+        )}
       </div>
 
       {/* SHARE MODAL OVERLAY */}
@@ -3087,48 +3094,21 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                 )}
 
                 {/* Action buttons stack */}
-                <div className="w-full mb-4">
+                <div className="w-full mb-2">
                   <button
                     onClick={async () => {
                       triggerVibration(15);
                       try {
                         const blob = dataURItoBlob(shareImageUrl);
-                        const file = new File([blob], 'HelpYou_AI_Quiz_Score.png', { type: 'image/png' });
-                        
-                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                          await navigator.share({
-                            files: [file],
-                            title: 'My HelpYou AI Quiz Score!',
-                            text: `Check out my score on HelpYou AI! 🧠 I scored ${score}/${quiz.length} (${Math.round((score/quiz.length)*100)}%) on ${topic || 'Custom Assessment'}.`,
-                          });
-                          setShareStatus('success');
-                          setShareMessage('Card shared successfully! 🎉');
-                        } else {
-                          // Try copying to clipboard as fallback
-                          if (navigator.clipboard && navigator.clipboard.write) {
-                            await navigator.clipboard.write([
-                              new ClipboardItem({ 'image/png': blob })
-                            ]);
-                            setShareStatus('success');
-                            setShareMessage('Copied card to clipboard! 📋 Paste to share!');
-                          } else {
-                            throw new Error('Share/Copy not supported');
-                          }
-                        }
+                        const title = 'My HelpYou AI Quiz Score!';
+                        const text = `Check out my score on HelpYou AI! 🧠 I scored ${score}/${quiz.length} (${Math.round((score/quiz.length)*100)}%) on ${topic || 'Custom Assessment'}.`;
+                        await shareImageMobile(blob, 'HelpYou_AI_Quiz_Score.png', title, text);
+                        setShareStatus('success');
+                        setShareMessage('Card shared successfully! 🎉');
                       } catch (err) {
                         console.error('Sharing failed:', err);
-                        // Fallback: Copy summary text
-                        try {
-                          const totalTime = questionDurations.reduce((acc, curr) => acc + curr, 0);
-                          await navigator.clipboard.writeText(
-                            `🧠 My HelpYou AI Quiz Performance:\nSubject: ${topic || 'Custom Assessment'}\nScore: ${score}/${quiz.length} (${Math.round((score/quiz.length)*100)}%)\nTime taken: ${Math.round(totalTime)}s`
-                          );
-                          setShareStatus('success');
-                          setShareMessage('Copied statistics text to clipboard! 📋');
-                        } catch (copyErr) {
-                          setShareStatus('error');
-                          setShareMessage('Could not share or copy performance card.');
-                        }
+                        setShareStatus('error');
+                        setShareMessage('Could not share performance card.');
                       }
                       setTimeout(() => {
                         setShareStatus('idle');
@@ -3141,43 +3121,6 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                     <span>Share Performance Card</span>
                   </button>
                 </div>
-
-                {/* Clipboard copy helper */}
-                <button
-                  onClick={async () => {
-                    triggerVibration(15);
-                    try {
-                      const blob = dataURItoBlob(shareImageUrl);
-                      if (navigator.clipboard && navigator.clipboard.write) {
-                        await navigator.clipboard.write([
-                          new ClipboardItem({ 'image/png': blob })
-                        ]);
-                        setShareStatus('success');
-                        setShareMessage('Copied score card image to clipboard! 📋 Paste in any app!');
-                      } else {
-                        // Fallback: Copy summary text
-                        const totalTime = questionDurations.reduce((acc, curr) => acc + curr, 0);
-                        await navigator.clipboard.writeText(
-                          `🧠 My HelpYou AI Quiz Performance:\nSubject: ${topic || 'Custom Assessment'}\nScore: ${score}/${quiz.length} (${Math.round((score/quiz.length)*100)}%)\nTime taken: ${Math.round(totalTime)}s`
-                        );
-                        setShareStatus('success');
-                        setShareMessage('Copied statistics text to clipboard! 📋');
-                      }
-                    } catch (err) {
-                      console.error('Copy failed:', err);
-                      setShareStatus('error');
-                      setShareMessage('Unable to copy image.');
-                    }
-                    setTimeout(() => {
-                      setShareStatus('idle');
-                      setShareMessage('');
-                    }, 4000);
-                  }}
-                  className="text-[11px] font-black tracking-wider uppercase text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1 cursor-pointer"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Image to Clipboard</span>
-                </button>
               </div>
             </motion.div>
           </motion.div>
@@ -3302,7 +3245,33 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
               </div>
 
               {/* Modal Footer */}
-              <div className="p-6 border-t border-zinc-100 bg-zinc-50/30 flex justify-end">
+              <div className="p-6 border-t border-zinc-100 bg-zinc-50/30 flex items-center justify-between gap-3">
+                {reviewingAttempt.questions && reviewingAttempt.questions.length > 0 ? (
+                  <button
+                    onClick={() => {
+                      triggerVibration(10);
+                      const retakeQuestions: Question[] = reviewingAttempt.questions.map((q: any) => ({
+                        question: q.question,
+                        options: q.options || [],
+                        correctAnswer: q.correctAnswer,
+                        explanation: q.explanation || ""
+                      }));
+                      setQuiz(retakeQuestions);
+                      setCurrentIndex(0);
+                      setSelectedOption(null);
+                      setIsAnswered(false);
+                      setScore(0);
+                      setQuizState('playing');
+                      setReviewingAttempt(null);
+                      setShowHistory(false);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Retake Practice</span>
+                  </button>
+                ) : <div />}
+
                 <button
                   onClick={() => {
                     triggerVibration(10);
@@ -3524,17 +3493,6 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                     </button>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleCopyAIHelp}
-                        disabled={askAILoadingMode === askAIMode || !(askAICacheRef.current[currentIndex]?.[askAIMode] || askAICache[currentIndex]?.[askAIMode])}
-                        className="px-3.5 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 hover:bg-zinc-50 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-40"
-                        title="Copy Explanation"
-                      >
-                        {copiedAiHelp ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedAiHelp ? 'Copied' : 'Copy'}</span>
-                      </button>
-
                       <button
                         type="button"
                         onClick={() => setShowAskAIModal(false)}

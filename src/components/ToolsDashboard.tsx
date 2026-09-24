@@ -8,6 +8,7 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getCoins, isUserLoggedIn } from '../utils/coins';
 import { useSettings } from '../hooks/useSettings';
 import { db } from '../lib/firebase';
+import { shareTextMobile } from '../utils/mobileSaver';
 
 interface ToolsDashboardProps {
   onSelectTool: (tool: string) => void;
@@ -92,50 +93,48 @@ function ToolsDashboard({
   
   const startY = useRef(0);
   const isDragging = useRef(false);
-
-  // Trigger internal re-layout on refreshEpoch change
-  useEffect(() => {
-    if (refreshEpoch) {
-      setForceRenderCount(prev => prev + 1);
-    }
-  }, [refreshEpoch]);
+  const rafRef = useRef<number | null>(null);
 
   const handleDragStart = (clientY: number) => {
     if (!scrollRef.current) return;
     // Only allow pull-to-refresh if the scrollbar is completely at the top
-    if (scrollRef.current.scrollTop === 0 && refreshState === 'idle') {
+    if (scrollRef.current.scrollTop <= 0 && refreshState === 'idle') {
       startY.current = clientY;
       isDragging.current = true;
     }
   };
 
-  const handleDragMove = (clientY: number, e?: { preventDefault?: () => void }) => {
+  const handleDragMove = (clientY: number) => {
     if (!isDragging.current || refreshState === 'refreshing' || refreshState === 'success') return;
+    if (scrollRef.current && scrollRef.current.scrollTop > 0) {
+      isDragging.current = false;
+      return;
+    }
+
     const dy = clientY - startY.current;
     if (dy > 0) {
-      // Apply a spring resistance damping ratio
-      const damped = Math.min(100, dy * 0.35);
-      setPullDistance(damped);
-      if (damped >= 55) {
-        setRefreshState('ready');
-      } else {
-        setRefreshState('pulling');
-      }
-      // Prevent default overscroll bounce/refreshes in some WebView frames
-      if (e?.preventDefault) {
-        e.preventDefault();
-      }
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const damped = Math.min(80, dy * 0.3);
+        setPullDistance(damped);
+        if (damped >= 50) {
+          setRefreshState('ready');
+        } else {
+          setRefreshState('pulling');
+        }
+      });
     }
   };
 
   const handleDragEnd = async () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (!isDragging.current) return;
     isDragging.current = false;
 
     if (refreshState === 'ready' && onForceSync) {
       triggerVibration(10);
       setRefreshState('refreshing');
-      setPullDistance(55); // Lock it at loading distance
+      setPullDistance(50);
       try {
         await onForceSync();
         setRefreshState('success');
@@ -147,11 +146,10 @@ function ToolsDashboard({
         return;
       }
       
-      // Keep success state briefly so it feels high-fidelity
       setTimeout(() => {
         setRefreshState('idle');
         setPullDistance(0);
-      }, 1000);
+      }, 800);
     } else {
       setRefreshState('idle');
       setPullDistance(0);
@@ -164,7 +162,7 @@ function ToolsDashboard({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    handleDragMove(e.touches[0].pageY, e);
+    handleDragMove(e.touches[0].pageY);
   };
 
   const handleTouchEnd = () => {
@@ -176,7 +174,7 @@ function ToolsDashboard({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    handleDragMove(e.pageY, e);
+    handleDragMove(e.pageY);
   };
 
   const handleMouseUpOrLeave = () => {
@@ -184,45 +182,17 @@ function ToolsDashboard({
   };
   // --------------------------------------
 
-  // WebView / Capacitor safe layout force-render trick
-  const [forceRenderCount, setForceRenderCount] = useState(0);
-
+  // Native Splash Screen hide optimization on first mount
   useEffect(() => {
-    const forceLayoutRecalculation = () => {
-      setForceRenderCount(prev => prev + 1);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('resize'));
-      }
-    };
-
-    const timers = [
-      setTimeout(forceLayoutRecalculation, 10),
-      setTimeout(forceLayoutRecalculation, 80),
-      setTimeout(forceLayoutRecalculation, 180),
-      setTimeout(forceLayoutRecalculation, 350),
-      setTimeout(forceLayoutRecalculation, 600)
-    ];
-
     if (Capacitor.isNativePlatform()) {
       try {
         const nativeSplashScreen = (Capacitor as any).Plugins?.SplashScreen || (window as any).Capacitor?.Plugins?.SplashScreen;
         if (nativeSplashScreen) {
-          nativeSplashScreen.hide().catch((e: any) => console.log('[Native] SplashScreen hide error:', e));
+          nativeSplashScreen.hide().catch(() => {});
         }
-      } catch (err) {
-        console.warn('[Native] Capacitor SplashScreen detection skipped:', err);
-      }
+      } catch (_) {}
     }
-
-    window.addEventListener('focus', forceLayoutRecalculation);
-    document.addEventListener('visibilitychange', forceLayoutRecalculation);
-
-    return () => {
-      timers.forEach(clearTimeout);
-      window.removeEventListener('focus', forceLayoutRecalculation);
-      document.removeEventListener('visibilitychange', forceLayoutRecalculation);
-    };
-  }, [activeTab]);
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showToastMessage, setShowToastMessage] = useState<string | null>(null);
@@ -267,13 +237,10 @@ function ToolsDashboard({
     setContextMenuItem(null);
   };
 
-  const handleShareTool = (toolId: string) => {
+  const handleShareTool = async (toolId: string) => {
     const cleanId = toolId.startsWith('tab:') ? toolId.substring(4) : toolId;
     const shareText = `📚 Check out the AI Tool - "${cleanId.toUpperCase()}" on HelpYou AI! It supercharges your learning! 🚀`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(shareText);
-      setShowToastMessage(`📋 Share text copied to clipboard!`);
-    }
+    await shareTextMobile(`HelpYou AI - ${cleanId.toUpperCase()}`, shareText);
     setContextMenuItem(null);
   };
 
@@ -293,12 +260,12 @@ function ToolsDashboard({
   };
 
   const handleMovePress = (e: any) => {
-    if (!touchStartPos.current) return;
+    if (!touchStartPos.current || !longPressTimer.current) return;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const dx = Math.abs(clientX - touchStartPos.current.x);
     const dy = Math.abs(clientY - touchStartPos.current.y);
-    if (dx > 12 || dy > 12) {
+    if (dx > 10 || dy > 10) {
       handleCancelPress();
     }
   };
@@ -306,15 +273,12 @@ function ToolsDashboard({
   const handleEndPress = (e: any, onClick: () => void) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (touchStartPos.current && !isLongPressActive.current) {
-      if (e.cancelable && e.type === 'touchend') {
-        e.preventDefault();
-      }
       onClick();
     } else if (isLongPressActive.current) {
-      if (e.cancelable) {
+      if (e?.cancelable) {
         e.preventDefault();
       }
-      e.stopPropagation();
+      e?.stopPropagation?.();
     }
     touchStartPos.current = null;
   };
@@ -390,7 +354,7 @@ function ToolsDashboard({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUpOrLeave}
       onMouseLeave={handleMouseUpOrLeave}
-      className="w-full p-6 h-full flex flex-col text-zinc-900 bg-gradient-to-b from-[#F9FBE7]/15 via-[#FAF9F6] to-[#FAF9F6] overflow-y-auto relative font-sans select-none touch-pan-y"
+      className="w-full px-6 pt-6 pb-36 h-full flex flex-col text-zinc-900 bg-gradient-to-b from-[#F9FBE7]/15 via-[#FAF9F6] to-[#FAF9F6] overflow-y-auto relative font-sans select-none touch-pan-y"
     >
       {/* Pull-To-Refresh Visual Indicator Container */}
       <AnimatePresence>
@@ -572,7 +536,7 @@ function ToolsDashboard({
                     Deep Search AI
                     <span className="text-[9px] font-black uppercase tracking-wider bg-white/20 text-white px-1.5 py-0.5 rounded-full animate-pulse">LIVE</span>
                   </h3>
-                  <p className="text-xs text-white/80 font-bold">Search live dates, syllabus & current facts</p>
+                  <p className="text-xs text-white/80 font-bold">Live Web Search</p>
                 </div>
               </div>
               <ArrowRight className="w-5 h-5 text-white shrink-0" />
@@ -797,7 +761,7 @@ function ToolsDashboard({
                       </div>
                       <div>
                         <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">AI Essay Grader</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Get grading & feedback</p>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Instant Grading</p>
                       </div>
                     </motion.div>
                   )}
@@ -822,7 +786,7 @@ function ToolsDashboard({
                       </div>
                       <div>
                         <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Image to PDF</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Turn photos to PDF</p>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Photos to PDF</p>
                       </div>
                     </motion.div>
                   )}
@@ -848,7 +812,7 @@ function ToolsDashboard({
                       </div>
                       <div>
                         <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">The Mistake Vault</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Concept correction lab</p>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Concept correction</p>
                       </div>
                     </motion.div>
                   )}
@@ -883,7 +847,7 @@ function ToolsDashboard({
                   3-Card Trap
                 </span>
               </div>
-              <p className="text-xs text-zinc-500 font-bold mt-1">Under 90s micro-assessment • Master negative-marking traps 🔥</p>
+              <p className="text-xs text-zinc-500 font-bold mt-1">Quick 90s Trivia</p>
             </div>
           </div>
           <div className="w-9 h-9 rounded-full bg-zinc-100 group-hover:bg-zinc-200 flex items-center justify-center shrink-0 transition-colors">

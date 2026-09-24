@@ -12,6 +12,7 @@ import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { getUserProfileData } from '../utils/profile';
+import { addStudyXP } from '../utils/gamification';
 import GlobalMarkdown, { formatQuizMath, healUnitSuperscripts } from './GlobalMarkdown';
 
 interface MistakeVaultProps {
@@ -48,6 +49,14 @@ interface ParsedVaultConcept {
   isStructured: boolean;
 }
 
+function cleanVaultField(s: string | undefined | null): string {
+  if (!s) return '';
+  const trimmed = String(s).trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === 'undefined' || lower === 'null' || lower === 'n/a' || lower === 'nan') return '';
+  return trimmed;
+}
+
 function parseVaultConcept(raw: string): ParsedVaultConcept {
   if (!raw) return { correctText: '', trapWarning: '', formula: '', explanation: '', isStructured: false };
 
@@ -59,41 +68,59 @@ function parseVaultConcept(raw: string): ParsedVaultConcept {
     isStructured: false
   };
 
-  const text = raw.trim();
+  // Strip accidental stringified undefined or null markers
+  let text = String(raw).trim()
+    .replace(/(?:Trap Warning|Trap):\s*(?:undefined|null)\b/gi, '')
+    .replace(/\|\s*(?:undefined|null)\b/gi, '')
+    .replace(/\b(?:undefined|null)\b/gi, '')
+    .trim();
 
-  // 1. Compound Trivia format with pipe delimiters:
-  // E.g. "Correct: 9.8 m/s^2 downward. Trap Warning: Common mistake: Assuming... | Formula/Concept: v = u + at, \quad a = -g \approx -9.8 \text{ m/s}^2 | Velocity is zero..."
-  if (text.includes('|') || text.includes('Formula/Concept:') || text.includes('Trap Warning:')) {
-    const pipeParts = text.split('|').map(p => p.trim()).filter(Boolean);
+  // 1. Compound Trivia format with pipe delimiters or section markers
+  if (text.includes('|') || /Formula(?:\/Concept)?:/i.test(text) || /Trap(?: Warning)?:/i.test(text) || /^Correct:/i.test(text)) {
+    const pipeParts = text.split('|').map(p => cleanVaultField(p)).filter(Boolean);
 
     for (const part of pipeParts) {
       if (/^Formula(?:\/Concept)?:\s*/i.test(part)) {
-        result.formula = part.replace(/^Formula(?:\/Concept)?:\s*/i, '').trim();
-      } else if (/^Trap Warning:\s*/i.test(part)) {
-        result.trapWarning = part.replace(/^Trap Warning:\s*/i, '').trim();
+        result.formula = cleanVaultField(part.replace(/^Formula(?:\/Concept)?:\s*/i, ''));
+      } else if (/^Trap(?: Warning)?:\s*/i.test(part)) {
+        result.trapWarning = cleanVaultField(part.replace(/^Trap(?: Warning)?:\s*/i, ''));
       } else if (/^Correct:\s*/i.test(part)) {
-        // May contain "Trap Warning:" inside this same part if not pipe-separated
-        const subTrapMatch = part.match(/^(Correct:\s*[^.]+?\.)\s*Trap Warning:\s*(.+)$/i);
+        // May contain "Trap Warning:" or "Trap:" inside this same part if not pipe-separated
+        const subTrapMatch = part.match(/^(Correct:\s*[^.]+?\.)\s*Trap(?: Warning)?:\s*(.+)$/i);
         if (subTrapMatch) {
-          result.correctText = subTrapMatch[1].trim();
-          result.trapWarning = subTrapMatch[2].trim();
+          result.correctText = cleanVaultField(subTrapMatch[1]);
+          result.trapWarning = cleanVaultField(subTrapMatch[2]);
         } else {
-          result.correctText = part.trim();
+          const trapIdx = part.search(/Trap(?: Warning)?:\s*/i);
+          if (trapIdx !== -1) {
+            result.correctText = cleanVaultField(part.slice(0, trapIdx));
+            result.trapWarning = cleanVaultField(part.slice(trapIdx).replace(/^Trap(?: Warning)?:\s*/i, ''));
+          } else {
+            result.correctText = cleanVaultField(part);
+          }
         }
       } else if (!result.explanation) {
-        result.explanation = part.trim();
+        result.explanation = cleanVaultField(part);
       } else {
-        result.explanation += ' ' + part.trim();
+        const extra = cleanVaultField(part);
+        if (extra) result.explanation += ' ' + extra;
       }
     }
 
-    if (!result.trapWarning && result.correctText.includes('Trap Warning:')) {
-      const idx = result.correctText.indexOf('Trap Warning:');
-      result.trapWarning = result.correctText.slice(idx + 'Trap Warning:'.length).trim();
-      result.correctText = result.correctText.slice(0, idx).trim();
+    if (!result.trapWarning && result.correctText) {
+      const trapIdx = result.correctText.search(/Trap(?: Warning)?:\s*/i);
+      if (trapIdx !== -1) {
+        result.trapWarning = cleanVaultField(result.correctText.slice(trapIdx).replace(/^Trap(?: Warning)?:\s*/i, ''));
+        result.correctText = cleanVaultField(result.correctText.slice(0, trapIdx));
+      }
     }
 
-    if (result.formula || result.trapWarning || result.correctText) {
+    result.correctText = cleanVaultField(result.correctText);
+    result.trapWarning = cleanVaultField(result.trapWarning);
+    result.formula = cleanVaultField(result.formula);
+    result.explanation = cleanVaultField(result.explanation);
+
+    if (result.formula || result.trapWarning || result.correctText || result.explanation) {
       result.isStructured = true;
     }
   }
@@ -102,8 +129,12 @@ function parseVaultConcept(raw: string): ParsedVaultConcept {
   if (!result.isStructured && text.includes('🚨 Watch Out!')) {
     const parts = text.split(/🚨 Watch Out! \(Common Trap\):?/);
     result.isStructured = true;
-    result.correctText = parts[0]?.trim() || '';
-    result.trapWarning = parts[1]?.trim() || '';
+    result.correctText = cleanVaultField(parts[0]);
+    result.trapWarning = cleanVaultField(parts[1]);
+  }
+
+  if (!result.isStructured && text) {
+    result.correctText = cleanVaultField(text);
   }
 
   return result;
@@ -113,9 +144,11 @@ function VaultConceptView({ concept }: { concept: string }) {
   const parsed = parseVaultConcept(concept);
 
   if (!parsed.isStructured) {
+    const cleanRaw = cleanVaultField(concept);
+    if (!cleanRaw) return null;
     return (
       <div className="text-xs font-semibold text-zinc-800 leading-relaxed">
-        <GlobalMarkdown>{concept}</GlobalMarkdown>
+        <GlobalMarkdown>{cleanRaw}</GlobalMarkdown>
       </div>
     );
   }
@@ -129,12 +162,12 @@ function VaultConceptView({ concept }: { concept: string }) {
         </div>
       )}
 
-      {/* 2. Exam Trap Warning Callout */}
+      {/* 2. Exam Trap Warning Callout (only rendered when valid trap warning exists) */}
       {parsed.trapWarning && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5 text-xs text-amber-950 font-bold">
-          <div className="flex items-center gap-1 text-[10px] text-amber-800 uppercase tracking-wider font-black mb-0.5">
+          <div className="flex items-center gap-1.5 text-[10px] text-amber-800 uppercase tracking-wider font-black mb-1">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span>⚠️ Exam Trap Warning:</span>
+            <span>Exam Trap Warning:</span>
           </div>
           <GlobalMarkdown className="text-xs font-medium text-amber-900 leading-relaxed [&_p]:inline [&_p]:m-0">
             {parsed.trapWarning}
@@ -216,9 +249,16 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
         const fetched: MistakeItem[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
+          const cleanCorrect = (data.correctConcept || '')
+            .replace(/(?:Trap Warning|Trap):\s*(?:undefined|null)\b/gi, '')
+            .replace(/\|\s*(?:undefined|null)\b/gi, '')
+            .replace(/\b(?:undefined|null)\b/gi, '')
+            .trim();
+
           fetched.push({
             id: docSnap.id,
-            ...data
+            ...data,
+            correctConcept: cleanCorrect
           } as MistakeItem);
         });
         
@@ -233,7 +273,15 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
       } else {
         // Fetch from localStorage fallback
         const local = JSON.parse(localStorage.getItem('study_temp_mistakes') || '[]');
-        setMistakes(local.reverse());
+        const cleanedLocal = local.map((m: any) => ({
+          ...m,
+          correctConcept: (m.correctConcept || '')
+            .replace(/(?:Trap Warning|Trap):\s*(?:undefined|null)\b/gi, '')
+            .replace(/\|\s*(?:undefined|null)\b/gi, '')
+            .replace(/\b(?:undefined|null)\b/gi, '')
+            .trim()
+        }));
+        setMistakes(cleanedLocal.reverse());
       }
     } catch (err) {
       console.error('Error fetching mistakes:', err);
@@ -309,7 +357,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
         pro_memory_trick: aiFixData.pro_memory_trick || aiFixData.memory_trick || "💡 Memory Rule: Write down given values and check units carefully!"
       };
 
-      // Save fix to state
+      // 1. Save fix to React state immediately
       setMistakes(prev => prev.map(m => {
         if (m.id === item.id) {
           return { ...m, aiFix: formattedFix };
@@ -317,13 +365,20 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
         return m;
       }));
 
-      // Persist to DB or localStorage
+      // 2. Persist to Firestore safely without wiping out on network warning
       const user = auth.currentUser;
       if (user && !item.id.startsWith('local_')) {
-        await updateDoc(doc(db, 'MistakeVault', item.id), {
-          aiFix: formattedFix
-        });
-      } else {
+        try {
+          await updateDoc(doc(db, 'MistakeVault', item.id), {
+            aiFix: formattedFix
+          });
+        } catch (dbErr) {
+          console.warn('Firestore updateDoc warning (saving locally):', dbErr);
+        }
+      }
+
+      // 3. Always mirror to localStorage as resilient offline cache
+      try {
         const local = JSON.parse(localStorage.getItem('study_temp_mistakes') || '[]');
         const updatedLocal = local.map((m: any) => {
           if (m.id === item.id) {
@@ -332,6 +387,8 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
           return m;
         });
         localStorage.setItem('study_temp_mistakes', JSON.stringify(updatedLocal));
+      } catch (localErr) {
+        console.warn('LocalStorage save error:', localErr);
       }
 
       setExpandedFixId(item.id);
@@ -351,6 +408,14 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
   };
 
   const startPractice = async (item: MistakeItem) => {
+    // If already practicing this exact item, toggle it closed
+    if (practicingId === item.id) {
+      triggerVibration(10);
+      setPracticingId(null);
+      setPracticeQuestions([]);
+      return;
+    }
+
     if (practiceLoading) return;
     triggerVibration(25);
     setPracticingId(item.id);
@@ -389,8 +454,40 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
       if (questionsArray.length === 0) {
         throw new Error("No questions generated");
       }
+
+      // Robust normalization of questions, options, and correctIndex
+      const normalizedQuestions: PracticeQuestion[] = questionsArray.map((q: any) => {
+        let correctIdx = 0;
+        if (typeof q.correctIndex === 'number' && !isNaN(q.correctIndex)) {
+          correctIdx = Math.max(0, Math.min(3, Math.floor(q.correctIndex)));
+        } else if (typeof q.correctIndex === 'string') {
+          const parsed = parseInt(q.correctIndex, 10);
+          if (!isNaN(parsed) && parsed >= 0 && parsed <= 3) {
+            correctIdx = parsed;
+          } else {
+            const letter = q.correctIndex.trim().toUpperCase();
+            if (letter === 'A') correctIdx = 0;
+            else if (letter === 'B') correctIdx = 1;
+            else if (letter === 'C') correctIdx = 2;
+            else if (letter === 'D') correctIdx = 3;
+          }
+        }
+
+        const rawOptions = Array.isArray(q.options) ? q.options : [];
+        const cleanOptions = rawOptions.map((opt: any) => String(opt || '').trim()).filter(Boolean);
+        while (cleanOptions.length < 4) {
+          cleanOptions.push(`Option ${cleanOptions.length + 1}`);
+        }
+
+        return {
+          question: String(q.question || 'Practice Question').trim(),
+          options: cleanOptions.slice(0, 4),
+          correctIndex: correctIdx,
+          explanation: String(q.explanation || 'Review the core concept to remember the correct principle.').trim()
+        };
+      });
       
-      setPracticeQuestions(questionsArray);
+      setPracticeQuestions(normalizedQuestions);
     } catch (err) {
       console.error("Practice generation failed, using instant fallback questions:", err);
       // Seamless fallback so the user always gets 3 practice questions to master the concept
@@ -453,7 +550,6 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                 🔒 VAULT
               </span>
             </h2>
-            <p className="text-[10px] text-zinc-500 font-medium">Concept Correction & Memory Lab</p>
           </div>
         </div>
         <div className="w-9 h-9 rounded-full flex items-center justify-center bg-red-50 text-red-500">
@@ -462,7 +558,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto px-5 py-6 bg-white">
+      <div className="flex-1 overflow-y-auto px-5 pt-6 pb-36 bg-white">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64 gap-3 text-zinc-400">
             <Loader2 className="w-8 h-8 animate-spin text-red-500" />
@@ -549,12 +645,11 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                         </div>
                       </div>
 
-                      {!hasFix && (
-                        <div className="space-y-1.5">
-                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600 block">Correct Principle:</span>
-                          <VaultConceptView concept={item.correctConcept} />
-                        </div>
-                      )}
+                      {/* Correct Principle is ALWAYS shown */}
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-600 block">Correct Principle:</span>
+                        <VaultConceptView concept={item.correctConcept} />
+                      </div>
                     </div>
 
                     {/* Expandable Fix Details */}
@@ -736,6 +831,11 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                                         setIsAnswerSubmitted(false);
                                       } else {
                                         setPracticeComplete(true);
+                                        if (correctAnswersCount >= 1) {
+                                          try {
+                                            addStudyXP(30, 'Mastered Practice Drill');
+                                          } catch {}
+                                        }
                                       }
                                     }}
                                     className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-extrabold shadow-md active:scale-95 transition-all"
@@ -757,7 +857,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                                 </p>
                                 {correctAnswersCount >= 2 ? (
                                   <p className="text-[11px] text-emerald-600 font-bold">
-                                    Excellent mastery! You have successfully resolved this conceptual gap. 🎉
+                                    Excellent mastery! You have successfully resolved this conceptual gap. 🎉 (+30 XP)
                                   </p>
                                 ) : (
                                   <p className="text-[11px] text-zinc-500 font-bold">
@@ -807,12 +907,12 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                             onClick={() => startPractice(item)}
                             className={`px-3 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1.5 transition-all active:scale-95 ${
                               practicingId === item.id
-                                ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                                ? 'bg-purple-600 text-white shadow-sm ring-2 ring-purple-300'
                                 : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-zinc-100 shadow-sm'
                             }`}
                           >
-                            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                            <span>Practice Similar 🎯</span>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>{practicingId === item.id ? "Close Practice" : "Practice Similar 🎯"}</span>
                           </button>
 
                           {!hasFix && (
@@ -826,7 +926,7 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                               ) : (
                                 <Sparkles className="w-3.5 h-3.5" />
                               )}
-                              <span>AI Fix My Mistake</span>
+                              <span>{isFixing ? "Fixing Concept..." : "AI Fix My Mistake"}</span>
                             </button>
                           )}
 
@@ -836,9 +936,13 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                                 triggerVibration(10);
                                 setExpandedFixId(prev => prev === item.id ? null : item.id);
                               }}
-                              className="px-3 py-1.5 rounded-xl text-[11px] font-black text-zinc-500 hover:text-zinc-900 bg-zinc-50 border border-zinc-100 transition-all flex items-center gap-1"
+                              className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all flex items-center gap-1 ${
+                                isExpanded
+                                  ? 'bg-zinc-900 text-white shadow-sm'
+                                  : 'text-zinc-700 hover:text-zinc-950 bg-zinc-100 border border-zinc-200'
+                              }`}
                             >
-                              <span>{isExpanded ? "Hide Review" : "Review AI Fix"}</span>
+                              <span>{isExpanded ? "Hide AI Fix" : "Review AI Fix ✨"}</span>
                               {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                             </button>
                           )}

@@ -120,9 +120,6 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
             <h1 className="text-base font-black text-zinc-850 tracking-tight flex items-center gap-1.5">
               <span>🔥</span> Study Streak Days
             </h1>
-            <p className="text-[10px] text-zinc-400 font-extrabold uppercase tracking-widest">
-              Your Dedication Tracker
-            </p>
           </div>
         </div>
       </header>
@@ -149,8 +146,8 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
               {studyStreak > 0 ? "Daily Habit Active 🚀" : "Start your Streak today! 🌱"}
             </span>
             
-            <p className="text-xs font-bold text-white/95 mt-5 leading-relaxed max-w-xs">
-              Fantastic Performance! You are working hard every day! Your study streak keeps glowing brighter with every visit! 🎯
+            <p className="text-xs font-bold text-white/95 mt-3">
+              Keep it glowing! 🔥
             </p>
           </div>
         </div>
@@ -166,8 +163,8 @@ export default function StreakDetailsPage({ onBack }: StreakDetailsPageProps) {
             </h4>
           </div>
 
-          <p className="text-[11px] font-bold text-zinc-500 max-w-xs leading-relaxed">
-            Your daily study streak is calculated automatically in the background when you open the app. No manual check-in needed! Keep up the incredible learning habit! ✨🚀
+          <p className="text-[11px] font-bold text-zinc-500">
+            Auto-tracked daily
           </p>
 
           <div className="w-full bg-zinc-50 border border-zinc-150 py-3.5 px-4 rounded-xl text-xs font-black text-zinc-700 flex items-center justify-center gap-2">

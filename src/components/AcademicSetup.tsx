@@ -223,8 +223,8 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
                   What grade are you in?
                 </h1>
-                <p className="text-xs text-zinc-500 font-semibold mt-1.5 leading-relaxed">
-                  We customize explanations, math solver steps, and study guides for your school or college curriculum level.
+                <p className="text-xs text-zinc-500 font-semibold mt-1">
+                  Customized for your level
                 </p>
               </div>
 
@@ -281,8 +281,8 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight flex items-center gap-2">
                   Select your country
                 </h1>
-                <p className="text-xs text-zinc-500 font-semibold mt-1.5 leading-relaxed">
-                  We tailor subject titles and exam naming conventions (SAT, GCSE, A-Levels, IB) to your educational system.
+                <p className="text-xs text-zinc-500 font-semibold mt-1">
+                  Matches your regional curriculum
                 </p>
               </div>
 
@@ -337,8 +337,8 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
                   Choose your study focus
                 </h1>
-                <p className="text-xs text-zinc-500 font-semibold mt-1.5 leading-relaxed">
-                  Select your primary academic subject track. This matches your daily quizzes and memory revision cards perfectly.
+                <p className="text-xs text-zinc-500 font-semibold mt-1">
+                  Personalizes quizzes & cards
                 </p>
               </div>
 

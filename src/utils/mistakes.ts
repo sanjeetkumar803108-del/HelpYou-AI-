@@ -28,12 +28,24 @@ export async function saveMistakeToVault(
 ): Promise<void> {
   const user = auth.currentUser;
   
+  // Ensure clean strings and strip any accidental 'undefined' or 'null' values
+  const cleanQ = (question || 'Academic Question').trim();
+  const cleanWrong = (wrongInput || 'Incorrect attempt').trim();
+  let cleanCorrect = (correctConcept || 'Check the correct method and principle.').trim();
+
+  // Strip accidental stringified "Trap: undefined" or "undefined"
+  cleanCorrect = cleanCorrect
+    .replace(/(?:Trap Warning|Trap):\s*(?:undefined|null)\b/gi, '')
+    .replace(/\|\s*(?:undefined|null)\b/gi, '')
+    .replace(/\b(?:undefined|null)\b/gi, '')
+    .trim();
+
   const mistakeData = {
     userId: user?.uid || 'anonymous',
     sourceFeature,
-    question: question.trim(),
-    wrongInput: wrongInput.trim(),
-    correctConcept: correctConcept.trim(),
+    question: cleanQ,
+    wrongInput: cleanWrong,
+    correctConcept: cleanCorrect,
     aiFix: null,
     createdAt: new Date().toISOString()
   };

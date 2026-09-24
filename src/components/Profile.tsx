@@ -412,7 +412,9 @@ export default function Profile({
     currentData[todayStr] = (currentData[todayStr] || 0) + mins;
     
     safeSetItem('study_passive_usage_data', JSON.stringify(currentData));
-    setChartData(generateChartData(currentData));
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      setChartData(generateChartData(currentData));
+    }
 
     pendingSyncRef.current += mins;
   };
@@ -451,7 +453,7 @@ export default function Profile({
     };
   }, [user]);
 
-  // 1. Periodic Flush Interval (every 5 seconds for local, every 5 minutes for Firestore sync)
+  // 1. Periodic Flush Interval (every 30 seconds for local, every 5 minutes for Firestore sync)
   useEffect(() => {
     let tickCount = 0;
     const interval = setInterval(() => {
@@ -464,13 +466,13 @@ export default function Profile({
         accumulateTime(elapsedMins);
       }
 
-      // 5 minutes is 60 ticks of 5 seconds
+      // 5 minutes is 10 ticks of 30 seconds
       tickCount++;
-      if (tickCount >= 60) {
+      if (tickCount >= 10) {
         tickCount = 0;
         syncUsageToFirestore();
       }
-    }, 5000);
+    }, 30000);
     
     return () => {
       clearInterval(interval);
@@ -1007,7 +1009,7 @@ export default function Profile({
       </AnimatePresence>
 
       {/* Main Profile Tab Screen */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto pb-24">
+      <div className="flex-1 flex flex-col h-full overflow-y-auto pb-36">
         {/* Custom Header Area */}
         <header className="px-6 py-5 bg-white border-b border-zinc-200/60 flex justify-between items-center sticky top-0 z-10">
           <h1 className="text-lg font-black tracking-tight text-zinc-850 flex items-center gap-2">
@@ -1440,7 +1442,7 @@ export default function Profile({
             </div>
             
             <p className="text-[10px] text-zinc-400 font-medium text-center mt-2">
-              AI-generated mapping based on your recent quiz scores.
+              Recent Quiz Mastery
             </p>
           </div>
 
@@ -1454,10 +1456,6 @@ export default function Profile({
                 Passive 7-Day Log
               </span>
             </div>
-
-            <p className="text-[11px] font-bold text-zinc-500 leading-relaxed">
-              Tracks total active time spent in the app. Updates passively as you study, solve quizzes, and interact with the AI tutor.
-            </p>
 
             {/* Passive Usage Line Chart */}
             <div className="w-full h-48 -mt-1 select-none relative">
@@ -1660,7 +1658,7 @@ export default function Profile({
                 </div>
                 <div>
                   <p className="text-xl font-black text-zinc-850 leading-none">{coinsBalance}</p>
-                  <p className="text-[9px] text-zinc-400 font-bold mt-1">Available Study Coins</p>
+                  <p className="text-[9px] text-zinc-400 font-bold mt-1">Study Coins</p>
                 </div>
               </div>
             )}
@@ -1699,7 +1697,7 @@ export default function Profile({
               </div>
               <div>
                 <p className="text-xl font-black text-zinc-850 leading-none">{studyStreak} Days</p>
-                <p className="text-[9px] text-zinc-400 font-bold mt-1">Daily App Check-In</p>
+                <p className="text-[9px] text-zinc-400 font-bold mt-1">Daily Check-In</p>
               </div>
             </div>
           </div>
@@ -1825,45 +1823,33 @@ export default function Profile({
                     return (
                       <div
                         key={badge.id}
-                        className={`col-span-3 p-4 rounded-2xl border-2 transition-all flex items-center justify-between gap-3 ${
+                        className={`col-span-3 p-5 rounded-3xl border transition-all flex flex-col items-center justify-center text-center shadow-xs ${
                           badge.unlocked
-                            ? 'bg-gradient-to-r from-amber-500/15 via-purple-500/10 to-amber-500/15 border-amber-400 shadow-md'
-                            : 'bg-gradient-to-r from-zinc-50 via-amber-50/40 to-purple-50/30 border-amber-200/90 shadow-xs'
+                            ? 'bg-gradient-to-b from-[#fffef8] to-[#fffdf3] border-amber-300'
+                            : 'bg-[#fffdf5] border-amber-200/90'
                         }`}
                       >
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 shadow-xs border ${
-                            badge.unlocked 
-                              ? 'bg-amber-100 border-amber-300 ring-2 ring-amber-400/40' 
-                              : 'bg-gradient-to-br from-amber-100 to-amber-200/60 border-amber-300'
-                          }`}>
-                            {badge.icon}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-black text-zinc-900 truncate">
-                                {badge.title}
-                              </span>
-                              <span className="text-[9px] font-black text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded font-mono border border-amber-200">
-                                {badge.requiredXP} XP
-                              </span>
-                            </div>
-                            <div className="mt-1">
-                              <span className="text-[10px] font-black text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-md tracking-wider uppercase inline-flex items-center gap-1 border border-purple-200 shadow-2xs">
-                                🎁 SUPRISED EMAIL
-                              </span>
-                            </div>
-                          </div>
+                        <span className="text-4xl">{badge.icon}</span>
+                        <span className="text-sm font-black text-[#5c3a1e] tracking-tight mt-1">
+                          {badge.title}
+                        </span>
+                        <span className="text-[11px] font-semibold text-zinc-400 mt-0.5">
+                          {badge.requiredXP.toLocaleString()} XP
+                        </span>
+
+                        <div className="my-2 px-3.5 py-1 rounded-full bg-[#fff5db] text-[#78350f] border border-amber-300 font-extrabold text-[10px] tracking-wide uppercase inline-flex items-center gap-1.5 shadow-2xs">
+                          <span>🎁</span>
+                          <span>{badge.specialReward || 'SURPRISE EMAIL'}</span>
                         </div>
 
-                        <div className="shrink-0">
+                        <div className="mt-0.5">
                           {badge.unlocked ? (
-                            <span className="text-[9px] font-black uppercase text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1 rounded-lg shadow-2xs">
-                              Unlocked
+                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-300 px-3 py-0.5 rounded-full shadow-2xs">
+                              UNLOCKED
                             </span>
                           ) : (
-                            <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 border border-zinc-200/90 px-3 py-1 rounded-lg flex items-center gap-1">
-                              <Lock className="w-2.5 h-2.5 text-zinc-400" /> Locked
+                            <span className="text-[11px] font-semibold text-zinc-400 flex items-center justify-center gap-1">
+                              <Lock className="w-3 h-3 text-zinc-400" /> Locked
                             </span>
                           )}
                         </div>
@@ -1874,30 +1860,32 @@ export default function Profile({
                   return (
                     <div
                       key={badge.id}
-                      className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all ${
+                      className={`p-3.5 rounded-2xl border text-center flex flex-col items-center justify-between gap-1.5 transition-all min-h-[115px] ${
                         badge.unlocked
-                          ? 'bg-amber-50/50 border-amber-200 shadow-xs'
-                          : 'bg-zinc-50/30 border-zinc-200/40 opacity-50'
+                          ? 'bg-white border-2 border-amber-300 shadow-xs'
+                          : 'bg-white border border-zinc-200/70'
                       }`}
                     >
-                      <span className="text-2xl">{badge.icon}</span>
-                      <div>
-                        <span className={`text-[10px] font-black block truncate ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                      <span className="text-2xl mt-0.5">{badge.icon}</span>
+                      <div className="flex flex-col items-center w-full">
+                        <span className={`text-[11px] font-bold block truncate w-full ${badge.unlocked ? 'text-zinc-900' : 'text-zinc-400'}`}>
                           {badge.title}
                         </span>
-                        <span className="text-[8px] font-bold text-zinc-400 block">
-                          {badge.requiredXP} XP
+                        <span className="text-[9px] font-semibold text-zinc-400 block mt-0.5">
+                          {badge.requiredXP.toLocaleString()} XP
                         </span>
                       </div>
-                      {badge.unlocked ? (
-                        <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100/80 px-1.5 py-0.5 rounded">
-                          Unlocked
-                        </span>
-                      ) : (
-                        <span className="text-[8px] font-bold text-zinc-400 flex items-center gap-0.5">
-                          <Lock className="w-2.5 h-2.5" /> Locked
-                        </span>
-                      )}
+                      <div className="w-full flex justify-center">
+                        {badge.unlocked ? (
+                          <span className="text-[9px] font-black uppercase tracking-wider text-amber-700 bg-[#fffbf0] border border-amber-300/80 px-2 py-0.5 rounded-md">
+                            UNLOCKED
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-semibold text-zinc-400 flex items-center justify-center gap-1">
+                            <Lock className="w-2.5 h-2.5 text-zinc-400" /> Locked
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -2005,7 +1993,7 @@ export default function Profile({
                     </div>
                     <div className="text-left">
                       <span className="text-xs font-black text-zinc-850 block">Manage Subscription</span>
-                      <span className="text-[9px] text-zinc-400 font-bold">View billing, update plans & history</span>
+                      <span className="text-[9px] text-zinc-400 font-bold">Billing & plans</span>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-zinc-400" />
@@ -2027,7 +2015,7 @@ export default function Profile({
                     <div className="text-left">
                       <span className="text-xs font-black text-zinc-850 block">Restore Purchases</span>
                       <span className="text-[9px] text-zinc-400 font-bold">
-                        {isRestoring ? "Checking subscriptions..." : "Force-sync previous purchases"}
+                        {isRestoring ? "Checking..." : "Sync purchases"}
                       </span>
                     </div>
                   </div>
@@ -2078,7 +2066,7 @@ export default function Profile({
                       <Zap className="w-3.5 h-3.5 text-zinc-400" />
                       <div>
                         <span className="text-xs font-bold text-zinc-700 block">Haptic Feedback</span>
-                        <span className="text-[10px] text-zinc-400 font-semibold">Vibrations on button taps</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Vibrations on taps</span>
                       </div>
                     </div>
                     <div className={`w-9 h-5 ${hapticEnabled ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
@@ -2135,7 +2123,7 @@ export default function Profile({
                       <Share2 className="w-3.5 h-3.5 text-zinc-400" />
                       <div>
                         <span className="block">Share HelpYou AI</span>
-                        <span className="text-[10px] text-zinc-400 font-semibold">Invite your friends to study smarter</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Invite your friends</span>
                       </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-zinc-400" />

@@ -107,8 +107,8 @@ export default function LockedFeature({
             Unlock {featureName}
           </h2>
           
-          <p className="text-xs font-semibold text-zinc-500 mt-2 leading-relaxed px-2">
-            This premium AI helper requires an active daily limit or a Pro subscription to process your queries.
+          <p className="text-xs font-semibold text-zinc-500 mt-1">
+            Pro access required
           </p>
 
           <div className="w-full bg-zinc-50 border border-zinc-200/40 rounded-2xl p-4 my-6 space-y-2.5">

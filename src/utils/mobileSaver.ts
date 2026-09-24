@@ -401,3 +401,135 @@ export async function saveAudioMobile(audioData: string | Blob, filename: string
     return false;
   }
 }
+
+/**
+ * Universal Mobile Share for Text Content
+ * Directly triggers the native Android/iOS system share sheet (WhatsApp, Telegram, Gmail, etc.) via @capacitor/share
+ * Falls back to Web Share API, and only copies to clipboard on desktop browsers if sharing is unsupported
+ */
+export async function shareTextMobile(title: string, text: string, url?: string): Promise<boolean> {
+  triggerVibration(15);
+
+  // 1. Native Capacitor Share (Android / iOS)
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Share.share({
+        title,
+        text,
+        url,
+        dialogTitle: title || 'Share via HelpYou AI'
+      });
+      return true;
+    } catch (e: any) {
+      if (e?.message?.includes('canceled') || e?.message?.includes('cancelled')) {
+        return false;
+      }
+      console.warn('[MobileSaver] Native shareText failed, trying web fallback:', e);
+    }
+  }
+
+  // 2. Web Share API (Mobile browsers like Chrome on Android, Safari on iOS)
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({
+        title,
+        text,
+        url
+      });
+      return true;
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return false;
+      console.warn('[MobileSaver] Web share failed, falling back:', e);
+    }
+  }
+
+  // 3. Desktop browser fallback only
+  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(url ? `${text}\n\n${url}` : text);
+      showInAppToast('📋 Copied to clipboard! Ready to paste & share.');
+      return true;
+    } catch (e) {
+      console.error('[MobileSaver] Clipboard fallback failed:', e);
+    }
+  }
+  return false;
+}
+
+/**
+ * Universal Mobile Share for Images (e.g. Scorecards, Charts)
+ * Writes image to cache and triggers the native Capacitor Share sheet with the image file URI
+ */
+export async function shareImageMobile(
+  imageData: Blob | string,
+  filename: string,
+  title?: string,
+  text?: string
+): Promise<boolean> {
+  triggerVibration(20);
+  let cleanFilename = filename.trim().replace(/[\\/:"*?<>|]/g, '_');
+  if (!cleanFilename.toLowerCase().endsWith('.png') && !cleanFilename.toLowerCase().endsWith('.jpg')) {
+    cleanFilename += '.png';
+  }
+
+  // 1. Native Platform (Android / iOS)
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const b64Data = await getBase64(imageData);
+      const tempFile = await Filesystem.writeFile({
+        path: cleanFilename,
+        data: b64Data,
+        directory: Directory.Cache,
+      });
+
+      await Share.share({
+        title: title || cleanFilename,
+        text: text || 'Check out my score on HelpYou AI!',
+        url: tempFile.uri,
+        dialogTitle: title || 'Share Scorecard',
+      });
+      return true;
+    } catch (e: any) {
+      if (e?.message?.includes('canceled') || e?.message?.includes('cancelled')) {
+        return false;
+      }
+      console.error('[MobileSaver] Native image share failed:', e);
+    }
+  }
+
+  // 2. Web Share API with File
+  try {
+    const blob = await getBlob(imageData);
+    const file = new File([blob], cleanFilename, { type: 'image/png' });
+    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: title || cleanFilename,
+        text: text || 'Check out my score on HelpYou AI!',
+      });
+      return true;
+    }
+  } catch (err: any) {
+    if (err?.name === 'AbortError') return false;
+    console.warn('[MobileSaver] Web image share failed:', err);
+  }
+
+  // 3. Fallback: Download the image or copy summary text
+  try {
+    const b64 = typeof imageData === 'string' && imageData.startsWith('data:')
+      ? imageData
+      : `data:image/png;base64,${await getBase64(imageData)}`;
+    const link = document.createElement('a');
+    link.href = b64;
+    link.download = cleanFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showInAppToast('📥 Scorecard image saved!');
+    return true;
+  } catch (e) {
+    console.error('[MobileSaver] Fallback image download failed:', e);
+    return false;
+  }
+}
+

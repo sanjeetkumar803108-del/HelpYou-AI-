@@ -41,14 +41,11 @@ export default function TestPrep({ onBack, isVip, onOpenVip, onNavigateToTab }: 
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-8 flex flex-col justify-start max-w-lg mx-auto w-full pb-12">
+      <div className="flex-1 overflow-y-auto px-6 pt-8 pb-36 flex flex-col justify-start max-w-lg mx-auto w-full">
         {/* Tutor Welcome Message */}
-        <div className="text-center mb-8">
-          <span className="text-5xl filter drop-shadow-sm select-none">🎯</span>
-          <h2 className="text-3xl font-black text-zinc-900 mt-3 tracking-tight">Test Prep Hub</h2>
-          <p className="text-sm text-zinc-500 font-semibold mt-2 leading-relaxed">
-            Ready to ace your exams? Let's choose the perfect study method! Use Quizzes to test your memory or Flashcards to review core terms.
-          </p>
+        <div className="text-center mb-6">
+          <span className="text-4xl filter drop-shadow-sm select-none">🎯</span>
+          <h2 className="text-2xl font-black text-zinc-900 mt-2 tracking-tight">Test Prep Hub</h2>
         </div>
 
         {/* Selection Cards Grid */}
@@ -61,21 +58,21 @@ export default function TestPrep({ onBack, isVip, onOpenVip, onNavigateToTab }: 
               triggerVibration(20);
               setActiveSubTool('quiz');
             }}
-            className="group relative overflow-hidden bg-white border border-zinc-200/80 rounded-[2rem] p-6 shadow-md shadow-zinc-100 flex items-start gap-5 cursor-pointer transition-all select-none hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50/50"
+            className="group relative overflow-hidden bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-md shadow-zinc-100 flex items-start gap-4 cursor-pointer transition-all select-none hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50/50"
           >
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
-              <Award className="w-7 h-7 stroke-[2]" />
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
+              <Award className="w-6 h-6 stroke-[2]" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="font-black text-zinc-900 text-lg tracking-tight">AI Quizzes</h3>
+                <h3 className="font-black text-zinc-900 text-base tracking-tight">AI Quizzes</h3>
                 <span className="bg-indigo-50 text-indigo-600 text-[10px] font-bold px-2 py-0.5 rounded-full">Practice</span>
               </div>
-              <p className="text-xs text-zinc-500 font-semibold mt-1 leading-relaxed">
-                Generate high-yield multiple choice questions from textbook images, study notes, or uploaded PDFs to test your comprehension.
+              <p className="text-xs text-zinc-500 font-semibold mt-0.5">
+                Practice Exam MCQs
               </p>
-              <div className="flex items-center gap-1.5 text-indigo-600 text-xs font-black mt-3">
-                <span>Start Quiz Prep</span>
+              <div className="flex items-center gap-1.5 text-indigo-600 text-xs font-black mt-2">
+                <span>Start Quiz</span>
                 <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
@@ -89,21 +86,21 @@ export default function TestPrep({ onBack, isVip, onOpenVip, onNavigateToTab }: 
               triggerVibration(20);
               setActiveSubTool('flashcard');
             }}
-            className="group relative overflow-hidden bg-white border border-zinc-200/80 rounded-[2rem] p-6 shadow-md shadow-zinc-100 flex items-start gap-5 cursor-pointer transition-all select-none hover:border-pink-200 hover:shadow-lg hover:shadow-pink-50/50"
+            className="group relative overflow-hidden bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-md shadow-zinc-100 flex items-start gap-4 cursor-pointer transition-all select-none hover:border-pink-200 hover:shadow-lg hover:shadow-pink-50/50"
           >
-            <div className="w-14 h-14 rounded-2xl bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600 shrink-0 group-hover:bg-pink-600 group-hover:text-white transition-colors duration-300">
-              <Layers className="w-7 h-7 stroke-[2]" />
+            <div className="w-12 h-12 rounded-2xl bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600 shrink-0 group-hover:bg-pink-600 group-hover:text-white transition-colors duration-300">
+              <Layers className="w-6 h-6 stroke-[2]" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="font-black text-zinc-900 text-lg tracking-tight">AI Flashcards</h3>
+                <h3 className="font-black text-zinc-900 text-base tracking-tight">AI Flashcards</h3>
                 <span className="bg-pink-50 text-pink-600 text-[10px] font-bold px-2 py-0.5 rounded-full">Review</span>
               </div>
-              <p className="text-xs text-zinc-500 font-semibold mt-1 leading-relaxed">
-                Convert your syllabus, long paragraphs, or lecture slides into elegant active-recall cards to memorize key definitions easily.
+              <p className="text-xs text-zinc-500 font-semibold mt-0.5">
+                Active Recall Cards
               </p>
-              <div className="flex items-center gap-1.5 text-pink-600 text-xs font-black mt-3">
-                <span>Start Flashcard Prep</span>
+              <div className="flex items-center gap-1.5 text-pink-600 text-xs font-black mt-2">
+                <span>Start Flashcards</span>
                 <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
               </div>
             </div>

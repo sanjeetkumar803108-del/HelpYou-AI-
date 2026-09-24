@@ -695,31 +695,31 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
       name: "Coach Sophia", 
       label: "Coach Sophia (Energetic)", 
       color: "from-purple-500 to-indigo-500", 
-      desc: "Highly upbeat, enthusiastic, and motivating. Cheers you on like a sports coach." 
+      desc: "Warm & motivating" 
     },
     alex: { 
       name: "Alex", 
       label: "Alex (Socratic)", 
       color: "from-blue-500 to-cyan-500", 
-      desc: "Plays devil's advocate. Never gives direct answers immediately; asks guiding Socratic questions." 
+      desc: "Guiding questions" 
     },
     liam: { 
       name: "Expert Dr. Liam", 
       label: "Expert Dr. Liam (Rigorous) / Exam Crunch", 
       color: "from-red-500 to-amber-500", 
-      desc: "Strict, fast-paced, extremely precise. Rapid-fire quizzing, core formulas, high-yield exam facts." 
+      desc: "Rapid-fire quizzing" 
     },
     clara: { 
       name: "Guru Clara", 
       label: "Guru Clara (Calm) / ELI5", 
       color: "from-emerald-500 to-teal-500", 
-      desc: "Soothing, patient, explaining complex mechanisms with extremely simple, relatable analogies." 
+      desc: "Simple analogies" 
     },
     storyteller: { 
       name: "Storyteller", 
       label: "Storyteller", 
       color: "from-pink-500 to-rose-500", 
-      desc: "Turns dry academic topics into fascinating historical narratives, mysteries, or real-world stories." 
+      desc: "Story-based learning" 
     }
   };
 

@@ -1,13 +1,6 @@
-plugins {
-    id 'com.android.application'
-    id 'com.bugsee.android.gradle' version '4.+'
-}
+apply plugin: 'com.android.application'
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.firebase.crashlytics'
-
-bugsee {
-    appToken "cfde90e3-eff9-433d-aa39-a2fbcd5a6d04"
-}
 
 android {
     namespace "com.helpyou.ai"

@@ -41,6 +41,11 @@
             android:name="firebase_crashlytics_collection_enabled"
             android:value="false" />
 
+        <!-- Bugsee SDK Token for auto-launch & QA bug tracking -->
+        <meta-data
+            android:name="com.bugsee.app-token"
+            android:value="cfde90e3-eff9-433d-aa39-a2fbcd5a6d04" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -5,8 +5,9 @@ import {
   RotateCcw, HelpCircle, Coins, ChevronDown, ChevronUp,
   TrendingUp, Timer, Percent, Clipboard, Target, ListChecks, Calendar,
   UploadCloud, FileText, Mic, MicOff, Camera, Image, Sparkles,
-  Share2, Download, Check, X, Lightbulb, History, Clock, Trash2, Play
+  Share2, Download, Check, X, Lightbulb, History, Clock, Trash2, Play, Flag
 } from 'lucide-react';
+import ReportAIModal from './ReportAIModal';
 import GlobalMarkdown, { formatQuizMath } from './GlobalMarkdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -985,6 +986,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
   const [error, setError] = useState<string | null>(null);
   const [quizState, setQuizState] = useState<'initial' | 'playing' | 'results'>('initial');
   const [saved, setSaved] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
   const [pdfProcessing, setPdfProcessing] = useState(false);
@@ -2231,8 +2234,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                 </div>
 
                 {/* Grid of Preset Options */}
-                <div className="grid grid-cols-4 gap-2">
-                  {[5, 10, 15, 20].map((num) => {
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[5, 10, 15].map((num) => {
                     const isSelected = configCount === num;
                     return (
                       <button
@@ -2950,6 +2953,23 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                       {formatQuizMath(quiz[currentIndex].explanation)}
                     </GlobalMarkdown>
                   </div>
+
+                  <div className="mt-2.5 pt-2 border-t border-zinc-200/60 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerVibration(15);
+                        const curQ = quiz[currentIndex];
+                        setReportSnippet(`Question ${currentIndex + 1}: ${curQ.question}\nCorrect Answer: ${curQ.correctAnswer}\nExplanation: ${curQ.explanation}`);
+                        setReportModalOpen(true);
+                      }}
+                      className="px-2 py-1 rounded-lg text-zinc-500 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center gap-1 text-[10.5px] font-bold active:scale-95 cursor-pointer"
+                      title="Report Inaccurate or Inappropriate Content"
+                    >
+                      <Flag className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Report Question</span>
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -3015,6 +3035,21 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Try Another Quiz</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerVibration(15);
+                  const quizSnippet = quiz.map((q, i) => `Q${i + 1}: ${q.question}\nAns: ${q.correctAnswer}`).join('\n\n');
+                  setReportSnippet(quizSnippet);
+                  setReportModalOpen(true);
+                }}
+                className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                title="Report Inaccurate or Inappropriate Content"
+              >
+                <Flag className="w-3.5 h-3.5 text-rose-500" />
+                <span>Report AI Quiz</span>
               </button>
             </div>
           </motion.div>
@@ -3516,6 +3551,17 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
           </div>
         )}
       </AnimatePresence>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={reportSnippet}
+        sourceFeature="Quiz Generator"
+        onClose={() => {
+          setReportModalOpen(false);
+          setReportSnippet('');
+        }}
+      />
     </div>
   );
 }

@@ -262,6 +262,35 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Instant Cloud API Pre-Warm & Liveness Heartbeat
+  // Eliminates mobile cold-start delays on Railway/Cloud containers
+  useEffect(() => {
+    const prewarmApi = () => {
+      try {
+        fetch(getApiUrl('/health'), { method: 'GET', cache: 'no-store' }).catch(() => {});
+      } catch (_) {}
+    };
+
+    // 1. Fire immediately on app mount
+    prewarmApi();
+
+    // 2. Fire whenever app returns to foreground from background
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        prewarmApi();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // 3. Keep server warm while student is actively using the app (every 4 mins)
+    const interval = setInterval(prewarmApi, 4 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(interval);
+    };
+  }, []);
+
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState<User | null>(null);

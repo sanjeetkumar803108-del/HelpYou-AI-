@@ -11,8 +11,10 @@ import {
   CheckCircle2, 
   XCircle,
   BookOpen,
-  Sparkles
+  Sparkles,
+  Flag
 } from 'lucide-react';
+import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
@@ -140,6 +142,8 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
   const [activeReviewIdx, setActiveReviewIdx] = useState<number | null>(null);
   const [xpAwarded, setXpAwarded] = useState<number>(0);
   const [awardedNewFreeze, setAwardedNewFreeze] = useState<boolean>(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
 
   // Exclude list — persists across days to prevent question repetition
   const [excludeList, setExcludeList] = useState<string[]>(() => {
@@ -699,6 +703,20 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
                 Share Result
               </button>
               <button
+                type="button"
+                onClick={() => {
+                  triggerVibration(15);
+                  const textToReport = booster ? booster.questions.map((q, idx) => `Q${idx + 1}: ${q.question}\nAns: ${q.options[q.correctIndex]}\nExplanation: ${q.shortExplanation}`).join('\n\n') : '';
+                  setReportSnippet(textToReport);
+                  setReportModalOpen(true);
+                }}
+                className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                title="Report Inaccurate or Inappropriate Content"
+              >
+                <Flag className="w-3.5 h-3.5 text-rose-500" />
+                <span>Report Daily Trivia</span>
+              </button>
+              <button
                 onClick={onBack}
                 className="w-full bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 font-bold text-xs py-3 rounded-2xl transition-all active:scale-98"
               >
@@ -846,6 +864,22 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
                           {currentQ.shortExplanation}
                         </GlobalMarkdown>
                       </div>
+
+                      <div className="pt-1 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerVibration(15);
+                            setReportSnippet(`Question: ${currentQ.question}\nCorrect: ${currentQ.options[currentQ.correctIndex]}\nExplanation: ${currentQ.shortExplanation}`);
+                            setReportModalOpen(true);
+                          }}
+                          className="px-2 py-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center gap-1 text-[10.5px] font-bold active:scale-95 cursor-pointer"
+                          title="Report Inaccurate or Inappropriate Content"
+                        >
+                          <Flag className="w-3.5 h-3.5 text-rose-500" />
+                          <span>Report Question</span>
+                        </button>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -885,6 +919,17 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
         ) : null}
 
       </div>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={reportSnippet}
+        sourceFeature="Daily Trivia"
+        onClose={() => {
+          setReportModalOpen(false);
+          setReportSnippet('');
+        }}
+      />
     </div>
   );
 }

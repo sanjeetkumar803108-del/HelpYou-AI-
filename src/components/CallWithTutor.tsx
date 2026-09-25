@@ -5,7 +5,7 @@ import {
   PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, 
   Sparkles, GraduationCap, Clock, MessageSquare, ArrowLeft,
   ChevronDown, BookOpen, RefreshCw, Bookmark, AlertCircle, PlayCircle, X,
-  Camera, History, Trash2, Calendar, Loader2
+  Camera, History, Trash2, Calendar, Loader2, Flag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -14,6 +14,7 @@ import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration } from '../utils/vibrate';
 import { requestMicrophonePermission } from '../utils/nativePermissions';
 import GlobalMarkdown from './GlobalMarkdown';
+import ReportAIModal from './ReportAIModal';
 
 interface CallWithTutorProps {
   onBack: () => void;
@@ -78,6 +79,10 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any | null>(null);
+
+  // States for reporting AI content
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
 
   const fetchHistory = async () => {
     if (!auth.currentUser) return;
@@ -993,6 +998,21 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
                     <div className="max-w-[85%] bg-zinc-100 text-zinc-800 border border-zinc-200 rounded-2xl rounded-tl-none px-3.5 py-2.5 pb-3 text-xs font-bold leading-loose break-words whitespace-pre-wrap shadow-sm">
                       {liveTutorText}
                     </div>
+                    <div className="flex items-center gap-2 mt-1 px-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerVibration(15);
+                          setReportSnippet(liveTutorText);
+                          setReportModalOpen(true);
+                        }}
+                        className="text-zinc-400 hover:text-rose-600 transition-colors p-0.5 rounded cursor-pointer flex items-center gap-1 text-[9.5px] font-bold"
+                        title="Report AI Tutor Speech"
+                      >
+                        <Flag className="w-2.5 h-2.5 text-rose-500" />
+                        <span>Report</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1018,7 +1038,24 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
                       )}
                       {item.text}
                     </div>
-                    <span className="text-[9px] text-zinc-400 font-semibold mt-1 px-1">{item.time}</span>
+                    <div className="flex items-center gap-2 mt-1 px-1">
+                      <span className="text-[9px] text-zinc-400 font-semibold">{item.time}</span>
+                      {item.sender === 'tutor' && item.text && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerVibration(15);
+                            setReportSnippet(item.text);
+                            setReportModalOpen(true);
+                          }}
+                          className="text-zinc-400 hover:text-rose-600 transition-colors p-0.5 rounded cursor-pointer flex items-center gap-1 text-[9.5px] font-bold"
+                          title="Report AI Tutor Speech"
+                        >
+                          <Flag className="w-2.5 h-2.5 text-rose-500" />
+                          <span>Report</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
 
@@ -1228,6 +1265,13 @@ export default function CallWithTutor({ onBack }: CallWithTutorProps) {
  
       </div>
 
+      {/* Report AI Content Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        messageText={reportSnippet}
+        sourceFeature="Call With Tutor"
+      />
     </div>
   );
 }

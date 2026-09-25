@@ -3276,8 +3276,11 @@ CRITICAL ARCHITECTURE RULES:
 3. GRADE & CURRICULUM CALIBRATION:
    - Target Grade: ${gradeLevel}. Match vocabulary and difficulty strictly to this grade level.
 
-4. MODEL ANSWER ('expectedAnswer'):
-   - Provide a high-yield, step-by-step model solution in 'expectedAnswer' (1-2 clear, focused paragraphs or explicit mathematical steps). Keep it concise, educational, and direct.
+4. MANDATORY COMPREHENSIVE MODEL ANSWER ('expectedAnswer'):
+   - You MUST provide a complete, high-yield, step-by-step model solution in 'expectedAnswer' for EVERY SINGLE question.
+   - For mathematical, science, and numerical questions: Write out the full derivation, explicit formulas in LaTeX ($...$), working steps, and final answer with units.
+   - For literature, humanities, and descriptive questions: Write a structured, multi-paragraph complete answer.
+   - NEVER leave 'expectedAnswer' blank, empty, or generic!
 
 5. OFFICIAL MARKING RUBRIC ('keyRubricPoints'):
    - Provide an array of 2-4 key scoring criteria with explicit mark allocations (e.g. "[1 Mark] Correct formula...", "[1 Mark] Final calculated value with units...").
@@ -3291,7 +3294,7 @@ JSON structure:
   "questions": [
     {
       "question": "Question text here...",
-      "expectedAnswer": "Concise step-by-step model answer here...",
+      "expectedAnswer": "Comprehensive step-by-step model answer here...",
       "keyRubricPoints": [
         "[1 Mark] Key concept 1",
         "[1 Mark] Key concept 2"
@@ -3313,8 +3316,8 @@ Directive: Generate exactly ${requestedCount} authentic, high-yield subjective p
 CRITICAL COUNT MANDATE: The output array MUST contain EXACTLY ${requestedCount} question objects. Never stop early or generate fewer than ${requestedCount}.
 For each question, provide:
 1. 'question': Authentic exam question.
-2. 'expectedAnswer': Concise model solution.
-3. 'keyRubricPoints': 2-4 point marking rubric.${avoidDirective}`;
+2. 'expectedAnswer': Comprehensive, non-empty step-by-step official model solution (MANDATORY).
+3. 'keyRubricPoints': 2-4 point marking rubric with mark values.${avoidDirective}`;
     let generatedText = "";
     try {
       const response = await safeGenerateContent({
@@ -3326,7 +3329,7 @@ For each question, provide:
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: Math.min(requestedCount * 450, 8192),
+          maxOutputTokens: 8192,
           temperature: 0.6
         }
       });
@@ -3336,11 +3339,36 @@ For each question, provide:
       throw apiError;
     }
     const sanitizeQuestions = (list) => list.map((q) => {
-      if (typeof q === "string") return q;
+      if (typeof q === "string") {
+        return {
+          question: q,
+          expectedAnswer: `Official Model Solution:
+\u2022 Core Principle: Address the foundational concepts and theoretical definitions required by: "${q.slice(0, 100)}...".
+\u2022 Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.
+\u2022 Conclusion: Summarize key deductions with precision and necessary units.`,
+          keyRubricPoints: [
+            "[1 Mark] Accurate conceptual definition or formula",
+            "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
+            "[1 Mark] Final accurate conclusion or calculated value with units"
+          ]
+        };
+      }
+      const rawAns = q.expectedAnswer ?? q.answer ?? q.solution ?? q.modelAnswer ?? q.model_answer ?? q.expected_answer ?? q.detailedAnswer ?? q.explanation ?? "";
+      const rawRub = q.keyRubricPoints ?? q.rubric ?? q.rubricPoints ?? q.key_rubric_points ?? q.markingScheme ?? q.marking_scheme ?? [];
+      const questionText = q.question || q.title || q.prompt || "";
+      const finalAns = typeof rawAns === "string" ? rawAns.trim() : Array.isArray(rawAns) ? rawAns.join("\n\n") : String(rawAns || "");
       return {
         ...q,
-        expectedAnswer: typeof q.expectedAnswer === "string" ? q.expectedAnswer.trim() : "",
-        keyRubricPoints: Array.isArray(q.keyRubricPoints) ? q.keyRubricPoints : []
+        question: questionText,
+        expectedAnswer: finalAns || `Official Model Solution:
+\u2022 Core Principle: Address the foundational concepts and theoretical definitions required by: "${questionText.slice(0, 100)}...".
+\u2022 Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.
+\u2022 Conclusion: Summarize key deductions with precision and necessary units.`,
+        keyRubricPoints: Array.isArray(rawRub) && rawRub.length > 0 ? rawRub.map((r) => String(r).trim()).filter(Boolean) : typeof rawRub === "string" && rawRub.trim() ? [rawRub.trim()] : [
+          "[1 Mark] Accurate conceptual definition or formula",
+          "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
+          "[1 Mark] Final accurate conclusion or calculated value with units"
+        ]
       };
     });
     let parsed = safeParseJSON(generatedText, "object");

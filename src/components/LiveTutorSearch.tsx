@@ -5,8 +5,9 @@ import {
   Lightbulb, FileText, Check, ChevronRight, History, X, Trash2, 
   Calendar, Lock, ExternalLink, RefreshCw, Newspaper,
   Atom, BookOpen, Layers, Share2, Compass, AlertCircle,
-  Zap, ShieldCheck, Bookmark, CheckSquare, Flame
+  Zap, ShieldCheck, Bookmark, CheckSquare, Flame, Flag
 } from 'lucide-react';
+import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { isProUser } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
@@ -268,6 +269,8 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const [searchStep, setSearchStep] = useState(0);
   const [searchResponse, setSearchResponse] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
   const [showNotesBlending, setShowNotesBlending] = useState(false);
   const [highlightedSourceIdx, setHighlightedSourceIdx] = useState<number | null>(null);
@@ -628,6 +631,18 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                 className="w-10 h-10 rounded-2xl flex items-center justify-center bg-zinc-100 hover:bg-blue-50 hover:text-blue-600 text-zinc-700 transition-all active:scale-95 cursor-pointer"
               >
                 <Share2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerVibration(15);
+                  setReportSnippet(JSON.stringify(searchResponse, null, 2).slice(0, 1000));
+                  setReportModalOpen(true);
+                }}
+                title="Report Inaccurate or Inappropriate Content"
+                className="w-10 h-10 rounded-2xl flex items-center justify-center bg-zinc-100 hover:bg-rose-50 hover:text-rose-600 text-zinc-700 transition-all active:scale-95 cursor-pointer"
+              >
+                <Flag className="w-4 h-4 text-rose-500" />
               </button>
             </>
           )}
@@ -1027,6 +1042,22 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                       </div>
                     </div>
                   )}
+
+                  <div className="pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerVibration(15);
+                        setReportSnippet(JSON.stringify(searchResponse, null, 2).slice(0, 1000));
+                        setReportModalOpen(true);
+                      }}
+                      className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                      title="Report Inaccurate or Inappropriate Content"
+                    >
+                      <Flag className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Report Research Content</span>
+                    </button>
+                  </div>
                 </motion.div>
               )}
 
@@ -1217,6 +1248,17 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={reportSnippet}
+        sourceFeature="Live Study Tutor"
+        onClose={() => {
+          setReportModalOpen(false);
+          setReportSnippet('');
+        }}
+      />
     </div>
   );
 }

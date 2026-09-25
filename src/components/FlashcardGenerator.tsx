@@ -20,8 +20,10 @@ import {
   CheckCircle2, 
   UploadCloud,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  Flag
 } from 'lucide-react';
+import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -200,6 +202,8 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [flipped, setFlipped] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
   const [isParsingFile, setIsParsingFile] = useState(false);
   const [grades, setGrades] = useState<{ [key: number]: 'hard' | 'good' | 'easy' }>({});
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -824,8 +828,8 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                 <p className="text-xs text-zinc-500 font-bold mt-1">Select the number of revision flashcards</p>
               </div>
 
-              <div className="grid grid-cols-4 gap-2">
-                {[5, 10, 15, 20].map((num) => {
+              <div className="grid grid-cols-3 gap-2.5">
+                {[5, 10, 15].map((num) => {
                   const isSelected = configCount === num;
                   return (
                     <button
@@ -1169,6 +1173,22 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
             </div>
           )}
 
+          {/* Report Current Flashcard Button */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerVibration(15);
+              const card = flashcards[currentIndex];
+              setReportSnippet(`Question: ${card?.question || ''}\nAnswer: ${card?.answer || ''}`);
+              setReportModalOpen(true);
+            }}
+            className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer mb-2.5"
+            title="Report Inaccurate or Inappropriate Content"
+          >
+            <Flag className="w-3.5 h-3.5 text-rose-500" />
+            <span>Report Flashcard</span>
+          </button>
+
           <div className="flex gap-2">
             <button 
               onClick={handleShareDeck}
@@ -1200,6 +1220,17 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
         </motion.div>
       )}
       </div>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={reportSnippet}
+        sourceFeature="Flashcard Generator"
+        onClose={() => {
+          setReportModalOpen(false);
+          setReportSnippet('');
+        }}
+      />
     </div>
   );
 }

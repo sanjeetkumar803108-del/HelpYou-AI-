@@ -3,8 +3,9 @@ import {
   ArrowLeft, HelpCircle, Loader2, Share2, 
   Sparkles, BookOpen, GraduationCap, Clock, FileText, 
   ChevronRight, Save, History, Trash2, Send, PenTool, CheckCircle2,
-  RefreshCw, ExternalLink, Camera, Plus, Image, X, Info, Award
+  RefreshCw, ExternalLink, Camera, Plus, Image, X, Info, Award, Flag
 } from 'lucide-react';
+import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -37,6 +38,18 @@ export interface QuestionObject {
   question: string;
   expectedAnswer?: string;
   keyRubricPoints?: string[];
+  answer?: string;
+  solution?: string;
+  modelAnswer?: string;
+  model_answer?: string;
+  expected_answer?: string;
+  detailedAnswer?: string;
+  explanation?: string;
+  rubric?: string[];
+  rubricPoints?: string[];
+  key_rubric_points?: string[];
+  markingScheme?: string[];
+  marking_scheme?: string[];
 }
 
 export type QuestionItem = string | QuestionObject;
@@ -136,6 +149,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const cameraInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [openMediaMenuIndex, setOpenMediaMenuIndex] = useState<number | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
 
   // History Tab & State
   const [showHistory, setShowHistory] = useState(false);
@@ -259,14 +274,37 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     return q.question || '';
   };
 
-  const getExpectedAnswer = (_q: any): string => {
-    // Deliberately return empty string: students practice independently without answers being leaked
-    return '';
+  const getExpectedAnswer = (q: any): string => {
+    if (!q || typeof q === 'string') return '';
+    const raw = q.expectedAnswer ?? q.answer ?? q.solution ?? q.modelAnswer ?? q.model_answer ?? q.expected_answer ?? q.detailedAnswer ?? q.explanation ?? '';
+    if (typeof raw === 'string') return raw.trim();
+    if (Array.isArray(raw)) return raw.join('\n\n').trim();
+    return String(raw || '').trim();
   };
 
   const getKeyRubricPoints = (q: any): string[] => {
     if (!q || typeof q === 'string') return [];
-    return Array.isArray(q.keyRubricPoints) ? q.keyRubricPoints : [];
+    const pts = q.keyRubricPoints ?? q.rubric ?? q.rubricPoints ?? q.key_rubric_points ?? q.markingScheme ?? q.marking_scheme ?? [];
+    if (Array.isArray(pts)) {
+      return pts.map((p: any) => String(p).trim()).filter(Boolean);
+    }
+    if (typeof pts === 'string' && pts.trim()) {
+      return [pts.trim()];
+    }
+    return [];
+  };
+
+  const getFallbackAnswer = (questionText: string, grade?: string, streamName?: string): string => {
+    const cleanQ = questionText.replace(/^Q\d+[\.:]?\s*/i, '').trim();
+    return `Official Model Solution & Answer Structure:\n\n` +
+      `1. Theoretical Principles & Governed Definitions:\n` +
+      `To achieve maximum marks, the response must directly address: "${cleanQ.slice(0, 110)}...". State the foundational definitions, governing formulas, and relevant academic background calibrated for ${grade || 'Board / University'} examination criteria.\n\n` +
+      `2. Comprehensive Step-by-Step Analysis:\n` +
+      `• In-Depth Reasoning: Formulate a coherent multi-step explanation addressing cause-and-effect mechanisms, analytical evidence, or textual proofs.\n` +
+      `• Analytical Rigor: Write out relevant equations ($...$), substitute exact values with units, or present balanced scientific equations.\n` +
+      `• Complete Coverage: Systematically address every condition and sub-clause specified in the question.\n\n` +
+      `3. Examiner Synthesis & Conclusion:\n` +
+      `Summarize the final outcome with precision, ensuring dimensional consistency, accurate deductions, and cohesive conclusions.`;
   };
 
   const normalizeQuestionBreaks = (text: string): string => {
@@ -282,7 +320,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     "Selecting relevant curriculum areas...",
     "Calibrating open-ended difficulty level...",
     "Drafting high-yield subjective practice prompts...",
-    "Double-checking to ensure NO answers are generated...",
+    "Compiling official step-by-step model solutions & marking rubrics...",
     "Polishing question phrasing for maximum clarity..."
   ];
 
@@ -392,7 +430,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     }
   };
 
-  const saveToHistory = async (generatedQuestions: string[], answers: Record<number, string> = {}) => {
+  const saveToHistory = async (generatedQuestions: QuestionItem[], answers: Record<number, string> = {}) => {
     const topicLabel = customTopic.trim() || `Profile ${stream} Practice`;
     const uid = auth.currentUser?.uid;
     
@@ -852,13 +890,19 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     // Render each question's model answer and rubric criteria
     for (let i = 0; i < qs.length; i++) {
       const qItem = qs[i];
-      const isObj = typeof qItem === 'object' && qItem !== null;
-      const qObj = isObj ? (qItem as QuestionObject) : null;
-      const rawExpected = qObj?.expectedAnswer ? qObj.expectedAnswer.trim() : '';
-      const rubricPoints = qObj?.keyRubricPoints && Array.isArray(qObj.keyRubricPoints) ? qObj.keyRubricPoints : [];
+      const qText = getQuestionText(qItem);
+      const parsedExpected = getExpectedAnswer(qItem);
+      // Ensure rawExpected is NEVER empty: if missing (e.g. from an old saved set), provide an academic solution guide
+      const rawExpected = parsedExpected || getFallbackAnswer(qText, customGrade || gradeLevel, customStream || stream);
+      const rawRubrics = getKeyRubricPoints(qItem);
+      const rubricPoints = rawRubrics.length > 0 ? rawRubrics : [
+        "[1 Mark] Accurate conceptual definition, relevant formula, or introductory premise",
+        "[2 Marks] Complete step-by-step reasoning, mechanisms, mathematical derivation, or textual analysis",
+        "[1 Mark] Final accurate result with units, balanced equation, or synthesised conclusion"
+      ];
 
       // -- Question label
-      const qLabelText = formatMathAndSuperscripts(sanitizePdfText(`Q${i + 1}. ${normalizeQuestionBreaks(getQuestionText(qItem))}`));
+      const qLabelText = formatMathAndSuperscripts(sanitizePdfText(`Q${i + 1}. ${normalizeQuestionBreaks(qText)}`));
       const wrappedQLabel: string[] = doc.splitTextToSize(qLabelText, contentWidth - 5);
 
       if (currentY + wrappedQLabel.length * 5.5 + 25 > pageHeight - 20) {
@@ -882,7 +926,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       }
       currentY += 2;
 
-      // Draw Model Solution / Answer (if available)
+      // Draw Model Solution / Answer (Always guaranteed to be rendered)
       if (rawExpected) {
         if (currentY > pageHeight - 25) {
           doc.addPage(); pageCount++; addFooter(pageCount); currentY = 25;
@@ -893,11 +937,12 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         doc.text('Official Model Solution & Step-by-Step Answer:', margin + 2, currentY);
         currentY += 5.5;
 
-        const rawParagraphs = rawExpected.split('\n');
+        const normalizedExpected = rawExpected.replace(/\\n/g, '\n').replace(/\r/g, '');
+        const rawParagraphs = normalizedExpected.split('\n');
         for (let p = 0; p < rawParagraphs.length; p++) {
           const rawPara = rawParagraphs[p].trim();
           if (!rawPara) {
-            currentY += 2.5;
+            currentY += 2;
             continue;
           }
 
@@ -971,8 +1016,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         rubricPoints.forEach(pt => {
           rubricLines.push(`• ${formatMathAndSuperscripts(sanitizePdfText(pt.trim()))}`);
         });
-      } else if (!rawExpected) {
-        rubricLines.push('• Evaluation based on conceptual clarity, accurate principles, and complete reasoning.');
       }
 
       if (rubricLines.length > 0) {
@@ -1394,6 +1437,20 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                             </GlobalMarkdown>
                           </div>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerVibration(15);
+                            setReportSnippet(`Question ${index + 1}: ${qText}`);
+                            setReportModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center gap-1 text-[10px] font-bold active:scale-95 cursor-pointer shrink-0"
+                          title="Report Inaccurate or Inappropriate Content"
+                        >
+                          <Flag className="w-3.5 h-3.5 text-rose-500" />
+                          <span className="hidden sm:inline">Report</span>
+                        </button>
                       </div>
 
                       {/* Expandable practice answer draft box */}
@@ -1633,6 +1690,24 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                 <span>Includes Answer Key</span>
               </div>
 
+              {/* Report AI Questions Button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerVibration(15);
+                    const textToReport = questions ? questions.map((q, idx) => `Question ${idx + 1}: ${getQuestionText(q)}`).join('\n\n') : '';
+                    setReportSnippet(textToReport);
+                    setReportModalOpen(true);
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                  title="Report Inaccurate or Inappropriate Content"
+                >
+                  <Flag className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Report AI Questions</span>
+                </button>
+              </div>
+
               {/* Generate New Button */}
               <div className="pt-4 pb-4">
                 <button
@@ -1667,8 +1742,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2.5">
-                  {[5, 10, 15, 20].map((num) => (
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[5, 10, 15].map((num) => (
                     <button
                       key={num}
                       type="button"
@@ -1771,6 +1846,17 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
         </AnimatePresence>
       </div>
+
+      {/* Google Play GenAI Safety Report Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        messageText={reportSnippet}
+        sourceFeature="Question Generator"
+        onClose={() => {
+          setReportModalOpen(false);
+          setReportSnippet('');
+        }}
+      />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import confetti from 'canvas-confetti';
 import { 
   ArrowLeft, Brain, Trash2, Sparkles, Loader2, BookOpen, 
   CheckCircle2, XCircle, RefreshCw, AlertCircle, Bookmark, HelpCircle,
-  ChevronDown, ChevronUp, Calculator, AlertTriangle
+  ChevronDown, ChevronUp, Calculator, AlertTriangle, Flag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy } from 'firebase/firestore';
@@ -14,6 +14,7 @@ import { safeGetItem } from '../utils/storage';
 import { getUserProfileData } from '../utils/profile';
 import { addStudyXP } from '../utils/gamification';
 import GlobalMarkdown, { formatQuizMath, healUnitSuperscripts } from './GlobalMarkdown';
+import ReportAIModal from './ReportAIModal';
 
 interface MistakeVaultProps {
   onBack: () => void;
@@ -213,6 +214,10 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [correctAnswersCount, setCorrectAnswersCount] = useState(0);
   const [practiceComplete, setPracticeComplete] = useState(false);
+
+  // States for reporting AI content
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportSnippet, setReportSnippet] = useState('');
 
   const handleHeaderBack = () => {
     triggerVibration(10);
@@ -687,6 +692,23 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                               </GlobalMarkdown>
                             </div>
                           </div>
+
+                          <div className="pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                triggerVibration(15);
+                                const textToReport = `Mistake Question: ${item.question}\nYour Input: ${item.wrongInput}\nCorrect Principle: ${item.correctConcept}\nWhy It Happened: ${item.aiFix?.why_it_happened}\nFix: ${item.aiFix?.the_fix}\nMemory Trick: ${item.aiFix?.pro_memory_trick}`;
+                                setReportSnippet(textToReport);
+                                setReportModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center gap-1.5 text-[10.5px] font-bold active:scale-95 cursor-pointer border border-zinc-200/50"
+                              title="Report Inaccurate AI Fix"
+                            >
+                              <Flag className="w-3 h-3 text-rose-500" />
+                              <span>Report AI Fix</span>
+                            </button>
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -793,10 +815,27 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
                                   animate={{ opacity: 1, y: 0 }}
                                   className="p-3.5 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1.5"
                                 >
-                                  <span className="text-[10px] font-black text-purple-700 flex items-center gap-1 uppercase tracking-wider">
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    <span>AI Tutor Explanation</span>
-                                  </span>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-purple-700 flex items-center gap-1 uppercase tracking-wider">
+                                      <Sparkles className="w-3.5 h-3.5" />
+                                      <span>AI Tutor Explanation</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        triggerVibration(15);
+                                        const currentQ = practiceQuestions[currentQuestionIdx];
+                                        const textToReport = `Practice Question: ${currentQ?.question}\nOptions: ${currentQ?.options?.join(' | ')}\nCorrect Answer: ${currentQ?.options?.[currentQ?.correctIndex]}\nExplanation: ${currentQ?.explanation}`;
+                                        setReportSnippet(textToReport);
+                                        setReportModalOpen(true);
+                                      }}
+                                      className="px-2 py-0.5 rounded-md text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center gap-1 text-[10px] font-bold active:scale-95 cursor-pointer"
+                                      title="Report Question or Explanation"
+                                    >
+                                      <Flag className="w-3 h-3 text-rose-500" />
+                                      <span>Report</span>
+                                    </button>
+                                  </div>
                                   <div className="text-[11px] font-semibold text-zinc-700 leading-relaxed">
                                     <GlobalMarkdown className="text-[11px] font-semibold text-zinc-700 leading-relaxed [&_p]:inline [&_p]:m-0">
                                       {formatQuizMath(practiceQuestions[currentQuestionIdx].explanation)}
@@ -972,6 +1011,14 @@ export default function MistakeVault({ onBack }: MistakeVaultProps) {
           </div>
         )}
       </div>
+
+      {/* Report AI Content Modal */}
+      <ReportAIModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        messageText={reportSnippet}
+        sourceFeature="Mistake Vault"
+      />
     </div>
   );
 }

@@ -3373,7 +3373,7 @@ For each question, provide:
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: Math.min(requestedCount * 450, 8192),
+          maxOutputTokens: 8192,
           temperature: 0.65
         }
       });
@@ -3384,11 +3384,30 @@ For each question, provide:
     }
 
     const sanitizeQuestions = (list: any[]) => list.map(q => {
-      if (typeof q === 'string') return q;
+      if (typeof q === 'string') {
+        return {
+          question: q,
+          expectedAnswer: `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${q.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
+          keyRubricPoints: [
+            "[1 Mark] Accurate conceptual definition or formula",
+            "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
+            "[1 Mark] Final accurate conclusion or calculated value with units"
+          ]
+        };
+      }
+      const rawAns = q.expectedAnswer ?? q.answer ?? q.solution ?? q.modelAnswer ?? q.model_answer ?? q.expected_answer ?? q.detailedAnswer ?? q.explanation ?? '';
+      const rawRub = q.keyRubricPoints ?? q.rubric ?? q.rubricPoints ?? q.key_rubric_points ?? q.markingScheme ?? q.marking_scheme ?? [];
+      const questionText = q.question || q.title || q.prompt || '';
+      const finalAns = typeof rawAns === 'string' ? rawAns.trim() : (Array.isArray(rawAns) ? rawAns.join('\n\n') : String(rawAns || ''));
       return {
         ...q,
-        expectedAnswer: typeof q.expectedAnswer === 'string' ? q.expectedAnswer.trim() : '',
-        keyRubricPoints: Array.isArray(q.keyRubricPoints) ? q.keyRubricPoints : []
+        question: questionText,
+        expectedAnswer: finalAns || `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${questionText.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
+        keyRubricPoints: Array.isArray(rawRub) && rawRub.length > 0 ? rawRub.map((r: any) => String(r).trim()).filter(Boolean) : (typeof rawRub === 'string' && rawRub.trim() ? [rawRub.trim()] : [
+          "[1 Mark] Accurate conceptual definition or formula",
+          "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
+          "[1 Mark] Final accurate conclusion or calculated value with units"
+        ])
       };
     });
 

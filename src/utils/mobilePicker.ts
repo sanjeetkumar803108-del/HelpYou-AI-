@@ -247,13 +247,35 @@ export async function pickNativeFiles(options: {
 
     const output: MobilePickedFile[] = [];
     for (const file of filesToProcess) {
-      if (!file.data) continue;
       const mimeType = file.mimeType || (types === 'pdf' ? 'application/pdf' : 'application/octet-stream');
-      const name = file.name || `file_${Date.now()}`;
-      const base64 = file.data;
-      const dataUrl = `data:${mimeType};base64,${base64}`;
-      const blob = base64ToBlob(base64, mimeType);
+      const name = file.name || `file_${Date.now()}${types === 'pdf' ? '.pdf' : ''}`;
+      let blob: Blob | null = null;
+      let base64 = file.data || '';
+
+      // 1. FAST PATH: Stream directly from local storage if path or webPath exists (zero base64 bridge memory overflow)
+      const pathCandidate = (file as any).path || (file as any).webPath;
+      if (pathCandidate) {
+        try {
+          const fileUrl = Capacitor.convertFileSrc(pathCandidate);
+          const fetched = await fetch(fileUrl);
+          blob = await fetched.blob();
+        } catch (fetchErr) {
+          console.warn('[mobilePicker] failed to fetch from file path, will try base64:', fetchErr);
+        }
+      }
+
+      // 2. FALLBACK PATH: Decode base64 if blob wasn't loaded from path
+      if (!blob && base64) {
+        blob = await base64ToBlobAsync(base64, mimeType);
+      }
+
+      if (!blob) {
+        console.warn('[mobilePicker] Could not obtain blob for file:', file.name);
+        continue;
+      }
+
       const fileObj = blobToFile(blob, name);
+      const dataUrl = base64 ? `data:${mimeType};base64,${base64}` : '';
 
       output.push({
         name,

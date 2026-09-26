@@ -378,7 +378,7 @@ export function getClientDeterministicBonusQuestions(
   let unseen = pool.filter(q => !isSeen(q.question));
 
   if (unseen.length < count) {
-    // Borrow from other pools
+    // Borrow from other stream pools
     const otherPools = Object.entries(STREAM_BONUS_POOL)
       .filter(([k]) => k !== streamKey)
       .flatMap(([, v]) => v)
@@ -386,8 +386,27 @@ export function getClientDeterministicBonusQuestions(
     unseen = [...unseen, ...otherPools];
   }
 
-  // Shuffle
-  const shuffled = [...(unseen.length > 0 ? unseen : pool)];
+  // Guaranteed Backfill: Never let unseen return fewer than count (3) questions
+  const poolList: DailyBoosterQuestion[] = [...unseen];
+  if (poolList.length < count) {
+    for (const q of pool) {
+      if (poolList.length >= count) break;
+      if (!poolList.some(item => item.question === q.question)) {
+        poolList.push(q);
+      }
+    }
+  }
+  if (poolList.length < count) {
+    for (const q of CANONICAL_DAILY_QUESTIONS) {
+      if (poolList.length >= count) break;
+      if (!poolList.some(item => item.question === q.question)) {
+        poolList.push(q);
+      }
+    }
+  }
+
+  // Shuffle selected questions
+  const shuffled = [...poolList];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -400,3 +419,4 @@ export function getClientDeterministicBonusQuestions(
     questions: selected
   };
 }
+

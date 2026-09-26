@@ -326,8 +326,8 @@ export default function Summariser({ onBack }: SummariserProps) {
       return;
     }
 
-    if (file.size > 15 * 1024 * 1024) {
-      setError("File is too large! Please select a document smaller than 15MB.");
+    if (file.size > 30 * 1024 * 1024) {
+      setError("File is too large! Please select a document smaller than 30MB.");
       triggerVibration(20);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
@@ -414,7 +414,10 @@ export default function Summariser({ onBack }: SummariserProps) {
         const picked = await pickNativeFiles({ types: 'pdf', multiple: false });
         if (picked && picked.length > 0 && picked[0]?.fileObj) {
           await processFile(picked[0].fileObj);
+          return;
         }
+        // If native picker didn't return any files or was skipped, fallback smoothly to file input
+        fileInputRef.current?.click();
       } catch (nativeErr: any) {
         console.error("Native file picker error, falling back to input click:", nativeErr);
         fileInputRef.current?.click();
@@ -624,7 +627,7 @@ export default function Summariser({ onBack }: SummariserProps) {
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
-                  accept=".pdf,.txt"
+                  accept="application/pdf,.pdf,text/plain,.txt"
                   className="hidden"
                 />
               </div>

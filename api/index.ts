@@ -171,6 +171,7 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 90000)
 }
 let lastQuotaExceededTime = 0;
 const rateLimitedModels: Record<string, number> = {};
+const rateLimitedModelsCooldown: Record<string, number> = {};
 
 app.use((req, res, next) => {
   if (req.body) {
@@ -623,8 +624,7 @@ ${pedagogicalDirective}`;
       : [
           requestedModel,
           "gemini-flash-lite-latest",
-          "gemini-3.5-flash-lite",
-          "gemini-3.5-flash"
+          "gemini-3.5-flash-lite"
         ].filter((value, index, self) => self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -634,8 +634,8 @@ ${pedagogicalDirective}`;
 
     for (const m of modelsToTry) {
       const lastLimited = rateLimitedModels[m] || 0;
-      // Keep on backburner for 1 minute to allow quick recovery
-      if (now - lastLimited < 60000) {
+      const cooldownMs = Math.min(rateLimitedModelsCooldown[m] || 15000, 30000);
+      if (now - lastLimited < cooldownMs) {
         backburnerModels.push(m);
       } else {
         activeModels.push(m);
@@ -677,11 +677,71 @@ ${pedagogicalDirective}`;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const aiClient = getAI();
-        const generatePromise = aiClient.models.generateContent(currentParams);
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout: Model ${model} took longer than 60000ms`)), 60000)
-        );
-        const response: any = await Promise.race([generatePromise, timeoutPromise]);
+        const timeoutMs = (params.timeoutMs && typeof params.timeoutMs === 'number') ? params.timeoutMs : 30000;
+
+        let response: any;
+        if (isAudioModel || isSpecialtyModel) {
+          const generatePromise = aiClient.models.generateContent(currentParams);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout: Model ${model} took longer than ${timeoutMs}ms`)), timeoutMs)
+          );
+          response = await Promise.race([generatePromise, timeoutPromise]);
+        } else {
+          // Direct ultra-fast REST fetch (1-3s response time, immune to SDK socket hang on Windows)
+          const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+          const restBody: any = {
+            contents: currentParams.contents
+          };
+
+          if (currentParams.config?.systemInstruction) {
+            restBody.systemInstruction = currentParams.config.systemInstruction;
+          }
+
+          const generationConfig: any = {};
+          if (currentParams.config?.responseMimeType) generationConfig.responseMimeType = currentParams.config.responseMimeType;
+          if (currentParams.config?.temperature !== undefined) generationConfig.temperature = currentParams.config.temperature;
+          if (currentParams.config?.maxOutputTokens) generationConfig.maxOutputTokens = currentParams.config.maxOutputTokens;
+          if (currentParams.config?.topP !== undefined) generationConfig.topP = currentParams.config.topP;
+          if (currentParams.config?.topK !== undefined) generationConfig.topK = currentParams.config.topK;
+          if (currentParams.config?.responseSchema) generationConfig.responseSchema = currentParams.config.responseSchema;
+
+          if (Object.keys(generationConfig).length > 0) {
+            restBody.generationConfig = generationConfig;
+          }
+
+          if (currentParams.config?.tools) {
+            restBody.tools = currentParams.config.tools;
+          }
+
+          const restFetchPromise = (async () => {
+            const restRes = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(restBody)
+            });
+
+            const data = await restRes.json();
+            if (!restRes.ok) {
+              const errMsg = data.error?.message || `HTTP ${restRes.status} Error from Gemini REST API`;
+              throw new Error(errMsg);
+            }
+
+            const fullText = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '';
+            return {
+              text: fullText,
+              candidates: data.candidates,
+              usageMetadata: data.usageMetadata,
+              raw: data
+            };
+          })();
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout: Model ${model} took longer than ${timeoutMs}ms`)), timeoutMs)
+          );
+          response = await Promise.race([restFetchPromise, timeoutPromise]);
+        }
         return response;
       } catch (error: any) {
         lastError = error;
@@ -727,24 +787,14 @@ ${pedagogicalDirective}`;
             continue;
           }
           
-          const isHardQuotaLimit = errorStr.includes("quota") || 
-                                   errorStr.includes("resource_exhausted") ||
-                                   errorStr.includes("503") ||
-                                   errorStr.includes("unavailable") ||
-                                   errorStr.includes("overloaded") ||
-                                   errorStr.includes("demand") ||
-                                   errorStr.includes("timeout") ||
-                                   errorStr.includes("not_found") ||
-                                   errorStr.includes("404") ||
-                                   (errorStr.includes("429") && !errorStr.includes("overloaded"));
-          
-          if (isHardQuotaLimit) {
-            console.warn(`[ai-client] Model ${model} is unavailable, overloaded, or hit quota. Skipping retries for this model and instantly routing to fallback...`);
+          const isModelNotFound = errorStr.includes("not_found") || errorStr.includes("404");
+          if (isModelNotFound) {
+            console.warn(`[ai-client] Model ${model} is deprecated or not found (404). Skipping retries...`);
             break;
           }
           
           if (attempt < retries) {
-            const waitTime = delay * Math.pow(2, attempt - 1);
+            const waitTime = Math.max(delay * Math.pow(2, attempt - 1), 1200);
             console.warn(`[ai-client] Model ${model} overloaded or rate-limited. Retrying in ${waitTime}ms...`);
             await new Promise((resolve) => setTimeout(resolve, waitTime));
             continue;
@@ -1025,6 +1075,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
 
 app.post("/api/chat", upload.single("image"), async (req, res) => {
   console.log("Received request at /api/chat");
+  const shouldStream = req.body?.stream === "true" || req.body?.stream === true;
   try {
     const aiClient = getAI();
     const { 
@@ -1175,13 +1226,10 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       ];
     }
 
-    const shouldStream = stream === "true" || stream === true;
-
     if (shouldStream) {
       let modelsToTry = [
         "gemini-flash-lite-latest",
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash"
+        "gemini-3.5-flash-lite"
       ];
 
       const now = Date.now();
@@ -1190,7 +1238,8 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
       for (const m of modelsToTry) {
         const lastLimited = rateLimitedModels[m] || 0;
-        if (now - lastLimited < 3600000) {
+        const cooldownMs = Math.min(rateLimitedModelsCooldown[m] || 15000, 30000);
+        if (now - lastLimited < cooldownMs) {
           backburnerModels.push(m);
         } else {
           activeModels.push(m);
@@ -1223,7 +1272,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             config: streamConfig
           });
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Stream start timeout for model ${model}`)), 12000)
+            setTimeout(() => reject(new Error(`Stream start timeout for model ${model}`)), 7000)
           );
           responseStream = await Promise.race([streamPromise, timeoutPromise]);
           successModel = model;
@@ -1259,7 +1308,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             gradeLevel,
             stream: academicTrack,
             country,
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-flash-lite-latest",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1279,7 +1328,15 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
           res.end();
           return;
         } catch (fbErr: any) {
-          return res.status(500).json({ error: fbErr.message || "Failed to initialize AI response stream." });
+          console.warn("[/api/chat] Fallback generate failed, streaming graceful retry prompt...", fbErr.message);
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+          res.flushHeaders();
+          res.write(`data: ${JSON.stringify({ text: "I'm right here with you! There was a momentary network delay while analyzing your question. Please tap Retry Question below so I can give you the complete step-by-step breakdown." })}\n\n`);
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
         }
       }
 
@@ -1319,7 +1376,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             gradeLevel,
             stream: academicTrack,
             country,
-            model: "gemini-3.5-flash",
+            model: "gemini-flash-lite-latest",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1365,15 +1422,20 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
       res.json({ text: response.text });
     }
   } catch (error: any) {
-    if (error.isRateLimit || error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      console.warn("Chat quota exceeded:", error.message);
-      return res.status(429).json({ 
-        isRateLimit: true,
-        error: "System is currently busy helping many students! 📚\nWe're processing your request as fast as possible. Please wait for 60 seconds and try again, or take a quick stretch break. Your learning journey is our priority!"
-      });
-    }
     console.error("Chat error:", error);
-    res.status(500).json({ error: error.message || "Failed to generate response" });
+    if (!res.headersSent) {
+      if (shouldStream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+        res.write(`data: ${JSON.stringify({ text: "I'm right here with you! There was a brief connection hiccup. Please tap Retry Question to continue." })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+        return;
+      }
+      res.json({ text: "I'm right here with you! There was a brief connection hiccup. Please tap Retry Question to continue." });
+    }
   }
 });
 
@@ -1428,18 +1490,33 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
         } else {
           try {
             const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
-            const pdfData = await pdf(req.file.buffer, { max: 100 });
+            // Parse full PDF without arbitrary 100-page limit
+            const pdfData = await pdf(req.file.buffer);
             
             extractedText = pdfData.text || "";
-            // If extracted text is too short, it might be a scanned PDF or images
+            // If extracted text is too short, verify if it's a valid binary PDF for inlineData OCR
             if (extractedText.trim().length < 50) {
-              useRawFile = true;
+              if (bufferHeader.includes("%PDF")) {
+                useRawFile = true;
+              } else {
+                const rawStr = req.file.buffer.toString("utf-8");
+                if (rawStr && rawStr.trim().length > 0) {
+                  extractedText = rawStr;
+                }
+              }
             }
-            
-            if (extractedText && extractedText.length > 300000) { extractedText = extractedText.slice(0, 300000); }
           } catch (parseError) {
-            console.warn("Failed to parse PDF locally with pdf-parse, will fallback to raw bytes:", parseError);
-            useRawFile = true;
+            console.warn("Failed to parse PDF locally with pdf-parse, checking binary header:", parseError);
+            if (bufferHeader.includes("%PDF")) {
+              useRawFile = true;
+            } else {
+              const rawStr = req.file.buffer.toString("utf-8");
+              if (rawStr && rawStr.trim().length > 0) {
+                extractedText = rawStr;
+              } else {
+                useRawFile = true;
+              }
+            }
           }
         }
       } else {
@@ -1447,7 +1524,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
         try {
           const rawStr = req.file.buffer.toString("utf-8");
           if (rawStr && rawStr.trim().length > 0) {
-            extractedText = rawStr.slice(0, 300000);
+            extractedText = rawStr;
           } else {
             useRawFile = true;
             effectiveMime = req.file.mimetype || "application/octet-stream";
@@ -1458,6 +1535,29 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
       }
     } else {
       extractedText = textInput;
+    }
+
+    // Intelligent Comprehensive Distillation for LONG PDFs and large documents (> 80,000 chars)
+    if (extractedText && extractedText.length > 80000) {
+      console.log(`[summarize] Long PDF detected (${extractedText.length} chars). Applying multi-section chapter distillation for comprehensive coverage...`);
+      const introSlice = extractedText.slice(0, 30000);
+      const conclusionSlice = extractedText.slice(-20000);
+      
+      const middleText = extractedText.slice(30000, -20000);
+      let middleSamples = "";
+      if (middleText.length > 40000) {
+        const chunkSize = 8000;
+        const totalChunks = 5;
+        const step = Math.floor((middleText.length - chunkSize) / totalChunks);
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * step;
+          middleSamples += `\n\n--- [DOCUMENT EXCERPT SECTION ${i + 1}] ---\n` + middleText.slice(start, start + chunkSize);
+        }
+      } else {
+        middleSamples = middleText;
+      }
+      
+      extractedText = `${introSlice}\n\n${middleSamples}\n\n--- [FINAL CHAPTERS & CONCLUSION] ---\n${conclusionSlice}`;
     }
 
     let promptText = "";
@@ -1602,11 +1702,10 @@ IF FORMAT IS "Explain Like I'm 5":
       return res.status(400).json({ error: "Document content is too short or empty to process." });
     }
     
-    // Model fallback chain for summarize — try faster models first, fall back on rate-limit or error
+    // Model fallback chain for summarize — try ultra-fast models first
     const summarizeModels = [
       "gemini-flash-lite-latest",
-      "gemini-3.5-flash-lite",
-      "gemini-3.5-flash"
+      "gemini-3.5-flash-lite"
     ];
     let summaryText = "";
     let summarizeError: any = null;
@@ -1617,6 +1716,7 @@ IF FORMAT IS "Explain Like I'm 5":
           stream,
           country,
           model,
+          timeoutMs: 60000,
           contents: contentsPayload,
           config: {
             responseMimeType: responseMimeType,
@@ -1887,8 +1987,7 @@ GIBBERISH / RANDOM TYPING GUARD:
 
     let modelsToTry = [
       "gemini-flash-lite-latest",
-      "gemini-3.5-flash-lite",
-      "gemini-3.5-flash"
+      "gemini-3.5-flash-lite"
     ];
     
     const now = Date.now();
@@ -1897,8 +1996,8 @@ GIBBERISH / RANDOM TYPING GUARD:
 
     for (const m of modelsToTry) {
       const lastLimited = rateLimitedModels[m] || 0;
-      // Keep on backburner for 1 hour to handle daily/frequent free-tier limits
-      if (now - lastLimited < 3600000) {
+      const cooldownMs = Math.min(rateLimitedModelsCooldown[m] || 15000, 30000);
+      if (now - lastLimited < cooldownMs) {
         backburnerModels.push(m);
       } else {
         activeModels.push(m);
@@ -2737,9 +2836,8 @@ At the very end of your notes, always include 3 helpful interactive study sugges
   } catch (error: any) {
     if (error.isRateLimit || error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("YouTube summary quota exceeded:", error.message);
-      return res.status(429).json({ 
-        isRateLimit: true,
-        error: "System is currently busy helping many students! 📚\nWe're processing your request as fast as possible. Please wait for 60 seconds and try again, or take a quick stretch break. Your learning journey is our priority!"
+      return res.status(200).json({ 
+        text: "The YouTube video analysis is currently experiencing high demand. Please try summarizing again in a few moments."
       });
     }
     console.error("YouTube summary error:", error);
@@ -3198,8 +3296,7 @@ IF FORMAT IS "Explain Like I'm 5":
     // Model fallback chain for text summarize
     const textSumModels = [
       "gemini-flash-lite-latest",
-      "gemini-3.5-flash-lite",
-      "gemini-3.5-flash"
+      "gemini-3.5-flash-lite"
     ];
     let textSummaryResult = "";
     let textSumError: any = null;

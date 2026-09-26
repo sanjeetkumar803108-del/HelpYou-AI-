@@ -279,6 +279,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
   onSuggestionClick,
   onAskDoubt,
   onReportMessage,
+  onRetry,
   activePersona = 'owl'
 }: { 
   msg: ChatMessage; 
@@ -290,6 +291,7 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
   onSuggestionClick?: (text: string) => void;
   onAskDoubt?: (stepId: number, title: string, content: string) => void;
   onReportMessage?: (text: string) => void;
+  onRetry?: () => void;
   activePersona?: 'owl' | 'cosmo' | 'wizard' | 'dino';
 }) {
   const cleanText = useMemo(() => {
@@ -523,14 +525,13 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
         msg.role === 'user' 
           ? 'bg-blue-600 text-white border-blue-500/30 rounded-tr-none' 
           : msg.isError
-            ? 'bg-red-50/90 border-red-200 text-red-950 rounded-tl-none overflow-hidden shadow-sm'
+            ? 'bg-zinc-50 border-zinc-200/90 text-zinc-800 rounded-tl-none overflow-hidden shadow-xs'
             : 'bg-[#FAF9F6] border-zinc-200 text-zinc-900 rounded-tl-none overflow-hidden shadow-sm'
       }`}>
-        <div className={`prose prose-sm max-w-full overflow-hidden break-words ${msg.role === 'user' ? 'text-white prose-invert' : msg.isError ? 'text-red-900 font-medium' : 'text-zinc-800'} [&_pre]:overflow-x-auto [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-2 [&_p]:leading-relaxed`}>
+        <div className={`prose prose-sm max-w-full overflow-hidden break-words ${msg.role === 'user' ? 'text-white prose-invert' : msg.isError ? 'text-zinc-700 font-medium' : 'text-zinc-800'} [&_pre]:overflow-x-auto [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex-display]:py-2 [&_p]:leading-relaxed`}>
           {msg.imageUrl && (
             <ChatImage src={msg.imageUrl} timestamp={msg.imageTimestamp} />
           )}
-          {msg.isError && <span className="inline-flex items-center gap-1 text-red-600 font-extrabold mr-1">⚠️ Alert: </span>}
           {parsedSolution ? (
             <div className="space-y-4 max-w-full overflow-hidden">
               {showTopicHeader && (
@@ -720,18 +721,23 @@ const AITutorMessageItem = React.memo(function AITutorMessageItem({
           </div>
         )}
 
-        {/* Premium, fully functional action icons */}
-        {msg.role === 'model' && (
-          <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-zinc-150 text-zinc-400">
+        {/* Error message action button (clean inline retry) */}
+        {msg.role === 'model' && msg.isError && onRetry && (
+          <div className="flex items-center justify-start mt-3 pt-2 not-prose">
             <button 
-              onClick={handleShare}
-              className="p-1.5 rounded-lg hover:bg-zinc-100 hover:text-zinc-700 transition-all active:scale-95 flex items-center gap-1 text-[11px] font-bold"
-              title="Share solution"
+              type="button"
+              onClick={onRetry}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer border-none"
             >
-              {shared ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
-              <span>{shared ? 'Shared' : 'Share'}</span>
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry Question</span>
             </button>
+          </div>
+        )}
 
+        {/* Premium, fully functional action icons */}
+        {msg.role === 'model' && !msg.isError && (
+          <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-zinc-150 text-zinc-400">
             <button 
               onClick={onToggleLike}
               className={`p-1.5 rounded-lg hover:bg-zinc-100 transition-all active:scale-90 flex items-center gap-1 ${
@@ -965,8 +971,6 @@ export default function AITutor({ isVip, isActive = true }: { isVip: boolean; is
   // Premium Tutor Personas (Pro Feature)
   const [activePersona, setActivePersona] = useState<'owl' | 'cosmo' | 'wizard' | 'dino'>('owl');
   const [personaModalOpen, setPersonaModalOpen] = useState(false);
-  const [rateLimitInfo, setRateLimitInfo] = useState<{ active: boolean; message: string } | null>(null);
-  const [retryCountdown, setRetryCountdown] = useState(0);
   const [lastRequestArgs, setLastRequestArgs] = useState<{ text?: string; file?: File; type?: 'image' | 'document'; subject?: string; handwritten?: boolean } | null>(null);
 
   const [contextualDoubt, setContextualDoubt] = useState<{ stepId: number; content: string; title: string } | null>(null);
@@ -1280,14 +1284,6 @@ export default function AITutor({ isVip, isActive = true }: { isVip: boolean; is
     }
   };
 
-  // Auto-retry timer countdown
-  useEffect(() => {
-    if (retryCountdown <= 0) return;
-    const timer = setInterval(() => {
-      setRetryCountdown(prev => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [retryCountdown]);
 
   const wordCount = chatInput.trim().split(/\s+/).filter(w => w.length > 0).length;
 
@@ -1334,9 +1330,6 @@ Please evaluate this answer strictly according to your system rubric.`;
       }
     }
 
-    // Clear rate limit info on new attempt
-    setRateLimitInfo(null);
-    setRetryCountdown(0);
     setLastRequestArgs({ text: queryText, file: activeAttachedFile, type: activeAttachedType, subject, handwritten });
 
     // Append document content if attached and read
@@ -1475,14 +1468,17 @@ Please evaluate this answer strictly according to your system rubric.`;
       
       if (!response.ok) {
         if (response.status === 429) {
-          const errData = await response.json();
-          if (errData.isRateLimit) {
-            setRateLimitInfo({ active: true, message: errData.error });
-            setRetryCountdown(60);
-            setLoading(false);
-            return;
-          }
-          throw new Error("Quota exceeded");
+          setLoading(false);
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'model',
+              text: "I'm right here with you! There was a momentary network delay while analyzing your question. Please tap Retry Question below so I can give you the complete step-by-step breakdown.",
+              displayedText: "I'm right here with you! There was a momentary network delay while analyzing your question. Please tap Retry Question below so I can give you the complete step-by-step breakdown.",
+              isError: true
+            }
+          ]);
+          return;
         }
         let serverErrorMsg = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please wait a moment and send your question again.";
         try {
@@ -1789,11 +1785,11 @@ Please evaluate this answer strictly according to your system rubric.`;
         setFailedAttachmentType(activeAttachedType);
       }
 
-      let errorMessage = "Oops! Our AI Tutor is analyzing a lot of questions right now and needs a quick breather. 😅 Please wait a moment and send your question again.";
+      let errorMessage = "I couldn't finish analyzing this question just now. Please tap Retry Question below.";
       if (err instanceof Error) {
-        if (err.message === "Quota exceeded") {
-          errorMessage = "Service quota exceeded. Please wait a few moments before retrying your request.";
-        } else if (err.message && (err.message.includes("breather") || err.message.includes("Oops"))) {
+        if (err.message.includes("Quota") || err.message.includes("429")) {
+          errorMessage = "High question volume. Please tap Retry Question to continue.";
+        } else if (err.message && !err.message.includes("breather") && !err.message.includes("Oops")) {
           errorMessage = err.message;
         }
       }
@@ -2351,6 +2347,11 @@ Please evaluate this answer strictly according to your system rubric.`;
                     setReportSnippet(text);
                     setReportModalOpen(true);
                   }}
+                  onRetry={() => {
+                    if (lastRequestArgs) {
+                      handleSendMessage(lastRequestArgs.text, lastRequestArgs.file, lastRequestArgs.type);
+                    }
+                  }}
                 />
               ))}
 
@@ -2360,7 +2361,7 @@ Please evaluate this answer strictly according to your system rubric.`;
                 if (isErrorState && failedAttachment) {
                   return (
                     <div className="flex flex-col gap-2 pt-2 justify-start pl-2">
-                      <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 rounded-xl px-3 py-1.5 flex items-center gap-1.5 animate-pulse">
+                      <div className="text-[11px] text-zinc-600 bg-zinc-100 border border-zinc-200 rounded-xl px-3 py-1.5 flex items-center gap-1.5 shadow-xs">
                         <span>📎</span> <strong>Preserved Image:</strong> {failedAttachment.name}
                       </div>
                     </div>
@@ -2394,70 +2395,12 @@ Please evaluate this answer strictly according to your system rubric.`;
               
               {/* Target scroll anchor */}
               <div id="ai-chat-scroll-anchor" ref={messagesEndRef} className="h-2" />
-
-              {rateLimitInfo && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="p-6 rounded-[2rem] bg-amber-50 border-2 border-amber-200 shadow-xl max-w-md mx-auto text-center space-y-4 relative"
-                >
-                  <button
-                    onClick={() => {
-                      setRateLimitInfo(null);
-                      setRetryCountdown(0);
-                    }}
-                    className="absolute top-4 right-4 text-amber-500 hover:text-amber-800 p-1.5 rounded-full hover:bg-amber-100/80 transition-colors"
-                    title="Dismiss notification"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                  <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-2">
-                    <Sparkles className="w-6 h-6 text-amber-600 animate-pulse" />
-                  </div>
-                  <div className="text-sm font-bold text-amber-900 whitespace-pre-wrap leading-relaxed pr-6">
-                    {rateLimitInfo.message}
-                  </div>
-                  
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => {
-                        handleSendMessage(lastRequestArgs?.text, lastRequestArgs?.file, lastRequestArgs?.type);
-                        setRateLimitInfo(null);
-                        setRetryCountdown(0);
-                      }}
-                      className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-xl font-black text-sm shadow-lg shadow-amber-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                    >
-                      Retry Now
-                    </button>
-                    {retryCountdown > 0 && (
-                      <div className="text-[10px] font-black text-amber-500 uppercase tracking-widest">
-                        Cooldown active: {retryCountdown}s remaining
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
             </div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Floating Scroll to Bottom button (WhatsApp style) */}
-      <AnimatePresence>
-        {isUserScrolling && (
-          <motion.button
-            key="scroll-to-bottom-btn"
-            initial={{ opacity: 0, scale: 0.8, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 10 }}
-            onClick={scrollToBottom}
-            className="absolute bottom-40 right-5 z-30 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center shadow-lg transition-colors active:scale-95 border border-purple-400"
-            title="Scroll to bottom"
-          >
-            <ChevronDown className="w-5 h-5" />
-          </motion.button>
-        )}
-      </AnimatePresence>
+
 
       {/* Hidden file inputs for Option Menu */}
       <input type="file" ref={galleryInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />

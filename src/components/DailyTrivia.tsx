@@ -29,7 +29,7 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { db, auth } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import GlobalMarkdown from './GlobalMarkdown';
-import { getClientDeterministicBonusQuestions } from '../utils/dailyTriviaData';
+import { getClientDeterministicBonusQuestions, CANONICAL_DAILY_QUESTIONS } from '../utils/dailyTriviaData';
 
 interface DailyTriviaProps {
   onBack: () => void;
@@ -66,8 +66,112 @@ function getTodayKey() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+export function normalizeTriviaQuestion(q: any): DailyBoosterQuestion {
+  if (!q) {
+    return {
+      id: 'fallback_q',
+      subject: 'Academic Knowledge',
+      topic: 'Core Concept',
+      question: 'Review the fundamental principle behind this concept.',
+      options: ['Option A', 'Option B', 'Option C', 'Option D'],
+      correctIndex: 0,
+      shortExplanation: 'Always double check units, signs, and formula constraints.',
+      examTrapWarning: 'Common trap: Rushing the question and picking the first intuitive option.'
+    };
+  }
+
+  const rawOptions = Array.isArray(q.options) && q.options.length >= 2
+    ? q.options.map((opt: any) => String(opt ?? '').trim())
+    : ['Option A', 'Option B', 'Option C', 'Option D'];
+
+  while (rawOptions.length < 4) {
+    rawOptions.push(`Option ${String.fromCharCode(65 + rawOptions.length)}`);
+  }
+
+  const correctIndex = typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex < rawOptions.length
+    ? q.correctIndex
+    : 0;
+
+  // Resolve explanation across all possible AI property variations to guarantee no blank box
+  const rawExplanation = (
+    q.shortExplanation ||
+    q.explanation ||
+    q.takeaway ||
+    q.rationale ||
+    q.solution ||
+    q.reason ||
+    q.answerExplanation ||
+    q.short_explanation ||
+    ''
+  );
+  const cleanExp = String(rawExplanation).trim();
+  const shortExplanation = (cleanExp && cleanExp !== 'undefined' && cleanExp !== 'null')
+    ? cleanExp
+    : (rawOptions[correctIndex] ? `Correct answer is "${rawOptions[correctIndex]}". Double-check the fundamental definitions and formula relationships.` : 'Review the core definition and step-by-step formula.');
+
+  // Resolve trap warning across all possible AI property variations to guarantee no blank box
+  const rawTrap = (
+    q.examTrapWarning ||
+    q.trapWarning ||
+    q.trap ||
+    q.examTrap ||
+    q.exam_trap_warning ||
+    q.exam_trap ||
+    q.commonMistake ||
+    q.pitfall ||
+    ''
+  );
+  const cleanTrap = String(rawTrap).trim();
+  const examTrapWarning = (cleanTrap && cleanTrap !== 'undefined' && cleanTrap !== 'null')
+    ? cleanTrap
+    : 'Common mistake: Rushing the question or assuming intuitive behavior without verifying the physical/mathematical rule.';
+
+  const rawLatex = q.latexEquation || q.latex || q.formula;
+  const cleanLatex = rawLatex && String(rawLatex).trim() !== 'undefined' && String(rawLatex).trim() !== 'null' ? String(rawLatex).trim() : undefined;
+
+  return {
+    id: q.id || `q_${Math.random().toString(36).slice(2, 9)}`,
+    subject: String(q.subject || 'Academic Knowledge').trim(),
+    topic: String(q.topic || 'Concept Review').trim(),
+    question: String(q.question || '').trim(),
+    options: rawOptions.slice(0, 4),
+    correctIndex,
+    latexEquation: cleanLatex,
+    shortExplanation,
+    examTrapWarning
+  };
+}
+
+export function normalizeBoosterPayload(payload: any): DailyBoosterPayload {
+  let questions: DailyBoosterQuestion[] = [];
+  if (payload && Array.isArray(payload.questions)) {
+    questions = payload.questions
+      .map(normalizeTriviaQuestion)
+      .filter((q: DailyBoosterQuestion) => q.question && q.question.length > 5);
+  } else if (payload?.trivia) {
+    questions = [normalizeTriviaQuestion(payload.trivia)];
+  }
+
+  // Strictly guarantee at least 3 high-yield questions
+  if (questions.length < 3) {
+    for (const bq of CANONICAL_DAILY_QUESTIONS) {
+      if (questions.length >= 3) break;
+      if (!questions.some(q => q.question === bq.question)) {
+        questions.push(normalizeTriviaQuestion(bq));
+      }
+    }
+  }
+
+  return {
+    dayNumber: payload?.dayNumber || 1,
+    theme: payload?.theme || 'Daily Exam Trap Booster',
+    questions: questions.slice(0, 3)
+  };
+}
+
 /**
  * Looks up today's completed booster from localStorage (multiple key strategies for compat).
+ * Discards corrupted sessions with fewer than 3 questions so user can take a full session.
  */
 function getTodayCompletedData(
   todayKey: string
@@ -77,7 +181,16 @@ function getTodayCompletedData(
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      if (parsed?.booster && Array.isArray(parsed?.responses) && parsed.responses.length > 0) return parsed;
+      if (
+        parsed?.booster?.questions &&
+        Array.isArray(parsed.booster.questions) &&
+        parsed.booster.questions.length >= 3 &&
+        Array.isArray(parsed?.responses) &&
+        parsed.responses.length >= 3
+      ) {
+        parsed.booster = normalizeBoosterPayload(parsed.booster);
+        return parsed;
+      }
     } catch {}
   }
   // Fallback: scan any key with today's date prefix
@@ -89,7 +202,16 @@ function getTodayCompletedData(
           const item = window.localStorage.getItem(key);
           if (item) {
             const parsed = JSON.parse(item);
-            if (parsed?.booster && Array.isArray(parsed?.responses) && parsed.responses.length > 0) return parsed;
+            if (
+              parsed?.booster?.questions &&
+              Array.isArray(parsed.booster.questions) &&
+              parsed.booster.questions.length >= 3 &&
+              Array.isArray(parsed?.responses) &&
+              parsed.responses.length >= 3
+            ) {
+              parsed.booster = normalizeBoosterPayload(parsed.booster);
+              return parsed;
+            }
           }
         }
       }
@@ -97,6 +219,7 @@ function getTodayCompletedData(
   } catch {}
   return null;
 }
+
 
 export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
   // ─── Profile ───────────────────────────────────────────────────────────────
@@ -120,11 +243,14 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        if (parsed?.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) return parsed;
+        if (parsed?.questions && Array.isArray(parsed.questions) && parsed.questions.length >= 3) {
+          return normalizeBoosterPayload(parsed);
+        }
       } catch {}
     }
     return null;
   }, [initialCompleted, todayQKey]);
+
 
   // ─── Core state ────────────────────────────────────────────────────────────
   const [isOffline, setIsOffline] = useState(false);
@@ -319,7 +445,8 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
       try {
         const parsed = JSON.parse(cached);
         if (parsed?.questions && Array.isArray(parsed.questions) && parsed.questions.length >= 3) {
-          setBooster(parsed);
+          const normalized = normalizeBoosterPayload(parsed);
+          setBooster(normalized);
           setCurrentIndex(0);
           setResponses([]);
           setIsRevealed(false);
@@ -364,11 +491,10 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
 
       if (!response.ok) throw new Error(`Server ${response.status}`);
       const data = await response.json();
-      const loaded: DailyBoosterPayload = data.booster || { questions: data.questions || [data.trivia] };
+      const rawPayload = data.booster || { questions: data.questions || [data.trivia] };
+      const loaded: DailyBoosterPayload = normalizeBoosterPayload(rawPayload);
 
-      if (loaded?.questions && Array.isArray(loaded.questions) && loaded.questions.length > 0) {
-        // Always exactly 3
-        loaded.questions = loaded.questions.slice(0, 3);
+      if (loaded?.questions && loaded.questions.length >= 3) {
         setBooster(loaded);
         safeSetItem(todayQKey, JSON.stringify(loaded));
 
@@ -385,8 +511,8 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
       }
     } catch {
       // Offline / server fallback → deterministic profile-based questions
-      const fallback = getClientDeterministicBonusQuestions(academicStream, 3, excludeList);
-      fallback.questions = fallback.questions.slice(0, 3);
+      const rawFallback = getClientDeterministicBonusQuestions(academicStream, 3, excludeList);
+      const fallback = normalizeBoosterPayload(rawFallback);
       setBooster(fallback);
       safeSetItem(todayQKey, JSON.stringify(fallback));
 
@@ -585,9 +711,9 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
               <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-zinc-800">
                 <div className="bg-zinc-800/60 rounded-2xl p-3 border border-zinc-700/50">
                   <p className="text-[10px] text-zinc-400 font-bold uppercase">Traps Mastered</p>
-                  <p className="text-xl font-black text-emerald-400 mt-0.5">{masteredCount}/3</p>
+                  <p className="text-xl font-black text-emerald-400 mt-0.5">{masteredCount}/{booster?.questions?.length || 3}</p>
                   <p className="text-[10px] text-zinc-400 mt-0.5">
-                    {masteredCount === 3 ? 'Flawless! 🌟' : masteredCount === 2 ? 'Strong 💪' : 'Keep going 🛡️'}
+                    {masteredCount === (booster?.questions?.length || 3) ? 'Flawless! 🌟' : masteredCount >= 2 ? 'Strong 💪' : 'Keep going 🛡️'}
                   </p>
                 </div>
                 <div className="bg-zinc-800/60 rounded-2xl p-3 border border-zinc-700/50">
@@ -683,11 +809,11 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
                 })}
               </div>
 
-              {masteredCount < 3 && (
+              {masteredCount < (booster?.questions?.length || 3) && (
                 <div className="mt-3 bg-purple-50/80 border border-purple-200/70 rounded-2xl p-3 flex items-center gap-2">
                   <span className="text-base">📋</span>
                   <p className="text-xs font-bold text-purple-900">
-                    {3 - masteredCount} trap{3 - masteredCount > 1 ? 's' : ''} saved to Mistake Vault.
+                    {(booster?.questions?.length || 3) - masteredCount} trap{((booster?.questions?.length || 3) - masteredCount) > 1 ? 's' : ''} saved to Mistake Vault.
                   </p>
                 </div>
               )}
@@ -740,7 +866,7 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
               <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-xs flex flex-col gap-2">
                 <div className="flex items-center justify-between text-[11px] font-black">
                   <span className="text-zinc-500 uppercase tracking-wider">
-                    Question {currentIndex + 1} / 3
+                    Question {currentIndex + 1} / {booster?.questions?.length || 3}
                   </span>
                   <span className="tabular-nums font-black" style={{ color: timerColor }}>
                     ⏱ {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
@@ -749,7 +875,7 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
 
                 {/* Question stepper dots */}
                 <div className="flex gap-1.5 w-full">
-                  {[0, 1, 2].map(i => (
+                  {(booster?.questions || [0, 1, 2]).map((_, i) => (
                     <div
                       key={i}
                       className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
@@ -841,13 +967,14 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
                       exit={{ opacity: 0, height: 0 }}
                       className="flex flex-col gap-2.5 mb-4 pt-2 border-t border-zinc-100 overflow-hidden"
                     >
+                      {/* Exam Trap Warning Box */}
                       <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-xs text-amber-950">
-                        <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1 mb-1">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                          ⚠️ Exam Trap:
+                        <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1.5 mb-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Exam Trap:</span>
                         </span>
                         <GlobalMarkdown className="text-xs font-medium text-amber-900 leading-relaxed [&_p]:inline [&_p]:m-0">
-                          {currentQ.examTrapWarning}
+                          {currentQ.examTrapWarning || 'Common mistake: Rushing the question or assuming intuitive behavior without verifying the physical/mathematical rule.'}
                         </GlobalMarkdown>
                       </div>
 
@@ -858,10 +985,14 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
                         </div>
                       )}
 
+                      {/* Takeaway / Explanation Box */}
                       <div className="bg-indigo-50/50 border border-indigo-100/70 rounded-2xl p-3 text-xs text-zinc-700 leading-relaxed">
-                        <p className="text-[10px] text-indigo-900 uppercase font-black tracking-wider mb-0.5">💡 Takeaway:</p>
+                        <p className="text-[10px] text-indigo-900 uppercase font-black tracking-wider mb-0.5 flex items-center gap-1.5">
+                          <span>💡</span>
+                          <span>Takeaway:</span>
+                        </p>
                         <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs text-zinc-700">
-                          {currentQ.shortExplanation}
+                          {currentQ.shortExplanation || (currentQ.options[currentQ.correctIndex] ? `Correct answer is "${currentQ.options[currentQ.correctIndex]}". Review the core definition and step-by-step formula.` : 'Review the core definition and step-by-step formula.')}
                         </GlobalMarkdown>
                       </div>
 
@@ -890,7 +1021,7 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
                     onClick={handleNextStep}
                     className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-black text-xs py-3.5 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm active:scale-98"
                   >
-                    {currentIndex < 2 ? 'Next →' : 'See Results 🏆'}
+                    {currentIndex < ((booster?.questions?.length || 3) - 1) ? 'Next →' : 'See Results 🏆'}
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 ) : (

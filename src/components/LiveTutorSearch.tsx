@@ -391,6 +391,9 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     setCopied(false);
     setHighlightedSourceIdx(null);
 
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 45000); // 45s safety timeout
+
     try {
       const currentNotes = localNotes.trim();
       const profile = getUserProfileData();
@@ -398,6 +401,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
       const response = await fetch(getApiUrl('/api/live-study-tutor'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: abortController.signal,
         body: JSON.stringify({
           query: activeQuery,
           profileContext: profile.profileContext,
@@ -408,6 +412,8 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
           stream: profile.stream
         }),
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -472,10 +478,15 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
       setSearchResponse(formattedResult);
       setError(null);
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to complete live research. Please try again.");
+      clearTimeout(timeoutId);
+      console.error("[LiveTutorSearch] Search error:", err);
+      const isAbort = err.name === 'AbortError' || err.message?.includes('aborted');
+      setError(isAbort 
+        ? "Research request took longer than expected. Please check your network and tap Search Again."
+        : (err.message || "Failed to complete live research. Please try again."));
       setSearchResponse(null);
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };

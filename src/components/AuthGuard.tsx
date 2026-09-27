@@ -1,7 +1,7 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { safeGetItem } from '../utils/storage';
+import { safeGetItem, safeRemoveItem } from '../utils/storage';
 import Login from './Login';
 import SplashScreen from './SplashScreen';
 import Onboarding from './Onboarding';
@@ -40,6 +40,16 @@ export default function AuthGuard({
 }: AuthGuardProps) {
   const containerClass = `w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-[#FAF9F6] text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`;
 
+  // Absolute fail-safe: Never allow loading skeleton to trap user for more than 1000ms
+  const [cachedCheckExpired, setCachedCheckExpired] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCachedCheckExpired(true);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // 1. Splash Screen
   if (showSplash) {
     return (
@@ -49,8 +59,15 @@ export default function AuthGuard({
     );
   }
 
-  // 2. Auth Loading Skeleton
-  if (authLoading) {
+  // Active User: check React state or immediate Firebase auth object
+  const activeUser = user || auth.currentUser;
+  const hasCachedSession = Boolean(
+    safeGetItem('last_logged_in_user') && 
+    safeGetItem('helpyou_active_user_session') === 'true'
+  );
+
+  // 2. Auth Loading Skeleton: ONLY while authLoading is true AND fail-safe timer hasn't expired
+  if (authLoading && !cachedCheckExpired) {
     return (
       <div className={containerClass}>
         {fallbackSkeleton}
@@ -58,21 +75,21 @@ export default function AuthGuard({
     );
   }
 
-  // Active User: use React state or fallback to immediate Firebase auth object
-  const activeUser = user || auth.currentUser;
-  const hasCachedSession = Boolean(
-    safeGetItem('last_logged_in_user') && 
-    safeGetItem('helpyou_active_user_session') === 'true'
-  );
-
-  // If user has an active session cached, but Firebase Auth hasn't finished reading IndexedDB yet,
-  // hold the smooth skeleton briefly instead of flashing the login screen.
-  if (!activeUser && hasCachedSession) {
+  // 3. Cached session hold: ONLY if user is not yet resolved, auth is actively loading, AND timer hasn't expired.
+  // The instant authLoading finishes (false) OR timer expires (true), we NEVER block the user!
+  if (!activeUser && hasCachedSession && authLoading && !cachedCheckExpired) {
     return (
       <div className={containerClass}>
         {fallbackSkeleton}
       </div>
     );
+  }
+
+  // If auth finished and there is no activeUser, clean up stale session marker
+  if (!activeUser && hasCachedSession && (!authLoading || cachedCheckExpired)) {
+    try {
+      safeRemoveItem('helpyou_active_user_session');
+    } catch (_) {}
   }
 
   // 3. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header

@@ -356,24 +356,24 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
         detectAndLogMistake('Essay Grader', essayText, accumulatedText).catch(e => console.error("Essay Grader mistake capture failed:", e));
       }
 
-      // Auto-save
+      // Auto-save asynchronously without blocking UI
       if (auth.currentUser && accumulatedText) {
-        try {
-          const snippet = (essayText || "Essay Submission").trim().replace(/\s+/g, ' ').substring(0, 24);
-          const historyTitle = snippet ? `Essay: ${snippet} (${subject})` : `AI Essay Grader: ${subject} (${curriculum})`;
+        const snippet = (essayText || "Essay Submission").trim().replace(/\s+/g, ' ').substring(0, 24);
+        const historyTitle = snippet ? `Essay: ${snippet} (${subject})` : `AI Essay Grader: ${subject} (${curriculum})`;
 
-          await addDoc(collection(db, 'pocket_items'), {
-            userId: auth.currentUser.uid,
-            type: 'note',
-            title: historyTitle,
-            text: accumulatedText,
-            createdAt: serverTimestamp()
-          });
+        addDoc(collection(db, 'pocket_items'), {
+          userId: auth.currentUser.uid,
+          type: 'note',
+          title: historyTitle,
+          text: accumulatedText,
+          createdAt: serverTimestamp()
+        }).then(() => {
           setSaved(true);
-        } catch (e) {
+        }).catch(e => {
           console.error("Auto-save failed", e);
-        }
+        });
       }
+      setLoading(false);
       hapticNotification('SUCCESS');
     } catch (err: any) {
       console.error(err);

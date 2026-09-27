@@ -392,7 +392,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     setHighlightedSourceIdx(null);
 
     const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 45000); // 45s safety timeout
+    const timeoutId = setTimeout(() => abortController.abort(), 20000); // 20s safety timeout
 
     try {
       const currentNotes = localNotes.trim();
@@ -453,17 +453,22 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
         throw new Error("Invalid response format from research engine.");
       }
 
-      // Log potential trap/misconceptions
+      // ⚡ IMMEDIATE RENDER: Show search results in 0ms without waiting for background tasks
+      setSearchResponse(formattedResult);
+      setError(null);
+      setLoading(false);
+
+      // Log potential trap/misconceptions (fire and forget)
       const searchContext = `${formattedResult.topic_title || ''} ${formattedResult.pro_tips || ''}`;
       detectAndLogMistake('Deep Search', activeQuery, searchContext).catch(() => {});
 
-      // Save deep search session to Firebase Firestore
+      // Save deep search session to Firebase Firestore asynchronously (non-blocking)
       if (auth.currentUser) {
         const liveUpdatesText = Array.isArray(formattedResult.live_updates)
           ? formattedResult.live_updates.map((u: string) => `* ${u}`).join('\n\n')
           : (formattedResult.live_updates || '');
 
-        await addDoc(collection(db, 'pocket_items'), {
+        addDoc(collection(db, 'pocket_items'), {
           userId: auth.currentUser.uid,
           title: `🔍 Deep Search: ${activeQuery}`,
           text: `**Deep Search: ${activeQuery}**\n\n### ${formattedResult.topic_title || 'Research Breakdown'}\n\n* **Match Score:** ${formattedResult.match_score || '98%'}\n* **Pro Tips:** ${formattedResult.pro_tips || ''}\n\n#### Verified Live Updates:\n${liveUpdatesText}\n\n#### Action Steps:\n` + 
@@ -474,9 +479,6 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
           createdAt: serverTimestamp()
         }).catch(err => console.error("Error saving deep search history:", err));
       }
-
-      setSearchResponse(formattedResult);
-      setError(null);
     } catch (err: any) {
       clearTimeout(timeoutId);
       console.error("[LiveTutorSearch] Search error:", err);

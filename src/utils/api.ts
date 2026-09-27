@@ -14,7 +14,7 @@ export const getApiUrl = (endpoint: string): string => {
     }
   }
 
-  let baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://ap-exam-five.vercel.app').trim();
+  let baseUrl = (import.meta.env.VITE_API_BASE_URL || 'https://help-you-ai-brcj.vercel.app').trim();
   if (baseUrl.endsWith('/')) {
     baseUrl = baseUrl.slice(0, -1);
   }

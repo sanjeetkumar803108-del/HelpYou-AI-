@@ -300,6 +300,14 @@ export default function App() {
       Boolean(safeGetItem('last_logged_in_user'));
     return !hasCachedSession;
   });
+
+  // Guaranteed safety unblock: authLoading can NEVER hang longer than 1200ms under any network condition
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      setAuthLoading(false);
+    }, 1200);
+    return () => clearTimeout(safetyTimer);
+  }, []);
   const [pocketItems, setPocketItems] = useState<any[]>(() => {
     const lastUser = safeGetItem('last_logged_in_user');
     const cached = lastUser ? safeGetItem(`stale_pocket_items_${lastUser}`) : null;
@@ -471,6 +479,7 @@ export default function App() {
         if (!currentUser.emailVerified && !isGoogle) {
           safeRemoveItem('helpyou_active_user_session');
           setUser(null);
+          setAuthLoading(false);
           signOut(auth).catch(err => console.warn('Sign out on unverified error:', err));
           return;
         }
@@ -684,6 +693,7 @@ export default function App() {
           });
       } else {
         // Guest user state: reset VIP without wiping guest storage
+        safeRemoveItem('helpyou_active_user_session');
         setIsVip(false);
         setAuthLoading(false);
         

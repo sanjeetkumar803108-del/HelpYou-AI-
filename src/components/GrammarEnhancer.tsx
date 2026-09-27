@@ -280,44 +280,43 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
       }
       const data = await response.json();
       setLoadingProgress(100);
-      await new Promise(r => setTimeout(r, 250));
       
       // Deduct 1 coin
       deductCoins(1, "Grammar & Flow");
       
-      setResult(data.text);
       const receivedFixes = data.fixes || [];
       setFixes(receivedFixes);
+      setResult(data.text);
+      setLoading(false);
 
-      // Auto-save grammatical fixes to mistake vault
+      // Auto-save grammatical fixes to mistake vault asynchronously
       if (receivedFixes && receivedFixes.length > 0) {
         detectAndLogMistake('Grammar Enhancer', inputText || "Image content", data.text).catch(e => console.error("Grammar mistake capture failed:", e));
       }
 
-      // Auto-save
+      // Auto-save asynchronously without blocking UI render
       if (auth.currentUser) {
-        try {
-          let savedText = data.text;
-          if (receivedFixes && receivedFixes.length > 0) {
-            savedText += "\n\n### What we fixed:\n" + (receivedFixes || []).map((f: string) => `- ${f}`).join("\n");
-          }
-
-          const snippet = (inputText || "Image Content").trim().replace(/\s+/g, ' ').substring(0, 28);
-          const historyTitle = snippet 
-            ? `Grammar: ${snippet}` 
-            : `Grammar & Flow (${mode === 'fix' ? 'Voice Preserved' : 'Academic'})`;
-
-          await addDoc(collection(db, 'pocket_items'), {
-            userId: auth.currentUser.uid,
-            type: 'note',
-            title: historyTitle,
-            text: savedText,
-            createdAt: serverTimestamp()
-          });
-          setSaved(true);
-        } catch (e) {
-          console.error("Auto-save failed", e);
+        let savedText = data.text;
+        if (receivedFixes && receivedFixes.length > 0) {
+          savedText += "\n\n### What we fixed:\n" + (receivedFixes || []).map((f: string) => `- ${f}`).join("\n");
         }
+
+        const snippet = (inputText || "Image Content").trim().replace(/\s+/g, ' ').substring(0, 28);
+        const historyTitle = snippet 
+          ? `Grammar: ${snippet}` 
+          : `Grammar & Flow (${mode === 'fix' ? 'Voice Preserved' : 'Academic'})`;
+
+        addDoc(collection(db, 'pocket_items'), {
+          userId: auth.currentUser.uid,
+          type: 'note',
+          title: historyTitle,
+          text: savedText,
+          createdAt: serverTimestamp()
+        }).then(() => {
+          setSaved(true);
+        }).catch(e => {
+          console.error("Auto-save failed", e);
+        });
       }
     } catch (err: any) {
       if (err.name === 'AbortError' || err.message?.includes('aborted')) {

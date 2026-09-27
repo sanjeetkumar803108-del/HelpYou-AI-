@@ -449,7 +449,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
           setCurrentIndex(0);
           setFlipped(false);
           setSaved(false);
-          await autoSaveFlashcardsToPocket(extracted, 'Flashcards');
+          autoSaveFlashcardsToPocket(extracted, 'Flashcards').catch(e => console.error("Flashcard save failed:", e));
           triggerVibration([30, 50, 30]);
         } else if (data.text) {
           setSourceText(data.text);
@@ -614,10 +614,10 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
     // Final result handling
     if (generatedCards.length > 0) {
       setLoadingProgress(100);
-      await new Promise(r => setTimeout(r, 250));
       deductCoins(2, "AI Flashcards");
       setFlashcards(generatedCards);
-      await autoSaveFlashcardsToPocket(generatedCards, sourceText.length < 35 ? sourceText : 'Flashcards');
+      setLoading(false);
+      autoSaveFlashcardsToPocket(generatedCards, sourceText.length < 35 ? sourceText : 'Flashcards').catch(e => console.error("Flashcard save failed:", e));
       triggerVibration([30, 50, 30]);
     } else {
       const isConnectionIssue = lastErrorMsg.includes("Failed to fetch") || 

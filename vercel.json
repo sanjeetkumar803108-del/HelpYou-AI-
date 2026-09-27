@@ -1,15 +1,19 @@
 {
   "version": 2,
   "functions": {
-    "api/index.ts": {
-      "memory": 1024,
-      "maxDuration": 60
+    "api/index.js": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.ts"
+      "destination": "/api"
+    },
+    {
+      "source": "/((?!assets/|favicon|logo|api).*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -597,15 +597,16 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-1.5-flash-8b";
-  if (!isAudioModel && requestedModel && (requestedModel.includes("3.5-flash-lite") || requestedModel.includes("3.8-flash") || requestedModel.includes("3.6-flash") || requestedModel.includes("3.1-flash-lite") || requestedModel.includes("flash-lite-latest") || requestedModel.includes("flash-latest"))) {
-    requestedModel = "gemini-1.5-flash-8b";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.1-flash-lite-preview";
+  if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash"))) {
+    requestedModel = "gemini-3.1-flash-lite-preview";
   }
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash"
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.6-flash",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -4164,7 +4165,7 @@ Return ONLY a valid JSON array of objects with this exact structure:
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-1.5-flash-8b",
+            model: "gemini-3.1-flash-lite-preview",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Multiple Choice Questions (MCQs) for this batch.
@@ -4383,7 +4384,7 @@ NEVER include multiple-choice options A/B/C/D in subjective output.`;
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-1.5-flash-8b",
+            model: "gemini-3.1-flash-lite-preview",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Free Response / Subjective Questions for this batch.
@@ -5844,8 +5845,8 @@ Return ONLY the JSON.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-1.5-flash-8b",
-        timeoutMs: 5500,
+        model: "gemini-3.1-flash-lite-preview",
+        timeoutMs: 6500,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

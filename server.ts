@@ -752,14 +752,12 @@ ${pedagogicalDirective}`;
     params.model.includes("clip")
   ));
 
-  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-1.5-flash-8b");
-  // Only normalize if the requested model itself is a known fake/non-existent name
+  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.1-flash-lite-preview");
+  // Normalize deprecated/retired model names to live active models
   if (!isAudioModel && requestedModel && (
-    requestedModel.includes("3.5-flash-lite") || requestedModel.includes("3.8-flash") ||
-    requestedModel.includes("3.6-flash") || requestedModel.includes("3.1-flash-lite") ||
-    requestedModel.includes("flash-lite-latest") || requestedModel.includes("flash-latest")
+    requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash")
   )) {
-    requestedModel = "gemini-1.5-flash-8b";
+    requestedModel = "gemini-3.1-flash-lite-preview";
   }
   let modelsToTry = isAudioModel 
     ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean)
@@ -767,9 +765,10 @@ ${pedagogicalDirective}`;
       ? [requestedModel] 
       : [
           requestedModel,
-          "gemini-1.5-flash-8b",
-          "gemini-1.5-flash",
-          "gemini-2.0-flash"
+          "gemini-3.1-flash-lite-preview",
+          "gemini-3.6-flash",
+          "gemini-flash-lite-latest",
+          "gemini-3.5-flash-lite"
         ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -4728,7 +4727,7 @@ Return ONLY a valid JSON array of objects with this exact structure:
         const makeCall = async (seed: string): Promise<any[]> => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-1.5-flash-8b",
+            model: "gemini-3.1-flash-lite-preview",
             timeoutMs: 90000,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Multiple Choice Questions (MCQs) for this batch.
@@ -4961,7 +4960,7 @@ NEVER include multiple-choice options A/B/C/D in subjective output.`;
         const makeCall = async (seed: string): Promise<any[]> => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-1.5-flash-8b",
+            model: "gemini-3.1-flash-lite-preview",
             timeoutMs: 90000,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Free Response / Subjective Questions for this batch.
@@ -6523,8 +6522,8 @@ Return ONLY the JSON.`;
     try {
       const resp = await safeGenerateContent({
         gradeLevel, stream: academicStream, country,
-        model: "gemini-1.5-flash-8b",
-        timeoutMs: 5500,
+        model: "gemini-3.1-flash-lite-preview",
+        timeoutMs: 6500,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6539,7 +6538,7 @@ Return ONLY the JSON.`;
       console.warn("[live-study-tutor] AI fallback:", aiErr?.message);
       const updates = searchResults.length > 0
         ? searchResults.slice(0, 4).map((s: any) => `**${s.title}** (${s.sourceName})\n${(s.snippet||'').replace(/<[^>]+>/g,' ').trim()}`)
-        : [`Verified info for **${rawQuery}** — tap Search Again for AI analysis.`];
+        : [`Verified info for **${rawQuery}** ï¿½ tap Search Again for AI analysis.`];
       parsedResult = {
         topic_title: (keywords[0] || rawQuery).slice(0,40),
         match_score: "94%",

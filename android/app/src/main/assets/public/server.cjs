@@ -630,18 +630,16 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(import_genai.Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.5-flash-lite";
-  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
-    requestedModel = "gemini-3.5-flash-lite";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.1-flash-lite-preview";
+  if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash"))) {
+    requestedModel = "gemini-3.1-flash-lite-preview";
   }
-  let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
+  let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
-    "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-3.1-flash-lite",
-    "gemini-3.8-flash",
+    "gemini-3.1-flash-lite-preview",
     "gemini-3.6-flash",
-    "gemini-flash-latest"
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -924,7 +922,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
       stream,
       country,
       profileContext,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
         responseMimeType: "application/json",
@@ -1234,12 +1232,12 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     }
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite",
-        "gemini-3.6-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash",
         "gemini-3.5-flash",
-        "gemini-flash-latest"
+        "gemini-1.5-flash"
       ];
       const now = Date.now();
       const activeModels = [];
@@ -1301,7 +1299,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-1.5-flash-8b",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1375,7 +1373,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-1.5-flash-8b",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1409,7 +1407,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         stream: effectiveStream,
         country,
         profileContext,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents,
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1687,12 +1685,12 @@ ${extractedText}` };
       return res.status(400).json({ error: "Document content is too short or empty to process." });
     }
     const summarizeModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let summaryText = "";
     let summarizeError = null;
@@ -1961,14 +1959,14 @@ MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX):
 
 GIBBERISH / RANDOM TYPING GUARD:
 - If the submitted text consists of random typing, keyboard mashing, or lacks coherent sentences, output under the score header: "The submitted text does not contain a coherent essay or recognizable arguments. Please submit a valid written essay to receive full rubric assessment and constructive feedback."`;
-    const originalModel = "gemini-flash-latest";
+    const originalModel = "gemini-1.5-flash";
     let modelsToTry = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     const now = Date.now();
     const activeModels = [];
@@ -2083,7 +2081,7 @@ GIBBERISH / RANDOM TYPING GUARD:
           stream,
           country,
           profileContext,
-          model: "gemini-3.5-flash-lite",
+          model: "gemini-1.5-flash-8b",
           contents: [{
             parts: [
               ...contentParts,
@@ -2141,7 +2139,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
       }
     };
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2261,7 +2259,7 @@ Return ONLY valid raw JSON conforming strictly to this schema:
   ]
 }`;
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2360,7 +2358,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
       }
     }));
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2422,7 +2420,7 @@ Format:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{
         role: "user",
         parts: [{ text: `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount} cards:
@@ -2521,7 +2519,7 @@ Format:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{
         parts: [
           pdfPart,
@@ -2847,7 +2845,7 @@ ${previousSummary}
 Student's Request: "${followUp}"`;
       const response2 = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: promptText }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] }
@@ -2906,7 +2904,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 \`[SUGGESTION: Deep dive into the first half]\``;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: transcriptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -3055,7 +3053,7 @@ CRITICAL EXECUTION:
       gradeLevel,
       stream,
       country,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3144,11 +3142,11 @@ You must return your output strictly in JSON format matching the following schem
     const targetText = trimmed || "Please read the text inside the attached image(s), correct any grammatical errors, and enhance it according to the chosen mode.";
     contentParts.push({ text: targetText });
     const grammarModels = [
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let response = null;
     let grammarError = null;
@@ -3369,12 +3367,12 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
    This ensures crisp, beautiful KaTeX rendering for the student.
 4. Ensure there is a blank line before and after every heading and list block.`;
     const textSumModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let textSummaryResult = "";
     let textSumError = null;
@@ -3510,7 +3508,7 @@ For each question, provide:
         gradeLevel,
         stream,
         country,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: userPrompt }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -4200,7 +4198,7 @@ Return ONLY a valid JSON array of objects with this exact structure:
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-3.1-flash-lite-preview",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Multiple Choice Questions (MCQs) for this batch.
@@ -4419,7 +4417,7 @@ NEVER include multiple-choice options A/B/C/D in subjective output.`;
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-3.1-flash-lite-preview",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Free Response / Subjective Questions for this batch.
@@ -4550,7 +4548,7 @@ STRICT JSON OUTPUT FORMAT:
 }`;
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Question: ${questionPrompt || "AP Question"}
 Student Chose / Mistake: ${wrongInput || "Distractor Trap"}
 Correct Concept / Target: ${correctConcept || "CED Standard"}
@@ -4656,7 +4654,7 @@ STRICT JSON OUTPUT FORMAT (WHEN VALID):
       contentParts.push({ text: customQuestion || "Analyze this AP multiple-choice question and expose every trap option." });
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: contentParts },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] },
@@ -4768,7 +4766,7 @@ Step 4 (Interpretation): This value represents the total path length traveled by
 ]`;
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Generate ${requestedCount2} authentic AP ${subject} Free Response Trap Radar questions for ${targetTopic}.` }] },
         config: {
           systemInstruction: { parts: [{ text: subjectiveSystemInstruction }] },
@@ -4893,7 +4891,7 @@ Return ONLY a valid JSON array of question objects:
 ]`;
     const response = await safeGenerateContent({
       gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: `Generate ${requestedCount} authentic AP ${subject} Trap Radar questions for ${targetTopic}.` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5046,7 +5044,7 @@ ${image ? "IMPORTANT: The student has provided an attached photo containing thei
     });
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ role: "user", parts }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -5164,7 +5162,7 @@ Disarm Secret Note: ${disarmStrategy}
 ${promptGoal}`;
     const response = await safeGenerateContent({
       gradeLevel: "AP High School (Advanced Placement)",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: userPrompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5222,12 +5220,12 @@ ${avoidList.map((p, i) => `  [${i + 1}] ${p.slice(0, 100)}`).join("\n")}` : "";
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: Math.min(requestedCount * 350, 8192),
+          maxOutputTokens: Math.min(requestedCount * 400, 8192),
           temperature: 0.6
         }
       });
@@ -5346,7 +5344,7 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{
           parts: [{ text: `DOCUMENT CONTENT:
 ${slicedText}
@@ -5371,7 +5369,7 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{
           parts: [
             pdfPart,
@@ -5453,7 +5451,7 @@ Use this exact JSON structure:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions for a student in Grade: ${gradeLevel || "Standard"}.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5594,7 +5592,7 @@ Analyze this mistake and provide the 3-part JSON fix for this grade level.`;
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5679,7 +5677,7 @@ Goal: Generate a master-level ${isHint ? "question breakdown and 3 progressive h
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5732,7 +5730,7 @@ Generate 3 fresh similar practice questions to help the student master this conc
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5842,137 +5840,68 @@ app.post("/api/live-study-tutor", async (req, res) => {
     const rawQuery = rawQueryInput.trim();
     const keywords = extractSearchKeywords(rawQuery);
     const isSmallOrDateQuery = rawQuery.split(/\s+/).length <= 8 || /\b(when|date|launch|born|died|kab|kitne|kitna|kaun|kisne|kisko|kaha|where|who is|what is|capital|full form|ceo|founder|prime minister|president|released|announced|exam date|admit card|score|result|headquarters|hq|established)\b/i.test(rawQuery);
-    const searchResults = await performLiveWebSearch(rawQuery, keywords, country);
-    const verifiedContextString = searchResults.map(
+    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicStream, country);
+    const currentDateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const searchResults = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve([]), 3500);
+      performLiveWebSearch(rawQuery, keywords, country).then((r) => {
+        clearTimeout(t);
+        resolve(r);
+      }).catch(() => {
+        clearTimeout(t);
+        resolve([]);
+      });
+    });
+    const verifiedCtx = searchResults.map(
       (s, idx) => `[Source ${idx + 1}] Title: ${s.title}
 URL: ${s.uri}
 Publisher: ${s.sourceName} (${s.pubDate || "Recent"})
-Content Snippet: ${s.snippet}
+Snippet: ${s.snippet}
 `
     ).join("\n---\n");
-    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicStream, country);
-    const currentDateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const systemInstruction = `${gradeDirective}
-
-You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
-Current Real-Time Date: ${currentDateStr}. Treat this as the absolute present moment.
-Your mission is to provide 100% accurate, up-to-date, grounded answers for student queries.
-
-CRITICAL ADAPTIVE FORMATTING & BEHAVIOR DIRECTIVE:
-1. QUERY INTENT CLASSIFICATION:
-${isSmallOrDateQuery ? `   - [ACTIVE MODE: DIRECT & CONCISE ANSWER]
-     * The user has asked a date, small query, or specific factual question ("${rawQuery}").
-     * GIVE A DIRECT, SIMPLE, CRISP ANSWER. Do NOT output a lengthy thesis or artificial 4-section report.
-     * The very first line/bullet of "live_updates" MUST state the exact answer or date IMMEDIATELY in bold (e.g. "**Chandrayaan-3 was launched on July 14, 2023 at 2:35 PM IST.**" or in Hinglish: "**Chandrayaan-3 ko 14 July 2023 ko dopehar 2:35 baje launch kiya gaya tha.**").
-     * Follow with 2 to 3 concise, high-value bullet points explaining essential verified context with citations [1], [2].
-     * Keep "action_steps" to 1-2 practical takeaways.` : `   - [ACTIVE MODE: STRUCTURED POINT-WISE BREAKDOWN]
-     * The user has asked a broad, academic, or complex topic ("${rawQuery}").
-     * Provide an elite, point-wise, structured research report with small markdown subheadings and clear bullet points.
-     * Organize cleanly into 3-4 logical subheadings (e.g., "### \u{1F4CC} Core Background & Definition", "### \u{1F50D} Key Developments & Timeline", "### \u2696\uFE0F Real-World Impact & Analysis", "### \u{1F4A1} High-Yield Takeaways").
-     * Under each subheading, provide 2 to 3 detailed bullet points starting with bold anchors (* **Bold Anchor:** explanation [1]).`}
-
-2. REAL-TIME FACTUAL ACCURACY & CURRENT NEWS:
-   - Ground strictly in verified live context provided below.
-   - For latest news, dates, or current events, state exact real-world names, dates, organizations, or developments. Never guess or write vague summaries like "recently".
-
-3. STRICT WIKIPEDIA HARD-BAN:
-   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output.
-   - Strictly prioritize peer-reviewed journals (.edu, .gov, Nature, Science, IEEE, NIH, JSTOR, Springer, Elsevier, Crossref DOI), authoritative encyclopedias (Encyclopaedia Britannica), accredited national education boards (CollegeBoard, NCERT, UCAS), and verified global news wires (Reuters, AP, BBC).
-
-4. MANDATORY INLINE CITATIONS PROTOCOL:
-   - Every single factual claim, statistic, date, or event in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...approved on January 14, 2026 [1]...", "...launched on July 14, 2023 [1]...").
-   - Every citation number [1], [2] MUST correspond directly to the 1-based index in "source_links".
-
-5. LANGUAGE MATCHING:
-   - If the user wrote in Hinglish (e.g. "bhai Chandrayaan 3 kab launch hua tha"), write the entire response in natural, articulate, crisp Hinglish.
-   - If Hindi, write Hindi. If English, write English.
-
-6. HEADLINE:
-   - "topic_title" MUST be a crisp, elegant headline of 3 to 6 words max.
-
-STRICT JSON OUTPUT FORMAT:
-{
-  "topic_title": "Concise Main Headline (3-6 words)",
-  "match_score": "98%",
-  "live_updates": [
-    "markdown formatted text / bullet points with citations [1], [2]"
-  ],
-  "action_steps": [
-    "Practical action step 1",
-    "Practical action step 2"
-  ],
-  "pro_tips": "In-depth educator pro-tip or memory anchor.",
-  "related_queries": [
-    "Follow-up research question 1",
-    "Follow-up research question 2"
-  ],
-  "source_links": [
-    "verified url 1",
-    "verified url 2"
-  ]
-}`;
-    const contentPrompt = `STUDENT SEARCH QUERY: "${rawQuery}"
-STUDENT ACADEMIC PROFILE & LOCATION:
-- Country: ${country}
-- Grade Level: ${gradeLevel}
-- Academic Stream: ${academicStream}
-${profileContext ? `ADDITIONAL PROFILE CONTEXT:
-${profileContext}
-` : ""}
-${studentNotes ? `STUDENT LOCAL STUDY NOTES / TARGET SYLLABUS:
-${studentNotes}
-` : ""}
-
-VERIFIED REAL-TIME LIVE WEB CONTEXT:
-${verifiedContextString || "No external search feeds returned. Synthesize using accurate, verified ground truth from peer-reviewed databases."}
-
-${isSmallOrDateQuery ? "Generate a direct, simple, concise answer with the exact date/fact stated immediately in bold, followed by 2-3 crisp bullet points with inline citations." : "Generate an elite, point-wise, structured academic research report with small markdown subheadings (### ...) and bullet points with inline citations."}
-Return strictly the JSON structure specified above.`;
-    let rawText = "";
+You are the Deep Search AI engine for "HelpYou AI". Current Date: ${currentDateStr}.
+${isSmallOrDateQuery ? "DIRECT MODE: State the exact fact/date in BOLD immediately in the first bullet of live_updates. Then 2-3 concise bullets with citations [1],[2]. Keep action_steps to 1-2 items." : "STRUCTURED MODE: Write a point-wise academic report with 3-4 markdown subheadings (### ...) and bullet points with citations. Each bullet starts bold."}
+RULES: NEVER cite wikipedia.org. Every fact needs inline citation [1],[2]. topic_title = max 6 words. Match user language.
+RETURN ONLY VALID JSON (no markdown/code fences):
+{"topic_title":"Headline","match_score":"98%","live_updates":["bullet [1]"],"action_steps":["step"],"pro_tips":"tip","related_queries":["q1"],"source_links":["https://url"]}`;
+    const contentPrompt = `QUERY: "${rawQuery}"
+PROFILE: Grade=${gradeLevel} | Country=${country} | Stream=${academicStream}
+${profileContext ? "CONTEXT:\n" + profileContext + "\n" : ""}${studentNotes ? "NOTES:\n" + studentNotes + "\n" : ""}
+WEB CONTEXT:
+${verifiedCtx || "No sources. Use verified knowledge."}
+${isSmallOrDateQuery ? "Give a direct answer with key fact in bold first." : "Give structured academic report with subheadings."}
+Return ONLY the JSON.`;
     let parsedResult = null;
     try {
-      const response = await safeGenerateContent({
+      const resp = await safeGenerateContent({
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-3.5-flash-lite",
-        timeoutMs: 32e3,
+        model: "gemini-3.1-flash-lite-preview",
+        timeoutMs: 6500,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 550
+          maxOutputTokens: 1200
         }
       }, 1);
-      rawText = response.text || "";
-      parsedResult = safeParseJSON(rawText, "object");
-      if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) {
-        throw new Error("Invalid or incomplete JSON response from model");
-      }
+      parsedResult = safeParseJSON(resp.text || "", "object");
+      if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) throw new Error("Incomplete JSON");
     } catch (aiErr) {
-      console.warn("[live-study-tutor] AI generation failed or busy, constructing grounded research from web context:", aiErr?.message || aiErr);
-      const updates = searchResults.length > 0 ? searchResults.map((s) => {
-        const cleanSnippet = (s.snippet || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-        return `**${s.title}** (${s.sourceName})
-${cleanSnippet}`;
-      }) : [rawText || `Live verified information retrieved for **${rawQuery}**.`];
+      console.warn("[live-study-tutor] AI fallback:", aiErr?.message);
+      const updates = searchResults.length > 0 ? searchResults.slice(0, 4).map((s) => `**${s.title}** (${s.sourceName})
+${(s.snippet || "").replace(/<[^>]+>/g, " ").trim()}`) : [`Verified info for **${rawQuery}** \uFFFD tap Search Again for AI analysis.`];
       parsedResult = {
-        topic_title: keywords[0] || rawQuery,
-        match_score: "96%",
+        topic_title: (keywords[0] || rawQuery).slice(0, 40),
+        match_score: "94%",
         live_updates: updates,
-        action_steps: [
-          `Review core concepts and definitions of ${keywords[0] || rawQuery}`,
-          `Analyze key mechanisms, timeline, and exam implications`,
-          `Verify understanding against authoritative academic references`
-        ],
-        pro_tips: `Focus on the underlying core principles and timeline rather than rote memorization when studying ${keywords[0] || rawQuery}.`,
-        related_queries: [
-          `Key timeline of ${keywords[0] || rawQuery}`,
-          `Exam takeaways for ${keywords[0] || rawQuery}`,
-          `Important facts about ${keywords[0] || rawQuery}`
-        ],
-        source_links: searchResults.map((s) => s.uri).slice(0, 5)
+        action_steps: [`Review concepts of ${keywords[0] || rawQuery}`, "Tap Search Again for full AI analysis"],
+        pro_tips: `Focus on key principles of ${keywords[0] || rawQuery}.`,
+        related_queries: [`${keywords[0] || rawQuery} exam questions`, `${keywords[0] || rawQuery} key facts`],
+        source_links: searchResults.map((s) => s.uri).filter((u) => u && u.startsWith("http")).slice(0, 5)
       };
     }
     const cleanSources = [];
@@ -5984,84 +5913,46 @@ ${cleanSnippet}`;
       seenUrls.add(link);
       cleanSources.push(link);
       const matched = searchResults.find((s) => s.uri === link);
-      let displayTitle = matched?.title;
-      if (!displayTitle) {
+      let t2 = matched?.title;
+      if (!t2) {
         try {
-          const u = new URL(link);
-          const host = u.hostname.replace(/^www\./, "");
-          if (host.includes("britannica")) displayTitle = "Encyclopaedia Britannica Academic";
-          else if (host.includes("nature")) displayTitle = "Nature Journal Research";
-          else if (host.includes("doi.org")) displayTitle = "Peer-Reviewed DOI Study";
-          else if (host.includes("news.google")) displayTitle = "Google News Live Feed";
-          else displayTitle = `${host} Verified Research`;
+          const h = new URL(link).hostname.replace(/^www\./, "");
+          t2 = h.includes("britannica") ? "Encyclopaedia Britannica Academic" : `${h} Research`;
         } catch (_) {
-          displayTitle = "Verified Academic Source";
+          t2 = "Verified Source";
         }
       }
-      detailedSources.push({
-        title: displayTitle || "Verified Research Source",
-        uri: link,
-        sourceName: matched?.sourceName || "Academic Resource"
-      });
+      detailedSources.push({ title: t2 || "Verified Source", uri: link, sourceName: matched?.sourceName || "Academic" });
     }
     if (detailedSources.length === 0) {
-      const mainKeyword = keywords[0] || rawQuery;
-      const encodedKw = encodeURIComponent(mainKeyword);
-      const countryNorm = (country || "").toLowerCase();
-      const britannicaUrl = `https://www.britannica.com/search?query=${encodedKw}`;
-      const natureUrl = `https://www.nature.com/search?q=${encodedKw}`;
-      cleanSources.push(britannicaUrl, natureUrl);
-      detailedSources.push(
-        { title: `${mainKeyword} - Encyclopaedia Britannica Academic`, uri: britannicaUrl, sourceName: "Encyclopaedia Britannica" },
-        { title: `${mainKeyword} - Nature Academic Research Index`, uri: natureUrl, sourceName: "Nature Journal" }
-      );
-      if (countryNorm.includes("india")) {
+      const enc = encodeURIComponent(keywords[0] || rawQuery);
+      cleanSources.push(`https://www.britannica.com/search?query=${enc}`);
+      detailedSources.push({ title: `${keywords[0] || rawQuery} - Britannica`, uri: `https://www.britannica.com/search?query=${enc}`, sourceName: "Encyclopaedia Britannica" });
+      if ((country || "").toLowerCase().includes("india")) {
         cleanSources.push("https://ncert.nic.in");
-        detailedSources.push({ title: "NCERT National Academic Repository", uri: "https://ncert.nic.in", sourceName: "NCERT India" });
-      } else if (countryNorm.includes("kingdom") || countryNorm.includes("uk")) {
-        cleanSources.push("https://www.gov.uk/education");
-        detailedSources.push({ title: "UK Department for Education Official Portal", uri: "https://www.gov.uk/education", sourceName: "GOV.UK Education" });
-      } else {
-        cleanSources.push("https://www.loc.gov");
-        detailedSources.push({ title: "Library of Congress Academic Database", uri: "https://www.loc.gov", sourceName: "Library of Congress" });
+        detailedSources.push({ title: "NCERT Academic Repository", uri: "https://ncert.nic.in", sourceName: "NCERT India" });
       }
     }
     parsedResult.source_links = cleanSources.slice(0, 6);
     parsedResult.detailed_sources = detailedSources.slice(0, 6);
-    const finalSourcesCount = parsedResult.detailed_sources.length;
-    if (finalSourcesCount > 0) {
-      const clampCitations = (text) => {
-        if (!text) return "";
-        return text.replace(/\[\s*(\d+)\s*\]/g, (_, p1) => {
-          let n = parseInt(p1, 10);
-          if (n > finalSourcesCount) {
-            n = (n - 1) % finalSourcesCount + 1;
-          } else if (n < 1) {
-            n = 1;
-          }
-          return `[${n}]`;
-        });
-      };
-      if (Array.isArray(parsedResult.live_updates)) {
-        parsedResult.live_updates = parsedResult.live_updates.map((u) => typeof u === "string" ? clampCitations(u) : u);
-      } else if (typeof parsedResult.live_updates === "string") {
-        parsedResult.live_updates = clampCitations(parsedResult.live_updates);
-      }
+    const fc = parsedResult.detailed_sources.length;
+    if (fc > 0) {
+      const clamp = (s) => s.replace(/\[\s*(\d+)\s*\]/g, (_, p) => {
+        let n = parseInt(p, 10);
+        if (n > fc) n = (n - 1) % fc + 1;
+        else if (n < 1) n = 1;
+        return `[${n}]`;
+      });
+      if (Array.isArray(parsedResult.live_updates)) parsedResult.live_updates = parsedResult.live_updates.map((u) => typeof u === "string" ? clamp(u) : u);
+      else if (typeof parsedResult.live_updates === "string") parsedResult.live_updates = clamp(parsedResult.live_updates);
     }
     if (!Array.isArray(parsedResult.related_queries) || parsedResult.related_queries.length === 0) {
-      parsedResult.related_queries = [
-        `Key milestones of ${parsedResult.topic_title}`,
-        `Exam questions on ${parsedResult.topic_title}`,
-        `Latest 2026 updates regarding ${parsedResult.topic_title}`
-      ];
+      parsedResult.related_queries = [`Key milestones of ${parsedResult.topic_title}`, `Exam questions on ${parsedResult.topic_title}`];
     }
     res.json(parsedResult);
   } catch (error) {
-    console.error("[live-study-tutor] Fatal error:", error);
-    res.status(500).json({
-      error: error.message || "Failed to conduct deep research search. Please try again.",
-      success: false
-    });
+    console.error("[live-study-tutor] Fatal:", error);
+    res.status(500).json({ error: error.message || "Deep research failed. Please try again.", success: false });
   }
 });
 var dailySharedTriviaCache = {};
@@ -6568,7 +6459,7 @@ Return strictly a valid JSON object matching the requested schema with exactly $
         gradeLevel: studentGrade,
         stream: studentStream,
         country: studentCountry,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

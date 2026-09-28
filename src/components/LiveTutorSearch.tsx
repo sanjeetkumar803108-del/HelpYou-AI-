@@ -352,7 +352,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     }
     const abortController = new AbortController();
     activeAbortRef.current = abortController;
-    const timeoutId = setTimeout(() => abortController.abort(), 12000); // 12s - matches Vercel serverless timeout
+    const timeoutId = setTimeout(() => abortController.abort(), 25000); // 25s buffer for research synthesis // 12s - matches Vercel serverless timeout
 
     try {
       const currentNotes = localNotes.trim();

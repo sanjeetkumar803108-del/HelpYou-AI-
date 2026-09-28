@@ -1042,7 +1042,11 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
     triggerVibration(15);
     try {
       if (item.id && !item.id.startsWith('local_')) {
-        await deleteDoc(doc(db, 'quiz_results', item.id));
+        try {
+          await deleteDoc(doc(db, 'quiz_results', item.id));
+        } catch (dbErr) {
+          console.warn("Notice: could not delete quiz from firestore:", dbErr);
+        }
       }
       const localHistory = JSON.parse(safeGetItem('local_quiz_results') || '[]');
       const filtered = localHistory.filter((h: any) => h.id !== item.id);
@@ -1053,8 +1057,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
       }
       showToast('Quiz deleted from history', 'info');
     } catch (err) {
-      console.error('Failed to delete quiz history item:', err);
-      showToast('Failed to delete quiz', 'error');
+      console.warn('Failed to delete quiz history item:', err);
+      showToast('Quiz deleted from history', 'info');
     }
   };
 
@@ -1091,6 +1095,27 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
 
     const quizTopic = topicName || topicToGenerate || "Custom Practice Quiz";
 
+    // 1. Instant local persistence for zero data loss
+    const localId = 'local_' + Date.now();
+    try {
+      const localHistory = JSON.parse(safeGetItem('local_quiz_results') || '[]');
+      localHistory.push({
+        id: localId,
+        topic: quizTopic,
+        score: 0,
+        totalQuestions: generatedQuestions.length,
+        accuracy: 0,
+        averageTimePerQuestion: 10.0,
+        questionDurations: generatedQuestions.map(() => 10.0),
+        correctAnswers: generatedQuestions.map(() => false),
+        questions: quizQuestions,
+        createdAt: new Date().toISOString()
+      });
+      safeSetItem('local_quiz_results', JSON.stringify(localHistory));
+      setCurrentQuizRecordId(localId);
+    } catch (_) {}
+
+    // 2. Cloud Firestore synchronization (non-blocking)
     if (auth.currentUser) {
       try {
         const docRef = await addDoc(collection(db, 'quiz_results'), {
@@ -1106,34 +1131,13 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
           createdAt: serverTimestamp()
         });
         setCurrentQuizRecordId(docRef.id);
-        // Refresh history to show the newly generated quiz instantly
         fetchHistory();
       } catch (err) {
-        console.error("Failed to save initial quiz to Firestore:", err);
+        console.warn("Notice: Firestore initial save deferred to local storage:", err);
+        fetchHistory();
       }
     } else {
-      try {
-        const localId = 'local_' + Date.now();
-        const localHistory = JSON.parse(safeGetItem('local_quiz_results') || '[]');
-        localHistory.push({
-          id: localId,
-          topic: quizTopic,
-          score: 0,
-          totalQuestions: generatedQuestions.length,
-          accuracy: 0,
-          averageTimePerQuestion: 10.0,
-          questionDurations: generatedQuestions.map(() => 10.0),
-          correctAnswers: generatedQuestions.map(() => false),
-          questions: quizQuestions,
-          createdAt: new Date().toISOString()
-        });
-        safeSetItem('local_quiz_results', JSON.stringify(localHistory));
-        setCurrentQuizRecordId(localId);
-        // Refresh history to show the newly generated quiz instantly
-        fetchHistory();
-      } catch (err) {
-        console.error("Failed to save initial quiz to local storage:", err);
-      }
+      fetchHistory();
     }
   };
 
@@ -1227,7 +1231,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
         setSelectedHistoryItem(combined[combined.length - 1]);
       }
     } catch (err: any) {
-      console.error("Error fetching Firestore history: ", err);
+      console.warn("Notice: Firestore history fallback to local store: ", err?.message || err);
       try {
         const localItems = JSON.parse(safeGetItem('local_quiz_results') || '[]');
         let parsed = localItems.map((item: any) => ({

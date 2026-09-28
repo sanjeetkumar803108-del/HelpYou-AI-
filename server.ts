@@ -5780,7 +5780,7 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

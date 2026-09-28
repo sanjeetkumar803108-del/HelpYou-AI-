@@ -1901,7 +1901,7 @@ Please evaluate this answer strictly according to your system rubric.`;
           try {
             await deleteDoc(doc(db, 'ai_tutor_chats', item.id));
           } catch (err) {
-            console.error("Failed to delete old ai_tutor_chats item:", err);
+            console.warn("Notice: skipped cleaning legacy chat document:", err);
           }
         }
         setSavedChats(toKeep);

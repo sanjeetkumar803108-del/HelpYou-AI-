@@ -352,7 +352,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     }
     const abortController = new AbortController();
     activeAbortRef.current = abortController;
-    const timeoutId = setTimeout(() => abortController.abort(), 45000); // 45s safety timeout for in-depth research
+    const timeoutId = setTimeout(() => abortController.abort(), 60000); // 60s safety timeout for in-depth research
 
     try {
       const currentNotes = localNotes.trim();

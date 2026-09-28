@@ -5903,14 +5903,15 @@ Return strictly the JSON structure specified above.`;
         stream: academicStream,
         country,
         model: "gemini-3.5-flash-lite",
+        timeoutMs: 32e3,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 750
+          maxOutputTokens: 550
         }
-      });
+      }, 1);
       rawText = response.text || "";
       parsedResult = safeParseJSON(rawText, "object");
       if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) {

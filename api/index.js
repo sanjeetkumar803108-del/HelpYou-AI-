@@ -5992,6 +5992,7 @@ ${(s.snippet || "").replace(/<[^>]+>/g, " ").trim()}`) : [`Verified academic sum
       parsedResult = {
         topic_title: cleanTopic,
         match_score: "94%",
+        debug_ai_error: aiErr?.message || String(aiErr),
         research_mode: isComplexQuery ? "deep_research" : "quick_concept",
         live_updates: updates,
         action_steps: [

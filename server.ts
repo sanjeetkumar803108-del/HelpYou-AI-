@@ -752,18 +752,22 @@ ${pedagogicalDirective}`;
     params.model.includes("clip")
   ));
 
-  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-flash-latest");
-  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5") || requestedModel.includes("lite") || requestedModel.includes("3.5"))) {
-    requestedModel = "gemini-flash-latest";
+  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-flash-lite-latest");
+  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
+    requestedModel = "gemini-flash-lite-latest";
   }
   let modelsToTry = isAudioModel 
     ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean)
     : isSpecialtyModel 
       ? [requestedModel] 
       : [
-          "gemini-flash-latest",
-          "gemini-3.8-flash"
-        ].filter((value, index, self) => self.indexOf(value) === index);
+          requestedModel,
+          "gemini-flash-lite-latest",
+          "gemini-3.1-flash-lite",
+          "gemini-3.6-flash",
+          "gemini-3.5-flash",
+          "gemini-flash-latest"
+        ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -1421,8 +1425,11 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-flash-latest",
-        "gemini-3.8-flash"
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest"
       ];
 
       const now = Date.now();
@@ -1911,8 +1918,11 @@ IF FORMAT IS "Explain Like I'm 5":
 
     // Model fallback chain for summarize — try ultra-fast models first
     const summarizeModels = [
-      "gemini-flash-latest",
-      "gemini-3.8-flash"
+      "gemini-flash-lite-latest",
+      "gemini-3.1-flash-lite",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-flash-latest"
     ];
     let summaryText = "";
     let summarizeError: any = null;
@@ -2201,8 +2211,11 @@ GIBBERISH / RANDOM TYPING GUARD:
 
     const originalModel = "gemini-flash-latest";
     let modelsToTry = [
-      "gemini-flash-latest",
-      "gemini-3.8-flash"
+      "gemini-flash-lite-latest",
+      "gemini-3.1-flash-lite",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-flash-latest"
     ];
 
     const now = Date.now();
@@ -3537,8 +3550,11 @@ You must return your output strictly in JSON format matching the following schem
 
     // Model fallback chain for fast and robust responses
     const grammarModels = [
-      "gemini-flash-latest",
-      "gemini-3.8-flash"
+      "gemini-flash-lite-latest",
+      "gemini-3.1-flash-lite",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-flash-latest"
     ];
     let response: any = null;
     let grammarError: any = null;
@@ -3797,8 +3813,11 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
 
     // Model fallback chain for text summarize
     const textSumModels = [
-      "gemini-flash-latest",
-      "gemini-3.8-flash"
+      "gemini-flash-lite-latest",
+      "gemini-3.1-flash-lite",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-flash-latest"
     ];
     let textSummaryResult = "";
     let textSumError: any = null;
@@ -3924,7 +3943,7 @@ For each question, provide:
         gradeLevel,
         stream,
         country,
-        model: "gemini-flash-latest",
+        model: "gemini-flash-lite-latest",
         contents: { parts: [{ text: userPrompt }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5756,7 +5775,7 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-flash-latest",
+        model: "gemini-flash-lite-latest",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6560,13 +6579,13 @@ Return strictly the JSON structure specified above.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-flash-latest",
+        model: "gemini-flash-lite-latest",
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 2048
+          maxOutputTokens: 1500
         }
       });
       rawText = response.text || "";
@@ -6577,7 +6596,10 @@ Return strictly the JSON structure specified above.`;
     } catch (aiErr: any) {
       console.warn("[live-study-tutor] AI generation failed or busy, constructing grounded research from web context:", aiErr?.message || aiErr);
       const updates = searchResults.length > 0 
-        ? searchResults.map(s => `**${s.title}** (${s.sourceName})\n${s.snippet}`)
+        ? searchResults.map(s => {
+            const cleanSnippet = (s.snippet || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            return `**${s.title}** (${s.sourceName})\n${cleanSnippet}`;
+          })
         : [rawText || `Live verified information retrieved for **${rawQuery}**.`];
 
       parsedResult = {

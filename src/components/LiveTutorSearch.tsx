@@ -196,72 +196,6 @@ function getFriendlyErrorMessage(err: any): string {
 export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
   const isVip = isProUser();
 
-  if (!isVip) {
-    return (
-      <div className="w-full h-full flex flex-col justify-between bg-gradient-to-b from-slate-50 via-white to-blue-50/30 overflow-hidden min-h-[500px]">
-        {/* Navbar */}
-        <div className="px-6 py-5 flex items-center justify-between border-b border-zinc-200/60 bg-white/80 backdrop-blur-md">
-          <button
-            onClick={onBack}
-            className="w-10 h-10 rounded-2xl flex items-center justify-center bg-zinc-100/90 border border-zinc-200/60 text-zinc-700 hover:text-zinc-950 shadow-xs active:scale-95 transition-all cursor-pointer"
-          >
-            <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
-          </button>
-          <span className="font-black text-blue-600 text-xs tracking-widest uppercase flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            VIP Research Engine
-          </span>
-          <div className="w-10 h-10" />
-        </div>
-
-        {/* Lock Overlay Content */}
-        <div className="flex-1 flex flex-col justify-center items-center p-8 text-center max-w-md mx-auto">
-          <div className="relative mb-6">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/25">
-              <Lock className="w-9 h-9" />
-            </div>
-            <motion.div
-              animate={{ scale: [1, 1.25, 1], opacity: [0.3, 0.7, 0.3] }}
-              transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
-              className="absolute -inset-2 rounded-3xl bg-blue-500/20 -z-10 blur-sm"
-            />
-          </div>
-          
-          <h2 className="text-2xl font-black text-zinc-900 tracking-tight">
-            Deep Search AI is VIP Only! 🌟
-          </h2>
-          
-          <p className="text-sm font-semibold text-zinc-500 mt-2.5 leading-relaxed">
-            Unlock 100% verified real-time web grounding, breaking news, 2026 exam calendars, and multi-source research intelligence with VIP!
-          </p>
-
-          <div className="w-full bg-white border border-blue-100/80 rounded-3xl p-5 my-6 space-y-3.5 shadow-sm text-left">
-            <div className="flex items-center gap-3 text-xs font-black text-zinc-800">
-              <span className="w-7 h-7 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">🌐</span>
-              <span>Google News Live & Wikipedia REST Index</span>
-            </div>
-            <div className="flex items-center gap-3 text-xs font-black text-zinc-800">
-              <span className="w-7 h-7 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">⚡</span>
-              <span>100% Direct Working Links (0 Broken 404s)</span>
-            </div>
-            <div className="flex items-center gap-3 text-xs font-black text-zinc-800">
-              <span className="w-7 h-7 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">📑</span>
-              <span>Multi-Paragraph Deep Explanations in Hinglish/Hindi</span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('open-vip-modal'))}
-            className="w-full py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-sm rounded-2xl shadow-lg shadow-blue-500/25 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer border-none"
-          >
-            <Sparkles className="w-4 h-4 text-amber-300 fill-amber-300" />
-            Unlock Deep Search with VIP PRO
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const [query, setQuery] = useState('');
   const [localNotes, setLocalNotes] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'news' | 'stem' | 'history'>('all');
@@ -392,7 +326,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     setHighlightedSourceIdx(null);
 
     const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 20000); // 20s safety timeout
+    const timeoutId = setTimeout(() => abortController.abort(), 60000); // 60s safety timeout for in-depth research
 
     try {
       const currentNotes = localNotes.trim();
@@ -427,7 +361,10 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
 
       let formattedResult: SearchResult;
       if (data && typeof data === 'object') {
-        const updates = data.live_updates || data.updates || data.content || data.summary || data.text || data.explanation || "";
+        const rawUpdates = data.live_updates || data.updates || data.content || data.summary || data.text || data.explanation || "";
+        const updates = Array.isArray(rawUpdates)
+          ? rawUpdates.map(u => typeof u === 'string' ? u : (u?.text || u?.point || u?.update || JSON.stringify(u)))
+          : (typeof rawUpdates === 'string' ? rawUpdates : JSON.stringify(rawUpdates));
         
         // Hard filter to eliminate any Wikipedia links from output
         const rawSourceLinks = Array.isArray(data.source_links) ? data.source_links : [];
@@ -441,7 +378,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
         formattedResult = {
           topic_title: data.topic_title || data.title || activeQuery,
           live_updates: updates,
-          match_score: data.match_score || '98%',
+          match_score: String(data.match_score || '98%'),
           action_steps: Array.isArray(data.action_steps) ? data.action_steps : (data.steps || []),
           pro_tips: data.pro_tips || data.tip || '',
           related_queries: Array.isArray(data.related_queries) ? data.related_queries : [],

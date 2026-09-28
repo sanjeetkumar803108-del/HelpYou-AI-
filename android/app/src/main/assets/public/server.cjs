@@ -630,16 +630,15 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(import_genai.Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.6-flash";
-  if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash") || requestedModel.includes("3.1-flash") || requestedModel.includes("3.5-flash"))) {
-    requestedModel = "gemini-3.6-flash";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.1-flash-lite";
+  if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash") || requestedModel.includes("preview") || requestedModel.includes("3.5-flash") || requestedModel.includes("3.8-flash"))) {
+    requestedModel = "gemini-3.1-flash-lite";
   }
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
+    "gemini-3.1-flash-lite",
     "gemini-3.6-flash",
-    "gemini-3.7-flash",
-    "gemini-3-flash-preview",
-    "gemini-flash-latest"
+    "gemini-3.7-flash"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -5878,8 +5877,8 @@ Return ONLY the JSON.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-3.6-flash",
-        timeoutMs: 6500,
+        model: "gemini-3.1-flash-lite",
+        timeoutMs: 9e3,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5893,9 +5892,9 @@ Return ONLY the JSON.`;
     } catch (aiErr) {
       console.warn("[live-study-tutor] AI fallback:", aiErr?.message);
       const updates = searchResults.length > 0 ? searchResults.slice(0, 4).map((s) => `**${s.title}** (${s.sourceName})
-${(s.snippet || "").replace(/<[^>]+>/g, " ").trim()}`) : [`Verified info for **${rawQuery}** \uFFFD tap Search Again for AI analysis.`];
+${(s.snippet || "").replace(/<[^>]+>/g, " ").trim()}`) : [`Verified info for **${rawQuery}** \u2014 tap Search Again for AI analysis.`];
       parsedResult = {
-        topic_title: (keywords[0] || rawQuery).slice(0, 40),
+        topic_title: rawQuery || keywords[0] || "Research Breakdown",
         match_score: "94%",
         live_updates: updates,
         action_steps: [`Review concepts of ${keywords[0] || rawQuery}`, "Tap Search Again for full AI analysis"],

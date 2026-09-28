@@ -752,12 +752,12 @@ ${pedagogicalDirective}`;
     params.model.includes("clip")
   ));
 
-  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.1-flash-lite-preview");
+  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.6-flash");
   // Normalize deprecated/retired model names to live active models
   if (!isAudioModel && requestedModel && (
-    requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash")
+    requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash") || requestedModel.includes("3.1-flash") || requestedModel.includes("3.5-flash")
   )) {
-    requestedModel = "gemini-3.1-flash-lite-preview";
+    requestedModel = "gemini-3.6-flash";
   }
   let modelsToTry = isAudioModel 
     ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean)
@@ -765,10 +765,10 @@ ${pedagogicalDirective}`;
       ? [requestedModel] 
       : [
           requestedModel,
-          "gemini-3.1-flash-lite-preview",
           "gemini-3.6-flash",
-          "gemini-flash-lite-latest",
-          "gemini-3.5-flash-lite"
+          "gemini-3.7-flash",
+          "gemini-3-flash-preview",
+          "gemini-flash-latest"
         ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -5781,7 +5781,7 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-1.5-flash-8b",
+        model: "gemini-3.6-flash",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6522,7 +6522,7 @@ Return ONLY the JSON.`;
     try {
       const resp = await safeGenerateContent({
         gradeLevel, stream: academicStream, country,
-        model: "gemini-3.1-flash-lite-preview",
+        model: "gemini-3.6-flash",
         timeoutMs: 6500,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {

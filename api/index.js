@@ -597,16 +597,16 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.1-flash-lite-preview";
-  if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash"))) {
-    requestedModel = "gemini-3.1-flash-lite-preview";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.6-flash";
+  if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash") || requestedModel.includes("3.1-flash") || requestedModel.includes("3.5-flash"))) {
+    requestedModel = "gemini-3.6-flash";
   }
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
-    "gemini-3.1-flash-lite-preview",
     "gemini-3.6-flash",
-    "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite"
+    "gemini-3.7-flash",
+    "gemini-3-flash-preview",
+    "gemini-flash-latest"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -5187,7 +5187,7 @@ ${avoidList.map((p, i) => `  [${i + 1}] ${p.slice(0, 100)}`).join("\n")}` : "";
         gradeLevel,
         stream,
         country,
-        model: "gemini-1.5-flash-8b",
+        model: "gemini-3.6-flash",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5845,7 +5845,7 @@ Return ONLY the JSON.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-3.1-flash-lite-preview",
+        model: "gemini-3.6-flash",
         timeoutMs: 6500,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {

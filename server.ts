@@ -6646,6 +6646,7 @@ Return strictly the JSON structure specified above.`;
       parsedResult = {
         topic_title: cleanTopic,
         match_score: "94%",
+        debug_ai_error: aiErr?.message || String(aiErr),
         live_updates: updates,
         action_steps: [
           `Review the fundamental concepts and principles of ${cleanTopic}`,

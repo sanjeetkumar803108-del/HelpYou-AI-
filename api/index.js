@@ -597,18 +597,15 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.5-flash-lite";
-  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
-    requestedModel = "gemini-3.5-flash-lite";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-1.5-flash-8b";
+  if (!isAudioModel && requestedModel && (requestedModel.includes("3.5-flash-lite") || requestedModel.includes("3.8-flash") || requestedModel.includes("3.6-flash") || requestedModel.includes("3.1-flash-lite") || requestedModel.includes("flash-lite-latest") || requestedModel.includes("flash-latest"))) {
+    requestedModel = "gemini-1.5-flash-8b";
   }
-  let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
+  let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
-    "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-3.1-flash-lite",
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-flash-latest"
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -891,7 +888,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
       stream,
       country,
       profileContext,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
         responseMimeType: "application/json",
@@ -1201,12 +1198,12 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     }
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite",
-        "gemini-3.6-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash",
         "gemini-3.5-flash",
-        "gemini-flash-latest"
+        "gemini-1.5-flash"
       ];
       const now = Date.now();
       const activeModels = [];
@@ -1268,7 +1265,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-1.5-flash-8b",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1342,7 +1339,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-1.5-flash-8b",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1376,7 +1373,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         stream: effectiveStream,
         country,
         profileContext,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents,
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1654,12 +1651,12 @@ ${extractedText}` };
       return res.status(400).json({ error: "Document content is too short or empty to process." });
     }
     const summarizeModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let summaryText = "";
     let summarizeError = null;
@@ -1928,14 +1925,14 @@ MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX):
 
 GIBBERISH / RANDOM TYPING GUARD:
 - If the submitted text consists of random typing, keyboard mashing, or lacks coherent sentences, output under the score header: "The submitted text does not contain a coherent essay or recognizable arguments. Please submit a valid written essay to receive full rubric assessment and constructive feedback."`;
-    const originalModel = "gemini-flash-latest";
+    const originalModel = "gemini-1.5-flash";
     let modelsToTry = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     const now = Date.now();
     const activeModels = [];
@@ -2050,7 +2047,7 @@ GIBBERISH / RANDOM TYPING GUARD:
           stream,
           country,
           profileContext,
-          model: "gemini-3.5-flash-lite",
+          model: "gemini-1.5-flash-8b",
           contents: [{
             parts: [
               ...contentParts,
@@ -2108,7 +2105,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
       }
     };
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2228,7 +2225,7 @@ Return ONLY valid raw JSON conforming strictly to this schema:
   ]
 }`;
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2327,7 +2324,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
       }
     }));
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2389,7 +2386,7 @@ Format:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{
         role: "user",
         parts: [{ text: `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount} cards:
@@ -2488,7 +2485,7 @@ Format:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{
         parts: [
           pdfPart,
@@ -2814,7 +2811,7 @@ ${previousSummary}
 Student's Request: "${followUp}"`;
       const response2 = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: promptText }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] }
@@ -2873,7 +2870,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 \`[SUGGESTION: Deep dive into the first half]\``;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: transcriptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -3022,7 +3019,7 @@ CRITICAL EXECUTION:
       gradeLevel,
       stream,
       country,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3111,11 +3108,11 @@ You must return your output strictly in JSON format matching the following schem
     const targetText = trimmed || "Please read the text inside the attached image(s), correct any grammatical errors, and enhance it according to the chosen mode.";
     contentParts.push({ text: targetText });
     const grammarModels = [
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let response = null;
     let grammarError = null;
@@ -3336,12 +3333,12 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
    This ensures crisp, beautiful KaTeX rendering for the student.
 4. Ensure there is a blank line before and after every heading and list block.`;
     const textSumModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let textSummaryResult = "";
     let textSumError = null;
@@ -3477,7 +3474,7 @@ For each question, provide:
         gradeLevel,
         stream,
         country,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: userPrompt }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -4167,7 +4164,7 @@ Return ONLY a valid JSON array of objects with this exact structure:
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-1.5-flash-8b",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Multiple Choice Questions (MCQs) for this batch.
@@ -4386,7 +4383,7 @@ NEVER include multiple-choice options A/B/C/D in subjective output.`;
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-1.5-flash-8b",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Free Response / Subjective Questions for this batch.
@@ -4517,7 +4514,7 @@ STRICT JSON OUTPUT FORMAT:
 }`;
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Question: ${questionPrompt || "AP Question"}
 Student Chose / Mistake: ${wrongInput || "Distractor Trap"}
 Correct Concept / Target: ${correctConcept || "CED Standard"}
@@ -4623,7 +4620,7 @@ STRICT JSON OUTPUT FORMAT (WHEN VALID):
       contentParts.push({ text: customQuestion || "Analyze this AP multiple-choice question and expose every trap option." });
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: contentParts },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] },
@@ -4735,7 +4732,7 @@ Step 4 (Interpretation): This value represents the total path length traveled by
 ]`;
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Generate ${requestedCount2} authentic AP ${subject} Free Response Trap Radar questions for ${targetTopic}.` }] },
         config: {
           systemInstruction: { parts: [{ text: subjectiveSystemInstruction }] },
@@ -4860,7 +4857,7 @@ Return ONLY a valid JSON array of question objects:
 ]`;
     const response = await safeGenerateContent({
       gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: `Generate ${requestedCount} authentic AP ${subject} Trap Radar questions for ${targetTopic}.` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5013,7 +5010,7 @@ ${image ? "IMPORTANT: The student has provided an attached photo containing thei
     });
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ role: "user", parts }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -5131,7 +5128,7 @@ Disarm Secret Note: ${disarmStrategy}
 ${promptGoal}`;
     const response = await safeGenerateContent({
       gradeLevel: "AP High School (Advanced Placement)",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: userPrompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5189,12 +5186,12 @@ ${avoidList.map((p, i) => `  [${i + 1}] ${p.slice(0, 100)}`).join("\n")}` : "";
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: Math.min(requestedCount * 350, 8192),
+          maxOutputTokens: Math.min(requestedCount * 400, 8192),
           temperature: 0.6
         }
       });
@@ -5313,7 +5310,7 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{
           parts: [{ text: `DOCUMENT CONTENT:
 ${slicedText}
@@ -5338,7 +5335,7 @@ Generate the ${requestedCount}-question JSON quiz now based strictly on the cont
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{
           parts: [
             pdfPart,
@@ -5420,7 +5417,7 @@ Use this exact JSON structure:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions for a student in Grade: ${gradeLevel || "Standard"}.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5561,7 +5558,7 @@ Analyze this mistake and provide the 3-part JSON fix for this grade level.`;
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5646,7 +5643,7 @@ Goal: Generate a master-level ${isHint ? "question breakdown and 3 progressive h
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5699,7 +5696,7 @@ Generate 3 fresh similar practice questions to help the student master this conc
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5902,16 +5899,16 @@ Return strictly the JSON structure specified above.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-3.5-flash-lite",
-        timeoutMs: 32e3,
+        model: "gemini-1.5-flash-8b",
+        timeoutMs: 8e3,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 550
+          maxOutputTokens: 1800
         }
-      }, 1);
+      }, 2);
       rawText = response.text || "";
       parsedResult = safeParseJSON(rawText, "object");
       if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) {
@@ -6535,7 +6532,7 @@ Return strictly a valid JSON object matching the requested schema with exactly $
         gradeLevel: studentGrade,
         stream: studentStream,
         country: studentCountry,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

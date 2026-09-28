@@ -752,22 +752,24 @@ ${pedagogicalDirective}`;
     params.model.includes("clip")
   ));
 
-  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.5-flash-lite");
-  if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
-    requestedModel = "gemini-3.5-flash-lite";
+  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-1.5-flash-8b");
+  // Only normalize if the requested model itself is a known fake/non-existent name
+  if (!isAudioModel && requestedModel && (
+    requestedModel.includes("3.5-flash-lite") || requestedModel.includes("3.8-flash") ||
+    requestedModel.includes("3.6-flash") || requestedModel.includes("3.1-flash-lite") ||
+    requestedModel.includes("flash-lite-latest") || requestedModel.includes("flash-latest")
+  )) {
+    requestedModel = "gemini-1.5-flash-8b";
   }
   let modelsToTry = isAudioModel 
-    ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean)
+    ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean)
     : isSpecialtyModel 
       ? [requestedModel] 
       : [
           requestedModel,
-          "gemini-3.5-flash-lite",
-          "gemini-flash-lite-latest",
-          "gemini-3.1-flash-lite",
-          "gemini-3.8-flash",
-          "gemini-3.6-flash",
-          "gemini-flash-latest"
+          "gemini-1.5-flash-8b",
+          "gemini-1.5-flash",
+          "gemini-2.0-flash"
         ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -1090,7 +1092,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL:
       stream,
       country,
       profileContext,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
         responseMimeType: "application/json",
@@ -1426,12 +1428,12 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite",
-        "gemini-3.6-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-flash",
         "gemini-3.5-flash",
-        "gemini-flash-latest"
+        "gemini-1.5-flash"
       ];
 
       const now = Date.now();
@@ -1511,7 +1513,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-1.5-flash-8b",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1583,7 +1585,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-1.5-flash-8b",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1615,7 +1617,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         stream: effectiveStream,
         country,
         profileContext,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents,
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1920,12 +1922,12 @@ IF FORMAT IS "Explain Like I'm 5":
 
     // Model fallback chain for summarize — try ultra-fast models first
     const summarizeModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let summaryText = "";
     let summarizeError: any = null;
@@ -2212,14 +2214,14 @@ MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX):
 GIBBERISH / RANDOM TYPING GUARD:
 - If the submitted text consists of random typing, keyboard mashing, or lacks coherent sentences, output under the score header: "The submitted text does not contain a coherent essay or recognizable arguments. Please submit a valid written essay to receive full rubric assessment and constructive feedback."`;
 
-    const originalModel = "gemini-flash-latest";
+    const originalModel = "gemini-1.5-flash";
     let modelsToTry = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
 
     const now = Date.now();
@@ -2350,7 +2352,7 @@ GIBBERISH / RANDOM TYPING GUARD:
           stream,
           country,
           profileContext,
-          model: "gemini-3.5-flash-lite",
+          model: "gemini-1.5-flash-8b",
           contents: [{
             parts: [
               ...contentParts,
@@ -2413,7 +2415,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
     };
 
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2538,7 +2540,7 @@ Return ONLY valid raw JSON conforming strictly to this schema:
 }`;
 
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2669,7 +2671,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
     }));
 
     const response = await safeGenerateContent({
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [
         {
           parts: [
@@ -2737,7 +2739,7 @@ Format:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{
         role: "user",
         parts: [{ text: `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || 'Standard'}. You must provide all ${requestedCount} cards:\n\n${text}` }]
@@ -2842,7 +2844,7 @@ Format:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{
         parts: [
           pdfPart,
@@ -3223,7 +3225,7 @@ Student's Request: "${followUp}"`;
 
       const response = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: promptText }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -3294,7 +3296,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: transcriptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -3456,7 +3458,7 @@ CRITICAL EXECUTION:
       gradeLevel,
       stream,
       country,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: promptText }] },
       config: { 
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3554,11 +3556,11 @@ You must return your output strictly in JSON format matching the following schem
 
     // Model fallback chain for fast and robust responses
     const grammarModels = [
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let response: any = null;
     let grammarError: any = null;
@@ -3817,12 +3819,12 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
 
     // Model fallback chain for text summarize
     const textSumModels = [
-      "gemini-3.5-flash-lite",
-      "gemini-flash-lite-latest",
-      "gemini-3.1-flash-lite",
-      "gemini-3.6-flash",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash",
       "gemini-3.5-flash",
-      "gemini-flash-latest"
+      "gemini-1.5-flash"
     ];
     let textSummaryResult = "";
     let textSumError: any = null;
@@ -3948,7 +3950,7 @@ For each question, provide:
         gradeLevel,
         stream,
         country,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: userPrompt }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -4726,7 +4728,7 @@ Return ONLY a valid JSON array of objects with this exact structure:
         const makeCall = async (seed: string): Promise<any[]> => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-1.5-flash-8b",
             timeoutMs: 90000,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Multiple Choice Questions (MCQs) for this batch.
@@ -4959,7 +4961,7 @@ NEVER include multiple-choice options A/B/C/D in subjective output.`;
         const makeCall = async (seed: string): Promise<any[]> => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-3.5-flash-lite",
+            model: "gemini-1.5-flash-8b",
             timeoutMs: 90000,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Free Response / Subjective Questions for this batch.
@@ -5099,7 +5101,7 @@ STRICT JSON OUTPUT FORMAT:
 
       const response = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Question: ${questionPrompt || 'AP Question'}\nStudent Chose / Mistake: ${wrongInput || 'Distractor Trap'}\nCorrect Concept / Target: ${correctConcept || 'CED Standard'}\nTrap Type: ${trapType || 'Psychometric Trap'}` }] },
         config: {
           systemInstruction: { parts: [{ text: explainSystemInstruction }] },
@@ -5208,7 +5210,7 @@ STRICT JSON OUTPUT FORMAT (WHEN VALID):
 
       const response = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: contentParts },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5325,7 +5327,7 @@ Return ONLY a valid JSON array of question objects:
 
       const response = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Generate ${requestedCount} authentic AP ${subject} Free Response Trap Radar questions for ${targetTopic}.` }] },
         config: {
           systemInstruction: { parts: [{ text: subjectiveSystemInstruction }] },
@@ -5456,7 +5458,7 @@ Return ONLY a valid JSON array of question objects:
 
     const response = await safeGenerateContent({
       gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: `Generate ${requestedCount} authentic AP ${subject} Trap Radar questions for ${targetTopic}.` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5618,7 +5620,7 @@ ${image ? 'IMPORTANT: The student has provided an attached photo containing thei
 
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ role: "user", parts }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -5716,7 +5718,7 @@ CRITICAL SOCRATIC AP TUTORING PRINCIPLES:
 
     const response = await safeGenerateContent({
       gradeLevel: "AP High School (Advanced Placement)",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: { parts: [{ text: userPrompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -5780,12 +5782,12 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: Math.min(requestedCount * 350, 8192),
+          maxOutputTokens: Math.min(requestedCount * 400, 8192),
           temperature: 0.6
         }
       });
@@ -5918,7 +5920,7 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{
           parts: [{ text: `DOCUMENT CONTENT:\n${slicedText}\n\nGenerate the ${requestedCount}-question JSON quiz now based strictly on the content above for a student in Grade: ${gradeLevel || 'Standard'}.` }]
         }],
@@ -5941,7 +5943,7 @@ Use this exact JSON structure:
         gradeLevel,
         stream,
         country,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{
           parts: [
             pdfPart,
@@ -6028,7 +6030,7 @@ Use this exact JSON structure:
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions for a student in Grade: ${gradeLevel || 'Standard'}.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6215,7 +6217,7 @@ Analyze this mistake and provide the 3-part JSON fix for this grade level.`;
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6307,7 +6309,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6366,7 +6368,7 @@ Generate 3 fresh similar practice questions to help the student master this conc
       gradeLevel,
       stream,
       country,
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-1.5-flash-8b",
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6584,16 +6586,16 @@ Return strictly the JSON structure specified above.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-3.5-flash-lite",
-        timeoutMs: 32000,
+        model: "gemini-1.5-flash-8b",
+        timeoutMs: 8000,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 550
+          maxOutputTokens: 1800
         }
-      }, 1);
+      }, 2);
       rawText = response.text || "";
       parsedResult = safeParseJSON(rawText, 'object');
       if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) {
@@ -7286,7 +7288,7 @@ Return strictly a valid JSON object matching the requested schema with exactly $
         gradeLevel: studentGrade,
         stream: studentStream,
         country: studentCountry,
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-1.5-flash-8b",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

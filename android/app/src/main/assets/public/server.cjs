@@ -630,14 +630,14 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(import_genai.Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.6-flash";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.1-flash-lite";
   if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash") || requestedModel.includes("preview") || requestedModel.includes("3.5-flash") || requestedModel.includes("3.8-flash"))) {
-    requestedModel = "gemini-3.6-flash";
+    requestedModel = "gemini-3.1-flash-lite";
   }
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
-    "gemini-3.6-flash",
     "gemini-3.1-flash-lite",
+    "gemini-3.6-flash",
     "gemini-3.7-flash"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
@@ -5895,9 +5895,7 @@ Publisher: ${s.sourceName} (${s.pubDate || "Recent"})
 Snippet: ${s.snippet}
 `
     ).join("\n---\n");
-    const systemInstruction = `${gradeDirective}
-
-You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
+    const systemInstruction = `You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
 Current Real-Time Date: ${currentDateStr}. Treat this as the absolute present moment.
 Your mission is to provide 100% accurate, up-to-date, grounded answers for student queries.
 
@@ -5980,14 +5978,14 @@ Return strictly the JSON structure specified above.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-3.6-flash",
-        timeoutMs: 12e3,
+        model: "gemini-3.1-flash-lite",
+        timeoutMs: 9e3,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.3,
-          maxOutputTokens: 2e3
+          maxOutputTokens: 1500
         }
       }, 2);
       parsedResult = safeParseJSON(resp.text || "", "object");

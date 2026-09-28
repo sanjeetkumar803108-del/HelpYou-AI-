@@ -752,12 +752,12 @@ ${pedagogicalDirective}`;
     params.model.includes("clip")
   ));
 
-  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.6-flash");
+  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.1-flash-lite");
   // Normalize deprecated/retired/overloaded model names to live active models
   if (!isAudioModel && requestedModel && (
     requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash") || requestedModel.includes("preview") || requestedModel.includes("3.5-flash") || requestedModel.includes("3.8-flash")
   )) {
-    requestedModel = "gemini-3.6-flash";
+    requestedModel = "gemini-3.1-flash-lite";
   }
   let modelsToTry = isAudioModel 
     ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean)
@@ -765,8 +765,8 @@ ${pedagogicalDirective}`;
       ? [requestedModel] 
       : [
           requestedModel,
-          "gemini-3.6-flash",
           "gemini-3.1-flash-lite",
+          "gemini-3.6-flash",
           "gemini-3.7-flash"
         ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
 
@@ -6544,9 +6544,7 @@ app.post("/api/live-study-tutor", async (req, res) => {
       `[Source ${idx+1}] Title: ${s.title}\nURL: ${s.uri}\nPublisher: ${s.sourceName} (${s.pubDate||'Recent'})\nSnippet: ${s.snippet}\n`
     ).join('\n---\n');
 
-    const systemInstruction = `${gradeDirective}
-
-You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
+    const systemInstruction = `You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
 Current Real-Time Date: ${currentDateStr}. Treat this as the absolute present moment.
 Your mission is to provide 100% accurate, up-to-date, grounded answers for student queries.
 
@@ -6627,14 +6625,14 @@ Return strictly the JSON structure specified above.`;
     try {
       const resp = await safeGenerateContent({
         gradeLevel, stream: academicStream, country,
-        model: "gemini-3.6-flash",
-        timeoutMs: 12000,
+        model: "gemini-3.1-flash-lite",
+        timeoutMs: 9000,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.3,
-          maxOutputTokens: 2000
+          maxOutputTokens: 1500
         }
       }, 2);
       parsedResult = safeParseJSON(resp.text || "", 'object');

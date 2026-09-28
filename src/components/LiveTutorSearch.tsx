@@ -39,6 +39,7 @@ interface SearchResult {
   source_links: string[];
   detailed_sources?: DetailedSource[];
   text?: string;
+  research_mode?: 'deep_research' | 'quick_concept';
 }
 
 const getCleanDomain = (url: string) => {
@@ -404,6 +405,7 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
           topic_title: data.topic_title || data.title || activeQuery,
           live_updates: updates,
           match_score: String(data.match_score || '98%'),
+          research_mode: data.research_mode || 'deep_research',
           action_steps: Array.isArray(data.action_steps) ? data.action_steps : (data.steps || []),
           pro_tips: data.pro_tips || data.tip || '',
           related_queries: Array.isArray(data.related_queries) ? data.related_queries : [],
@@ -869,10 +871,23 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                 >
                   {/* Topic Title & Executive Relevance Card */}
                   <div className="bg-white rounded-3xl p-5 sm:p-6 border-l-4 border-l-blue-600 border border-zinc-200/80 shadow-sm space-y-4">
-                    {/* Full-width Title: clean readable lines */}
-                    <h3 className="text-base sm:text-lg font-black text-zinc-900 tracking-tight leading-snug break-words">
-                      {searchResponse.topic_title}
-                    </h3>
+                    {/* Full-width Title with Adaptive Depth Badge */}
+                    <div className="flex flex-wrap items-center justify-between gap-2.5">
+                      <h3 className="text-base sm:text-lg font-black text-zinc-900 tracking-tight leading-snug break-words flex-1">
+                        {searchResponse.topic_title}
+                      </h3>
+                      {searchResponse.research_mode === 'quick_concept' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-full shrink-0 shadow-2xs">
+                          <Zap className="w-3 h-3 text-blue-600" />
+                          <span>Direct Concept</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 border border-purple-200/80 px-2.5 py-1 rounded-full shrink-0 shadow-2xs">
+                          <Sparkles className="w-3 h-3 text-purple-600" />
+                          <span>Deep Academic Research</span>
+                        </span>
+                      )}
+                    </div>
 
                     {/* Live Updates & In-Depth Content */}
                     <div className="space-y-3">

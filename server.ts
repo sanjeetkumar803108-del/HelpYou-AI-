@@ -6525,14 +6525,20 @@ app.post("/api/live-study-tutor", async (req, res) => {
     }
 
     const keywords = extractSearchKeywords(rawQuery);
-    const isSmallOrDateQuery = rawQuery.split(/\s+/).length <= 8 ||
-      /\b(when|date|launch|born|died|kab|kitne|kitna|kaun|kisne|kisko|kaha|where|who is|what is|capital|full form|ceo|founder|prime minister|president|released|announced|exam date|admit card|score|result|headquarters|hq|established)\b/i.test(rawQuery);
+    
+    // Explicit depth keywords: derivations, proofs, mechanisms, complex problem solving
+    const isExplicitlyComplex = /\b(derive|derivation|proof|prove|mechanism|working principle|step by step|in detail|detailed|deep research|deeply|deep dive|explain thoroughly|samjhao vistar se|kaise kaam karta hai|difference between|compare|comparison|pathway|cycle|kinetics|thermodynamics|calculus|differential|integration|quantum|relativity|reaction mechanism|equation of|law of conservation|internal structure|architecture|synthesis|numerical|problem solving|advanced|hard|complex|tough)\b/i.test(rawQuery);
 
-    const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicStream, country);
+    const isExplicitlySimple = /\b(define|definition|what is|kya hai|kya hota hai|meaning of|full form|formula of|unit of|value of|si unit|symbol of|who is|who was|who invented|who discovered|capital of|where is|when was|when is|date of|kisne|kab|kaha|kitna|kitne)\b/i.test(rawQuery) && !isExplicitlyComplex;
+
+    const wordCount = rawQuery.trim().split(/\s+/).length;
+
+    // A query is COMPLEX if it explicitly asks for depth/derivation/mechanism or is a multi-concept deep query
+    const isComplexQuery = isExplicitlyComplex || (wordCount >= 9 && !isExplicitlySimple);
+    const isSimpleQuery = !isComplexQuery;
+
     const currentDateStr = new Date().toISOString().slice(0, 10);
 
-    // KEY FIX: Web search capped at 3.5s, then AI gets 5.5s = 9s total (within Vercel limit)
-    // Old flow: web(4.5s sequential) + AI(8s) = 12.5s -> Vercel timeout!
     const searchResults: any[] = await new Promise(resolve => {
       const t = setTimeout(() => resolve([]), 2000);
       performLiveWebSearch(rawQuery, keywords, country)
@@ -6546,36 +6552,48 @@ app.post("/api/live-study-tutor", async (req, res) => {
 
     const systemInstruction = `You are the lead intelligence engine for "Deep Search AI" in the "HelpYou AI" app.
 Current Real-Time Date: ${currentDateStr}. Treat this as the absolute present moment.
-Your mission is to provide 100% accurate, up-to-date, grounded answers for student queries.
+Your mission is to provide 100% accurate, up-to-date, grounded answers tailored precisely to student needs.
 
-CRITICAL ADAPTIVE FORMATTING & BEHAVIOR DIRECTIVE:
-1. QUERY INTENT CLASSIFICATION:
-${isSmallOrDateQuery ? `   - [ACTIVE MODE: DIRECT & CONCISE ANSWER]
-     * The user has asked a date, small query, or specific factual question ("${rawQuery}").
-     * GIVE A DIRECT, SIMPLE, CRISP ANSWER. Do NOT output a lengthy thesis or artificial 4-section report.
-     * The very first line/bullet of "live_updates" MUST state the exact answer or date IMMEDIATELY in bold (e.g. "**Chandrayaan-3 was launched on July 14, 2023 at 2:35 PM IST.**" or in Hinglish: "**Chandrayaan-3 ko 14 July 2023 ko dopehar 2:35 baje launch kiya gaya tha.**").
-     * Follow with 2 to 3 concise, high-value bullet points explaining essential verified context with citations [1], [2].
-     * Keep "action_steps" to 1-2 practical takeaways.` : `   - [ACTIVE MODE: STRUCTURED POINT-WISE BREAKDOWN]
-     * The user has asked a broad, academic, or complex topic ("${rawQuery}").
-     * Provide an elite, point-wise, structured research report with small markdown subheadings and clear bullet points.
-     * Organize cleanly into 3-4 logical subheadings (e.g., "### 📌 Core Background & Definition", "### 🔍 Key Mechanism & Process", "### ⚖️ Real-World Impact & Applications", "### 💡 High-Yield Exam Takeaways").
-     * Under each subheading, provide 2 to 3 detailed bullet points starting with bold anchors (* **Bold Concept:** explanation [1]).`}
+CRITICAL RESEARCH DEPTH & ADAPTIVE INTELLIGENCE:
+${isSimpleQuery ? `1. [ACTIVE MODE: SIMPLE & DIRECT CONCEPT OVERVIEW]
+   - The student has asked a simple, fundamental, or factual question ("${rawQuery}").
+   - DO NOT overwhelm the student with complex university thesis paragraphs or multi-page proofs.
+   - Bullet 1: Give the direct, crystal-clear definition or answer immediately in bold (e.g. in Hinglish: "**Velocity ka matlab hota hai kisi object ka ek specific direction me position change hone ki speed ($v = \\frac{\\Delta x}{\\Delta t}$).**").
+   - Bullet 2: Give an everyday, relatable real-world example or intuitive analogy that makes the concept unforgettable.
+   - Bullet 3: State the essential formula, standard SI units, or key property in crisp KaTeX ($...$).
+   - "action_steps": 1 to 2 easy, practical study checkpoints.
+   - "pro_tips": A fun, high-yield memory hook or mnemonic trick.
+   - "related_queries": 3 simple, natural follow-up questions strictly on this concept.` : `1. [ACTIVE MODE: DEEP MASTER-CLASS RESEARCH & DERIVATION]
+   - The student has asked a complex, hard, multi-concept academic topic or derivation ("${rawQuery}").
+   - Provide an elite, comprehensive, deep research report structured with clear markdown subheadings:
+     * "### 📌 Core Theory & Physical / Conceptual Foundation"
+       - Fundamental governing laws, assumptions, and physical/biological significance with citations [1].
+     * "### 🔬 Step-by-Step Mathematical Derivation / Chemical Mechanism / Core Architecture"
+       - Rigorous, explicit step-by-step derivation or chemical pathway.
+       - EVERY SINGLE intermediate step, integral, substitution, or reaction intermediate MUST be written in explicit KaTeX ($...$).
+       - Explain the physical reason behind each mathematical transition.
+     * "### ⚙️ Real-World Engineering / Scientific Applications & Edge Cases"
+       - Concrete industrial, biological, or technological application with practical parameters.
+     * "### 🎯 High-Yield Exam Traps & Common Misconceptions"
+       - Subtle edge cases, sign convention traps, or conditions where the formula fails where 90% of students lose marks.
+   - "action_steps": 2 to 3 rigorous, actionable practice steps for mastering this complex topic.
+   - "pro_tips": An expert educator alert highlighting the #1 mistake students make on this specific topic in competitive exams.
+   - "related_queries": 3 to 4 advanced, highly relevant follow-up questions directly expanding on this topic.`}
 
-2. REAL-TIME FACTUAL ACCURACY & CURRENT NEWS:
-   - Ground strictly in verified live context provided below.
-   - For latest news, dates, or current events, state exact real-world names, dates, organizations, or developments. Never guess or write vague summaries like "recently".
+2. REAL-TIME FACTUAL ACCURACY & GROUNDING:
+   - Ground strictly in verified live context provided below. Never guess or write vague filler.
 
 3. STRICT WIKIPEDIA HARD-BAN:
-   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles anywhere in your output.
-   - Strictly prioritize peer-reviewed journals, authoritative encyclopedias (Encyclopaedia Britannica), accredited national education boards (NCERT, CBSE, CollegeBoard), and verified global news wires.
+   - NEVER cite, link, or output "wikipedia.org" or "wikimedia.org" URLs or titles.
+   - Strictly prioritize peer-reviewed journals, Encyclopaedia Britannica, NCERT, CBSE, CollegeBoard, and official registries.
 
 4. MANDATORY INLINE CITATIONS PROTOCOL:
-   - Every single factual claim, statistic, date, or event in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...reaction occurs in thylakoid membranes [1]...").
-   - Every citation number [1], [2] MUST correspond directly to the 1-based index in "source_links".
+   - Every factual claim, statistic, date, or event in "live_updates" MUST include an inline numerical bracket citation immediately following the fact (e.g. "...reaction occurs in thylakoid membranes [1]...").
+   - Citations [1], [2] MUST correspond to the 1-based index in "source_links".
 
 5. LANGUAGE MATCHING & FRIENDLY TONE:
    - MATCH USER'S LANGUAGE EXACTLY: If user queries in Hinglish/Hindi (e.g. "Photosynthesis kya hota hai bhai" or "Newton ke laws batao"), explain in fluent, natural, student-friendly Hinglish/Hindi. If user asks in English, answer in polished English.
-   - Keep explanations encouraging, intuitive, and crystal-clear for school and college students without unnecessary textbook jargon.
+   - Maintain an encouraging, clear, master educator voice.
 
 6. MATHEMATICAL & SCIENTIFIC NOTATION (KaTeX):
    - Wrap ALL mathematical equations, expressions, variables, units, and chemical formulas ($H_2O$, $CO_2$, $C_6H_{12}O_6$, $F = ma$) in single dollar signs ($...$) for crisp LaTeX rendering.
@@ -6583,10 +6601,19 @@ ${isSmallOrDateQuery ? `   - [ACTIVE MODE: DIRECT & CONCISE ANSWER]
 7. HEADLINE:
    - "topic_title" MUST be a crisp, elegant headline of 3 to 6 words max.
 
+8. MANDATORY PRE-OUTPUT SELF-CRITIQUE & STUDENT HELPFULNESS AUDIT:
+   Before generating the final JSON response, you MUST internally verify:
+   a) [Relevance Audit]: Does this output directly and thoroughly answer what the student asked without generic dodging?
+   b) [Depth Calibration Audit]: If the query is simple, is the answer simple and clean? If the query is complex or hard, is the answer deeply researched with full derivations and mechanisms? (If a complex query got a shallow answer, DEEPEN IT IMMEDIATELY!).
+   c) [Student Helpfulness Audit]: Will this truly help the student understand and ace exams? Are all KaTeX formulas accurate?
+   d) [Topic-Specific Suggestions Audit]: Are "related_queries" 100% strictly about THIS SPECIFIC TOPIC and logically guide the student to the next academic concept? (NEVER provide generic or disconnected questions).
+   Only return the JSON when all checks pass with excellence.
+
 STRICT JSON OUTPUT FORMAT (Return ONLY valid JSON):
 {
   "topic_title": "Concise Main Headline (3-6 words)",
   "match_score": "98%",
+  "research_mode": "${isComplexQuery ? 'deep_research' : 'quick_concept'}",
   "live_updates": [
     "markdown formatted text / bullet points with citations [1], [2]"
   ],
@@ -6596,8 +6623,9 @@ STRICT JSON OUTPUT FORMAT (Return ONLY valid JSON):
   ],
   "pro_tips": "In-depth educator pro-tip, exam trap, or memory anchor.",
   "related_queries": [
-    "Follow-up research question 1",
-    "Follow-up research question 2"
+    "Topic-specific follow-up research question 1",
+    "Topic-specific follow-up research question 2",
+    "Topic-specific follow-up research question 3"
   ],
   "source_links": [
     "verified url 1",
@@ -6613,12 +6641,12 @@ STUDENT ACADEMIC PROFILE & LOCATION:
 ${profileContext ? `ADDITIONAL PROFILE CONTEXT:\n${profileContext}\n` : ""}
 ${studentNotes ? `STUDENT LOCAL STUDY NOTES / TARGET SYLLABUS:\n${studentNotes}\n` : ""}
 
+RESEARCH DEPTH SPECIFICATION:
+${isComplexQuery ? "MODE: DEEP MASTER-CLASS RESEARCH. Provide rigorous step-by-step mathematical derivations, complete chemical pathways, clear subheadings, and deep exam trap analyses." : "MODE: SIMPLE & DIRECT CONCEPT OVERVIEW. Provide a simple, crystal-clear definition in the first line, an everyday analogy, and standard formula/unit."}
+
 VERIFIED REAL-TIME LIVE WEB CONTEXT:
 ${verifiedCtx || "No external search feeds returned. Synthesize using accurate, verified ground truth from peer-reviewed databases."}
 
-${isSmallOrDateQuery 
-  ? "Generate a direct, simple, concise answer with the exact date/fact stated immediately in bold, followed by 2-3 crisp bullet points with inline citations." 
-  : "Generate an elite, point-wise, structured academic research report with small markdown subheadings (### ...) and bullet points with inline citations."}
 Return strictly the JSON structure specified above.`;
 
     let parsedResult: any = null;
@@ -6631,8 +6659,8 @@ Return strictly the JSON structure specified above.`;
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          temperature: 0.3,
-          maxOutputTokens: 1500
+          temperature: isComplexQuery ? 0.25 : 0.35,
+          maxOutputTokens: isComplexQuery ? 2200 : 1200
         }
       }, 2);
       parsedResult = safeParseJSON(resp.text || "", 'object');
@@ -6646,14 +6674,18 @@ Return strictly the JSON structure specified above.`;
       parsedResult = {
         topic_title: cleanTopic,
         match_score: "94%",
-        debug_ai_error: aiErr?.message || String(aiErr),
+        research_mode: isComplexQuery ? 'deep_research' : 'quick_concept',
         live_updates: updates,
         action_steps: [
           `Review the fundamental concepts and principles of ${cleanTopic}`,
           "Practice core problem sets to solidify understanding"
         ],
         pro_tips: `💡 High-Yield Tip: Focus on foundational formulas and definitions for ${cleanTopic}.`,
-        related_queries: [`${cleanTopic} key concepts`, `${cleanTopic} exam questions`, `${cleanTopic} practice notes`],
+        related_queries: [
+          `${cleanTopic} core principles and formulas`,
+          `${cleanTopic} step-by-step example questions`,
+          `${cleanTopic} high-yield exam traps`
+        ],
         source_links: searchResults.map((s: any) => s.uri).filter((u: string) => u && u.startsWith('http')).slice(0,5)
       };
     }
@@ -6680,14 +6712,24 @@ Return strictly the JSON structure specified above.`;
     }
     parsedResult.source_links = cleanSources.slice(0,6);
     parsedResult.detailed_sources = detailedSources.slice(0,6);
+    parsedResult.research_mode = parsedResult.research_mode || (isComplexQuery ? 'deep_research' : 'quick_concept');
     const fc = parsedResult.detailed_sources.length;
     if (fc > 0) {
       const clamp = (s: string) => s.replace(/\[\s*(\d+)\s*\]/g, (_: string, p: string) => { let n=parseInt(p,10); if(n>fc)n=((n-1)%fc)+1; else if(n<1)n=1; return `[${n}]`; });
       if (Array.isArray(parsedResult.live_updates)) parsedResult.live_updates = parsedResult.live_updates.map((u: any)=>typeof u==='string'?clamp(u):u);
       else if (typeof parsedResult.live_updates==='string') parsedResult.live_updates=clamp(parsedResult.live_updates);
     }
-    if (!Array.isArray(parsedResult.related_queries)||parsedResult.related_queries.length===0) {
-      parsedResult.related_queries=[`Key milestones of ${parsedResult.topic_title}`,`Exam questions on ${parsedResult.topic_title}`];
+    if (!Array.isArray(parsedResult.related_queries) || parsedResult.related_queries.length === 0) {
+      const isHi = /[\u0900-\u097F]|(kya|kaise|bhai|batao|samjhao|kyu)/i.test(rawQuery);
+      parsedResult.related_queries = isHi ? [
+        `${parsedResult.topic_title} ke core formulas aur equations kya hain?`,
+        `${parsedResult.topic_title} ka step-by-step example ya numerical`,
+        `${parsedResult.topic_title} ke common exam traps aur mistakes`
+      ] : [
+        `Core principles and formulas of ${parsedResult.topic_title}`,
+        `Step-by-step numerical examples for ${parsedResult.topic_title}`,
+        `Common exam traps and pitfalls in ${parsedResult.topic_title}`
+      ];
     }
     res.json(parsedResult);
   } catch (error: any) {

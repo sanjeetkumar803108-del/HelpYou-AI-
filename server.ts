@@ -765,9 +765,7 @@ ${pedagogicalDirective}`;
       ? [requestedModel] 
       : [
           requestedModel,
-          "gemini-3.1-flash-lite",
-          "gemini-3.6-flash",
-          "gemini-3.7-flash"
+          "gemini-3.1-flash-lite"
         ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
 
   if (!isSpecialtyModel) {
@@ -910,9 +908,6 @@ ${pedagogicalDirective}`;
         }
 
         if (isRateLimitOrOverloaded) {
-          anyQuotaExceeded = true;
-          lastQuotaExceededTime = Date.now();
-          rateLimitedModels[model] = Date.now();
 
           // Check if the current parameters specify the googleSearch tool.
           // If so, the 429 is highly likely due to search grounding quota limits.
@@ -6662,7 +6657,7 @@ Return strictly the JSON structure specified above.`;
           temperature: isComplexQuery ? 0.25 : 0.35,
           maxOutputTokens: isComplexQuery ? 2200 : 1200
         }
-      }, 2);
+      }, 3);
       parsedResult = safeParseJSON(resp.text || "", 'object');
       if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) throw new Error("Incomplete JSON");
     } catch (aiErr: any) {
@@ -6674,7 +6669,6 @@ Return strictly the JSON structure specified above.`;
       parsedResult = {
         topic_title: cleanTopic,
         match_score: "94%",
-        debug_ai_error: aiErr?.message || String(aiErr),
         research_mode: isComplexQuery ? 'deep_research' : 'quick_concept',
         live_updates: updates,
         action_steps: [

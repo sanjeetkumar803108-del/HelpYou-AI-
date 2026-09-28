@@ -636,9 +636,7 @@ ${text}`.trim() },
   }
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
-    "gemini-3.1-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash"
+    "gemini-3.1-flash-lite"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
     const now = Date.now();
@@ -747,9 +745,6 @@ ${text}`.trim() },
           console.error(`[ai-client] Model ${model} (attempt ${attempt}/${retries}) failed:`, errorStr);
         }
         if (isRateLimitOrOverloaded) {
-          anyQuotaExceeded = true;
-          lastQuotaExceededTime = Date.now();
-          rateLimitedModels[model] = Date.now();
           const hasSearch = currentParams?.config?.tools?.some((t) => t.googleSearch);
           if (hasSearch) {
             console.warn(`[ai-client] Search grounding quota exhausted. Stripping googleSearch tool and retrying model ${model} without search...`);
@@ -6014,7 +6009,7 @@ Return strictly the JSON structure specified above.`;
           temperature: isComplexQuery ? 0.25 : 0.35,
           maxOutputTokens: isComplexQuery ? 2200 : 1200
         }
-      }, 2);
+      }, 3);
       parsedResult = safeParseJSON(resp.text || "", "object");
       if (!parsedResult || !parsedResult.topic_title || !parsedResult.live_updates) throw new Error("Incomplete JSON");
     } catch (aiErr) {

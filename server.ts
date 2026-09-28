@@ -6534,7 +6534,7 @@ app.post("/api/live-study-tutor", async (req, res) => {
     // KEY FIX: Web search capped at 3.5s, then AI gets 5.5s = 9s total (within Vercel limit)
     // Old flow: web(4.5s sequential) + AI(8s) = 12.5s -> Vercel timeout!
     const searchResults: any[] = await new Promise(resolve => {
-      const t = setTimeout(() => resolve([]), 3500);
+      const t = setTimeout(() => resolve([]), 2000);
       performLiveWebSearch(rawQuery, keywords, country)
         .then(r => { clearTimeout(t); resolve(r); })
         .catch(() => { clearTimeout(t); resolve([]); });
@@ -6626,7 +6626,7 @@ Return strictly the JSON structure specified above.`;
       const resp = await safeGenerateContent({
         gradeLevel, stream: academicStream, country,
         model: "gemini-3.1-flash-lite",
-        timeoutMs: 9000,
+        timeoutMs: 18000,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

@@ -5879,7 +5879,7 @@ app.post("/api/live-study-tutor", async (req, res) => {
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, academicStream, country);
     const currentDateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const searchResults = await new Promise((resolve) => {
-      const t = setTimeout(() => resolve([]), 3500);
+      const t = setTimeout(() => resolve([]), 2e3);
       performLiveWebSearch(rawQuery, keywords, country).then((r) => {
         clearTimeout(t);
         resolve(r);
@@ -5979,7 +5979,7 @@ Return strictly the JSON structure specified above.`;
         stream: academicStream,
         country,
         model: "gemini-3.1-flash-lite",
-        timeoutMs: 9e3,
+        timeoutMs: 18e3,
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

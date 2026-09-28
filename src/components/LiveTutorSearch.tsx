@@ -228,6 +228,9 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     return [];
   }, [searchResponse]);
 
+  const [searchElapsed, setSearchElapsed] = useState(0);
+  const activeAbortRef = useRef<AbortController | null>(null);
+
   // Dynamic search loading steps animation
   const searchSteps = [
     { label: "1. Analyzing query & extracting core entities...", icon: "🔍", sub: "Converting conversational prompts into high-precision search keywords" },
@@ -238,16 +241,35 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
 
   useEffect(() => {
     let interval: any;
+    let timer: any;
     if (loading) {
       setSearchStep(0);
+      setSearchElapsed(0);
       interval = setInterval(() => {
         setSearchStep(prev => (prev < searchSteps.length - 1 ? prev + 1 : prev));
       }, 1500);
+      timer = setInterval(() => {
+        setSearchElapsed(prev => prev + 1);
+      }, 1000);
     } else {
       setSearchStep(0);
+      setSearchElapsed(0);
     }
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearInterval(timer);
+    };
   }, [loading]);
+
+  const cancelSearch = () => {
+    triggerVibration(15);
+    if (activeAbortRef.current) {
+      try { activeAbortRef.current.abort(); } catch (_) {}
+      activeAbortRef.current = null;
+    }
+    setLoading(false);
+    setError("Search was stopped. You can tap 'Search Again' or try another question.");
+  };
 
   const fetchHistory = async () => {
     if (!auth.currentUser) return;
@@ -325,8 +347,12 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     setCopied(false);
     setHighlightedSourceIdx(null);
 
+    if (activeAbortRef.current) {
+      try { activeAbortRef.current.abort(); } catch (_) {}
+    }
     const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 60000); // 60s safety timeout for in-depth research
+    activeAbortRef.current = abortController;
+    const timeoutId = setTimeout(() => abortController.abort(), 45000); // 45s safety timeout for in-depth research
 
     try {
       const currentNotes = localNotes.trim();
@@ -763,6 +789,11 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                     <p className="text-xs font-semibold text-zinc-400 leading-relaxed">
                       {searchSteps[searchStep]?.sub}
                     </p>
+                    <p className="text-[11px] font-bold text-blue-600 pt-0.5">
+                      {searchElapsed > 6 
+                        ? `⚡ Synthesizing verified answers (${searchElapsed}s)...` 
+                        : `Live grounding in progress (${searchElapsed}s)...`}
+                    </p>
                   </div>
 
                   {/* Multi-step progress bar */}
@@ -786,6 +817,16 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
                       />
                     ))}
                   </div>
+
+                  {searchElapsed >= 6 && (
+                    <button
+                      type="button"
+                      onClick={cancelSearch}
+                      className="text-xs font-bold text-zinc-400 hover:text-zinc-600 underline pt-1 cursor-pointer transition-colors"
+                    >
+                      Cancel Search
+                    </button>
+                  )}
                 </motion.div>
               )}
 

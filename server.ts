@@ -752,9 +752,9 @@ ${pedagogicalDirective}`;
     params.model.includes("clip")
   ));
 
-  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-flash-lite-latest");
+  let requestedModel = isAudioModel ? (params.model || "gemini-2.5-flash-preview-tts") : (params.model || "gemini-3.5-flash-lite");
   if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
-    requestedModel = "gemini-flash-lite-latest";
+    requestedModel = "gemini-3.5-flash-lite";
   }
   let modelsToTry = isAudioModel 
     ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean)
@@ -762,10 +762,11 @@ ${pedagogicalDirective}`;
       ? [requestedModel] 
       : [
           requestedModel,
+          "gemini-3.5-flash-lite",
           "gemini-flash-lite-latest",
           "gemini-3.1-flash-lite",
+          "gemini-3.8-flash",
           "gemini-3.6-flash",
-          "gemini-3.5-flash",
           "gemini-flash-latest"
         ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
 
@@ -1425,6 +1426,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
 
     if (shouldStream) {
       let modelsToTry = [
+        "gemini-3.5-flash-lite",
         "gemini-flash-lite-latest",
         "gemini-3.1-flash-lite",
         "gemini-3.6-flash",
@@ -1918,6 +1920,7 @@ IF FORMAT IS "Explain Like I'm 5":
 
     // Model fallback chain for summarize — try ultra-fast models first
     const summarizeModels = [
+      "gemini-3.5-flash-lite",
       "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
       "gemini-3.6-flash",
@@ -2211,6 +2214,7 @@ GIBBERISH / RANDOM TYPING GUARD:
 
     const originalModel = "gemini-flash-latest";
     let modelsToTry = [
+      "gemini-3.5-flash-lite",
       "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
       "gemini-3.6-flash",
@@ -3813,6 +3817,7 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
 
     // Model fallback chain for text summarize
     const textSumModels = [
+      "gemini-3.5-flash-lite",
       "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
       "gemini-3.6-flash",
@@ -6579,13 +6584,13 @@ Return strictly the JSON structure specified above.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 1500
+          maxOutputTokens: 750
         }
       });
       rawText = response.text || "";

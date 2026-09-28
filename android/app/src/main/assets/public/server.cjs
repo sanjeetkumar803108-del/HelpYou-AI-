@@ -630,16 +630,17 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(import_genai.Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-flash-lite-latest";
+  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.5-flash-lite";
   if (!isAudioModel && requestedModel && (requestedModel.includes("2.5") || requestedModel.includes("2.0") || requestedModel.includes("1.5"))) {
-    requestedModel = "gemini-flash-lite-latest";
+    requestedModel = "gemini-3.5-flash-lite";
   }
   let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
     requestedModel,
+    "gemini-3.5-flash-lite",
     "gemini-flash-lite-latest",
     "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
     "gemini-3.6-flash",
-    "gemini-3.5-flash",
     "gemini-flash-latest"
   ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
   if (!isSpecialtyModel) {
@@ -1233,6 +1234,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     }
     if (shouldStream) {
       let modelsToTry = [
+        "gemini-3.5-flash-lite",
         "gemini-flash-lite-latest",
         "gemini-3.1-flash-lite",
         "gemini-3.6-flash",
@@ -1685,6 +1687,7 @@ ${extractedText}` };
       return res.status(400).json({ error: "Document content is too short or empty to process." });
     }
     const summarizeModels = [
+      "gemini-3.5-flash-lite",
       "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
       "gemini-3.6-flash",
@@ -1960,6 +1963,7 @@ GIBBERISH / RANDOM TYPING GUARD:
 - If the submitted text consists of random typing, keyboard mashing, or lacks coherent sentences, output under the score header: "The submitted text does not contain a coherent essay or recognizable arguments. Please submit a valid written essay to receive full rubric assessment and constructive feedback."`;
     const originalModel = "gemini-flash-latest";
     let modelsToTry = [
+      "gemini-3.5-flash-lite",
       "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
       "gemini-3.6-flash",
@@ -3365,6 +3369,7 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
    This ensures crisp, beautiful KaTeX rendering for the student.
 4. Ensure there is a blank line before and after every heading and list block.`;
     const textSumModels = [
+      "gemini-3.5-flash-lite",
       "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
       "gemini-3.6-flash",
@@ -5930,13 +5935,13 @@ Return strictly the JSON structure specified above.`;
         gradeLevel,
         stream: academicStream,
         country,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: [{ parts: [{ text: contentPrompt }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
           temperature: 0.2,
-          maxOutputTokens: 1500
+          maxOutputTokens: 750
         }
       });
       rawText = response.text || "";

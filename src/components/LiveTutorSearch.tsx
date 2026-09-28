@@ -344,7 +344,6 @@ export default function LiveTutorSearch({ onBack }: LiveTutorSearchProps) {
     setError(null);
     setSearchResponse(null);
     setCheckedSteps({});
-    setCopied(false);
     setHighlightedSourceIdx(null);
 
     if (activeAbortRef.current) {

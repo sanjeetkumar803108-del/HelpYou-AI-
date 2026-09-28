@@ -244,7 +244,6 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
     setError(null);
     setResult(null);
     setSaved(false);
-    setCopied(false);
     setFixes([]);
 
     try {

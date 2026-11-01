@@ -5,12 +5,10 @@ export const getApiUrl = (endpoint: string): string => {
   
   if (typeof window !== 'undefined') {
     const isNative = Capacitor.isNativePlatform();
-    const hostname = window.location.hostname;
-    const port = window.location.port;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
 
-    // Only use local relative endpoint if running directly on express server (port 3000)
-    if (!isNative && isLocalhost && port === '3000') {
+    // If running in any web browser (localhost, 127.0.0.1, 192.168.x.x LAN IP, Vercel, or custom host),
+    // always use relative endpoint so requests stay on the exact host that served the page!
+    if (!isNative) {
       return cleanEndpoint;
     }
   }
@@ -22,4 +20,3 @@ export const getApiUrl = (endpoint: string): string => {
 
   return `${baseUrl}${cleanEndpoint}`;
 };
-

@@ -51,6 +51,7 @@ export function generateNewSessionId(): string {
 export async function registerActiveSession(userId: string): Promise<string> {
   const newSessionId = generateNewSessionId();
   setLocalSessionId(userId, newSessionId);
+  safeSetItem(`last_session_register_time_${userId}`, String(Date.now()));
 
   try {
     const userDocRef = doc(db, 'users', userId);
@@ -87,8 +88,18 @@ export function listenToActiveSession(
     const remoteSessionId = data?.currentSessionId;
     const localSessionId = getLocalSessionId(userId);
 
+    const lastRegTime = Number(safeGetItem(`last_session_register_time_${userId}`) || 0);
+    const isRecentLogin = (Date.now() - lastRegTime) < 30000;
+
     if (isInitial) {
       isInitial = false;
+      // If this device just logged in/registered (within 30s), it is the active authority.
+      // Do NOT kick ourselves out if Firestore snapshot has not yet caught up with our write!
+      if (isRecentLogin) {
+        console.log('[SessionManager] Recent login detected on this device (within 30s). Skipping initial conflict check.');
+        return;
+      }
+
       // On initial snapshot:
       if (remoteSessionId && localSessionId && remoteSessionId !== localSessionId) {
         console.warn(`[SessionManager] Initial snapshot session conflict! Local: ${localSessionId}, Remote: ${remoteSessionId}`);
@@ -105,6 +116,11 @@ export function listenToActiveSession(
     }
 
     // On subsequent updates pushed by Firestore (when another mobile logs in in real time):
+    if (isRecentLogin && localSessionId && remoteSessionId !== localSessionId) {
+      console.log('[SessionManager] Echo snapshot during recent login, skipping transient conflict.');
+      return;
+    }
+
     if (remoteSessionId && localSessionId && remoteSessionId !== localSessionId) {
       console.warn(`[SessionManager] Real-time session conflict detected! Local: ${localSessionId}, Remote: ${remoteSessionId}`);
       onConflict({ remotePlatform: data?.lastActivePlatform });
@@ -120,9 +136,13 @@ export function listenToActiveSession(
  * Performs a complete, clean logout on session conflict.
  */
 export async function terminateSessionDueToConflict(userId?: string): Promise<void> {
+  if (userId) {
+    safeRemoveItem(`last_session_register_time_${userId}`);
+  }
   clearLocalSessionId(userId);
   safeRemoveItem('helpyou_active_user_session');
   safeRemoveItem('last_logged_in_user');
+  safeRemoveItem('helpyou_auth_in_progress');
   safeSetItem('session_conflict_notice', '⚠️ You were logged out because this account was logged into another mobile device.');
 
   if (Capacitor.isNativePlatform()) {

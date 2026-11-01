@@ -8,7 +8,7 @@ import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, de
 import { deductCoins, getCoins } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
-import { getUserProfileData } from '../utils/profile';
+import { getUserProfileData, getProfilePayload, appendProfileToFormData } from '../utils/profile';
 import { generateNotesPDFBlob } from '../lib/pdfExporter';
 import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
 import SafePdfViewer from './SafePdfViewer';
@@ -258,18 +258,13 @@ export default function Summariser({ onBack }: SummariserProps) {
     setSaved(false);
 
     try {
-      const profile = getUserProfileData();
       const response = await fetch(getApiUrl('/api/summarize-text'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(getProfilePayload({
           text: inputText,
           format,
-          gradeLevel: profile.gradeLevel,
-          stream: profile.stream,
-          country: profile.country,
-          profileContext: profile.profileContext
-        }),
+        })),
         signal: controller.signal
       });
       
@@ -347,14 +342,10 @@ export default function Summariser({ onBack }: SummariserProps) {
     setSaved(false);
     
     const formData = new FormData();
+    appendProfileToFormData(formData);
     formData.append('pdf', file);
     formData.append('action', 'summarize');
     formData.append('format', format);
-    const profile = getUserProfileData();
-    formData.append('gradeLevel', profile.gradeLevel || '');
-    if (profile.stream) formData.append('stream', profile.stream);
-    if (profile.country) formData.append('country', profile.country);
-    if (profile.profileContext) formData.append('profileContext', profile.profileContext);
     
     try {
       const response = await fetch(getApiUrl('/api/summarize'), {

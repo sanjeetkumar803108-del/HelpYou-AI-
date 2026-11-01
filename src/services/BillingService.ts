@@ -92,6 +92,7 @@ class BillingService {
           },
           body: JSON.stringify({
             userId: currentUser.uid,
+            email: currentUser.email || '',
             isPro: true
           })
         })
@@ -100,7 +101,7 @@ class BillingService {
         .catch(err => console.error('Failed to sync subscription with backend:', err));
 
         // Update user profile in Firestore
-        setDoc(doc(db, 'users', currentUser.uid), { isPro: true }, { merge: true })
+        setDoc(doc(db, 'users', currentUser.uid), { isPro: true, study_is_vip: true, subscriptionUpdatedAt: new Date().toISOString() }, { merge: true })
           .then(() => console.log('Successfully saved Pro subscription in Firestore!'))
           .catch(dbErr => console.error('Failed to save Pro subscription in Firestore:', dbErr));
       }

@@ -54,11 +54,10 @@ const StreakDetailsPage = lazyWithRetry(() => import('./components/StreakDetails
 const AITutor = lazyWithRetry(() => import('./components/AITutor'));
 const QuizGenerator = lazyWithRetry(() => import('./components/QuizGenerator'));
 const QuestionGenerator = lazyWithRetry(() => import('./components/QuestionGenerator'));
+const AINotes = lazyWithRetry(() => import('./components/AINotes'));
 const TestPrep = lazyWithRetry(() => import('./components/TestPrep'));
 const CoinPage = lazyWithRetry(() => import('./components/CoinPage'));
 const DailyTrivia = lazyWithRetry(() => import('./components/DailyTrivia'));
-const LiveTutorSearch = lazyWithRetry(() => import('./components/LiveTutorSearch'));
-const MistakeVault = lazyWithRetry(() => import('./components/MistakeVault'));
 const PaywallModal = lazyWithRetry(() => import('./components/PaywallModal'));
 // Cleaned up fake sandbox modal import
 // const IAPModal = lazyWithRetry(() => import('./components/IAPModal'));
@@ -96,6 +95,34 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState('notes');
   const [activeTool, setActiveTool] = useState<string | null>(null);
+
+  // Multitasking & Keep-Alive State:
+  // Visited tabs and tools are lazily mounted and kept alive in the DOM (using CSS hidden)
+  // so background work, in-progress AI generation, inputs, and scroll positions are preserved.
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set(['notes']));
+  const [mountedTools, setMountedTools] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (activeTab) {
+      setMountedTabs(prev => {
+        if (prev.has(activeTab)) return prev;
+        const next = new Set(prev);
+        next.add(activeTab);
+        return next;
+      });
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTool) {
+      setMountedTools(prev => {
+        if (prev.has(activeTool)) return prev;
+        const next = new Set(prev);
+        next.add(activeTool);
+        return next;
+      });
+    }
+  }, [activeTool]);
   
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -380,7 +407,6 @@ export default function App() {
     };
     const handleOpenProfile = () => {
       console.log('Received open-profile-modal event');
-      setActiveTool(null);
       setActiveTab('profile');
     };
     const handleShowMobileToast = (e: Event) => {
@@ -410,6 +436,13 @@ export default function App() {
       const customEvent = e as CustomEvent;
       setIsVip(customEvent.detail === true);
     };
+    const handleCloseActiveTool = () => {
+      setActiveTool(null);
+    };
+    const handleNavigateToHome = () => {
+      setActiveTool(null);
+      setActiveTab('notes');
+    };
 
     window.addEventListener('open-vip-modal', handleOpenVip);
     window.addEventListener('open-login-modal', handleOpenLogin);
@@ -418,6 +451,8 @@ export default function App() {
     window.addEventListener('open-paywall-modal', handleOpenPaywall);
     window.addEventListener('open-iap-modal', handleOpenIap);
     window.addEventListener('study-vip-updated', handleVipUpdated);
+    window.addEventListener('close-active-tool', handleCloseActiveTool);
+    window.addEventListener('navigate-to-home', handleNavigateToHome);
     return () => {
       window.removeEventListener('open-vip-modal', handleOpenVip);
       window.removeEventListener('open-login-modal', handleOpenLogin);
@@ -426,6 +461,8 @@ export default function App() {
       window.removeEventListener('open-paywall-modal', handleOpenPaywall);
       window.removeEventListener('open-iap-modal', handleOpenIap);
       window.removeEventListener('study-vip-updated', handleVipUpdated);
+      window.removeEventListener('close-active-tool', handleCloseActiveTool);
+      window.removeEventListener('navigate-to-home', handleNavigateToHome);
     };
   }, []);
 
@@ -456,9 +493,13 @@ export default function App() {
         // it means the user never logged in during an active session (or logged out / deleted account).
         // This stops stale background cache / IndexedDB persistence from auto-logging into
         // a random/stale email and auto-opening the app without user consent.
+        const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
+        const isAuthInProgress = safeGetItem('helpyou_auth_in_progress') === 'true';
         const hasActiveSession = 
           safeGetItem('helpyou_active_user_session') === 'true' || 
-          safeGetItem('last_logged_in_user') === currentUser.uid;
+          safeGetItem('last_logged_in_user') === currentUser.uid ||
+          isAuthInProgress ||
+          isGoogle;
         if (!hasActiveSession) {
           console.log('[Auth Guard] Stale unconfirmed background user session detected. Enforcing clean logout so Login screen is shown.');
           setUser(null);
@@ -473,9 +514,9 @@ export default function App() {
         } else {
           safeSetItem('helpyou_active_user_session', 'true');
           safeSetItem('last_logged_in_user', currentUser.uid);
+          safeRemoveItem('helpyou_auth_in_progress');
         }
 
-        const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
         if (!currentUser.emailVerified && !isGoogle) {
           safeRemoveItem('helpyou_active_user_session');
           setUser(null);
@@ -517,15 +558,26 @@ export default function App() {
           safeSetItem('study_is_vip', 'true');
         }
 
-        const hasCompletedLocalSetup = 
-          safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true' ||
+        const hasCompletedLocalAcademicSetup = 
           safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true' ||
           safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
 
-        if (hasCompletedLocalSetup) {
+        const isWelcomingDone = safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true';
+
+        if (hasCompletedLocalAcademicSetup) {
+          // Instant Zero-Wait Unblock: Returning user UI renders in 0ms without network gating
           setShowOnboarding(false);
           setShowAcademicSetup(false);
-          // Instant Zero-Wait Unblock: Returning user UI renders in 0ms without network gating
+          setAuthLoading(false);
+        } else if (isWelcomingDone) {
+          // Welcoming skipped or completed -> Must show the 4 Academic Setup selection pages!
+          setShowOnboarding(false);
+          setShowAcademicSetup(true);
+          setAuthLoading(false);
+        } else {
+          // Completely new user -> Show Welcoming screens first
+          setShowOnboarding(true);
+          setShowAcademicSetup(false);
           setAuthLoading(false);
         }
         
@@ -544,14 +596,12 @@ export default function App() {
                 safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
 
               if (hasCompletedSetup) {
-                // Returning User: bypass onboarding completely and go directly to MainApp / HomeTabs
                 safeSetItem(`onboarding_completed_${currentUser.uid}`, 'true');
                 safeSetItem(`academic_setup_completed_${currentUser.uid}`, 'true');
                 safeSetItem(`isOnboardingComplete_${currentUser.uid}`, 'true');
                 setShowOnboarding(false);
                 setShowAcademicSetup(false);
               } else {
-                // Existing user doc, but onboarding incomplete
                 const userOnboardingCompleted = safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true';
                 if (!userOnboardingCompleted) {
                   setShowOnboarding(true);
@@ -563,6 +613,101 @@ export default function App() {
               }
 
               if (userData) {
+                if (userData.targetExam || userData.exam || userData.academic_exam) {
+                  const savedExam = userData.targetExam || userData.exam || userData.academic_exam;
+                  safeSetItem('academic_exam', savedExam);
+                  safeSetItem('target_exam', savedExam);
+                  safeSetItem(`academic_exam_${currentUser.uid}`, savedExam);
+                  safeSetItem(`target_exam_${currentUser.uid}`, savedExam);
+                }
+                if (userData.grade || userData.academic_grade) {
+                  const savedGrade = userData.grade || userData.academic_grade;
+                  safeSetItem('academic_grade', savedGrade);
+                  safeSetItem(`academic_grade_${currentUser.uid}`, savedGrade);
+                }
+                if (userData.stream || userData.academic_stream || userData.subject || userData.selectedSubject) {
+                  const savedStream = userData.subject || userData.selectedSubject || userData.stream || userData.academic_stream;
+                  safeSetItem('academic_stream', savedStream);
+                  safeSetItem('academic_subject', savedStream);
+                  safeSetItem('subject', savedStream);
+                  safeSetItem(`academic_stream_${currentUser.uid}`, savedStream);
+                  safeSetItem(`academic_subject_${currentUser.uid}`, savedStream);
+                  safeSetItem(`subject_${currentUser.uid}`, savedStream);
+                }
+                if (userData.country || userData.academic_country) {
+                  const savedCountry = userData.country || userData.academic_country;
+                  safeSetItem('academic_country', savedCountry);
+                  safeSetItem(`academic_country_${currentUser.uid}`, savedCountry);
+                }
+                if (userData.subjects || userData.academic_subjects) {
+                  const savedSubjects = userData.academic_subjects || userData.subjects;
+                  const subjStr = Array.isArray(savedSubjects) ? JSON.stringify(savedSubjects) : String(savedSubjects);
+                  safeSetItem('academic_subjects', subjStr);
+                  safeSetItem(`academic_subjects_${currentUser.uid}`, subjStr);
+                }
+                if (userData.examBlueprint || userData.academicBlueprint) {
+                  const savedBp = userData.academicBlueprint || userData.examBlueprint;
+                  if (savedBp && typeof savedBp === 'object') {
+                    const bpStr = JSON.stringify(savedBp);
+                    safeSetItem('user_exam_blueprint', bpStr);
+                    safeSetItem('academic_exam_blueprint', bpStr);
+                    safeSetItem(`user_exam_blueprint_${currentUser.uid}`, bpStr);
+                  }
+                }
+
+                // Cross-device sync: restore saved Topper Notes from Cloud Firestore
+                try {
+                  const notesQ = query(collection(db, 'user_notes'), where('userId', '==', currentUser.uid));
+                  const notesSnap = await getDocs(notesQ);
+                  if (!notesSnap.empty) {
+                    const restoredNotes: any[] = [];
+                    notesSnap.forEach(d => {
+                      const nd = d.data();
+                      restoredNotes.push({
+                        id: d.id,
+                        timestamp: nd.createdAt?.toMillis ? nd.createdAt.toMillis() : Date.now(),
+                        chapter: nd.chapter,
+                        subject: nd.subject,
+                        exam: nd.exam,
+                        data: nd.data
+                      });
+                    });
+                    restoredNotes.sort((a, b) => b.timestamp - a.timestamp);
+                    safeSetItem('helpyou_ai_saved_notes', JSON.stringify(restoredNotes));
+                    safeSetItem(`user_notes_${currentUser.uid}`, JSON.stringify(restoredNotes));
+                  }
+                } catch (notesErr) {
+                  console.warn('[App Auth] Notes cross-device restore notice:', notesErr);
+                }
+
+                try {
+                  window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+                } catch (_) {}
+                // Restore XP & Gamification points across all devices
+                const savedXP = userData.study_total_xp ?? userData.xp;
+                if (savedXP !== undefined && savedXP !== null) {
+                  const numXP = String(savedXP);
+                  safeSetItem('study_total_xp', numXP);
+                  safeSetItem(`study_total_xp_${currentUser.uid}`, numXP);
+                  window.dispatchEvent(new CustomEvent('study-xp-updated', { detail: Number(numXP) }));
+                }
+
+                // Restore Study Streak
+                const savedStreak = userData.study_streak_days ?? userData.currentStreak ?? userData.study_punches;
+                if (savedStreak !== undefined && savedStreak !== null) {
+                  const strStreak = String(savedStreak);
+                  safeSetItem('study_streak_days', strStreak);
+                  safeSetItem('study_punches', strStreak);
+                  safeSetItem(`study_streak_days_${currentUser.uid}`, strStreak);
+                  safeSetItem(`study_punches_${currentUser.uid}`, strStreak);
+                  window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: Number(strStreak) }));
+                }
+
+                // Restore Usage Stats
+                if (userData.usageStats && typeof userData.usageStats === 'object') {
+                  safeSetItem('study_passive_usage_data', JSON.stringify(userData.usageStats));
+                }
+
                 if (typeof userData.isPro === 'boolean') {
                   setIsVip(userData.isPro);
                   safeSetItem('study_is_vip', String(userData.isPro));
@@ -638,11 +783,20 @@ export default function App() {
           } catch (fsErr) {
             console.warn('[Auth Check] Firestore fetch failed, falling back to REST/Cache:', fsErr);
             // Fallback onboarding checks
-            const userOnboardingCompleted = safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true';
-            const academicSetupCompleted = safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true';
-            if (!userOnboardingCompleted) {
+            const academicSetupCompleted = 
+              safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true' ||
+              safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
+            const userOnboardingCompleted = 
+              safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true' || academicSetupCompleted;
+
+            if (academicSetupCompleted) {
+              setShowOnboarding(false);
+              setShowAcademicSetup(false);
+            } else if (!userOnboardingCompleted) {
               setShowOnboarding(true);
-            } else if (!academicSetupCompleted) {
+              setShowAcademicSetup(false);
+            } else {
+              setShowOnboarding(false);
               setShowAcademicSetup(true);
             }
           }
@@ -871,9 +1025,8 @@ export default function App() {
         window.dispatchEvent(new CustomEvent('study-quests-updated'));
       } catch (_) {}
 
-      // 4. Invalidate and Refresh Feature Caches (Mistake Vault, PDF History, Academic Profile)
+      // 4. Invalidate and Refresh Feature Caches (PDF History, Academic Profile)
       try {
-        window.dispatchEvent(new CustomEvent('study-mistake-vault-updated'));
         window.dispatchEvent(new CustomEvent('pdf-history-updated', { detail: { refreshed: true } }));
         window.dispatchEvent(new CustomEvent('academic_profile_updated', { detail: { refreshed: true } }));
         window.dispatchEvent(new Event('settings_changed'));
@@ -1062,13 +1215,11 @@ export default function App() {
   }, []);
 
   const handleOpenProfileFromDashboard = useCallback(() => {
-    setActiveTool(null);
     setActiveTab('profile');
   }, []);
 
   const handleOpenLoginFromDashboard = useCallback(() => {
     if (auth.currentUser || user) {
-      setActiveTool(null);
       setActiveTab('profile');
       return;
     }
@@ -1077,10 +1228,8 @@ export default function App() {
 
   const handleSelectToolFromDashboard = useCallback((tool: string) => {
     if (tool === 'tab:scanner') {
-      setActiveTool(null);
       setActiveTab('scanner');
     } else if (tool === 'tab:aitutor') {
-      setActiveTool(null);
       setActiveTab('aitutor');
     } else {
       setActiveTool(tool);
@@ -1164,206 +1313,258 @@ export default function App() {
         </header>
       )}
       
-      <main className={`w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 ${(activeTab === 'scanner' || activeTab === 'aitutor' || activeTab === 'teacher' || (activeTab === 'notes' && activeTool !== null)) ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto pb-20'} bg-[#FAF9F6]`} style={{ position: 'relative' }}>
+      <main className="w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 overflow-hidden flex flex-col h-full bg-[#FAF9F6]" style={{ position: 'relative' }}>
         {/* Scanner Tab */}
-        <div className={activeTab === 'scanner' ? 'h-full flex flex-col' : 'hidden'}>
-          <ErrorBoundary>
-            <Suspense fallback={<FullPageSkeleton />}>
-              <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
-                setActiveTool(null);
-                setActiveTab(tab);
-              }} />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-
-        {/* AI Tutor Tab */}
-        <div className={activeTab === 'aitutor' ? 'h-full flex flex-col' : 'hidden'}>
-          <ErrorBoundary>
-            <Suspense fallback={<FullPageSkeleton />}>
-              <AITutor isVip={isVip} isActive={activeTab === 'aitutor'} />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-
-        {/* Home/Notes Tab — only visible when activeTab === 'notes' */}
-        <div className={activeTab === 'notes' ? 'h-full flex flex-col' : 'hidden'}>
-          <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
+        {mountedTabs.has('scanner') && (
+          <div className={activeTab === 'scanner' ? "h-full flex flex-col" : "hidden"}>
             <ErrorBoundary>
               <Suspense fallback={<FullPageSkeleton />}>
-                <ToolsDashboard 
-                  key={`tools-dash-${dashboardRefreshEpoch}`}
-                  isVip={isVip} 
+                <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
+                  setActiveTab(tab);
+                }} />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
+        )}
+
+        {/* AI Tutor Tab */}
+        {mountedTabs.has('aitutor') && (
+          <div className={activeTab === 'aitutor' ? "h-full flex flex-col" : "hidden"}>
+            <ErrorBoundary>
+              <Suspense fallback={<FullPageSkeleton />}>
+                <AITutor isVip={isVip} isActive={activeTab === 'aitutor'} />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
+        )}
+
+        {/* Home/Notes Tab */}
+        {mountedTabs.has('notes') && (
+          <div className={activeTab === 'notes' ? "h-full flex flex-col relative" : "hidden"}>
+            <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
+              <ErrorBoundary featureName="Home Dashboard" onReset={() => setDashboardRefreshEpoch(Date.now())}>
+                <Suspense fallback={<FullPageSkeleton />}>
+                  <ToolsDashboard 
+                    key={`tools-dash-${dashboardRefreshEpoch}`}
+                    isVip={isVip} 
+                    user={user}
+                    pocketItems={pocketItems}
+                    onOpenVip={handleOpenVipFromDashboard}
+                    onOpenProfile={handleOpenProfileFromDashboard}
+                    onOpenLogin={handleOpenLoginFromDashboard}
+                    onSelectTool={handleSelectToolFromDashboard} 
+                    activeTab={activeTab}
+                    onForceSync={handleForceSync}
+                    refreshEpoch={dashboardRefreshEpoch}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+
+            {/* Active and Visited Tools - KEEP ALIVE */}
+            {mountedTools.has('essaygrader') && (
+              <div className={activeTool === 'essaygrader' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Essay Grader" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                      <EssayGrader onBack={() => setActiveTool(null)} />
+                    </LockedFeature>
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('testprep') && (
+              <div className={activeTool === 'testprep' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Test Prep" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <TestPrep 
+                      onBack={() => setActiveTool(null)} 
+                      isVip={isVip}
+                      onOpenVip={() => setShowVipModal(true)}
+                      onNavigateToTab={(tab) => {
+                        setActiveTab(tab);
+                      }}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('image2pdf') && (
+              <div className={activeTool === 'image2pdf' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Image to PDF" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <ImageToPDF 
+                      onBack={() => setActiveTool(null)} 
+                      onOpenHistory={() => setActiveTool('pdfhistory')} 
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('pdfhistory') && (
+              <div className={activeTool === 'pdfhistory' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="PDF History" onClose={() => setActiveTool('image2pdf')} onReset={() => setActiveTool('image2pdf')}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <PdfHistoryScreen 
+                      onBack={() => setActiveTool('image2pdf')} 
+                      onOpenImageToPdf={() => setActiveTool('image2pdf')}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('contentgenerator') && (
+              <div className={activeTool === 'contentgenerator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Content Generator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <LockedFeature cost={1} featureName="AI Study Content Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                      <ContentGenerator onBack={() => setActiveTool(null)} />
+                    </LockedFeature>
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('grammar') && (
+              <div className={activeTool === 'grammar' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Grammar Enhancer" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <LockedFeature cost={1} featureName="AI Grammar Enhancer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                      <GrammarEnhancer onBack={() => setActiveTool(null)} />
+                    </LockedFeature>
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('summariser') && (
+              <div className={activeTool === 'summariser' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Summarizer" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <LockedFeature cost={1} featureName="AI Text Summarizer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                      <Summariser onBack={() => setActiveTool(null)} />
+                    </LockedFeature>
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('calculator') && (
+              <div className={activeTool === 'calculator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Calculator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <Calculator 
+                      onBack={() => setActiveTool(null)} 
+                      onNavigateToTab={(tab) => {
+                        setActiveTab(tab);
+                      }} 
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('questiongenerator') && (
+              <div className={activeTool === 'questiongenerator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Question Generator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                      <QuestionGenerator 
+                        onBack={() => setActiveTool(null)} 
+                        onNavigateToTab={(tab) => {
+                          setActiveTab(tab);
+                        }} 
+                      />
+                    </LockedFeature>
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('ainotes') && (
+              <div className={activeTool === 'ainotes' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="AI Notes" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <LockedFeature cost={2} featureName="AI Notes" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                      <AINotes 
+                        onBack={() => setActiveTool(null)} 
+                        isVip={isVip} 
+                      />
+                    </LockedFeature>
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('dailytrivia') && (
+              <div className={activeTool === 'dailytrivia' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Daily Trivia" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <DailyTrivia isOpen={activeTool === 'dailytrivia'} onBack={() => setActiveTool(null)} />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('coinpage') && (
+              <div className={activeTool === 'coinpage' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Coin Page" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <CoinPage 
+                      isVip={isVip}
+                      onClose={() => setActiveTool(null)} 
+                      onSelectTool={(tool) => {
+                        if (tool === 'tab:scanner') {
+                          setActiveTab('scanner');
+                        } else if (tool === 'tab:aitutor') {
+                          setActiveTab('aitutor');
+                        } else {
+                          setActiveTool(tool);
+                        }
+                      }} 
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+            {mountedTools.has('streakpage') && (
+              <div className={activeTool === 'streakpage' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                <ErrorBoundary featureName="Streak Details" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <StreakDetailsPage onBack={() => setActiveTool(null)} />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Profile Tab */}
+        {mountedTabs.has('profile') && (
+          <div className={activeTab === 'profile' ? "h-full flex flex-col" : "hidden"}>
+            <ErrorBoundary>
+              <Suspense fallback={<FullPageSkeleton />}>
+                <Profile 
                   user={user}
-                  pocketItems={pocketItems}
-                  onOpenVip={handleOpenVipFromDashboard}
-                  onOpenProfile={handleOpenProfileFromDashboard}
-                  onOpenLogin={handleOpenLoginFromDashboard}
-                  onSelectTool={handleSelectToolFromDashboard} 
-                  activeTab={activeTab}
-                  onForceSync={handleForceSync}
-                  refreshEpoch={dashboardRefreshEpoch}
+                  isVip={isVip}
+                  setIsVip={handleSetIsVip}
+                  onClose={() => {
+                    setActiveTab('notes');
+                  }} 
+                  isDarkMode={isDarkMode}
+                  onToggleDarkMode={toggleDarkMode}
+                  isTabMode={true}
+                  onOpenLogin={() => setShowLoginModal(true)}
+                  onNavigateToCoinPage={() => {
+                    setActiveTab('notes');
+                    setActiveTool('coinpage');
+                  }}
+                  onNavigateToStreakPage={() => {
+                    setActiveTab('notes');
+                    setActiveTool('streakpage');
+                  }}
+                  onOpenPdfHistory={() => {
+                    setActiveTab('notes');
+                    setActiveTool('pdfhistory');
+                  }}
                 />
               </Suspense>
             </ErrorBoundary>
           </div>
-          {/* Active Tool Rendering — kept mounted via hidden class, NOT && so state/processing survives tab switches */}
-          <Suspense fallback={<FullPageSkeleton />}>
-            <div className={activeTool === 'essaygrader' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                  <EssayGrader onBack={() => setActiveTool(null)} />
-                </LockedFeature>
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'testprep' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <TestPrep 
-                  onBack={() => setActiveTool(null)} 
-                  isVip={isVip}
-                  onOpenVip={() => setShowVipModal(true)}
-                  onNavigateToTab={(tab) => {
-                    setActiveTool(null);
-                    setActiveTab(tab);
-                  }}
-                />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'image2pdf' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <ImageToPDF 
-                  onBack={() => setActiveTool(null)} 
-                  onOpenHistory={() => setActiveTool('pdfhistory')} 
-                />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'pdfhistory' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <PdfHistoryScreen 
-                  onBack={() => setActiveTool('image2pdf')} 
-                  onOpenImageToPdf={() => setActiveTool('image2pdf')}
-                />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'contentgenerator' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <LockedFeature cost={1} featureName="AI Study Content Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                  <ContentGenerator onBack={() => setActiveTool(null)} />
-                </LockedFeature>
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'grammar' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <LockedFeature cost={1} featureName="AI Grammar Enhancer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                  <GrammarEnhancer onBack={() => setActiveTool(null)} />
-                </LockedFeature>
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'summariser' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <LockedFeature cost={1} featureName="AI Text Summarizer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                  <Summariser onBack={() => setActiveTool(null)} />
-                </LockedFeature>
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'calculator' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <Calculator 
-                  onBack={() => setActiveTool(null)} 
-                  onNavigateToTab={(tab) => {
-                    setActiveTool(null);
-                    setActiveTab(tab);
-                  }} 
-                />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'questiongenerator' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                  <QuestionGenerator 
-                    onBack={() => setActiveTool(null)} 
-                    onNavigateToTab={(tab) => {
-                      setActiveTool(null);
-                      setActiveTab(tab);
-                    }} 
-                  />
-                </LockedFeature>
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'dailytrivia' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <DailyTrivia isOpen={activeTool === 'dailytrivia'} onBack={() => setActiveTool(null)} />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'livetutorsearch' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <LiveTutorSearch onBack={() => setActiveTool(null)} />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'mistakevault' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <MistakeVault onBack={() => setActiveTool(null)} />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'coinpage' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <CoinPage 
-                  isVip={isVip}
-                  onClose={() => setActiveTool(null)} 
-                  onSelectTool={(tool) => {
-                    if (tool === 'tab:scanner') {
-                      setActiveTool(null);
-                      setActiveTab('scanner');
-                    } else if (tool === 'tab:aitutor') {
-                      setActiveTool(null);
-                      setActiveTab('aitutor');
-                    } else {
-                      setActiveTool(tool);
-                    }
-                  }} 
-                />
-              </ErrorBoundary>
-            </div>
-            <div className={activeTool === 'streakpage' ? 'h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]' : 'hidden'}>
-              <ErrorBoundary>
-                <StreakDetailsPage onBack={() => setActiveTool(null)} />
-              </ErrorBoundary>
-            </div>
-          </Suspense>
-        </div>
-
-        {/* Profile Tab */}
-        <div className={activeTab === 'profile' ? 'h-full flex flex-col' : 'hidden'}>
-          <ErrorBoundary>
-            <Suspense fallback={<FullPageSkeleton />}>
-              <Profile 
-                user={user}
-                isVip={isVip}
-                setIsVip={handleSetIsVip}
-                onClose={() => {
-                  setActiveTool(null);
-                  setActiveTab('notes');
-                }} 
-                isDarkMode={isDarkMode}
-                onToggleDarkMode={toggleDarkMode}
-                isTabMode={true}
-                onOpenLogin={() => setShowLoginModal(true)}
-                onNavigateToCoinPage={() => {
-                  setActiveTab('notes');
-                  setActiveTool('coinpage');
-                }}
-                onNavigateToStreakPage={() => {
-                  setActiveTab('notes');
-                  setActiveTool('streakpage');
-                }}
-                onOpenPdfHistory={() => {
-                  setActiveTab('notes');
-                  setActiveTool('pdfhistory');
-                }}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
+        )}
       </main>
 
       {/* Bottom nav is always visible */}
@@ -1374,8 +1575,11 @@ export default function App() {
             label="Home" 
             isActive={activeTab === 'notes'} 
             onClick={() => {
-              setActiveTool(null);
-              setActiveTab('notes');
+              if (activeTab === 'notes' && activeTool !== null) {
+                setActiveTool(null);
+              } else {
+                setActiveTab('notes');
+              }
             }} 
             isLightTheme={!isDarkMode}
           />
@@ -1384,7 +1588,6 @@ export default function App() {
             label="Scan" 
             isActive={activeTab === 'scanner'} 
             onClick={() => {
-              setActiveTool(null);
               setActiveTab('scanner');
             }} 
             isLightTheme={!isDarkMode}
@@ -1394,7 +1597,6 @@ export default function App() {
             label="Tutor" 
             isActive={activeTab === 'aitutor'} 
             onClick={() => {
-              setActiveTool(null);
               setActiveTab('aitutor');
             }} 
             isLightTheme={!isDarkMode}
@@ -1404,7 +1606,6 @@ export default function App() {
             label="Profile" 
             isActive={activeTab === 'profile'} 
             onClick={() => {
-              setActiveTool(null);
               setActiveTab('profile');
             }} 
             isLightTheme={!isDarkMode}
@@ -1445,12 +1646,17 @@ export default function App() {
             <Suspense fallback={<FullPageSkeleton />}>
               <Login 
                 onClose={() => setShowLoginModal(false)} 
-                onLoginSuccess={(target) => {
+                onLoginSuccess={(target?: string) => {
                   setShowLoginModal(false);
-                  if (target === 'setup') {
-                    setShowAcademicSetup(true);
-                  } else if (target === 'onboarding') {
+                  if (target === 'onboarding') {
                     setShowOnboarding(true);
+                    setShowAcademicSetup(false);
+                  } else if (target === 'setup') {
+                    setShowOnboarding(false);
+                    setShowAcademicSetup(true);
+                  } else {
+                    setShowOnboarding(false);
+                    setShowAcademicSetup(false);
                   }
                 }} 
               />
@@ -1483,18 +1689,20 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <Suspense fallback={null}>
-        <PaywallModal 
-          isOpen={showPaywallModal} 
-          onClose={() => setShowPaywallModal(false)} 
-          featureName={paywallFeature}
-          onSubscribe={(cycle, _hasTrial) => {
-            setShowPaywallModal(false);
-            triggerConfetti();
-            setMobileToast("🚀 Welcome to HelpYou AI PRO!");
-          }}
-        />
-      </Suspense>
+      {showPaywallModal && (
+        <Suspense fallback={null}>
+          <PaywallModal 
+            isOpen={showPaywallModal} 
+            onClose={() => setShowPaywallModal(false)} 
+            featureName={paywallFeature}
+            onSubscribe={(cycle, _hasTrial) => {
+              setShowPaywallModal(false);
+              triggerConfetti();
+              setMobileToast("🚀 Welcome to HelpYou AI PRO!");
+            }}
+          />
+        </Suspense>
+      )}
       </div>
       </AuthGuard>
     </>

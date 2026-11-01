@@ -1,17 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, GraduationCap, Rocket, HeartPulse, BarChart3, Palette, Cpu, ArrowLeft, ArrowRight, Globe } from 'lucide-react';
+import { Check, GraduationCap, ArrowLeft, ArrowRight, Globe, Target, BookOpen, Sparkles, X, AlertCircle, Loader2, ShieldCheck, AlertTriangle, Lock } from 'lucide-react';
 import { triggerVibration } from '../utils/vibrate';
-import { safeSetItem } from '../utils/storage';
+import { safeSetItem, safeGetItem } from '../utils/storage';
 import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { getApiUrl } from '../utils/api';
 
 interface AcademicSetupProps {
   userId: string;
   onComplete: () => void;
 }
 
-const GRADES = [
+export const COUNTRIES = [
+  { id: 'USA', name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
+  { id: 'UK', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
+  { id: 'CA', name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
+  { id: 'AU', name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
+  { id: 'Other', name: 'Others', flag: '🌍', regionSystem: 'Global' },
+];
+
+export const GRADES = [
   { id: '9th Grade (Freshman)', label: '9th Grade', desc: 'Freshman High School', isCollege: false },
   { id: '10th Grade (Sophomore)', label: '10th Grade', desc: 'Sophomore High School', isCollege: false },
   { id: '11th Grade (Junior)', label: '11th Grade', desc: 'Junior High School', isCollege: false },
@@ -22,129 +31,461 @@ const GRADES = [
   { id: 'College Senior', label: 'College Year 4', desc: 'Senior Undergrad', isCollege: true },
 ];
 
-export const COUNTRIES = [
-  { id: 'USA', name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
-  { id: 'UK', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
-  { id: 'CA', name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
-  { id: 'AU', name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
-  { id: 'Global', name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
+export const DEFAULT_SUBJECTS = [
+  { id: 'Mathematics', title: 'Mathematics', subtitle: 'Calculus, Algebra, Geometry & Statistics', icon: '📐', color: 'from-blue-500 to-indigo-500' },
+  { id: 'Physics', title: 'Physics', subtitle: 'Mechanics, Optics, Thermodynamics & Waves', icon: '⚡', color: 'from-purple-500 to-indigo-500' },
+  { id: 'Chemistry', title: 'Chemistry', subtitle: 'Organic, Inorganic & Physical Chemistry', icon: '🧪', color: 'from-pink-500 to-rose-500' },
+  { id: 'Biology', title: 'Biology & Life Sciences', subtitle: 'Genetics, Physiology, Botany & Zoology', icon: '🧬', color: 'from-emerald-500 to-teal-500' },
+  { id: 'Computer Science', title: 'Computer Science & AI', subtitle: 'Coding, Data Structures & Python/Java', icon: '💻', color: 'from-cyan-500 to-blue-500' },
+  { id: 'English & Literature', title: 'English & Literature', subtitle: 'Comprehension, Grammar, Essay & Writing', icon: '📚', color: 'from-amber-500 to-orange-500' },
+  { id: 'History & Social Studies', title: 'History & Social Studies', subtitle: 'World History, Civics & Political Science', icon: '🏛️', color: 'from-rose-500 to-red-500' },
+  { id: 'Economics & Commerce', title: 'Economics & Business', subtitle: 'Micro/Macroeconomics, Finance & Commerce', icon: '📊', color: 'from-violet-500 to-purple-500' },
 ];
 
-// Dynamic tracks dictionary mapped by Country Name
-export const REGIONAL_TRACKS: Record<string, Array<{ id: string; title: string; subtitle: string; icon: React.ReactNode; color: string }>> = {
-  'United States': [
-    { 
-      id: 'STEM / Engineering', 
-      title: 'STEM & Engineering', 
-      subtitle: 'Calculus, Physics & Advanced Mathematics', 
-      icon: <Rocket className="w-5 h-5" />, 
-      color: 'from-purple-500 to-indigo-500' 
-    },
-    { 
-      id: 'Pre-Med / Life Sciences', 
-      title: 'Biomedical & Pre-Health', 
-      subtitle: 'Biology, Chemistry, Anatomy & Life Sciences', 
-      icon: <HeartPulse className="w-5 h-5" />, 
-      color: 'from-pink-500 to-rose-500' 
-    },
-    { 
-      id: 'Business / Economics', 
-      title: 'Business & Economics', 
-      subtitle: 'Macro/Microeconomics, Statistics & Finance', 
-      icon: <BarChart3 className="w-5 h-5" />, 
-      color: 'from-amber-500 to-orange-500' 
-    },
-    { 
-      id: 'Humanities / Liberal Arts', 
-      title: 'Humanities & Pre-Law', 
-      subtitle: 'History, Government, Psychology & Literature', 
-      icon: <Palette className="w-5 h-5" />, 
-      color: 'from-emerald-500 to-teal-500' 
-    },
-    { 
-      id: 'Computer Science', 
-      title: 'Computer Science & AI', 
-      subtitle: 'Coding, Data Structures & AI Principles', 
-      icon: <Cpu className="w-5 h-5" />, 
-      color: 'from-blue-500 to-cyan-500' 
-    },
-    { 
-      id: 'Honors / College Prep', 
-      title: 'Honors & College Prep', 
-      subtitle: 'Academic Research, Seminar & Advanced Rigor', 
-      icon: <GraduationCap className="w-5 h-5" />, 
-      color: 'from-indigo-500 to-violet-500' 
-    },
-  ],
-  'United Kingdom': [
-    { id: 'STEM / Engineering', title: 'STEM & Mathematics', subtitle: 'Tailored for A-Level Maths & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / Life Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for A-Level Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
-    { id: 'Business / Economics', title: 'Economics & Business Studies', subtitle: 'Tailored for GCSE & A-Level Economics', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
-    { id: 'Humanities / Liberal Arts', title: 'Humanities & Social Sciences', subtitle: 'Tailored for A-Level History & Literature', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
-    { id: 'Computer Science', title: 'Computer Science & Software', subtitle: 'Tailored for GCSE & A-Level Computer Science', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
-  ],
-  'Canada': [
-    { id: 'STEM / Engineering', title: 'Engineering & Math (University Prep)', subtitle: 'Tailored for Grade 12 Calculus & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / Life Sciences', title: 'Health Sciences (University Prep)', subtitle: 'Tailored for Grade 12 Bio & Chem', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
-    { id: 'Business / Economics', title: 'Commerce & Economics Prep', subtitle: 'Tailored for Grade 12 Business & Financial Math', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
-    { id: 'Humanities / Liberal Arts', title: 'Humanities & Social Studies', subtitle: 'Tailored for Grade 12 Canadian History & English', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
-    { id: 'Computer Science', title: 'Computer Science & Tech', subtitle: 'Tailored for Grade 12 Computer & Data Science', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
-  ],
-  'Australia': [
-    { id: 'STEM / Engineering', title: 'Engineering & Mathematical Sciences', subtitle: 'Tailored for HSC Specialist Maths & Physics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / Life Sciences', title: 'Biomedical & Medical Sciences', subtitle: 'Tailored for HSC / VCE Biology & Chemistry', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
-    { id: 'Business / Economics', title: 'Commerce & Financial Studies', subtitle: 'Tailored for HSC / VCE Economics & Commerce', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
-    { id: 'Humanities / Liberal Arts', title: 'Humanities & Legal Studies', subtitle: 'Tailored for HSC Modern History & Legal Studies', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
-    { id: 'Computer Science', title: 'Information & Software Technology', subtitle: 'Tailored for HSC Software Design & Development', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
-  ],
-  'Others / International': [
-    { id: 'STEM / Engineering', title: 'STEM & Engineering', subtitle: 'Tailored for Physics & Advanced Mathematics', icon: <Rocket className="w-5 h-5" />, color: 'from-purple-500 to-indigo-500' },
-    { id: 'Pre-Med / Life Sciences', title: 'Medicine & Life Sciences', subtitle: 'Tailored for Biology, Chemistry & Health Sciences', icon: <HeartPulse className="w-5 h-5" />, color: 'from-pink-500 to-rose-500' },
-    { id: 'Business / Economics', title: 'Business, Economics & Finance', subtitle: 'Tailored for Global Economics & Business Management', icon: <BarChart3 className="w-5 h-5" />, color: 'from-amber-500 to-orange-500' },
-    { id: 'Humanities / Liberal Arts', title: 'Humanities & Liberal Arts', subtitle: 'Tailored for Global History, Literature & Social Sciences', icon: <Palette className="w-5 h-5" />, color: 'from-emerald-500 to-teal-500' },
-    { id: 'Computer Science', title: 'Computer Science & Software', subtitle: 'Tailored for Computer Science & Coding', icon: <Cpu className="w-5 h-5" />, color: 'from-blue-500 to-cyan-500' },
-  ],
+const SUBJECT_COLORS = [
+  'from-blue-500 to-indigo-500',
+  'from-purple-500 to-indigo-500',
+  'from-pink-500 to-rose-500',
+  'from-emerald-500 to-teal-500',
+  'from-cyan-500 to-blue-500',
+  'from-amber-500 to-orange-500',
+  'from-rose-500 to-red-500',
+  'from-violet-500 to-purple-500',
+];
+
+// Preserved for backwards compatibility with any legacy imports
+export const REGIONAL_TRACKS: Record<string, Array<{ id: string; title: string; subtitle: string; icon: string; color: string }>> = {
+  'United States': [],
+  'United Kingdom': [],
+  'Canada': [],
+  'Australia': [],
+  'Others': [],
+  'Others / International': []
 };
 
 export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [selectedGrade, setSelectedGrade] = useState<string>('11th Grade (Junior)');
-  const [selectedCountryId, setSelectedCountryId] = useState<string>('USA');
-  const [selectedStream, setSelectedStream] = useState<string>('STEM / Engineering');
+  // 4 Dedicated Selection Steps
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  const handleNextStep = () => {
+  // Step 1: Country Selection
+  const [selectedCountryId, setSelectedCountryId] = useState<string>(() => {
+    const savedCountry = safeGetItem(`academic_country_${userId}`) || safeGetItem('academic_country');
+    const matched = COUNTRIES.find(c => c.name === savedCountry || c.id === savedCountry);
+    return matched ? matched.id : (savedCountry && savedCountry !== 'United States' ? 'Other' : 'USA');
+  });
+  const [customCountry, setCustomCountry] = useState<string>(() => {
+    return safeGetItem(`academic_custom_country_${userId}`) || safeGetItem('academic_custom_country') || '';
+  });
+  const [countryError, setCountryError] = useState<string | null>(null);
+
+  // Step 2: Target Exam Selection & AI Verification
+  const [targetExam, setTargetExam] = useState<string>(() => {
+    return safeGetItem(`academic_exam_${userId}`) || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+  });
+  const [isVerifyingExam, setIsVerifyingExam] = useState<boolean>(false);
+  const [examError, setExamError] = useState<string | null>(null);
+
+  // Deep Research Loading & Calibration Modal States
+  const [isDeepResearching, setIsDeepResearching] = useState<boolean>(false);
+  const [researchStage, setResearchStage] = useState<number>(1);
+  const [researchMessage, setResearchMessage] = useState<string>('Connecting to Official Examination Registry...');
+
+  // AI-Researched Exam Subjects for Step 4
+  const [verifiedExamSubjects, setVerifiedExamSubjects] = useState<Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    icon: string;
+    color: string;
+  }>>(() => {
+    const cached = safeGetItem(`cached_exam_subjects_${userId}`);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (_) {}
+    }
+    return DEFAULT_SUBJECTS;
+  });
+
+  const [examHasElectives, setExamHasElectives] = useState<boolean | null>(() => {
+    const cached = safeGetItem(`cached_exam_has_electives_${userId}`);
+    return cached !== null ? cached === 'true' : null;
+  });
+
+  // AI-Researched Exam Grades / Classes for Step 3
+  const [verifiedExamGrades, setVerifiedExamGrades] = useState<Array<{
+    id: string;
+    label: string;
+    desc: string;
+    isCollege?: boolean;
+  }>>(() => {
+    const cached = safeGetItem(`cached_exam_grades_${userId}`) || safeGetItem('cached_exam_grades');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (_) {}
+    }
+    return GRADES;
+  });
+
+  // Step 3: Grade Level Selection
+  const [selectedGrade, setSelectedGrade] = useState<string>(() => {
+    return safeGetItem(`academic_grade_${userId}`) || safeGetItem('academic_grade') || '11th Grade (Junior)';
+  });
+
+  // Step 4: Multi-Subject Selection
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>(() => {
+    const activeUid = userId || auth.currentUser?.uid || '';
+    const savedList = (activeUid ? safeGetItem(`academic_subjects_${activeUid}`) : null) || safeGetItem('academic_subjects');
+    if (savedList) {
+      try {
+        const parsed = JSON.parse(savedList);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (_) {
+        const split = savedList.split(',').map((s: string) => s.trim()).filter(Boolean);
+        if (split.length > 0) return split;
+      }
+    }
+    const singleSaved = (activeUid ? safeGetItem(`academic_subject_${activeUid}`) : null) || safeGetItem('academic_subject') || safeGetItem('subject');
+    if (singleSaved) {
+      const split = singleSaved.split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (split.length > 0) return split;
+    }
+    return ['Mathematics'];
+  });
+  const [customSubject, setCustomSubject] = useState<string>(() => {
+    const activeUid = userId || auth.currentUser?.uid || '';
+    return (activeUid ? safeGetItem(`academic_custom_subject_${activeUid}`) : null) || safeGetItem('academic_custom_subject') || '';
+  });
+
+  const toggleSubject = (subjId: string) => {
+    triggerVibration(10);
+    setSelectedSubjectIds((prev) => {
+      if (prev.includes(subjId)) {
+        if (prev.length <= 1) {
+          return prev; // Keep at least one subject selected
+        }
+        return prev.filter(id => id !== subjId);
+      } else {
+        if (subjId === 'Other') {
+          setTimeout(() => {
+            if (subjectScrollRef.current) {
+              subjectScrollRef.current.scrollTo({ top: subjectScrollRef.current.scrollHeight, behavior: 'smooth' });
+            }
+            otherSubjectBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            customSubjectInputRef.current?.focus({ preventScroll: true });
+          }, 80);
+        }
+        return [...prev, subjId];
+      }
+    });
+  };
+
+  // Auto-scroll refs for dynamic typeboxes when "Others" is selected
+  const countryScrollRef = useRef<HTMLDivElement>(null);
+  const otherCountryBoxRef = useRef<HTMLDivElement>(null);
+  const customCountryInputRef = useRef<HTMLInputElement>(null);
+
+  const subjectScrollRef = useRef<HTMLDivElement>(null);
+  const otherSubjectBoxRef = useRef<HTMLDivElement>(null);
+  const customSubjectInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll down when 'Others' country option is chosen
+  useEffect(() => {
+    if (step === 1 && selectedCountryId === 'Other') {
+      const timer = setTimeout(() => {
+        if (countryScrollRef.current) {
+          countryScrollRef.current.scrollTo({
+            top: countryScrollRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+        otherCountryBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        customCountryInputRef.current?.focus({ preventScroll: true });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedCountryId, step]);
+
+  // Auto-scroll down when 'Other Subjects' option is chosen
+  useEffect(() => {
+    if (step === 4 && selectedSubjectIds.includes('Other')) {
+      const timer = setTimeout(() => {
+        if (subjectScrollRef.current) {
+          subjectScrollRef.current.scrollTo({
+            top: subjectScrollRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+        otherSubjectBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        customSubjectInputRef.current?.focus({ preventScroll: true });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedSubjectIds, step]);
+
+  const handleNextStep = async () => {
     triggerVibration(15);
+
     if (step === 1) {
-      setStep(2);
-    } else if (step === 2) {
-      setStep(3);
+      if (selectedCountryId === 'Other' && !customCountry.trim()) {
+        setCountryError("Please type your country name (e.g. India, Germany, UAE).");
+        customCountryInputRef.current?.focus();
+        triggerVibration(25);
+        return;
+      }
+      setCountryError(null);
+      setStep(2); // From Country -> Exam
+      return;
+    } 
+    
+    if (step === 2) {
+      // Step 2: Verify exam existence with AI and research official subjects
+      const trimmed = targetExam.trim();
+      if (!trimmed) {
+        setExamError("Please enter the exam name you are preparing for.");
+        return;
+      }
+
+      setExamError(null);
+      setIsVerifyingExam(true);
+
+      const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
+      const finalCountry = selectedCountryId === 'Other' 
+        ? ((customCountry || '').trim() || 'Others') 
+        : countryObj.name;
+
+      try {
+        const res = await fetch(getApiUrl('/api/verify-and-research-exam'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ country: finalCountry, examName: trimmed })
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to reach exam verification server");
+        }
+
+        const data = await res.json();
+
+        // 1. If exam does NOT exist, show error and stay on Step 2
+        if (!data.isValid) {
+          setExamError(data.errorMessage || `We could not verify "${trimmed}". Please check the spelling or enter a recognized exam name.`);
+          setIsVerifyingExam(false);
+          triggerVibration(25);
+          return;
+        }
+
+        // 2. Exam is VALID: Set standardized title and researched subjects
+        if (data.officialExamName) {
+          setTargetExam(data.officialExamName);
+        }
+
+        if (Array.isArray(data.subjects) && data.subjects.length > 0) {
+          const mapped = data.subjects.map((s: any, idx: number) => ({
+            id: s.id || s.title,
+            title: s.title || s.id,
+            subtitle: s.subtitle || 'Official Exam Syllabus Topic',
+            icon: s.icon || '📚',
+            color: SUBJECT_COLORS[idx % SUBJECT_COLORS.length]
+          }));
+
+          setVerifiedExamSubjects(mapped);
+          safeSetItem(`cached_exam_subjects_${userId}`, JSON.stringify(mapped));
+
+          const hasElectivesBool = typeof data.hasElectives === 'boolean' 
+            ? data.hasElectives 
+            : mapped.length >= 6;
+          setExamHasElectives(hasElectivesBool);
+          safeSetItem(`cached_exam_has_electives_${userId}`, String(hasElectivesBool));
+
+          // Pre-select all researched official subjects for this examination
+          setSelectedSubjectIds(mapped.map((m: any) => m.id));
+        }
+
+        // 3. Process AI-researched grades / classes for this specific exam
+        if (Array.isArray(data.grades) && data.grades.length > 0) {
+          const mappedGrades = data.grades.map((g: any) => ({
+            id: g.id || g.label,
+            label: g.label || g.id,
+            desc: g.desc || 'Exam preparation grade level',
+            isCollege: Boolean(g.isCollege)
+          }));
+
+          setVerifiedExamGrades(mappedGrades);
+          safeSetItem(`cached_exam_grades_${userId}`, JSON.stringify(mappedGrades));
+          safeSetItem('cached_exam_grades', JSON.stringify(mappedGrades));
+
+          // Auto-select the first grade if current selectedGrade is not in the researched list
+          if (!mappedGrades.some((g: any) => g.id === selectedGrade)) {
+            setSelectedGrade(mappedGrades[0].id);
+          }
+        }
+
+        setIsVerifyingExam(false);
+        setStep(3); // Advance to Grade selection
+      } catch (err: any) {
+        console.warn("[AcademicSetup] AI exam verification network error:", err);
+        setIsVerifyingExam(false);
+        setExamError(err?.message && !err.message.includes('Failed to reach')
+          ? err.message
+          : "Could not verify this exam with official records. Please check your internet connection or verify the exam name and try again.");
+        triggerVibration(25);
+      }
+      return;
+    } 
+    
+    if (step === 3) {
+      setStep(4); // From Grade -> Subjects
+      return;
     }
   };
 
   const handleBackStep = () => {
     triggerVibration(10);
-    if (step === 3) {
-      setStep(2);
+    setExamError(null);
+    if (step === 4) {
+      setStep(3); // From Subjects -> Grade
+    } else if (step === 3) {
+      setStep(2); // From Grade -> Exam
     } else if (step === 2) {
-      setStep(1);
+      setStep(1); // From Exam -> Country
     }
   };
+
+  // Show "Other Subjects" only if exam has many electives (6+ subjects), never for fixed 2-4 subject exams like NEET or JEE
+  const shouldShowOtherSubjects = examHasElectives !== null
+    ? (examHasElectives === true && verifiedExamSubjects.length >= 6)
+    : (verifiedExamSubjects.length >= 6);
+
+  const displayedSubjects = shouldShowOtherSubjects
+    ? [
+        ...verifiedExamSubjects,
+        {
+          id: 'Other',
+          title: 'Other Subjects',
+          subtitle: 'Type your custom subject or course name',
+          icon: '✏️',
+          color: 'from-zinc-700 to-zinc-900'
+        }
+      ]
+    : verifiedExamSubjects;
 
   const handleFinish = async () => {
     triggerVibration(25);
     
     const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
+    const finalCountry = selectedCountryId === 'Other' 
+      ? ((customCountry || '').trim() || 'Others') 
+      : countryObj.name;
+    const finalExam = (targetExam || '').trim() || 'General Studies';
+    
+    // Resolve final subjects list from multi-selection
+    const finalSubjectsList: string[] = [];
+    selectedSubjectIds.forEach(id => {
+      if (id === 'Other') {
+        if (!shouldShowOtherSubjects) return;
+        const trimmedCustom = (customSubject || '').trim();
+        if (trimmedCustom) {
+          trimmedCustom.split(',').map((s: string) => s.trim()).filter(Boolean).forEach((s: string) => {
+            if (!finalSubjectsList.includes(s)) finalSubjectsList.push(s);
+          });
+        } else {
+          if (!finalSubjectsList.includes('Other Subjects')) finalSubjectsList.push('Other Subjects');
+        }
+      } else {
+        const match = [...verifiedExamSubjects, ...DEFAULT_SUBJECTS].find(s => s.id === id);
+        const title = match?.title || id;
+        if (!finalSubjectsList.includes(title)) finalSubjectsList.push(title);
+      }
+    });
+
+    if (finalSubjectsList.length === 0) {
+      finalSubjectsList.push('Mathematics');
+    }
+
+    const finalSubject = finalSubjectsList.join(', ');
+
+    // Find study level based on grade (High School vs College)
+    const gradeObj = [...verifiedExamGrades, ...GRADES].find(g => g.id === selectedGrade);
+    const studyLevel = gradeObj?.isCollege ? 'College' : 'High School';
+
+    // Start 5-Stage Live Deep Research
+    setIsDeepResearching(true);
+    setResearchStage(1);
+    setResearchMessage(`Connecting to Official ${finalExam} Examination Registry...`);
+
+    // Dynamic stage progression timer while waiting for API
+    const stageTimer1 = setTimeout(() => {
+      setResearchStage(2);
+      setResearchMessage(`Curating official syllabus & core units for ${finalSubjectsList.length} subjects...`);
+    }, 1100);
+
+    const stageTimer2 = setTimeout(() => {
+      setResearchStage(3);
+      setResearchMessage(`Analyzing official marks weightage & negative marking rules...`);
+    }, 2400);
+
+    const stageTimer3 = setTimeout(() => {
+      setResearchStage(4);
+      setResearchMessage(`Extracting authentic examination question patterns & style...`);
+    }, 3800);
+
+    let researchedBlueprint: any = null;
+
+    try {
+      const res = await fetch(getApiUrl('/api/deep-research-exam-blueprint'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: finalCountry,
+          examName: finalExam,
+          grade: selectedGrade,
+          subjects: finalSubjectsList
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.subjectsBlueprint) {
+          researchedBlueprint = data.subjectsBlueprint;
+        }
+      }
+    } catch (apiErr) {
+      console.warn("[AcademicSetup] Deep research network fallback:", apiErr);
+    }
+
+    clearTimeout(stageTimer1);
+    clearTimeout(stageTimer2);
+    clearTimeout(stageTimer3);
+
+    // Stage 5: Finalizing & Securing
+    setResearchStage(5);
+    setResearchMessage('Permanently calibrating and securing your Academic DNA! ✓');
+    triggerVibration(30);
 
     // Save selections locally
-    safeSetItem('academic_grade', selectedGrade);
-    safeSetItem('academic_stream', selectedStream);
+    safeSetItem('academic_country', finalCountry);
+    safeSetItem('academic_custom_country', customCountry);
     safeSetItem('academic_region', countryObj.regionSystem);
-    safeSetItem('academic_country', countryObj.name);
-    
-    // Find study level based on grade (High School vs College)
-    const gradeObj = GRADES.find(g => g.id === selectedGrade);
-    const studyLevel = gradeObj?.isCollege ? 'College' : 'High School';
+    safeSetItem('academic_exam', finalExam);
+    safeSetItem('target_exam', finalExam);
+    safeSetItem('academic_grade', selectedGrade);
     safeSetItem('onboarding_grade', studyLevel);
+    safeSetItem('academic_subjects', JSON.stringify(finalSubjectsList));
+    safeSetItem('academic_subject', finalSubject);
+    safeSetItem('selected_subject', finalSubject);
+    safeSetItem('subject', finalSubject);
+    safeSetItem('academic_stream', finalSubject); // backward compatibility
+    safeSetItem('academic_custom_subject', customSubject);
+
+    if (researchedBlueprint) {
+      safeSetItem('user_exam_blueprint', JSON.stringify(researchedBlueprint));
+      safeSetItem('academic_exam_blueprint', JSON.stringify(researchedBlueprint));
+    }
+
     safeSetItem('onboarding_completed', 'true');
     safeSetItem('academic_setup_completed', 'true');
     safeSetItem('isOnboardingComplete', 'true');
@@ -155,11 +496,24 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
     if (activeUid) {
       safeSetItem('helpyou_active_user_session', 'true');
       safeSetItem('last_logged_in_user', activeUid);
-      safeSetItem(`academic_grade_${activeUid}`, selectedGrade);
-      safeSetItem(`academic_stream_${activeUid}`, selectedStream);
+      safeSetItem(`academic_country_${activeUid}`, finalCountry);
+      safeSetItem(`academic_custom_country_${activeUid}`, customCountry);
       safeSetItem(`academic_region_${activeUid}`, countryObj.regionSystem);
-      safeSetItem(`academic_country_${activeUid}`, countryObj.name);
+      safeSetItem(`academic_exam_${activeUid}`, finalExam);
+      safeSetItem(`target_exam_${activeUid}`, finalExam);
+      safeSetItem(`academic_grade_${activeUid}`, selectedGrade);
       safeSetItem(`onboarding_grade_${activeUid}`, studyLevel);
+      safeSetItem(`academic_subjects_${activeUid}`, JSON.stringify(finalSubjectsList));
+      safeSetItem(`academic_subject_${activeUid}`, finalSubject);
+      safeSetItem(`selected_subject_${activeUid}`, finalSubject);
+      safeSetItem(`subject_${activeUid}`, finalSubject);
+      safeSetItem(`academic_stream_${activeUid}`, finalSubject);
+      safeSetItem(`academic_custom_subject_${activeUid}`, customSubject);
+
+      if (researchedBlueprint) {
+        safeSetItem(`user_exam_blueprint_${activeUid}`, JSON.stringify(researchedBlueprint));
+      }
+
       safeSetItem(`academic_setup_completed_${activeUid}`, 'true');
       safeSetItem(`onboarding_completed_${activeUid}`, 'true');
       safeSetItem(`isOnboardingComplete_${activeUid}`, 'true');
@@ -167,24 +521,43 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
 
       // Update Firestore user document with isOnboardingComplete and selections
       try {
-        await setDoc(doc(db, 'users', activeUid), {
+        const userDocPayload: any = {
           isOnboardingComplete: true,
           isOnboardingCompleted: true,
+          country: finalCountry,
+          academic_country: finalCountry,
+          targetExam: finalExam,
+          exam: finalExam,
+          academic_exam: finalExam,
           grade: selectedGrade,
-          stream: selectedStream,
-          country: countryObj.name,
-          regionSystem: countryObj.regionSystem,
           academic_grade: selectedGrade,
-          academic_stream: selectedStream,
-          academic_country: countryObj.name,
+          subjects: finalSubjectsList,
+          academic_subjects: finalSubjectsList,
+          subject: finalSubject,
+          selectedSubject: finalSubject,
+          academic_subject: finalSubject,
+          stream: finalSubject,
+          academic_stream: finalSubject,
+          regionSystem: countryObj.regionSystem,
           updatedAt: new Date().toISOString()
-        }, { merge: true });
-        console.log(`[AcademicSetup] Successfully updated Firestore user doc ${activeUid} with isOnboardingComplete: true`);
+        };
+
+        if (researchedBlueprint) {
+          userDocPayload.examBlueprint = researchedBlueprint;
+          userDocPayload.academicBlueprint = researchedBlueprint;
+          userDocPayload.blueprintLastUpdated = new Date().toISOString();
+        }
+
+        await setDoc(doc(db, 'users', activeUid), userDocPayload, { merge: true });
+        console.log(`[AcademicSetup] Successfully updated user ${activeUid} with calibrated exam blueprint.`);
       } catch (dbErr) {
-        console.error('[AcademicSetup] Error saving onboarding state to Firestore:', dbErr);
+        console.error('[AcademicSetup] Error saving setup state to Firestore:', dbErr);
       }
     }
 
+    // Brief 800ms celebration confirmation for user
+    await new Promise(r => setTimeout(r, 800));
+    setIsDeepResearching(false);
     onComplete();
   };
 
@@ -202,7 +575,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest bg-zinc-100 px-2.5 py-1 rounded-full border border-zinc-150">
-            Step {step} of 3
+            Step {step} of 4
           </span>
         </div>
       </div>
@@ -210,9 +583,10 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
       {/* Content Area with Slide Animation */}
       <div className="flex-1 px-6 flex flex-col justify-center max-w-sm mx-auto w-full min-h-0 z-10">
         <AnimatePresence mode="wait">
+          {/* STEP 1: Country Selection */}
           {step === 1 && (
             <motion.div
-              key="step-grade"
+              key="step-country"
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 20, opacity: 0 }}
@@ -220,17 +594,302 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
               className="flex-1 flex flex-col justify-center min-h-0 py-2"
             >
               <div className="text-left mb-6 shrink-0">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
+                  <Globe className="w-3.5 h-3.5 text-purple-600" />
+                  Step 1 • Country
+                </div>
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
-                  What grade are you in?
+                  Select your country
                 </h1>
                 <p className="text-xs text-zinc-500 font-semibold mt-1">
-                  Customized for your level
+                  Matches your curriculum and educational system
                 </p>
+              </div>
+
+              {/* ONE-TIME COUNTRY SELECTION WARNING BANNER */}
+              <div className="mb-3.5 p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/40 text-amber-950 flex items-start gap-3 shadow-xs shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 stroke-[2.5]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 font-black text-amber-950 text-xs">
+                    <span>⚠️ Important: Permanent One-Time Selection</span>
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded">
+                      Cannot Edit Later
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-900/90 font-semibold mt-1 leading-relaxed">
+                    Your country can only be set <strong>once</strong> and <strong>cannot be changed or edited later</strong> in your profile. Please select your official country carefully.
+                  </p>
+                </div>
+              </div>
+
+              {/* Country Selection Cards */}
+              <div ref={countryScrollRef} className="flex-1 overflow-y-auto pr-1 -mr-1 py-1 space-y-2.5 max-h-[50vh] scroll-smooth">
+                {COUNTRIES.map((country) => {
+                  const isSelected = selectedCountryId === country.id;
+                  return (
+                    <div key={country.id} className="space-y-2">
+                      <motion.div
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          triggerVibration(10);
+                          setSelectedCountryId(country.id);
+                          if (countryError) setCountryError(null);
+                          if (country.id === 'Other') {
+                            setTimeout(() => {
+                              if (countryScrollRef.current) {
+                                countryScrollRef.current.scrollTo({ top: countryScrollRef.current.scrollHeight, behavior: 'smooth' });
+                              }
+                              otherCountryBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                              customCountryInputRef.current?.focus({ preventScroll: true });
+                            }, 80);
+                          }
+                        }}
+                        className={`p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? 'border-purple-500 bg-purple-50/60 ring-1 ring-purple-500/20 shadow-sm'
+                            : 'border-zinc-200 bg-white hover:border-zinc-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <span className="text-2xl filter drop-shadow-sm select-none">{country.flag}</span>
+                          <span className={`text-xs font-black ${isSelected ? 'text-purple-700' : 'text-zinc-800'}`}>
+                            {country.name}
+                          </span>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                          isSelected 
+                            ? 'border-purple-600 bg-purple-600 text-white' 
+                            : 'border-zinc-300 bg-white'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </motion.div>
+
+                      {/* When Others is selected, show Type Box immediately and auto-scroll */}
+                      {country.id === 'Other' && isSelected && (
+                        <motion.div
+                          ref={otherCountryBoxRef}
+                          initial={{ opacity: 0, height: 0, y: -6 }}
+                          animate={{ opacity: 1, height: 'auto', y: 0 }}
+                          exit={{ opacity: 0, height: 0, y: -6 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="bg-purple-50/70 border-2 border-purple-500/80 rounded-2xl p-3.5 shadow-sm">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-purple-700 block mb-1.5">
+                              Type Your Country Name
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <Globe className="w-4 h-4 text-purple-600 shrink-0" />
+                              <input
+                                ref={customCountryInputRef}
+                                type="text"
+                                value={customCountry}
+                                onChange={(e) => {
+                                  setCustomCountry(e.target.value);
+                                  if (countryError) setCountryError(null);
+                                }}
+                                placeholder="e.g. India, Germany, UAE, Pakistan, Nigeria..."
+                                className="w-full bg-transparent text-xs font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none"
+                                autoFocus
+                              />
+                              {customCountry.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    triggerVibration(10);
+                                    setCustomCountry('');
+                                    if (countryError) setCountryError(null);
+                                  }}
+                                  className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            {countryError && (
+                              <p className="text-[10px] text-red-600 font-bold mt-1.5 flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />
+                                {countryError}
+                              </p>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* STEP 2: Exam Name Selection & Live AI Verification */}
+          {step === 2 && (
+            <motion.div
+              key="step-exam"
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -20, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col justify-center min-h-0 py-2"
+            >
+              <div className="text-left mb-6 shrink-0">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  Step 2 • Target Exam
+                </div>
+                <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
+                  Which exam are you preparing for?
+                </h1>
+                <p className="text-xs text-zinc-500 font-semibold mt-1">
+                  Type your target exam name below (AI will verify & fetch official subjects)
+                </p>
+              </div>
+
+              {/* Clean Exam Type Box - NO LIST */}
+              <div className="space-y-3.5">
+                {/* ONE-TIME PERMANENT SELECTION WARNING BANNER */}
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/40 text-amber-950 flex items-start gap-3 shadow-xs">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 stroke-[2.5]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 font-black text-amber-950 text-xs">
+                      <span>⚠️ Important: Permanent One-Time Setting</span>
+                      <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded">
+                        Cannot Edit Later
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-900/90 font-semibold mt-1 leading-relaxed">
+                      Your target exam can only be set <strong>once</strong> and <strong>cannot be changed or edited later</strong> in your profile. Please write your official exam name accurately in English.
+                    </p>
+                  </div>
+                </div>
+
+                <div className={`bg-white border-2 rounded-2xl p-4 shadow-sm transition-all ${
+                  examError 
+                    ? 'border-red-500 shadow-red-500/5' 
+                    : 'border-purple-500/80 shadow-purple-500/5 focus-within:border-purple-600 focus-within:ring-4 focus-within:ring-purple-500/10'
+                }`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-purple-700 block">
+                      Target Exam Name (In English)
+                    </label>
+                    <span className="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5 text-amber-600" /> One-Time Edit
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Target className="w-5 h-5 text-purple-600 shrink-0" />
+                    <input
+                      type="text"
+                      value={targetExam}
+                      disabled={isVerifyingExam}
+                      onChange={(e) => {
+                        setTargetExam(e.target.value);
+                        if (examError) setExamError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleNextStep();
+                        }
+                      }}
+                      placeholder="e.g. JEE, NEET, SAT, AP Physics, CBSE..."
+                      className="w-full bg-transparent text-sm font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none disabled:opacity-50"
+                      autoFocus
+                    />
+                    {targetExam.length > 0 && !isVerifyingExam && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerVibration(10);
+                          setTargetExam('');
+                          setExamError(null);
+                        }}
+                        className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full hover:bg-zinc-100 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Inline Error Notice if Exam does not exist */}
+                {examError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3.5 rounded-2xl bg-red-50/90 border border-red-200 text-red-700 text-xs flex items-start gap-2.5 shadow-xs"
+                  >
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-black text-red-800">Exam Verification Notice</p>
+                      <p className="text-[11px] text-red-600 font-medium mt-0.5 leading-relaxed">
+                        {examError}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+
+                <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-[11px] text-zinc-500 font-medium leading-relaxed">
+                    AI will verify this exam and research its official syllabus papers to curate your exact subject selection.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* STEP 3: Grade Level Selection */}
+          {step === 3 && (
+            <motion.div
+              key="step-grade"
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -20, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col justify-center min-h-0 py-2"
+            >
+              <div className="text-left mb-6 shrink-0">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
+                  <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
+                  Step 3 • Grade / Class Level
+                </div>
+                <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
+                  What grade or class are you in?
+                </h1>
+                <p className="text-xs text-zinc-500 font-semibold mt-1">
+                  {targetExam ? `Curated classes & levels for ${targetExam}` : 'Customized for your academic level'}
+                </p>
+              </div>
+
+              {/* ONE-TIME GRADE SELECTION WARNING BANNER */}
+              <div className="mb-3.5 p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/40 text-amber-950 flex items-start gap-3 shadow-xs shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 stroke-[2.5]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 font-black text-amber-950 text-xs">
+                    <span>⚠️ Important: Permanent One-Time Selection</span>
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded">
+                      Cannot Edit Later
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-900/90 font-semibold mt-1 leading-relaxed">
+                    Your grade level can only be set <strong>once</strong> and <strong>cannot be changed or edited later</strong> in your profile. Please select your official grade/class carefully.
+                  </p>
+                </div>
               </div>
 
               {/* Scrollable Grade Grid */}
               <div className="flex-1 overflow-y-auto pr-1 -mr-1 py-1 space-y-2 max-h-[50vh]">
-                {GRADES.map((grade) => {
+                {verifiedExamGrades.map((grade) => {
                   const isSelected = selectedGrade === grade.id;
                   return (
                     <motion.div
@@ -268,9 +927,10 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
             </motion.div>
           )}
 
-          {step === 2 && (
+          {/* STEP 4: Subjects Selection (AI Researched for Exam) */}
+          {step === 4 && (
             <motion.div
-              key="step-country"
+              key="step-subjects"
               initial={{ x: 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
@@ -278,115 +938,101 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
               className="flex-1 flex flex-col justify-center min-h-0 py-2"
             >
               <div className="text-left mb-6 shrink-0">
-                <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight flex items-center gap-2">
-                  Select your country
-                </h1>
-                <p className="text-xs text-zinc-500 font-semibold mt-1">
-                  Matches your regional curriculum
-                </p>
-              </div>
-
-              {/* Country Selection Cards */}
-              <div className="flex-1 overflow-y-auto pr-1 -mr-1 py-1 space-y-2.5 max-h-[50vh]">
-                {COUNTRIES.map((country) => {
-                  const isSelected = selectedCountryId === country.id;
-                  return (
-                    <motion.div
-                      key={country.id}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        triggerVibration(10);
-                        setSelectedCountryId(country.id);
-                      }}
-                      className={`p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'border-purple-500 bg-purple-50/60 ring-1 ring-purple-500/20 shadow-sm'
-                          : 'border-zinc-200 bg-white hover:border-zinc-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <span className="text-2xl filter drop-shadow-sm select-none">{country.flag}</span>
-                        <span className={`text-xs font-black ${isSelected ? 'text-purple-700' : 'text-zinc-800'}`}>
-                          {country.name}
-                        </span>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
-                        isSelected 
-                          ? 'border-purple-600 bg-purple-600 text-white' 
-                          : 'border-zinc-300 bg-white'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-
-          {step === 3 && (
-            <motion.div
-              key="step-stream"
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -20, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="flex-1 flex flex-col justify-center min-h-0 py-2"
-            >
-              <div className="text-left mb-6 shrink-0">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                  Step 4 • Exam Syllabus
+                </div>
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
-                  Choose your study focus
+                  {targetExam ? `Subjects for ${targetExam}` : 'Select your subjects'}
                 </h1>
-                <p className="text-xs text-zinc-500 font-semibold mt-1">
-                  Personalizes quizzes & cards
-                </p>
+                <div className="flex items-center justify-between text-xs text-zinc-500 font-semibold mt-1">
+                  <span>Select all subjects you are preparing for:</span>
+                  <span className="text-[11px] font-black text-purple-700 bg-purple-100/90 px-2.5 py-0.5 rounded-full border border-purple-200">
+                    {selectedSubjectIds.length} Selected
+                  </span>
+                </div>
               </div>
 
-              {/* Streams Grid */}
-              <div className="flex-1 overflow-y-auto pr-1 -mr-1 py-1 space-y-2.5 max-h-[50vh]">
-                {(() => {
-                  const countryObj = COUNTRIES.find(c => c.id === selectedCountryId);
-                  const countryName = countryObj?.name || 'United States';
-                  const activeTracks = REGIONAL_TRACKS[countryName] || REGIONAL_TRACKS['Others / International'];
-
-                  return activeTracks.map((track) => {
-                    const isSelected = selectedStream === track.id || selectedStream === track.title;
-                    return (
+              {/* Subjects List: Real Exam Subjects (and Other Subjects only when exam has broad electives) */}
+              <div ref={subjectScrollRef} className="flex-1 overflow-y-auto pr-1 -mr-1 py-1 space-y-2.5 max-h-[50vh] scroll-smooth">
+                {displayedSubjects.map((subj) => {
+                  const isSelected = selectedSubjectIds.includes(subj.id);
+                  return (
+                    <div key={subj.id} className="space-y-2">
                       <motion.div
-                        key={track.title}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => {
-                          triggerVibration(10);
-                          setSelectedStream(track.id);
-                        }}
-                        className={`p-4 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer ${
+                        onClick={() => toggleSubject(subj.id)}
+                        className={`p-3.5 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer select-none ${
                           isSelected
-                            ? 'border-purple-500 bg-purple-50/50 shadow-sm shadow-purple-500/5'
+                            ? 'border-purple-600 bg-purple-50/70 shadow-sm ring-1 ring-purple-500/20'
                             : 'border-zinc-200 bg-white hover:border-zinc-300'
                         }`}
                       >
-                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${track.color} text-white flex items-center justify-center shadow-md shadow-zinc-100/10`}>
-                          {track.icon}
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${subj.color} text-white text-lg flex items-center justify-center shadow-md shadow-zinc-100/10 shrink-0`}>
+                          {subj.icon}
                         </div>
-                        <div className="flex-1 text-left">
-                          <p className={`text-xs font-black ${isSelected ? 'text-purple-700' : 'text-zinc-800'}`}>
-                            {track.title}
+                        <div className="flex-1 text-left min-w-0">
+                          <p className={`text-xs font-black truncate ${isSelected ? 'text-purple-950' : 'text-zinc-800'}`}>
+                            {subj.title}
                           </p>
-                          <p className="text-[9px] text-zinc-400 font-bold mt-0.5">
-                            {track.subtitle}
+                          <p className="text-[9px] text-zinc-400 font-bold mt-0.5 truncate">
+                            {subj.subtitle}
                           </p>
                         </div>
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                        {/* Rounded checkbox indicator */}
+                        <div className={`w-6 h-6 rounded-xl border-2 flex items-center justify-center transition-all shrink-0 ${
                           isSelected 
-                            ? 'border-purple-600 bg-purple-600 text-white' 
+                            ? 'border-purple-600 bg-purple-600 text-white shadow-xs' 
                             : 'border-zinc-300 bg-white'
                         }`}>
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </div>
                       </motion.div>
-                    );
-                  });
-                })()}
+
+                      {/* When Other Subjects is selected, show Type Box immediately and auto-scroll */}
+                      {subj.id === 'Other' && isSelected && (
+                        <motion.div
+                          ref={otherSubjectBoxRef}
+                          initial={{ opacity: 0, height: 0, y: -6 }}
+                          animate={{ opacity: 1, height: 'auto', y: 0 }}
+                          exit={{ opacity: 0, height: 0, y: -6 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="bg-purple-50/70 border-2 border-purple-500/80 rounded-2xl p-3.5 shadow-sm">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-purple-700 block mb-1.5">
+                              Type Your Custom Subject Name(s)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <BookOpen className="w-4 h-4 text-purple-600 shrink-0" />
+                              <input
+                                ref={customSubjectInputRef}
+                                type="text"
+                                value={customSubject}
+                                onChange={(e) => setCustomSubject(e.target.value)}
+                                placeholder="e.g. Psychology, French, Art History, Law..."
+                                className="w-full bg-transparent text-xs font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none"
+                                autoFocus
+                              />
+                              {customSubject.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    triggerVibration(10);
+                                    setCustomSubject('');
+                                  }}
+                                  className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           )}
@@ -400,21 +1046,32 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleBackStep}
-              className="px-4 py-4 bg-zinc-100 hover:bg-zinc-150 border border-zinc-200 rounded-[1.25rem] text-zinc-700 font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
+              disabled={isVerifyingExam}
+              className="px-4 py-4 bg-zinc-100 hover:bg-zinc-150 border border-zinc-200 rounded-[1.25rem] text-zinc-700 font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="text-xs">Back</span>
             </motion.button>
           )}
           
-          {step < 3 ? (
+          {step < 4 ? (
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleNextStep}
-              className="flex-1 bg-zinc-950 hover:bg-zinc-900 text-white rounded-[1.25rem] py-4 font-black text-sm flex items-center justify-center gap-2 shadow-md border border-zinc-900 transition-all cursor-pointer"
+              disabled={isVerifyingExam}
+              className="flex-1 bg-zinc-950 hover:bg-zinc-900 text-white rounded-[1.25rem] py-4 font-black text-sm flex items-center justify-center gap-2 shadow-md border border-zinc-900 transition-all cursor-pointer disabled:opacity-75"
             >
-              Continue
-              <ArrowRight className="w-4.5 h-4.5 text-zinc-400" />
+              {isVerifyingExam ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                  <span>Verifying Exam with AI...</span>
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight className="w-4.5 h-4.5 text-zinc-400" />
+                </>
+              )}
             </motion.button>
           ) : (
             <motion.button
@@ -431,6 +1088,122 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
           💡 You can update these anytime inside your Profile menu
         </p>
       </div>
+
+      {/* 5-Stage Live Deep Research & Academic DNA Calibration Overlay */}
+      <AnimatePresence>
+        {isDeepResearching && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-zinc-950/85 backdrop-blur-md flex items-center justify-center p-5 select-none"
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl border border-purple-500/20 relative overflow-hidden"
+            >
+              {/* Background ambient gradient glow */}
+              <div className="absolute -top-12 -right-12 w-36 h-36 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-12 -left-12 w-36 h-36 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+
+              {/* Central Pulsing Radar Orb */}
+              <div className="flex flex-col items-center text-center mb-6 relative">
+                <div className="relative mb-4">
+                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 p-0.5 shadow-xl shadow-purple-500/25 flex items-center justify-center animate-pulse">
+                    <div className="w-full h-full bg-white rounded-[1.4rem] flex items-center justify-center">
+                      {researchStage === 5 ? (
+                        <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
+                      ) : (
+                        <Sparkles className="w-8 h-8 text-purple-600 animate-spin" style={{ animationDuration: '4s' }} />
+                      )}
+                    </div>
+                  </div>
+                  {researchStage < 5 && (
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shadow-md">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-2 text-[10px] font-extrabold uppercase tracking-wider">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                  Official Exam Intelligence Engine
+                </div>
+                <h3 className="text-xl font-black text-zinc-950 tracking-tight">
+                  Calibrating Academic DNA
+                </h3>
+                <p className="text-[11px] text-zinc-500 font-semibold mt-1 max-w-[260px] leading-relaxed">
+                  Deep web research on official guidelines for <span className="font-extrabold text-zinc-900">{targetExam}</span>
+                </p>
+              </div>
+
+              {/* 5 Progress Stages Checklist */}
+              <div className="space-y-2 mb-5">
+                {[
+                  { num: 1, label: `Connect to ${targetExam || 'Exam'} Registry`, desc: 'Official testing authority handshake' },
+                  { num: 2, label: 'Curate Official Syllabus & Units', desc: 'Isolating chapters for each subject' },
+                  { num: 3, label: 'Analyze Marking Scheme & Weightage', desc: 'Formulating exact marks & negative marking' },
+                  { num: 4, label: 'Extract Real Exam Question Patterns', desc: 'Calibrating question styles & difficulty' },
+                  { num: 5, label: 'Lock Permanent Academic DNA', desc: 'Permanently secured to your personal profile' }
+                ].map((st) => {
+                  const isDone = researchStage > st.num || (researchStage === 5 && st.num === 5);
+                  const isCurrent = researchStage === st.num && researchStage < 5;
+
+                  return (
+                    <div 
+                      key={st.num}
+                      className={`p-2.5 rounded-xl border transition-all flex items-center gap-3 ${
+                        isDone 
+                          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                          : isCurrent
+                          ? 'bg-purple-50/70 border-purple-300 ring-2 ring-purple-500/10 text-purple-950'
+                          : 'bg-zinc-50/60 border-zinc-200/60 text-zinc-400 opacity-60'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                        isDone
+                          ? 'bg-emerald-600 text-white'
+                          : isCurrent
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-zinc-200 text-zinc-500'
+                      }`}>
+                        {isDone ? (
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        ) : isCurrent ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          st.num
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className={`text-xs font-black truncate ${
+                          isDone ? 'text-emerald-900' : isCurrent ? 'text-purple-900' : 'text-zinc-600'
+                        }`}>
+                          {st.label}
+                        </p>
+                        <p className="text-[9px] font-medium text-zinc-400 truncate">
+                          {st.desc}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Dynamic Status Ticker */}
+              <div className="p-3 bg-zinc-950 text-white rounded-xl text-center">
+                <p className="text-[11px] font-bold text-zinc-200 flex items-center justify-center gap-2">
+                  {researchStage < 5 && <Loader2 className="w-3 h-3 animate-spin text-purple-400" />}
+                  {researchMessage}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

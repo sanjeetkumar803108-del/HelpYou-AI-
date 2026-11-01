@@ -4,7 +4,7 @@ import {
   HelpCircle, Star, Bug, FileText, Trash2, ChevronRight, ChevronDown,
   Check, MessageSquare, AlertTriangle, Eye, EyeOff, Sparkles, Send, Moon,
   GraduationCap, Calendar, Trophy, Edit3, Save, Flame, User, Info, Target, Zap,
-  Loader2, Download, CreditCard, Bell, Share2, Play, Pause, Square
+  Loader2, Download, CreditCard, Bell, Share2, Play, Pause, Square, Plus, BookOpen, AlertCircle
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
@@ -32,7 +32,10 @@ import { clear as clearIndexedDB } from 'idb-keyval';
 import { useSettings } from '../hooks/useSettings';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { billingService } from '../services/BillingService';
-import { REGIONAL_TRACKS } from './AcademicSetup';
+import { REGIONAL_TRACKS, DEFAULT_SUBJECTS, COUNTRIES } from './AcademicSetup';
+import { getApiUrl } from '../utils/api';
+import { getStoredExamBlueprint, saveStoredExamBlueprint, getSubjectBlueprint } from '../utils/academicBlueprint';
+import { cleanSubjectTitle } from '../utils/curriculumMap';
 import { 
   getStudyXP, 
   getStudyLevel, 
@@ -301,20 +304,287 @@ export default function Profile({
   const [gradeLevel, setGradeLevel] = useState(() => {
     return safeGetItem('academic_grade') || '11th Grade (Junior)';
   });
+  // User Subjects (Multi-subject academic curriculum)
+  const [userSubjects, setUserSubjects] = useState<string[]>(() => {
+    const uid = auth.currentUser?.uid;
+    const raw = (uid ? safeGetItem(`academic_subjects_${uid}`) : null) || safeGetItem('academic_subjects');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (_) {
+        return raw.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    }
+    const fallback = (uid ? safeGetItem(`academic_subject_${uid}`) : null) || safeGetItem('academic_subject') || safeGetItem('selected_subject') || safeGetItem('subject');
+    return fallback ? fallback.split(',').map((s: string) => s.trim()).filter(Boolean) : ['Mathematics'];
+  });
+
   const [streamMajor, setStreamMajor] = useState(() => {
-    const savedGrade = safeGetItem('academic_grade') || '11th Grade (Junior)';
-    const isFoundational = savedGrade.includes('9th Grade') || savedGrade.includes('10th Grade');
-    if (isFoundational) return 'Core / Foundation';
-    return safeGetItem('academic_stream') || 'STEM / Engineering';
+    return userSubjects[0] || 'Mathematics';
   });
   const [selectedCountryName, setSelectedCountryName] = useState(() => {
     return safeGetItem('academic_country') || 'United States';
   });
+  const [targetExam, setTargetExam] = useState<string>(() => {
+    const uid = auth.currentUser?.uid;
+    return (uid ? safeGetItem(`academic_exam_${uid}`) : null) ||
+      (uid ? safeGetItem(`target_exam_${uid}`) : null) ||
+      safeGetItem('academic_exam') ||
+      safeGetItem('target_exam') ||
+      '';
+  });
+  const [isEditingExam, setIsEditingExam] = useState(false);
+  const [tempExam, setTempExam] = useState('');
+
   const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
-  const [isTrackDropdownOpen, setIsTrackDropdownOpen] = useState(false);
+  const [isSubjectsDropdownOpen, setIsSubjectsDropdownOpen] = useState(false);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
 
-  const { visualLearner, setVisualLearner, deepFocus, setDeepFocus } = useSettings();
+  // Add Subject & Deep Research Modal States
+  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
+  const [newSubjectInput, setNewSubjectInput] = useState('');
+  const [isResearchingSubject, setIsResearchingSubject] = useState(false);
+  const [researchStage, setResearchStage] = useState(1);
+  const [researchMessage, setResearchMessage] = useState('');
+  const [newSubjectError, setNewSubjectError] = useState<string | null>(null);
+
+  // Cached official exam subjects (researched during academic setup)
+  const cachedExamSubjects = React.useMemo(() => {
+    const uid = auth.currentUser?.uid;
+    const raw = (uid ? safeGetItem(`cached_exam_subjects_${uid}`) : null) || safeGetItem('cached_exam_subjects');
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (_) {}
+    return [];
+  }, [auth.currentUser?.uid]);
+
+  // Unadded official subjects for quick suggestion pills
+  const availableExamElectives = React.useMemo(() => {
+    if (!cachedExamSubjects || cachedExamSubjects.length === 0) return [];
+    const existingLower = new Set(userSubjects.map(s => s.toLowerCase().trim()));
+    return cachedExamSubjects.filter(s => {
+      const title = (s.title || s.id || '').trim();
+      return title && !existingLower.has(title.toLowerCase());
+    });
+  }, [cachedExamSubjects, userSubjects]);
+
+  const getSubjectIcon = (subjName: string) => {
+    const lower = subjName.toLowerCase();
+    if (lower.includes('math') || lower.includes('calc') || lower.includes('algebra') || lower.includes('trig') || lower.includes('geom')) return '📐';
+    if (lower.includes('phys')) return '⚡';
+    if (lower.includes('chem')) return '🧪';
+    if (lower.includes('bio') || lower.includes('botany') || lower.includes('zoology') || lower.includes('genet')) return '🧬';
+    if (lower.includes('comp') || lower.includes('code') || lower.includes('cs') || lower.includes('it') || lower.includes('data')) return '💻';
+    if (lower.includes('hist') || lower.includes('civic') || lower.includes('gov') || lower.includes('pol')) return '🏛️';
+    if (lower.includes('econ') || lower.includes('finan') || lower.includes('acc') || lower.includes('bus') || lower.includes('stat')) return '📊';
+    if (lower.includes('psych') || lower.includes('socio') || lower.includes('phil')) return '🧠';
+    if (lower.includes('eng') || lower.includes('lit') || lower.includes('lang') || lower.includes('writ')) return '📖';
+    if (lower.includes('geo') || lower.includes('earth') || lower.includes('env')) return '🌍';
+    if (lower.includes('art') || lower.includes('music') || lower.includes('design')) return '🎨';
+    return '📚';
+  };
+
+  const handleVerifyAndAddSubject = async (subjectToVerify?: string) => {
+    const candidate = (subjectToVerify || newSubjectInput).trim();
+    if (!candidate) {
+      setNewSubjectError("Please enter a subject name.");
+      return;
+    }
+
+    // Check duplicate
+    const candidateClean = cleanSubjectTitle(candidate) || candidate;
+    const isDup = userSubjects.some(
+      s => s.toLowerCase().trim() === candidateClean.toLowerCase().trim() ||
+           s.toLowerCase().replace(/[^a-z0-9]/g, '') === candidateClean.toLowerCase().replace(/[^a-z0-9]/g, '')
+    );
+    if (isDup) {
+      setNewSubjectError(`"${candidateClean}" is already in your subjects list.`);
+      triggerVibration(25);
+      return;
+    }
+
+    setNewSubjectError(null);
+    setIsResearchingSubject(true);
+    setResearchStage(1);
+    setResearchMessage(`Verifying if "${candidateClean}" is part of official ${targetExam || 'exam'} curriculum...`);
+
+    // Dynamic progression timers
+    const timer1 = setTimeout(() => {
+      setResearchStage(2);
+      setResearchMessage(`Conducting deep web research for official ${candidateClean} chapters & syllabus units...`);
+    }, 1200);
+
+    const timer2 = setTimeout(() => {
+      setResearchStage(3);
+      setResearchMessage(`Analyzing authentic ${candidateClean} marks weightage & examination question pattern...`);
+    }, 2800);
+
+    try {
+      const response = await fetch(getApiUrl('/api/verify-and-research-subject'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: selectedCountryName,
+          examName: targetExam,
+          grade: gradeLevel,
+          subjectName: candidateClean,
+          existingSubjects: userSubjects
+        })
+      });
+
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
+      if (!response.ok) {
+        throw new Error("Could not connect to subject verification engine.");
+      }
+
+      const data = await response.json();
+
+      if (!data.isValid) {
+        setIsResearchingSubject(false);
+        setNewSubjectError(data.errorMessage || `"${candidateClean}" is not part of the official ${targetExam || 'examination'} syllabus.`);
+        triggerVibration(30);
+        return;
+      }
+
+      // Stage 4: Success & Calibration
+      setResearchStage(4);
+      setResearchMessage(`Permanently updating your Academic DNA with official ${candidateClean} syllabus! ✓`);
+
+      const finalTitle = data.standardizedTitle || candidateClean;
+      const updatedList = [...userSubjects, finalTitle];
+      setUserSubjects(updatedList);
+      setStreamMajor(updatedList[0]);
+
+      const uid = auth.currentUser?.uid;
+      // 1. Update localStorage
+      safeSetItem('academic_subjects', JSON.stringify(updatedList));
+      safeSetItem('academic_subject', updatedList[0]);
+      safeSetItem('selected_subject', updatedList[0]);
+      safeSetItem('subject', updatedList[0]);
+      safeSetItem('academic_stream', updatedList[0]);
+      if (uid) {
+        safeSetItem(`academic_subjects_${uid}`, JSON.stringify(updatedList));
+        safeSetItem(`academic_subject_${uid}`, updatedList[0]);
+        safeSetItem(`selected_subject_${uid}`, updatedList[0]);
+        safeSetItem(`subject_${uid}`, updatedList[0]);
+        safeSetItem(`academic_stream_${uid}`, updatedList[0]);
+      }
+
+      // 2. Update Blueprint
+      if (data.blueprint) {
+        const currentBlueprint = getStoredExamBlueprint(uid) || {};
+        currentBlueprint[finalTitle] = data.blueprint;
+        saveStoredExamBlueprint(currentBlueprint, uid);
+
+        // 3. Update Firestore
+        if (uid) {
+          setDoc(doc(db, 'users', uid), {
+            academic_subjects: updatedList,
+            subjects: updatedList,
+            academic_subject: updatedList[0],
+            subjectsBlueprint: currentBlueprint,
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(e => console.error("Firestore subject update error:", e));
+        }
+      } else if (uid) {
+        setDoc(doc(db, 'users', uid), {
+          academic_subjects: updatedList,
+          subjects: updatedList,
+          academic_subject: updatedList[0],
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(e => console.error("Firestore subject update error:", e));
+      }
+
+      // Trigger global event so all components immediately sync
+      try {
+        window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+      } catch (_) {}
+
+      triggerVibration(25);
+      confetti({
+        particleCount: 60,
+        spread: 55,
+        origin: { y: 0.7 }
+      });
+
+      showToast(`🎉 "${finalTitle}" successfully verified & added to your curriculum!`);
+      setIsResearchingSubject(false);
+      setShowAddSubjectModal(false);
+      setNewSubjectInput('');
+    } catch (err: any) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      console.error("Subject research error:", err);
+      setIsResearchingSubject(false);
+      setNewSubjectError(err?.message || "Failed to verify subject. Please check your internet connection.");
+      triggerVibration(30);
+    }
+  };
+
+  const handleRemoveSubject = (subjectToRemove: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (userSubjects.length <= 1) {
+      showToast("⚠️ You must have at least one subject in your curriculum.");
+      triggerVibration(20);
+      return;
+    }
+    const updated = userSubjects.filter(s => s !== subjectToRemove);
+    setUserSubjects(updated);
+    setStreamMajor(updated[0] || 'Mathematics');
+    const uid = auth.currentUser?.uid;
+    safeSetItem('academic_subjects', JSON.stringify(updated));
+    safeSetItem('academic_subject', updated[0]);
+    safeSetItem('selected_subject', updated[0]);
+    safeSetItem('subject', updated[0]);
+    if (uid) {
+      safeSetItem(`academic_subjects_${uid}`, JSON.stringify(updated));
+      safeSetItem(`academic_subject_${uid}`, updated[0]);
+      safeSetItem(`selected_subject_${uid}`, updated[0]);
+      safeSetItem(`subject_${uid}`, updated[0]);
+      setDoc(doc(db, 'users', uid), {
+        academic_subjects: updated,
+        subjects: updated,
+        academic_subject: updated[0],
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+    } catch (_) {}
+    showToast(`Removed "${subjectToRemove}" from subjects.`);
+    triggerVibration(15);
+  };
+
+  const handleSaveTargetExam = async () => {
+    const trimmed = tempExam.trim();
+    setTargetExam(trimmed);
+    setIsEditingExam(false);
+    safeSetItem('academic_exam', trimmed);
+    safeSetItem('target_exam', trimmed);
+    if (auth.currentUser?.uid) {
+      safeSetItem(`academic_exam_${auth.currentUser.uid}`, trimmed);
+      safeSetItem(`target_exam_${auth.currentUser.uid}`, trimmed);
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          targetExam: trimmed,
+          exam: trimmed,
+          academic_exam: trimmed,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.error('Failed to update targetExam in Firestore:', err);
+      }
+    }
+    showToast('🎯 Target exam updated successfully!');
+    triggerVibration(15);
+  };
+
+  const { deepFocus, setDeepFocus } = useSettings();
 
   // Modal & Popup State in Settings
   const [activeModal, setActiveModal] = useState<
@@ -1186,225 +1456,397 @@ export default function Profile({
               
               <div className="grid grid-cols-2 gap-3 relative">
                 <div className="space-y-1.5 relative">
-                  <label className="text-[10px] font-bold text-zinc-500">Grade Level</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-zinc-500">Grade Level</label>
+                    {gradeLevel ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded select-none">
+                        <Lock className="w-2.5 h-2.5 text-amber-600" />
+                        Locked
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {gradeLevel ? (
+                    <div className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                      <span className="truncate pr-1.5 text-zinc-900 font-bold">{gradeLevel}</span>
+                      <Lock className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                    </div>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => {
+                          setIsGradeDropdownOpen(!isGradeDropdownOpen);
+                          setIsTrackDropdownOpen(false);
+                        }}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
+                      >
+                        <span className="truncate pr-2">{gradeLevel || 'Select Grade'}</span>
+                        <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                      </button>
+
+                      <AnimatePresence>
+                        {isGradeDropdownOpen && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute top-full left-0 w-48 sm:w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
+                          >
+                            <div className="max-h-48 overflow-y-auto overscroll-contain py-1">
+                              {(() => {
+                                const cached = safeGetItem(`cached_exam_grades_${auth.currentUser?.uid}`) || safeGetItem('cached_exam_grades');
+                                if (cached) {
+                                  try {
+                                    const parsed = JSON.parse(cached);
+                                    if (Array.isArray(parsed) && parsed.length > 0) {
+                                      return parsed.map((g: any) => g.id || g.label);
+                                    }
+                                  } catch (_) {}
+                                }
+                                return [
+                                  '9th Grade (Freshman)', '10th Grade (Sophomore)', 
+                                  '11th Grade (Junior)', '12th Grade (Senior)', 
+                                  'College Freshman', 'College Sophomore', 
+                                  'College Junior', 'College Senior'
+                                ];
+                              })().map((grade: string) => (
+                                <div 
+                                  key={grade}
+                                  onClick={() => {
+                                    setGradeLevel(grade);
+                                    safeSetItem('academic_grade', grade);
+                                    if (auth.currentUser?.uid) {
+                                      safeSetItem(`academic_grade_${auth.currentUser.uid}`, grade);
+                                    }
+                                    const isFoundational = grade.includes('9th Grade') || grade.includes('10th Grade');
+                                    if (isFoundational) {
+                                      setStreamMajor('Core / Foundation');
+                                      safeSetItem('academic_stream', 'Core / Foundation');
+                                      if (auth.currentUser?.uid) {
+                                        safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'Core / Foundation');
+                                      }
+                                    } else {
+                                      if (streamMajor === 'Core / Foundation') {
+                                        setStreamMajor('STEM / Engineering');
+                                        safeSetItem('academic_stream', 'STEM / Engineering');
+                                        if (auth.currentUser?.uid) {
+                                          safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'STEM / Engineering');
+                                        }
+                                      }
+                                    }
+                                    setIsGradeDropdownOpen(false);
+                                    triggerVibration(10);
+                                  }}
+                                  className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${gradeLevel === grade ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
+                                >
+                                  <span>{grade}</span>
+                                  {gradeLevel === grade && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  )}
+                </div>
+                
+                <div className="space-y-1.5 relative">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-zinc-500">Subjects</label>
+                    <span className="text-[9px] font-black text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded-md">
+                      {userSubjects.length} Active
+                    </span>
+                  </div>
                   <button 
+                    type="button"
                     onClick={() => {
-                      setIsGradeDropdownOpen(!isGradeDropdownOpen);
-                      setIsTrackDropdownOpen(false);
+                      setIsSubjectsDropdownOpen(!isSubjectsDropdownOpen);
+                      setIsGradeDropdownOpen(false);
+                      setIsCountryDropdownOpen(false);
                     }}
-                    className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
+                    className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold font-sans shadow-sm transition-all hover:bg-zinc-50 cursor-pointer"
                   >
-                    <span className="truncate pr-2">{gradeLevel}</span>
-                    <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                    <span className="truncate pr-2 text-zinc-900 font-bold">
+                      {userSubjects.length > 0 ? userSubjects.join(', ') : 'Select Subjects'}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform ${isSubjectsDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   <AnimatePresence>
-                    {isGradeDropdownOpen && (
+                    {isSubjectsDropdownOpen && (
                       <motion.div 
                         initial={{ opacity: 0, y: -4, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -4, scale: 0.98 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute top-full left-0 w-48 sm:w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
+                        className="absolute top-full right-0 w-72 sm:w-80 mt-1.5 bg-white border border-zinc-200 rounded-2xl shadow-xl z-50 overflow-hidden font-sans"
                       >
-                        <div className="max-h-48 overflow-y-auto overscroll-contain py-1">
-                          {[
-                            '9th Grade (Freshman)', '10th Grade (Sophomore)', 
-                            '11th Grade (Junior)', '12th Grade (Senior)', 
-                            'College Freshman', 'College Sophomore', 
-                            'College Junior', 'College Senior'
-                          ].map((grade) => (
-                            <div 
-                              key={grade}
-                              onClick={() => {
-                                setGradeLevel(grade);
-                                safeSetItem('academic_grade', grade);
-                                if (auth.currentUser?.uid) {
-                                  safeSetItem(`academic_grade_${auth.currentUser.uid}`, grade);
-                                }
-                                const isFoundational = grade.includes('9th Grade') || grade.includes('10th Grade');
-                                if (isFoundational) {
-                                  setStreamMajor('Core / Foundation');
-                                  safeSetItem('academic_stream', 'Core / Foundation');
-                                  if (auth.currentUser?.uid) {
-                                    safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'Core / Foundation');
-                                  }
-                                } else {
-                                  if (streamMajor === 'Core / Foundation') {
-                                    setStreamMajor('STEM / Engineering');
-                                    safeSetItem('academic_stream', 'STEM / Engineering');
-                                    if (auth.currentUser?.uid) {
-                                      safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'STEM / Engineering');
-                                    }
-                                  }
-                                }
-                                setIsGradeDropdownOpen(false);
-                                triggerVibration(10);
-                              }}
-                              className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${gradeLevel === grade ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
-                            >
-                              <span>{grade}</span>
-                              {gradeLevel === grade && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
-                            </div>
-                          ))}
+                        <div className="px-3.5 py-2.5 bg-zinc-50/90 border-b border-zinc-100 flex items-center justify-between">
+                          <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                            <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Your Chosen Subjects</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
+                            {userSubjects.length} Selected
+                          </span>
+                        </div>
+
+                        <div className="max-h-56 overflow-y-auto overscroll-contain py-1 divide-y divide-zinc-50">
+                          {userSubjects.map((subj, sIdx) => {
+                            const bp = getSubjectBlueprint(subj);
+                            return (
+                              <div 
+                                key={sIdx}
+                                className="px-3.5 py-2.5 flex items-center justify-between text-xs hover:bg-zinc-50/80 transition-colors group"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  <span className="w-7 h-7 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-sm shrink-0 shadow-2xs">
+                                    {getSubjectIcon(subj)}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <span className="font-extrabold text-zinc-900 truncate block text-xs">
+                                      {subj}
+                                    </span>
+                                    {bp?.coreUnits && (
+                                      <span className="text-[10px] text-zinc-400 font-semibold block">
+                                        {bp.coreUnits.length} {bp.nomenclature || 'Chapters'} • {bp.totalMarks ? `${bp.totalMarks} Marks` : 'Researched'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center" title="Active in curriculum">
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                  </span>
+                                  {userSubjects.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleRemoveSubject(subj, e)}
+                                      className="w-5 h-5 rounded-md hover:bg-red-50 text-zinc-300 hover:text-red-500 flex items-center justify-center transition-colors cursor-pointer"
+                                      title={`Remove ${subj}`}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="p-2.5 border-t border-zinc-100 bg-zinc-50/60">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              triggerVibration(15);
+                              setIsSubjectsDropdownOpen(false);
+                              setShowAddSubjectModal(true);
+                              setNewSubjectError(null);
+                              setNewSubjectInput('');
+                            }}
+                            className="w-full py-2.5 px-3 bg-white hover:bg-purple-50/70 border border-dashed border-purple-300 hover:border-purple-400 rounded-xl text-xs font-black text-purple-700 flex items-center justify-center gap-1.5 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4 text-purple-600" />
+                            <span>Add another subject</span>
+                          </button>
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
-                
-                <div className="space-y-1.5 relative">
-                  <label className="text-[10px] font-bold text-zinc-500">Academic Track</label>
-                  {(() => {
-                    const activeTracks = REGIONAL_TRACKS[selectedCountryName] || REGIONAL_TRACKS['Others / International'];
-                    const currentTrackObj = activeTracks.find(t => t.id === streamMajor || t.title === streamMajor) || activeTracks[0];
-                    const displayTitle = currentTrackObj ? currentTrackObj.title : streamMajor;
-                    const isFoundationalGrade = gradeLevel.includes('9th Grade') || gradeLevel.includes('10th Grade');
-
-                    return (
-                      <>
-                        <button 
-                          disabled={isFoundationalGrade}
-                          onClick={() => {
-                            if (isFoundationalGrade) return;
-                            setIsTrackDropdownOpen(!isTrackDropdownOpen);
-                            setIsGradeDropdownOpen(false);
-                            setIsCountryDropdownOpen(false);
-                          }}
-                          className={`w-full border rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold font-sans shadow-sm transition-all ${
-                            isFoundationalGrade 
-                              ? 'bg-zinc-50 border-zinc-200 text-zinc-400 cursor-not-allowed opacity-75' 
-                              : 'bg-white border-zinc-200 text-zinc-800 hover:bg-zinc-50'
-                          }`}
-                        >
-                          <span className="truncate pr-2 flex items-center gap-1.5">
-                            {isFoundationalGrade && <Lock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />}
-                            {isFoundationalGrade ? 'Core / Foundation' : displayTitle}
-                          </span>
-                          {!isFoundationalGrade && <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />}
-                        </button>
-
-                        <AnimatePresence>
-                          {!isFoundationalGrade && isTrackDropdownOpen && (
-                            <motion.div 
-                              initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                              transition={{ duration: 0.15 }}
-                              className="absolute top-full right-0 w-64 sm:w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
-                            >
-                              <div className="max-h-56 overflow-y-auto overscroll-contain py-1">
-                                {activeTracks.map((trackObj) => {
-                                  const isSelected = streamMajor === trackObj.id || streamMajor === trackObj.title;
-                                  return (
-                                    <div 
-                                      key={trackObj.title}
-                                      onClick={() => {
-                                        setStreamMajor(trackObj.id);
-                                        safeSetItem('academic_stream', trackObj.id);
-                                        if (auth.currentUser?.uid) {
-                                          safeSetItem(`academic_stream_${auth.currentUser.uid}`, trackObj.id);
-                                        }
-                                        setIsTrackDropdownOpen(false);
-                                        triggerVibration(10);
-                                      }}
-                                      className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${isSelected ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
-                                    >
-                                      <div className="flex flex-col pr-2">
-                                        <span className="font-bold text-zinc-800">{trackObj.title}</span>
-                                        <span className="text-[10px] text-zinc-400 font-normal">{trackObj.subtitle}</span>
-                                      </div>
-                                      {isSelected && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </>
-                    );
-                  })()}
-                </div>
               </div>
 
-              {/* Country / Educational Region Selection */}
+              {/* Country / Educational Region Selection - PERMANENTLY LOCKED ONCE SET */}
               <div className="space-y-1.5 pt-1 relative">
-                <label className="text-[10px] font-bold text-zinc-500">Country / Curriculum System</label>
-                <button 
-                  onClick={() => {
-                    setIsCountryDropdownOpen(!isCountryDropdownOpen);
-                    setIsGradeDropdownOpen(false);
-                    setIsTrackDropdownOpen(false);
-                  }}
-                  className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
-                >
-                  <span className="truncate pr-2">{selectedCountryName}</span>
-                  <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
-                </button>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-zinc-500">Country / Curriculum System</label>
+                  {selectedCountryName ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md select-none">
+                      <Lock className="w-2.5 h-2.5 text-amber-600" />
+                      Locked
+                    </span>
+                  ) : null}
+                </div>
 
-                <AnimatePresence>
-                  {isCountryDropdownOpen && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute top-full left-0 w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
-                    >
-                      <div className="max-h-52 overflow-y-auto overscroll-contain py-1">
-                        {[
-                          { name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
-                          { name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
-                          { name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
-                          { name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
-                          { name: 'Others / International', flag: '🌍', regionSystem: 'Global' },
-                        ].map((c) => (
-                          <div 
-                            key={c.name}
-                            onClick={() => {
-                              setSelectedCountryName(c.name);
-                              safeSetItem('academic_country', c.name);
-                              safeSetItem('academic_region', c.regionSystem);
-                              if (auth.currentUser?.uid) {
-                                safeSetItem(`academic_country_${auth.currentUser.uid}`, c.name);
-                                safeSetItem(`academic_region_${auth.currentUser.uid}`, c.regionSystem);
-                              }
-
-                              // Auto-sync track to match newly selected country
-                              const isFoundational = gradeLevel.includes('9th Grade') || gradeLevel.includes('10th Grade');
-                              if (isFoundational) {
-                                setStreamMajor('Core / Foundation');
-                                safeSetItem('academic_stream', 'Core / Foundation');
-                                if (auth.currentUser?.uid) {
-                                  safeSetItem(`academic_stream_${auth.currentUser.uid}`, 'Core / Foundation');
-                                }
-                              } else {
-                                const newTracks = REGIONAL_TRACKS[c.name] || REGIONAL_TRACKS['Others / International'];
-                                const matchedTrack = newTracks.find(t => t.id === streamMajor) || newTracks[0];
-                                setStreamMajor(matchedTrack.id);
-                                safeSetItem('academic_stream', matchedTrack.id);
-                                if (auth.currentUser?.uid) {
-                                  safeSetItem(`academic_stream_${auth.currentUser.uid}`, matchedTrack.id);
-                                }
-                              }
-
-                              setIsCountryDropdownOpen(false);
-                              triggerVibration(10);
-                            }}
-                            className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${selectedCountryName === c.name ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
-                          >
-                            <span className="flex items-center gap-2">
-                              <span>{c.flag}</span>
-                              <span>{c.name}</span>
-                            </span>
-                            {selectedCountryName === c.name && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
-                          </div>
-                        ))}
+                {selectedCountryName ? (
+                  /* PERMANENTLY LOCKED COUNTRY CARD - CANNOT BE EDITED */
+                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
+                        🌍
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <div className="min-w-0">
+                        <span className="text-zinc-950 font-black text-sm block truncate">
+                          {selectedCountryName}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
+                          Permanent setting • Calibrated to your educational region
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded-lg bg-zinc-200/60 text-zinc-600 text-[10px] font-black border border-zinc-300/50" title="Country is locked and cannot be changed">
+                      <Lock className="w-3 h-3 text-zinc-600" />
+                      <span>Locked</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => {
+                        setIsCountryDropdownOpen(!isCountryDropdownOpen);
+                        setIsGradeDropdownOpen(false);
+                        setIsTrackDropdownOpen(false);
+                      }}
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
+                    >
+                      <span className="truncate pr-2">Select Country (One-Time)</span>
+                      <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCountryDropdownOpen && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute top-full left-0 w-full mt-1.5 bg-white border border-zinc-200 rounded-xl shadow-lg z-50 overflow-hidden font-sans"
+                        >
+                          <div className="max-h-52 overflow-y-auto overscroll-contain py-1">
+                            {COUNTRIES.map((c) => (
+                              <div 
+                                key={c.name}
+                                onClick={() => {
+                                  setSelectedCountryName(c.name);
+                                  safeSetItem('academic_country', c.name);
+                                  safeSetItem('academic_region', c.regionSystem);
+                                  if (auth.currentUser?.uid) {
+                                    safeSetItem(`academic_country_${auth.currentUser.uid}`, c.name);
+                                    safeSetItem(`academic_region_${auth.currentUser.uid}`, c.regionSystem);
+                                    setDoc(doc(db, 'users', auth.currentUser.uid), {
+                                      country: c.name,
+                                      academic_country: c.name,
+                                      regionSystem: c.regionSystem,
+                                      updatedAt: new Date().toISOString()
+                                    }, { merge: true }).catch(() => {});
+                                  }
+                                  setIsCountryDropdownOpen(false);
+                                  triggerVibration(10);
+                                }}
+                                className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${selectedCountryName === c.name ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span>{c.flag}</span>
+                                  <span>{c.name}</span>
+                                </span>
+                                {selectedCountryName === c.name && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </>
+                )}
+              </div>
+
+              {/* Target Exam Selection - PERMANENTLY LOCKED ONCE SET */}
+              <div className="space-y-1.5 pt-1 relative">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-zinc-500">Target Exam / Syllabus</label>
+                  {targetExam ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md select-none">
+                      <Lock className="w-2.5 h-2.5 text-amber-600" />
+                      Locked
+                    </span>
+                  ) : !isEditingExam ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempExam(targetExam);
+                        setIsEditingExam(true);
+                      }}
+                      className="text-[10px] font-extrabold text-purple-600 hover:text-purple-700 hover:underline cursor-pointer"
+                    >
+                      + Set Exam (One-Time)
+                    </button>
+                  ) : null}
+                </div>
+
+                {targetExam ? (
+                  /* PERMANENTLY LOCKED EXAM CARD - CANNOT BE EDITED */
+                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
+                        🎯
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-zinc-950 font-black text-sm block truncate">
+                          {targetExam}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
+                          Permanent setting • Calibrated to your official syllabus
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded-lg bg-zinc-200/60 text-zinc-600 text-[10px] font-black border border-zinc-300/50" title="Target exam is locked and cannot be changed">
+                      <Lock className="w-3 h-3 text-zinc-600" />
+                      <span>Locked</span>
+                    </div>
+                  </div>
+                ) : isEditingExam ? (
+                  /* ONE-TIME INPUT FALLBACK IF NEVER SET BEFORE */
+                  <div className="space-y-2">
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Note: Target exam can only be set once and cannot be changed later.</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={tempExam}
+                        onChange={(e) => setTempExam(e.target.value)}
+                        placeholder="e.g. JEE, NEET, SAT, AP Physics, CBSE..."
+                        className="flex-1 bg-white border border-purple-500 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 font-sans"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveTargetExam();
+                          } else if (e.key === 'Escape') {
+                            setIsEditingExam(false);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveTargetExam}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Save & Lock
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingExam(false)}
+                        className="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 px-2.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => {
+                      setTempExam(targetExam);
+                      setIsEditingExam(true);
+                    }}
+                    className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 cursor-pointer font-sans"
+                  >
+                    <span className="text-zinc-400 italic text-xs">Not set (tap to set target exam once)</span>
+                    <span className="text-[10px] text-purple-600 font-bold shrink-0">+ Set Exam</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1571,7 +2013,7 @@ export default function Profile({
                   <div className="flex items-center justify-between pt-1 px-1 text-xs">
                     <div className="flex items-center gap-1.5 text-purple-600 font-bold">
                       <GraduationCap className="w-4 h-4 text-purple-600 stroke-[2.2]" />
-                      <span>{safeGetItem('academic_track_title') || safeGetItem('academic_stream') || 'AP Exam Prep App'}</span>
+                      <span>{targetExam ? `${targetExam} • ` : ''}{safeGetItem('academic_track_title') || safeGetItem('academic_stream') || 'HelpYou AI Prep'}</span>
                     </div>
                     <span className="text-zinc-400 font-bold text-[11px]">Study Analytics</span>
                   </div>
@@ -1585,23 +2027,6 @@ export default function Profile({
             <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2 mb-2">
               <Zap className="w-4 h-4 text-zinc-400" /> Accessibility & Focus
             </h3>
-            
-            {/* Visual Learner Mode Toggle */}
-            <div 
-              onClick={() => {
-                triggerVibration(10);
-                setVisualLearner(!visualLearner);
-              }}
-              className="flex justify-between items-center bg-zinc-50 border border-zinc-100 rounded-2xl p-4 cursor-pointer hover:bg-zinc-100/50 transition-colors"
-            >
-              <div>
-                <span className="text-xs font-black text-zinc-800 block">Visual Learner Mode</span>
-                <span className="text-[9px] font-bold text-zinc-400">Enhance diagrams and color-code notes</span>
-              </div>
-              <div className={`w-10 h-6 ${visualLearner ? 'bg-purple-500' : 'bg-zinc-200'} rounded-full relative shadow-inner transition-colors shrink-0`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${visualLearner ? 'right-1' : 'left-1'}`} />
-              </div>
-            </div>
 
             {/* Deep Focus Mode Toggle */}
             <div 
@@ -3223,6 +3648,185 @@ export default function Profile({
                 </div>
 
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* ADD EXAM SUBJECT & DEEP RESEARCH MODAL                                    */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showAddSubjectModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-200 overflow-hidden relative"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center text-base">
+                    📚
+                  </span>
+                  <div>
+                    <h3 className="text-base font-extrabold text-zinc-900 tracking-tight">Add Exam Subject</h3>
+                    <p className="text-[11px] font-bold text-purple-600">
+                      {targetExam || 'Official Exam'} • {selectedCountryName}
+                    </p>
+                  </div>
+                </div>
+                {!isResearchingSubject && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddSubjectModal(false);
+                      setNewSubjectError(null);
+                      setNewSubjectInput('');
+                    }}
+                    className="w-8 h-8 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {isResearchingSubject ? (
+                /* LIVE DEEP RESEARCH PROGRESS UI */
+                <div className="py-6 px-2 text-center space-y-5">
+                  <div className="relative mx-auto w-16 h-16">
+                    <div className="absolute inset-0 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
+                    <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-black text-zinc-900 mb-1.5">
+                      {researchStage === 1 && "Verifying Examination Alignment..."}
+                      {researchStage === 2 && "Curating Official Syllabus Units..."}
+                      {researchStage === 3 && "Analyzing Marks & Paper Pattern..."}
+                      {researchStage === 4 && "Finalizing Academic Calibration! ✓"}
+                    </h4>
+                    <p className="text-xs font-bold text-purple-600 min-h-[32px] px-2 leading-relaxed">
+                      {researchMessage}
+                    </p>
+                  </div>
+
+                  {/* 4-Stage Step Dots */}
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    {[1, 2, 3, 4].map((s) => (
+                      <div
+                        key={s}
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          s === researchStage
+                            ? 'w-8 bg-purple-600'
+                            : s < researchStage
+                            ? 'w-2 bg-emerald-500'
+                            : 'w-2 bg-zinc-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    Strictly referencing official testing agency frameworks & syllabus standards
+                  </p>
+                </div>
+              ) : (
+                /* INPUT FORM */
+                <div className="space-y-4">
+                  <p className="text-xs text-zinc-600 font-medium leading-relaxed">
+                    Enter the name of any subject you want to add. AI will verify if it's officially part of <strong className="text-zinc-900">{targetExam || 'your examination'}</strong> and deep-research its complete official chapter syllabus.
+                  </p>
+
+                  {/* Available Electives from Researched Exam (if any) */}
+                  {availableExamElectives.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">
+                        Official {targetExam} Electives:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto py-0.5">
+                        {availableExamElectives.map((elec: any, eIdx: number) => {
+                          const t = elec.title || elec.id;
+                          return (
+                            <button
+                              key={eIdx}
+                              type="button"
+                              onClick={() => {
+                                triggerVibration(10);
+                                setNewSubjectInput(t);
+                                setNewSubjectError(null);
+                              }}
+                              className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100/80 border border-purple-200/80 rounded-lg text-[11px] font-bold text-purple-700 flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                            >
+                              <span>{elec.icon || '📚'}</span>
+                              <span>{t}</span>
+                              <Plus className="w-3 h-3 text-purple-500 ml-0.5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-zinc-500 block">
+                      Subject Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newSubjectInput}
+                      onChange={(e) => {
+                        setNewSubjectInput(e.target.value);
+                        setNewSubjectError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newSubjectInput.trim()) {
+                          handleVerifyAndAddSubject();
+                        }
+                      }}
+                      placeholder="e.g. Computer Science, Statistics, Biology..."
+                      className="w-full p-3.5 rounded-xl border border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/10 font-bold text-xs shadow-xs"
+                      autoFocus
+                    />
+                  </div>
+
+                  {newSubjectError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-bold flex items-start gap-2.5 leading-relaxed shadow-2xs">
+                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <span className="font-extrabold block text-red-800">Verification Alert:</span>
+                        <span>{newSubjectError}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddSubjectModal(false);
+                        setNewSubjectError(null);
+                        setNewSubjectInput('');
+                      }}
+                      className="flex-1 py-3 px-4 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 font-bold text-xs text-zinc-700 transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleVerifyAndAddSubject()}
+                      disabled={!newSubjectInput.trim()}
+                      className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-purple-600/20 disabled:opacity-50 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Verify & Add</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

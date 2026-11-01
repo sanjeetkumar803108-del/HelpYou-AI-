@@ -1,11 +1,13 @@
 import { getApiUrl } from '../utils/api';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Layers, 
   Loader2, 
   ArrowLeft, 
   ChevronRight, 
   ChevronLeft, 
+  ChevronUp,
+  ChevronDown,
   Share2, 
   Check, 
   Shuffle, 
@@ -21,7 +23,9 @@ import {
   UploadCloud,
   HelpCircle,
   AlertCircle,
-  Flag
+  Flag,
+  FileText,
+  BookOpen
 } from 'lucide-react';
 import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
@@ -29,76 +33,16 @@ import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, de
 import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
-import { getUserProfileData } from '../utils/profile';
+import { getUserProfileData, getProfilePayload } from '../utils/profile';
+import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
 import { shareTextMobile } from '../utils/mobileSaver';
 import { deductCoins, getCoins } from '../utils/coins';
-import GlobalMarkdown from './GlobalMarkdown';
+import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
 
 interface Flashcard {
   question: string;
   answer: string;
 }
-
-const getDynamicQuickTopics = () => {
-  const profile = getUserProfileData();
-  const stream = (profile.stream || '').toLowerCase();
-  const country = (profile.country || '').toLowerCase();
-  const isIndia = country.includes('india');
-
-  if (stream.includes('med') || stream.includes('bio')) {
-    return [
-      { label: 'Cell Division & Mitosis', icon: '🧬' },
-      { label: 'DNA Replication & Transcription', icon: '🧪' },
-      { label: 'Human Circulatory System', icon: '🫀' },
-      { label: 'Photosynthesis Light Reactions', icon: '🌿' },
-      { label: 'Enzyme Kinetics & Inhibitors', icon: '⚡' },
-      { label: isIndia ? 'NEET High-Yield Genetics' : 'AP Biology Key Concepts', icon: '🎯' },
-    ];
-  }
-
-  if (stream.includes('business') || stream.includes('econ') || stream.includes('commerce')) {
-    return [
-      { label: 'Supply & Demand Elasticity', icon: '📈' },
-      { label: 'Fiscal & Monetary Policy', icon: '🏦' },
-      { label: 'Financial Statements & Balance Sheet', icon: '🧾' },
-      { label: 'Market Structures (Monopoly vs Perfect)', icon: '💼' },
-      { label: 'Opportunity Cost & Trade-offs', icon: '⚖️' },
-      { label: 'Inflation & GDP Indicators', icon: '📊' },
-    ];
-  }
-
-  if (stream.includes('human') || stream.includes('art') || stream.includes('law')) {
-    return [
-      { label: isIndia ? 'Indian Constitution & Fundamental Rights' : 'US Constitution & Bill of Rights', icon: '⚖️' },
-      { label: 'French & Industrial Revolutions', icon: '📜' },
-      { label: 'Rhetorical Devices & Argument Analysis', icon: '✍️' },
-      { label: 'World War I & II Key Treaties', icon: '🌍' },
-      { label: 'Major Philosophical Theories', icon: '🏛️' },
-      { label: 'Sociological Perspectives', icon: '👥' },
-    ];
-  }
-
-  if (stream.includes('cs') || stream.includes('computer') || stream.includes('code')) {
-    return [
-      { label: 'Python Recursion & Big-O Notation', icon: '💻' },
-      { label: 'Data Structures (Trees & Hash Maps)', icon: '💾' },
-      { label: 'Object-Oriented Programming (OOP)', icon: '⚙️' },
-      { label: 'HTTP Protocols & REST APIs', icon: '🌐' },
-      { label: 'Database Indexing & SQL Queries', icon: '🗄️' },
-      { label: 'Sorting Algorithms (Merge vs Quick)', icon: '⚡' },
-    ];
-  }
-
-  // Default / STEM Engineering
-  return [
-    { label: "Newton's Laws & Friction", icon: '⚡' },
-    { label: 'Chemical Bonding & Orbitals', icon: '🧪' },
-    { label: 'Integration by Parts & Calculus', icon: '📐' },
-    { label: 'Thermodynamics & Heat Engines', icon: '🔥' },
-    { label: 'Electromagnetic Induction & Optics', icon: '🧲' },
-    { label: isIndia ? 'JEE Physics Core Formulas' : 'AP Physics Mechanics Key Laws', icon: '🎯' },
-  ];
-};
 
 const parseFlashcardsFromText = (text: string): Flashcard[] => {
   const cards: Flashcard[] = [];
@@ -208,6 +152,43 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [grades, setGrades] = useState<{ [key: number]: 'hard' | 'good' | 'easy' }>({});
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
+
+  const profile = getUserProfileData();
+  const targetExam = profile.targetExam || 'Official Examination';
+  const gradeLevel = profile.gradeLevel || '12th Grade';
+  const stream = profile.stream || 'STEM / Engineering';
+  const country = profile.country || 'India';
+
+  const [profileRefreshTick, setProfileRefreshTick] = useState(0);
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      setProfileRefreshTick(prev => prev + 1);
+    };
+    window.addEventListener('academic_profile_updated', handleProfileUpdate);
+    return () => window.removeEventListener('academic_profile_updated', handleProfileUpdate);
+  }, []);
+
+  const mergedSubjects = useMemo(() => {
+    return getScalableRelevantQuizzes(gradeLevel, stream, country);
+  }, [gradeLevel, stream, country, profileRefreshTick]);
+
+  const [expandedSubject, setExpandedSubject] = useState<string | null>(() => {
+    return mergedSubjects[0]?.id || null;
+  });
+
+  const toggleSubject = (subjectId: string) => {
+    triggerVibration(10);
+    setExpandedSubject(prev => prev === subjectId ? null : subjectId);
+  };
+
+  const handleTopicClick = (subjectTitle: string, topicName: string) => {
+    triggerVibration(15);
+    const fullTopic = topicName.includes(subjectTitle) ? topicName : `${subjectTitle} - ${topicName}`;
+    setSourceText(fullTopic);
+    setShowConfig(true);
+    setConfigCount(10);
+  };
 
   const [showConfig, setShowConfig] = useState(false);
   const [configCount, setConfigCount] = useState<number>(10);
@@ -349,8 +330,8 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const handleShareDeck = async () => {
     if (flashcards.length === 0) return;
     triggerVibration(10);
-    const deckTitle = `Flashcards: ${topic || 'Revision Set'}`;
-    const textToShare = `📚 Flashcard Study Deck: ${topic || 'Revision Set'}\n\n` + 
+    const deckTitle = `Flashcards: ${sourceText || 'Revision Set'}`;
+    const textToShare = `📚 Flashcard Study Deck: ${sourceText || 'Revision Set'}\n\n` + 
       (flashcards || []).map((f, i) => `Q${i + 1}: ${f?.question || ''}\nA${i + 1}: ${f?.answer || ''}`).join('\n\n');
     await shareTextMobile(deckTitle, textToShare);
   };
@@ -467,8 +448,10 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const handleGenerate = () => {
-    if (!sourceText.trim()) return;
+  const handleGenerate = (topicStr?: string) => {
+    const t = (topicStr || sourceText).trim();
+    if (!t) return;
+    setSourceText(t);
     setShowConfig(true);
     setConfigCount(10);
   };
@@ -503,14 +486,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       const response = await fetch(getApiUrl('/api/generate-flashcards'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: sourceText,
-          topic: sourceText,
-          gradeLevel: profile.gradeLevel,
-          stream: profile.stream,
-          country: profile.country,
-          count: selectedCount
-        }),
+        body: JSON.stringify(getProfilePayload({ text: sourceText, topic: sourceText, count: selectedCount })),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -801,13 +777,8 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
               style={{ width: `${loadingProgress}%` }}
             />
           </div>
-          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-8">
+          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-2">
             {loadingProgress}% Ready
-          </div>
-
-          <div className="p-3.5 bg-white rounded-2xl border border-zinc-200 shadow-sm text-xs font-bold text-zinc-600 max-w-xs flex items-center gap-2.5">
-            <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>Answers are strictly condensed to 15–25 words for lightning-fast memory recall.</span>
           </div>
         </motion.div>
       ) : flashcards.length === 0 ? (
@@ -854,11 +825,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                 })}
               </div>
 
-              <div className="p-3 bg-pink-50/70 border border-pink-200/80 rounded-2xl text-[11px] font-bold text-pink-900 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-pink-600 shrink-0" />
-                <span>Every card includes a punchy 15–25 word answer key and Spaced Repetition grading.</span>
-              </div>
-
               <div className="flex gap-3 mt-1">
                 <button
                   type="button"
@@ -886,71 +852,49 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           </motion.div>
         ) : (
           <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
-            <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-pink-50 via-purple-50 to-indigo-50 border border-pink-200/70 shadow-xs flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-white shadow-xs border border-pink-200 text-pink-600 flex items-center justify-center shrink-0">
-                <Flame className="w-5 h-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-black text-zinc-900 leading-tight">Active Recall & Rapid Revision</p>
-                <p className="text-[11px] text-zinc-500 font-bold leading-tight mt-0.5">Enter any topic or paste your notes to generate study cards.</p>
-              </div>
-            </div>
 
+            {/* Custom Input Box: What do you want to practice? */}
             <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-pink-500" />
-                  Quick Revision Prompts
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {getDynamicQuickTopics().map((topic, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      triggerVibration(10);
-                      setSourceText(topic.label);
-                    }}
-                    className="px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:border-pink-300 hover:bg-pink-50/50 text-[11px] font-bold text-zinc-700 hover:text-pink-800 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <span>{topic.icon}</span>
-                    <span>{topic.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative mb-3">
-              <textarea
-                value={sourceText}
-                onChange={(e) => setSourceText(e.target.value)}
-                placeholder="Type any subject topic (e.g., 'Photosynthesis Light Dependent Reactions') or paste full study notes..."
-                className="w-full min-h-[180px] sm:min-h-[200px] p-4 sm:p-5 pb-8 rounded-3xl border border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 resize-none focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all shadow-sm font-semibold text-sm leading-relaxed"
-              />
-              <div className="absolute bottom-3 right-4 text-[11px] font-black text-zinc-400 bg-zinc-50 px-2.5 py-0.5 rounded-full border border-zinc-200/80">
-                {wordCount} words
+              <label className="block text-xs font-black uppercase tracking-wider text-pink-600 mb-2">
+                What do you want to practice?
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={sourceText}
+                  onChange={(e) => setSourceText(e.target.value)}
+                  disabled={loading || isParsingFile}
+                  placeholder="e.g. SAT Math – Trigonometry, AP US Gov"
+                  className="flex-1 p-4 rounded-2xl border border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all font-semibold text-sm h-14 shadow-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && sourceText.trim() && !loading && !isParsingFile) {
+                      handleGenerate();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerVibration(20);
+                    handleGenerate();
+                  }}
+                  disabled={!sourceText.trim() || loading || isParsingFile}
+                  className="bg-gradient-to-tr from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white disabled:opacity-50 w-14 h-14 rounded-2xl font-bold transition-all flex items-center justify-center border border-pink-500/30 shrink-0 shadow-md shadow-pink-600/15 cursor-pointer active:scale-95"
+                  title="Generate Active Recall Deck"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-xl filter drop-shadow-sm select-none">🪄</span>}
+                </button>
               </div>
             </div>
 
-            <div className="mb-4">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full py-3.5 px-4 bg-white hover:bg-zinc-50 active:scale-98 border border-zinc-200 text-zinc-700 hover:text-zinc-900 rounded-2xl font-black text-xs shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
-              >
-                {isParsingFile ? (
-                  <div className="flex items-center gap-2 text-pink-600">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>AI Reading Document...</span>
-                  </div>
-                ) : (
-                  <>
-                    <UploadCloud className="w-4 h-4 text-pink-500" />
-                    <span>Upload Notes</span>
-                  </>
-                )}
-              </button>
+            {/* Upload Notes Card (User requested "upload pdf ki jagah upload notes ka option") */}
+            <div 
+              onClick={() => {
+                triggerVibration(10);
+                fileInputRef.current?.click();
+              }}
+              className="mb-4 cursor-pointer relative overflow-hidden rounded-3xl border border-zinc-200/80 p-4 transition-all duration-300 shadow-sm bg-white hover:border-pink-200 hover:shadow-md active:scale-[0.99] group"
+            >
               <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -958,10 +902,34 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                 accept=".pdf,.txt,.md,.docx" 
                 className="hidden" 
               />
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-pink-50 border border-pink-100 text-pink-600 flex items-center justify-center shadow-sm shrink-0 group-hover:scale-105 transition-transform">
+                    {isParsingFile ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-pink-600" />
+                    ) : (
+                      <UploadCloud className="w-5 h-5 text-pink-600" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-sm text-zinc-800 leading-snug">
+                        Upload Notes
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                      {isParsingFile ? 'AI Reading Notes Document...' : 'Notes to Flashcards'}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-zinc-50 border border-zinc-200/50 flex items-center justify-center text-pink-600 shadow-sm shrink-0 group-hover:translate-x-0.5 transition-transform">
+                  <span className="text-xs filter drop-shadow-sm select-none">✨</span>
+                </div>
+              </div>
             </div>
 
             {error && (
-              <div className="text-red-700 text-xs mb-3 font-bold bg-red-50 p-3.5 rounded-2xl border border-red-200 flex items-center justify-between gap-3 shadow-xs">
+              <div className="text-red-700 text-xs mb-4 font-bold bg-red-50 p-3.5 rounded-2xl border border-red-200 flex items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
                   <span className="line-clamp-2">{error}</span>
@@ -979,14 +947,132 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
               </div>
             )}
 
-            <button
-              onClick={handleGenerate}
-              disabled={!sourceText.trim() || loading || isParsingFile}
-              className="w-full bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-pink-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2 border border-pink-500/30 cursor-pointer"
-            >
-              <Brain className="w-5 h-5" />
-              <span>Generate Active Recall Deck</span>
-            </button>
+            {/* Curriculum Active Recall Flashcards Accordion */}
+            <div className="mb-6 flex-1">
+              <div className="flex items-center justify-between mb-3 px-0.5">
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                  <BookOpen className="w-3.5 h-3.5 text-pink-500" />
+                  <span>Curriculum Practice Flashcards</span>
+                </h3>
+                {targetExam && (
+                  <span className="text-[10px] font-bold text-pink-700 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-lg truncate max-w-[180px]">
+                    {targetExam}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {mergedSubjects.map((subject) => {
+                  const isExpanded = expandedSubject === subject.id;
+                  return (
+                    <div 
+                      key={subject.id}
+                      className="bg-white border border-zinc-200/80 rounded-3xl overflow-hidden shadow-sm transition-all duration-300"
+                    >
+                      {/* Main Subject Card Header */}
+                      <button
+                        type="button"
+                        onClick={() => toggleSubject(subject.id)}
+                        className={`w-full p-4 flex items-center justify-between text-left transition-colors duration-300 cursor-pointer ${
+                          isExpanded ? 'bg-zinc-50/50' : 'hover:bg-zinc-50/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm ${subject.themeColor || 'bg-pink-50 text-pink-600'}`}>
+                            {subject.icon}
+                          </div>
+                          <div>
+                            <h4 className="font-extrabold text-sm text-zinc-800 leading-snug">
+                              {cleanSubjectTitle(subject.title)}
+                            </h4>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-lg">
+                            {(subject.topics || []).length} {subject.nomenclature || 'Chapters'}
+                          </span>
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-zinc-400 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Collapsible Sub-topics List */}
+                      <AnimatePresence initial={false}>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                            className="border-t border-zinc-100"
+                          >
+                            <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
+                              {/* All Chapters (Full Syllabus) Option */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cleanSubj = cleanSubjectTitle(subject.title);
+                                  const allTopicsList = (subject.topics || []).join(', ');
+                                  handleTopicClick(cleanSubj, `All ${subject.nomenclature || 'Chapters'} (Full Syllabus: ${allTopicsList})`);
+                                }}
+                                disabled={loading}
+                                className="w-full bg-gradient-to-r from-pink-50/90 via-rose-50/70 to-pink-50/90 border-2 border-pink-200/90 hover:border-pink-400 hover:from-pink-100/80 hover:to-rose-100/80 active:scale-[0.995] py-3.5 px-4 rounded-2xl flex items-center justify-between text-left transition-all group/all shadow-xs cursor-pointer mb-1"
+                              >
+                                <div className="flex items-center gap-2.5 flex-1 pr-2">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-white bg-pink-600 px-2 py-0.5 rounded-md shadow-xs shrink-0 flex items-center gap-1">
+                                    ⚡ Full Deck
+                                  </span>
+                                  <div className="min-w-0">
+                                    <span className="font-black text-xs text-pink-950 group-hover/all:text-pink-700 transition-colors block truncate">
+                                      All {subject.nomenclature || 'Chapters'} ({cleanSubjectTitle(subject.title)})
+                                    </span>
+                                    <span className="text-[10px] font-semibold text-zinc-500 block truncate">
+                                      Covers all {(subject.topics || []).length} {(subject.nomenclature || 'Chapters').toLowerCase()} in this subject
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="text-[11px] font-black text-white bg-pink-600 group-hover/all:bg-pink-700 px-3 py-1 rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1">
+                                  Cards &rarr;
+                                </span>
+                              </button>
+
+                              {(subject.topics || []).map((topicItem, index) => (
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={() => {
+                                    handleTopicClick(cleanSubjectTitle(subject.title), topicItem);
+                                  }}
+                                  disabled={loading}
+                                  className="w-full bg-white border border-zinc-200/70 hover:bg-pink-50/40 hover:border-pink-200 active:scale-[0.995] py-3 px-3.5 rounded-2xl flex items-center justify-between text-left transition-all group/topic shadow-xs cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-2.5 flex-1 pr-2">
+                                    <span className="text-[10px] font-black font-mono text-pink-600 bg-pink-50 border border-pink-100 px-1.5 py-0.5 rounded-md shrink-0">
+                                      {(subject.singularNomenclature || (subject.nomenclature ? subject.nomenclature.replace(/s$/, '') : 'Unit'))} {String(index + 1).padStart(2, '0')}
+                                    </span>
+                                    <span className="font-bold text-xs text-zinc-800 group-hover/topic:text-pink-600 transition-colors leading-snug">
+                                      {topicItem}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-lg opacity-80 group-hover/topic:opacity-100 group-hover/topic:bg-pink-600 group-hover/topic:text-white transition-all shrink-0 flex items-center gap-1">
+                                    Cards &rarr;
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
           </div>
         )
       ) : (
@@ -1071,7 +1157,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                     <div className="my-auto py-4 max-h-[260px] overflow-y-auto pr-1 select-text scrollbar-thin flex items-center justify-center">
                       <div className="text-xl sm:text-2xl md:text-3xl font-black text-zinc-950 leading-snug [&_p]:text-xl sm:[&_p]:text-2xl md:[&_p]:text-3xl [&_p]:font-black [&_p]:leading-snug [&_p]:my-1 [&_.katex]:text-xl sm:[&_.katex]:text-2xl">
                         <GlobalMarkdown>
-                          {flashcards[currentIndex]?.question || ''}
+                          {formatNotesMath(flashcards[currentIndex]?.question || '')}
                         </GlobalMarkdown>
                       </div>
                     </div>
@@ -1101,7 +1187,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                     <div className="my-auto py-4 max-h-[260px] overflow-y-auto pr-1 select-text scrollbar-thin flex items-center justify-center">
                       <div className="text-lg sm:text-xl md:text-2xl font-extrabold text-indigo-950 leading-relaxed text-center [&_p]:text-lg sm:[&_p]:text-xl md:[&_p]:text-2xl [&_p]:font-extrabold [&_p]:leading-relaxed [&_p]:my-1 [&_.katex]:text-lg sm:[&_.katex]:text-xl">
                         <GlobalMarkdown>
-                          {flashcards[currentIndex]?.answer || ''}
+                          {formatNotesMath(flashcards[currentIndex]?.answer || '')}
                         </GlobalMarkdown>
                       </div>
                     </div>

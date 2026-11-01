@@ -1,11 +1,15 @@
 import { safeGetItem } from './storage';
 import { auth } from '../lib/firebase';
+import { getStoredExamBlueprint, formatBlueprintForAIPrompt } from './academicBlueprint';
 
 export interface UserProfileData {
   gradeLevel: string;
+  subject: string;
+  subjects?: string[];
   stream: string;
   country: string;
   region: string;
+  targetExam: string;
   role: string;
   studyLevel: string;
   isVisualLearner: boolean;
@@ -25,9 +29,29 @@ export function getUserProfileData(): UserProfileData {
     safeGetItem('academic_grade') ||
     '11th Grade (Junior)';
 
-  const stream = (uid ? safeGetItem(`academic_stream_${uid}`) : null) ||
+  const subject = (uid ? safeGetItem(`academic_subject_${uid}`) : null) ||
+    safeGetItem('academic_subject') ||
+    safeGetItem('selected_subject') ||
+    safeGetItem('subject') ||
+    (uid ? safeGetItem(`academic_stream_${uid}`) : null) ||
     safeGetItem('academic_stream') ||
-    'STEM / Engineering';
+    'Mathematics';
+
+  let subjects: string[] = [];
+  const rawSubjects = (uid ? safeGetItem(`academic_subjects_${uid}`) : null) || safeGetItem('academic_subjects');
+  if (rawSubjects) {
+    try {
+      const parsed = JSON.parse(rawSubjects);
+      if (Array.isArray(parsed) && parsed.length > 0) subjects = parsed;
+    } catch (_) {
+      subjects = rawSubjects.split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+  }
+  if (subjects.length === 0 && subject) {
+    subjects = subject.split(',').map((s: string) => s.trim()).filter(Boolean);
+  }
+
+  const stream = subject;
 
   const country = (uid ? safeGetItem(`academic_country_${uid}`) : null) ||
     safeGetItem('academic_country') ||
@@ -36,6 +60,12 @@ export function getUserProfileData(): UserProfileData {
   const region = (uid ? safeGetItem(`academic_region_${uid}`) : null) ||
     safeGetItem('academic_region') ||
     'USA';
+
+  const targetExam = (uid ? safeGetItem(`academic_exam_${uid}`) : null) ||
+    (uid ? safeGetItem(`target_exam_${uid}`) : null) ||
+    safeGetItem('academic_exam') ||
+    safeGetItem('target_exam') ||
+    '';
 
   const role = safeGetItem('onboarding_role') || 'High School Student';
   const studyLevel = (uid ? safeGetItem(`onboarding_grade_${uid}`) : null) ||
@@ -47,6 +77,9 @@ export function getUserProfileData(): UserProfileData {
   const userName = auth.currentUser?.displayName || 'Student';
 
   let customNotes: string[] = [];
+  if (targetExam) {
+    customNotes.push(`Target Exam: ${targetExam}`);
+  }
   if (isVisualLearner) {
     customNotes.push('Visual Learner mode is enabled: prioritize tables, structured steps, and visual analogies.');
   }
@@ -54,13 +87,16 @@ export function getUserProfileData(): UserProfileData {
     customNotes.push('Deep Focus mode is enabled: provide direct, distraction-free, high-yield academic answers.');
   }
 
-  const profileContext = `Student: ${userName} | Grade: ${gradeLevel} | Stream: ${stream} | Region: ${country} (${region}) | Level: ${studyLevel}${customNotes.length > 0 ? ' | ' + customNotes.join(' | ') : ''}`;
+  const profileContext = `Student: ${userName} | Grade: ${gradeLevel} | Target Exam: ${targetExam || 'General'} | Subject: ${subject} | Region: ${country} (${region}) | Level: ${studyLevel}${customNotes.length > 0 ? ' | ' + customNotes.join(' | ') : ''}`;
 
   return {
     gradeLevel,
+    subject,
+    subjects,
     stream,
     country,
     region,
+    targetExam,
     role,
     studyLevel,
     isVisualLearner,
@@ -73,10 +109,18 @@ export function getUserProfileData(): UserProfileData {
 /**
  * Returns a rich profile context string suitable for injecting into AI system instructions.
  */
-export function getProfileContext(): string {
+export function getProfileContext(currentSubject?: string): string {
   const profile = getUserProfileData();
-  let ctx = `STUDENT PROFILE: ${profile.userName} is currently enrolled in ${profile.gradeLevel} pursuing the "${profile.stream}" track under the ${profile.country} (${profile.region}) curriculum.`;
+  const activeSubj = currentSubject || profile.subject || 'General Studies';
+  const examSnippet = profile.targetExam ? ` preparing specifically for "${profile.targetExam}" and` : '';
+  let ctx = `STUDENT PROFILE: ${profile.userName} is currently enrolled in ${profile.gradeLevel}${examSnippet} focusing on "${activeSubj}" under the ${profile.country} (${profile.region}) curriculum.`;
   
+  // Inject authentic exam blueprint calibrated from deep research
+  const blueprintSnippet = formatBlueprintForAIPrompt(activeSubj);
+  if (blueprintSnippet) {
+    ctx += `\n${blueprintSnippet}`;
+  }
+
   if (profile.isVisualLearner) {
     ctx += `\nPREFERENCE: Visual Learner Mode is ON. Structure solutions with clear step-by-step points, tables, and visual analogies.`;
   }
@@ -88,30 +132,47 @@ export function getProfileContext(): string {
 }
 
 /**
- * Returns a JSON payload merged with all relevant student profile parameters.
+ * Returns a JSON payload merged with all relevant student profile parameters and exam blueprint.
  */
 export function getProfilePayload(additionalData: Record<string, any> = {}): Record<string, any> {
   const profile = getUserProfileData();
+  const blueprint = getStoredExamBlueprint();
+  const activeSubj = additionalData.subject || additionalData.stream || profile.subject;
+
   return {
     ...additionalData,
     gradeLevel: additionalData.gradeLevel || profile.gradeLevel,
-    stream: additionalData.stream || profile.stream,
+    subject: activeSubj,
+    stream: activeSubj,
     country: additionalData.country || profile.country,
     region: additionalData.region || profile.region,
-    role: additionalData.role || profile.role,
+    targetExam: additionalData.targetExam || profile.targetExam,
+    exam: additionalData.exam || profile.targetExam,
+    academic_exam: additionalData.academic_exam || profile.targetExam,
+    examBlueprint: additionalData.examBlueprint || blueprint,
     learningStyle: profile.isVisualLearner ? 'Visual & Structured' : profile.isDeepFocus ? 'Deep Focus & Concise' : 'Balanced Pedagogical',
-    profileContext: additionalData.profileContext || profile.profileContext
+    profileContext: additionalData.profileContext || getProfileContext(activeSubj)
   };
 }
 
 /**
- * Appends student profile parameters to a FormData object (for multipart uploads like scanner/tutor voice).
+ * Appends student profile parameters and exam blueprint to a FormData object (for multipart uploads like scanner/tutor voice).
  */
 export function appendProfileToFormData(formData: FormData): void {
   const profile = getUserProfileData();
+  const blueprint = getStoredExamBlueprint();
+
   if (!formData.has('gradeLevel')) formData.append('gradeLevel', profile.gradeLevel);
+  if (!formData.has('subject')) formData.append('subject', profile.subject);
   if (!formData.has('stream')) formData.append('stream', profile.stream);
   if (!formData.has('country')) formData.append('country', profile.country);
   if (!formData.has('region')) formData.append('region', profile.region);
-  if (!formData.has('profileContext')) formData.append('profileContext', profile.profileContext);
+  if (!formData.has('targetExam') && profile.targetExam) {
+    formData.append('targetExam', profile.targetExam);
+    formData.append('academic_exam', profile.targetExam);
+  }
+  if (blueprint && !formData.has('examBlueprint')) {
+    formData.append('examBlueprint', JSON.stringify(blueprint));
+  }
+  if (!formData.has('profileContext')) formData.append('profileContext', getProfileContext(profile.subject));
 }

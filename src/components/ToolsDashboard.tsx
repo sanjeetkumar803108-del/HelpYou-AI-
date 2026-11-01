@@ -27,6 +27,7 @@ const FEATURE_COSTS: Record<string, number> = {
   'tab:scanner': 1,
   'testprep': 2,
   'questiongenerator': 2,
+  'ainotes': 2,
   'contentgenerator': 1,
   'essaygrader': 1,
   'youtubesummarizer': 1,
@@ -34,8 +35,7 @@ const FEATURE_COSTS: Record<string, number> = {
   'summariser': 1,
   'calculator': 0,
   'image2pdf': 0,
-  'pdfhistory': 0,
-  'livetutorsearch': 0
+  'pdfhistory': 0
 };
 
 const HeaderLogo = React.memo(() => (
@@ -86,7 +86,7 @@ function ToolsDashboard({
   const loggedIn = isUserLoggedIn();
   const { deepFocus } = useSettings();
 
-  // --- Pull-To-Refresh Implementation ---
+  // --- Pull-To-Refresh Implementation (Touch-Only, Zero-Jank) ---
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshState, setRefreshState] = useState<'idle' | 'pulling' | 'ready' | 'refreshing' | 'success'>('idle');
@@ -95,38 +95,44 @@ function ToolsDashboard({
   const isDragging = useRef(false);
   const rafRef = useRef<number | null>(null);
 
-  const handleDragStart = (clientY: number) => {
-    if (!scrollRef.current) return;
-    // Only allow pull-to-refresh if the scrollbar is completely at the top
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!scrollRef.current || !e.touches || e.touches.length === 0) return;
     if (scrollRef.current.scrollTop <= 0 && refreshState === 'idle') {
-      startY.current = clientY;
+      startY.current = e.touches[0].clientY;
       isDragging.current = true;
     }
   };
 
-  const handleDragMove = (clientY: number) => {
+  const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging.current || refreshState === 'refreshing' || refreshState === 'success') return;
+    if (!e.touches || e.touches.length === 0) return;
     if (scrollRef.current && scrollRef.current.scrollTop > 0) {
       isDragging.current = false;
       return;
     }
 
+    const clientY = e.touches[0].clientY;
     const dy = clientY - startY.current;
-    if (dy > 0) {
+    if (dy > 12) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
-        const damped = Math.min(80, dy * 0.3);
+        const damped = Math.min(65, (dy - 12) * 0.35);
         setPullDistance(damped);
-        if (damped >= 50) {
+        if (damped >= 45) {
           setRefreshState('ready');
         } else {
           setRefreshState('pulling');
         }
       });
+    } else if (dy <= 0) {
+      if (pullDistance > 0) {
+        setPullDistance(0);
+        setRefreshState('idle');
+      }
     }
   };
 
-  const handleDragEnd = async () => {
+  const handleTouchEnd = async () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (!isDragging.current) return;
     isDragging.current = false;
@@ -134,7 +140,7 @@ function ToolsDashboard({
     if (refreshState === 'ready' && onForceSync) {
       triggerVibration(10);
       setRefreshState('refreshing');
-      setPullDistance(50);
+      setPullDistance(45);
       try {
         await onForceSync();
         setRefreshState('success');
@@ -149,36 +155,11 @@ function ToolsDashboard({
       setTimeout(() => {
         setRefreshState('idle');
         setPullDistance(0);
-      }, 800);
+      }, 600);
     } else {
       setRefreshState('idle');
       setPullDistance(0);
     }
-  };
-
-  // Connect touch and mouse fallback handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    handleDragStart(e.touches[0].pageY);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    handleDragMove(e.touches[0].pageY);
-  };
-
-  const handleTouchEnd = () => {
-    handleDragEnd();
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    handleDragStart(e.pageY);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    handleDragMove(e.pageY);
-  };
-
-  const handleMouseUpOrLeave = () => {
-    handleDragEnd();
   };
   // --------------------------------------
 
@@ -244,9 +225,10 @@ function ToolsDashboard({
     setContextMenuItem(null);
   };
 
-  const handleStartPress = (item: any, isTool: boolean, e: any) => {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const handleStartPress = (item: any, isTool: boolean, e: React.TouchEvent) => {
+    if (!e.touches || e.touches.length === 0) return;
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
     touchStartPos.current = { x: clientX, y: clientY };
     
     isLongPressActive.current = false;
@@ -256,36 +238,36 @@ function ToolsDashboard({
       isLongPressActive.current = true;
       triggerVibration(45);
       setContextMenuItem({ item, isTool });
-    }, 600);
+    }, 650);
   };
 
-  const handleMovePress = (e: any) => {
+  const handleMovePress = (e: React.TouchEvent) => {
     if (!touchStartPos.current || !longPressTimer.current) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    if (!e.touches || e.touches.length === 0) return;
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
     const dx = Math.abs(clientX - touchStartPos.current.x);
     const dy = Math.abs(clientY - touchStartPos.current.y);
-    if (dx > 10 || dy > 10) {
+    if (dx > 25 || dy > 25) {
       handleCancelPress();
     }
   };
 
-  const handleEndPress = (e: any, onClick: () => void) => {
+  const handleEndTouch = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    if (touchStartPos.current && !isLongPressActive.current) {
-      onClick();
-    } else if (isLongPressActive.current) {
-      if (e?.cancelable) {
-        e.preventDefault();
-      }
-      e?.stopPropagation?.();
-    }
-    touchStartPos.current = null;
   };
 
   const handleCancelPress = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     touchStartPos.current = null;
+  };
+
+  const handleCardClick = (toolId: string) => {
+    if (isLongPressActive.current) {
+      isLongPressActive.current = false;
+      return;
+    }
+    handleSelectTool(toolId);
   };
 
   const handleSelectTool = (tool: string) => {
@@ -350,11 +332,9 @@ function ToolsDashboard({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUpOrLeave}
-      onMouseLeave={handleMouseUpOrLeave}
+      onTouchCancel={handleTouchEnd}
       className="w-full px-6 pt-6 pb-36 h-full flex flex-col text-zinc-900 bg-gradient-to-b from-[#F9FBE7]/15 via-[#FAF9F6] to-[#FAF9F6] overflow-y-auto relative font-sans select-none touch-pan-y"
+      style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}
     >
       {/* Pull-To-Refresh Visual Indicator Container */}
       <AnimatePresence>
@@ -476,13 +456,15 @@ function ToolsDashboard({
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('tab:scanner', true, e)}
+              onClick={() => handleCardClick('tab:scanner')}
               onTouchStart={(e) => handleStartPress('tab:scanner', true, e)}
-              onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('tab:scanner'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('tab:scanner'))}
-              onMouseLeave={handleCancelPress}
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'tab:scanner', isTool: true });
+              }}
               className="relative overflow-hidden bg-[#EBF5FF] border border-blue-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('tab:scanner')}
@@ -497,13 +479,15 @@ function ToolsDashboard({
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('tab:aitutor', true, e)}
+              onClick={() => handleCardClick('tab:aitutor')}
               onTouchStart={(e) => handleStartPress('tab:aitutor', true, e)}
-              onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('tab:aitutor'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('tab:aitutor'))}
-              onMouseLeave={handleCancelPress}
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'tab:aitutor', isTool: true });
+              }}
               className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('tab:aitutor')}
@@ -512,36 +496,6 @@ function ToolsDashboard({
             </motion.div>
           )}
 
-          {/* Live Search Tutor Card */}
-          {!archivedToolIds.includes('livetutorsearch') && (
-            <motion.div 
-              variants={itemVariants}
-              whileHover={{ scale: 1.02, y: -4, boxShadow: "0 10px 25px -5px rgba(124, 58, 237, 0.25)" }}
-              whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('livetutorsearch', true, e)}
-              onTouchStart={(e) => handleStartPress('livetutorsearch', true, e)}
-              onMouseMove={handleMovePress}
-              onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('livetutorsearch'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('livetutorsearch'))}
-              onMouseLeave={handleCancelPress}
-              className="col-span-2 relative overflow-hidden bg-gradient-to-r from-purple-600 to-blue-600 border-none shadow-md rounded-[2rem] p-5 flex items-center justify-between cursor-pointer transition-all gap-4 text-white select-none touch-pan-y"
-            >
-              <div className="flex items-center gap-4 text-white">
-                <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center text-white shrink-0">
-                  <Search className="w-6 h-6 stroke-[2.5]" />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-black text-white text-[1.05rem] tracking-tight leading-none mb-1.5 flex items-center gap-1.5">
-                    Deep Search AI
-                    <span className="text-[9px] font-black uppercase tracking-wider bg-white/20 text-white px-1.5 py-0.5 rounded-full animate-pulse">LIVE</span>
-                  </h3>
-                  <p className="text-xs text-white/80 font-bold">Live Web Search</p>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 text-white shrink-0" />
-            </motion.div>
-          )}
         </motion.div>
       </div>
 
@@ -561,13 +515,15 @@ function ToolsDashboard({
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('calculator', true, e)}
+              onClick={() => handleCardClick('calculator')}
               onTouchStart={(e) => handleStartPress('calculator', true, e)}
-              onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('calculator'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('calculator'))}
-              onMouseLeave={handleCancelPress}
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'calculator', isTool: true });
+              }}
               className="bg-[#E6FFFA] border border-teal-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-teal-500/20">
@@ -583,13 +539,15 @@ function ToolsDashboard({
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('testprep', true, e)}
+              onClick={() => handleCardClick('testprep')}
               onTouchStart={(e) => handleStartPress('testprep', true, e)}
-              onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('testprep'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('testprep'))}
-              onMouseLeave={handleCancelPress}
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'testprep', isTool: true });
+              }}
               className="relative overflow-hidden bg-[#FEFCBF] border border-yellow-300/50 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('testprep')}
@@ -604,18 +562,43 @@ function ToolsDashboard({
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('questiongenerator', true, e)}
+              onClick={() => handleCardClick('questiongenerator')}
               onTouchStart={(e) => handleStartPress('questiongenerator', true, e)}
-              onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('questiongenerator'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('questiongenerator'))}
-              onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#FFE4E6] border border-pink-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'questiongenerator', isTool: true });
+              }}
+              className="relative overflow-hidden bg-[#EDE9FE] border border-violet-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('questiongenerator')}
               <span className="text-4xl filter drop-shadow-sm select-none">🔮</span>
               <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">AI Questions</h3>
+            </motion.div>
+          )}
+
+          {/* Card 4: AI Notes */}
+          {!archivedToolIds.includes('ainotes') && (
+            <motion.div 
+              variants={itemVariants}
+              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleCardClick('ainotes')}
+              onTouchStart={(e) => handleStartPress('ainotes', true, e)}
+              onTouchMove={handleMovePress}
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'ainotes', isTool: true });
+              }}
+              className="relative overflow-hidden bg-[#FEE2E2] border border-red-200/70 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+            >
+              {renderLockIndicator('ainotes')}
+              <span className="text-4xl filter drop-shadow-sm select-none">📓</span>
+              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">AI Notes</h3>
             </motion.div>
           )}
 
@@ -625,13 +608,15 @@ function ToolsDashboard({
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('contentgenerator', true, e)}
+              onClick={() => handleCardClick('contentgenerator')}
               onTouchStart={(e) => handleStartPress('contentgenerator', true, e)}
-              onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('contentgenerator'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('contentgenerator'))}
-              onMouseLeave={handleCancelPress}
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'contentgenerator', isTool: true });
+              }}
               className="relative overflow-hidden bg-[#FFEDD5] border border-orange-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('contentgenerator')}
@@ -646,39 +631,20 @@ function ToolsDashboard({
               variants={itemVariants}
               whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
               whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('summariser', true, e)}
+              onClick={() => handleCardClick('summariser')}
               onTouchStart={(e) => handleStartPress('summariser', true, e)}
-              onMouseMove={handleMovePress}
               onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('summariser'))}
-              onMouseLeave={handleCancelPress}
+              onTouchEnd={handleEndTouch}
+              onTouchCancel={handleCancelPress}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuItem({ item: 'summariser', isTool: true });
+              }}
               className="relative overflow-hidden bg-[#F3E8FF] border border-purple-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
             >
               {renderLockIndicator('summariser')}
               <span className="text-4xl filter drop-shadow-sm select-none">📖</span>
               <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Summariser</h3>
-            </motion.div>
-          )}
-
-          {/* Card 6: Grammar & Flow */}
-          {!archivedToolIds.includes('grammar') && (
-            <motion.div 
-              variants={itemVariants}
-              whileHover={{ scale: 1.03, y: -4, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)" }}
-              whileTap={{ scale: 0.98 }}
-              onMouseDown={(e) => handleStartPress('grammar', true, e)}
-              onTouchStart={(e) => handleStartPress('grammar', true, e)}
-              onMouseMove={handleMovePress}
-              onTouchMove={handleMovePress}
-              onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
-              onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('grammar'))}
-              onMouseLeave={handleCancelPress}
-              className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 shadow-sm rounded-[2rem] p-6 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
-            >
-              {renderLockIndicator('grammar')}
-              <span className="text-4xl filter drop-shadow-sm select-none">✍️</span>
-              <h3 className="font-black text-zinc-900 text-[1.05rem] tracking-tight leading-none mb-1">Grammar & Flow</h3>
             </motion.div>
           )}
         </motion.div>
@@ -738,7 +704,7 @@ function ToolsDashboard({
                   variants={containerVariants}
                   initial="hidden"
                   animate="show"
-                  className="grid grid-cols-2 gap-4 pb-2 min-h-[260px]"
+                  className="grid grid-cols-2 gap-4 pb-2"
                 >
                   {/* Essay Grader */}
                   {!archivedToolIds.includes('essaygrader') && (
@@ -746,14 +712,16 @@ function ToolsDashboard({
                       variants={itemVariants}
                       whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
                       whileTap={{ scale: 0.98 }}
-                      onMouseDown={(e) => handleStartPress('essaygrader', true, e)}
+                      onClick={() => handleCardClick('essaygrader')}
                       onTouchStart={(e) => handleStartPress('essaygrader', true, e)}
-                      onMouseMove={handleMovePress}
                       onTouchMove={handleMovePress}
-                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('essaygrader'))}
-                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('essaygrader'))}
-                      onMouseLeave={handleCancelPress}
-                      className="relative overflow-hidden bg-[#FFE4E6] border border-pink-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
+                      onTouchEnd={handleEndTouch}
+                      onTouchCancel={handleCancelPress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenuItem({ item: 'essaygrader', isTool: true });
+                      }}
+                      className="relative overflow-hidden bg-[#FFE4E6] border border-pink-200/60 shadow-sm rounded-3xl p-5 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
                     >
                       {renderLockIndicator('essaygrader', "rounded-3xl")}
                       <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
@@ -766,20 +734,50 @@ function ToolsDashboard({
                     </motion.div>
                   )}
 
+                  {/* Grammar & Flow */}
+                  {!archivedToolIds.includes('grammar') && (
+                    <motion.div 
+                      variants={itemVariants}
+                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleCardClick('grammar')}
+                      onTouchStart={(e) => handleStartPress('grammar', true, e)}
+                      onTouchMove={handleMovePress}
+                      onTouchEnd={handleEndTouch}
+                      onTouchCancel={handleCancelPress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenuItem({ item: 'grammar', isTool: true });
+                      }}
+                      className="relative overflow-hidden bg-[#F0FDF4] border border-green-200/60 shadow-sm rounded-3xl p-5 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
+                    >
+                      {renderLockIndicator('grammar', "rounded-3xl")}
+                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
+                        ✍️
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Grammar & Flow</h4>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Proofreading AI</p>
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Image to PDF */}
                   {!archivedToolIds.includes('image2pdf') && (
                     <motion.div 
                       variants={itemVariants}
                       whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
                       whileTap={{ scale: 0.98 }}
-                      onMouseDown={(e) => handleStartPress('image2pdf', true, e)}
+                      onClick={() => handleCardClick('image2pdf')}
                       onTouchStart={(e) => handleStartPress('image2pdf', true, e)}
-                      onMouseMove={handleMovePress}
                       onTouchMove={handleMovePress}
-                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('image2pdf'))}
-                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('image2pdf'))}
-                      onMouseLeave={handleCancelPress}
-                      className="bg-[#EBF5FF] border border-blue-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
+                      onTouchEnd={handleEndTouch}
+                      onTouchCancel={handleCancelPress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenuItem({ item: 'image2pdf', isTool: true });
+                      }}
+                      className="bg-[#EBF5FF] border border-blue-200/60 shadow-sm rounded-3xl p-5 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
                     >
                       <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
                         📄
@@ -787,32 +785,6 @@ function ToolsDashboard({
                       <div>
                         <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Image to PDF</h4>
                         <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Photos to PDF</p>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Mistake Vault */}
-                  {!archivedToolIds.includes('mistakevault') && (
-                    <motion.div 
-                      variants={itemVariants}
-                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(239, 68, 68, 0.08)" }}
-                      whileTap={{ scale: 0.98 }}
-                      onMouseDown={(e) => handleStartPress('mistakevault', true, e)}
-                      onTouchStart={(e) => handleStartPress('mistakevault', true, e)}
-                      onMouseMove={handleMovePress}
-                      onTouchMove={handleMovePress}
-                      onMouseUp={(e) => handleEndPress(e, () => handleSelectTool('mistakevault'))}
-                      onTouchEnd={(e) => handleEndPress(e, () => handleSelectTool('mistakevault'))}
-                      onMouseLeave={handleCancelPress}
-                      className="relative overflow-hidden bg-[#FEF2F2] border border-red-200/60 rounded-3xl p-5 flex flex-col justify-between min-h-[120px] cursor-pointer transition-all select-none touch-pan-y"
-                    >
-                      {renderLockIndicator('mistakevault', "rounded-3xl")}
-                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
-                        🔒
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">The Mistake Vault</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Concept correction</p>
                       </div>
                     </motion.div>
                   )}

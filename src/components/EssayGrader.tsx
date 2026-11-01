@@ -9,26 +9,44 @@ import { deductCoins, getCoins } from '../utils/coins';
 import { detectAndLogMistake } from '../utils/mistakes';
 import { triggerVibration, hapticNotification, hapticImpact } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
-import { getUserProfileData } from '../utils/profile';
+import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { Capacitor } from '@capacitor/core';
 import { takeNativePhoto } from '../utils/mobilePicker';
 import { compressImage } from '../utils/imageCompressor';
 import { getApiUrl } from '../utils/api';
 
-const CURRICULUMS = [
-  'Standard High School',
-  'AP (Advanced Placement)',
-  'IB (International Baccalaureate)',
-  'A-Levels (UK)',
-  'IELTS / TOEFL'
-];
+export function getDynamicCurriculums(targetExam?: string): string[] {
+  const base = [
+    'Standard High School',
+    'CBSE / Indian Board',
+    'Colloquium Doctum / Dutch VWO',
+    'IB (International Baccalaureate)',
+    'AP (Advanced Placement)',
+    'A-Levels (UK)',
+    'IELTS / TOEFL',
+    'UPSC / Civil Services'
+  ];
+  if (targetExam && targetExam.trim()) {
+    const trimmed = targetExam.trim();
+    const match = base.find(b => b.toLowerCase().includes(trimmed.toLowerCase()) || trimmed.toLowerCase().includes(b.toLowerCase()));
+    if (match) {
+      return [match, ...base.filter(b => b !== match)];
+    } else {
+      return [trimmed, ...base];
+    }
+  }
+  return base;
+}
 
 const SUBJECT_OPTIONS: Record<string, string[]> = {
   'Standard High School': ['Argumentative Essay', 'Narrative Essay', 'Literary Analysis', 'Expository Essay', 'Persuasive Essay'],
-  'AP (Advanced Placement)': ['AP English Language', 'AP English Literature', 'AP US History', 'AP World History', 'AP Biology'],
+  'CBSE / Indian Board': ['English Core', 'Article & Speech Writing', 'Formal Essay Writing', 'Analytical Case-Study', 'Social & Economic Issues'],
+  'Colloquium Doctum / Dutch VWO': ['VWO Academic Essay', 'Scientific Expository Paper', 'Deductive Argumentative Paper', 'Critical Scientific Inquiry'],
   'IB (International Baccalaureate)': ['Theory of Knowledge (TOK)', 'Extended Essay (EE)', 'English A: Literature', 'History IA', 'Global Politics Essay'],
+  'AP (Advanced Placement)': ['AP English Language', 'AP English Literature', 'AP US History', 'AP World History', 'AP Biology'],
   'A-Levels (UK)': ['A-Level English Literature', 'A-Level History', 'A-Level Economics', 'A-Level Sociology', 'A-Level Psychology'],
-  'IELTS / TOEFL': ['Task 1 (Academic)', 'Task 2 (Opinion/Argument)', 'IELTS General Writing', 'TOEFL Independent Essay', 'TOEFL Integrated Essay']
+  'IELTS / TOEFL': ['Task 2 (Opinion/Argument)', 'Task 1 (Academic)', 'IELTS General Writing', 'TOEFL Independent Essay', 'TOEFL Integrated Essay'],
+  'UPSC / Civil Services': ['UPSC Mains General Studies Essay', 'Philosophical & Abstract Essay', 'Policy & Governance Analysis', 'Socio-Economic Dimensions']
 };
 
 export default function EssayGrader({ onBack }: { onBack: () => void }) {
@@ -45,8 +63,16 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
   const [essayText, setEssayText] = useState('');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [curriculum, setCurriculum] = useState('Standard High School');
-  const [subject, setSubject] = useState('Argumentative Essay');
+  const userProfile = getUserProfileData();
+  const dynamicCurriculums = getDynamicCurriculums(userProfile.targetExam);
+  const [curriculum, setCurriculum] = useState(() => dynamicCurriculums[0]);
+  const [subject, setSubject] = useState(() => (SUBJECT_OPTIONS[dynamicCurriculums[0]] || SUBJECT_OPTIONS['Standard High School'])[0]);
+
+  useEffect(() => {
+    const list = getDynamicCurriculums(userProfile.targetExam);
+    setCurriculum(list[0]);
+    setSubject((SUBJECT_OPTIONS[list[0]] || SUBJECT_OPTIONS['Standard High School'])[0]);
+  }, [userProfile.targetExam]);
   const [isCurriculumOpen, setIsCurriculumOpen] = useState(false);
   const [isSubjectOpen, setIsSubjectOpen] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -260,16 +286,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
       const response = await fetch(getApiUrl('/api/grade-essay'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text: essayText, 
-          curriculum, 
-          subject, 
-          gradeLevel: profile.gradeLevel, 
-          stream: profile.stream,
-          country: profile.country,
-          profileContext: profile.profileContext,
-          images: uploadedImages 
-        }),
+        body: JSON.stringify(getProfilePayload({ text: essayText, curriculum, subject, images: uploadedImages })),
       });
       
       const contentType = response.headers.get("content-type") || "";
@@ -595,7 +612,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
                         className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-2xl shadow-xl z-50 overflow-hidden font-sans"
                       >
                         <ul className="py-1 max-h-60 overflow-y-auto">
-                          {CURRICULUMS.map((curr) => {
+                          {dynamicCurriculums.map((curr) => {
                             const isSelected = curriculum === curr;
                             return (
                               <li key={curr}>

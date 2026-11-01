@@ -20,6 +20,7 @@ import { triggerVibration } from '../utils/vibrate';
 import confetti from 'canvas-confetti';
 import { saveMistakeToVault } from '../utils/mistakes';
 import { getUserProfileData } from '../utils/profile';
+import { getStoredExamBlueprint } from '../utils/academicBlueprint';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
 import { Network } from '@capacitor/network';
@@ -808,15 +809,6 @@ export default function DailyTrivia({ onBack, isOpen }: DailyTriviaProps) {
                   );
                 })}
               </div>
-
-              {masteredCount < (booster?.questions?.length || 3) && (
-                <div className="mt-3 bg-purple-50/80 border border-purple-200/70 rounded-2xl p-3 flex items-center gap-2">
-                  <span className="text-base">📋</span>
-                  <p className="text-xs font-bold text-purple-900">
-                    {(booster?.questions?.length || 3) - masteredCount} trap{((booster?.questions?.length || 3) - masteredCount) > 1 ? 's' : ''} saved to Mistake Vault.
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Actions */}

@@ -30,6 +30,12 @@ window.addEventListener('error', (event) => {
   }
 });
 
+// Auto-recover from stale dynamic chunk imports on rebuild/deploy
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('[Vite Preload Guard] Stale chunk detected during navigation. Auto-syncing fresh bundle...');
+  window.location.reload();
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

@@ -7,6 +7,141 @@
  * so exported PDFs never display garbled symbols (like â€™, ðŸ"š, ï¿½, ???) or excessive spacing.
  */
 
+function extractBalancedBraces(str: string, startIndex: number): { content: string; endIndex: number } | null {
+  if (str[startIndex] !== '{') return null;
+  let depth = 0;
+  for (let i = startIndex; i < str.length; i++) {
+    if (str[i] === '{') depth++;
+    else if (str[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return { content: str.slice(startIndex + 1, i), endIndex: i };
+      }
+    }
+  }
+  return null;
+}
+
+function replaceFractions(text: string): string {
+  let str = text;
+  let fracIdx = str.indexOf('\\frac');
+  let iterations = 0;
+  while (fracIdx !== -1 && iterations < 100) {
+    iterations++;
+    const arg1Start = str.indexOf('{', fracIdx + 5);
+    if (arg1Start === -1) break;
+    const arg1 = extractBalancedBraces(str, arg1Start);
+    if (!arg1) break;
+    const arg2Start = str.indexOf('{', arg1.endIndex + 1);
+    if (arg2Start === -1) break;
+    const arg2 = extractBalancedBraces(str, arg2Start);
+    if (!arg2) break;
+
+    const num = replaceFractions(arg1.content).trim();
+    const den = replaceFractions(arg2.content).trim();
+
+    const formattedNum = (num.length <= 3 && !/[+\-*/\s]/.test(num)) ? num : `(${num})`;
+    const formattedDen = (den.length <= 3 && !/[+\-*/\s]/.test(den)) ? den : `(${den})`;
+
+    str = str.slice(0, fracIdx) + `${formattedNum}/${formattedDen}` + str.slice(arg2.endIndex + 1);
+    fracIdx = str.indexOf('\\frac');
+  }
+  return str;
+}
+
+function replaceRoots(text: string): string {
+  let str = text;
+  let sqrtIdx = str.indexOf('\\sqrt');
+  let iterations = 0;
+  while (sqrtIdx !== -1 && iterations < 100) {
+    iterations++;
+    let afterSqrt = sqrtIdx + 5;
+    let degree = '';
+    if (str[afterSqrt] === '[') {
+      const bracketEnd = str.indexOf(']', afterSqrt);
+      if (bracketEnd !== -1) {
+        degree = str.slice(afterSqrt + 1, bracketEnd);
+        afterSqrt = bracketEnd + 1;
+      }
+    }
+    const braceStart = str.indexOf('{', afterSqrt);
+    if (braceStart === -1) {
+      const match = str.slice(afterSqrt).match(/^\s*(\S+)/);
+      if (match) {
+        const val = match[1];
+        str = str.slice(0, sqrtIdx) + `sqrt(${val})` + str.slice(afterSqrt + match[0].length);
+        sqrtIdx = str.indexOf('\\sqrt');
+        continue;
+      }
+      break;
+    }
+    const arg = extractBalancedBraces(str, braceStart);
+    if (!arg) break;
+    const inner = replaceRoots(arg.content).trim();
+    const replacement = degree ? `root[${degree}](${inner})` : `sqrt(${inner})`;
+    str = str.slice(0, sqrtIdx) + replacement + str.slice(arg.endIndex + 1);
+    sqrtIdx = str.indexOf('\\sqrt');
+  }
+  return str;
+}
+
+const SUPER_CHAR_MAP: Record<string, string> = {
+  '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
+  '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+  '⁺': '+', '⁻': '-', 'ⁿ': 'n', 'ⁱ': 'i'
+};
+
+const SUB_CHAR_MAP: Record<string, string> = {
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
+  '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+  '₊': '+', '₋': '-', 'ₐ': 'a', 'ₑ': 'e', 'ₒ': 'o',
+  'ₓ': 'x', 'ₙ': 'n'
+};
+
+function healSuperscriptsAndSubscripts(text: string): string {
+  let str = text;
+  // 1. Chemistry: convert LaTeX subscript patterns for chemical formulas (e.g. H_2O -> H2O, CO_2 -> CO2)
+  str = str.replace(/([A-Z][a-z]?)_\{?([0-9]+)\}?(?=[A-Z\s,.)\]]|$)/g, '$1$2');
+  // 2. Chemistry with Unicode subscripts (e.g. H₂O -> H2O)
+  str = str.replace(/([A-Z][a-z]?)([₀₁₂₃₄₅₆₇₈₉]+)(?=[A-Z\s,.)\]]|$)/g, (_m, elem, subs) => {
+    const digits = subs.split('').map(c => SUB_CHAR_MAP[c] || c).join('');
+    return `${elem}${digits}`;
+  });
+  // 3. Parenthesized chemical groups: (OH)₂ -> (OH)2, (SO₄)₃ -> (SO4)3
+  str = str.replace(/\(([A-Za-z0-9]+)\)_?\{?([0-9]+)\}?/g, '($1)$2');
+  str = str.replace(/\(([A-Za-z0-9]+)\)([₀₁₂₃₄₅₆₇₈₉]+)/g, (_m, group, subs) => {
+    const digits = subs.split('').map(c => SUB_CHAR_MAP[c] || c).join('');
+    return `(${group})${digits}`;
+  });
+  // 4. Contiguous unicode superscripts: 10⁻¹⁹ -> 10^-19, 10⁻⁵ -> 10^-5, 10²³ -> 10^23, Fe²⁺ -> Fe^2+
+  str = str.replace(/([⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻ⁿⁱ]+)/g, (match, seq, offset, fullStr) => {
+    const prevChar = offset > 0 ? fullStr[offset - 1] : '';
+    // Isolated single ² or ³ preceded by variable or unit stays native WinAnsi (m², cm³, x², y³)
+    if (seq.length === 1 && (seq === '²' || seq === '³') && /[a-zA-Z\)]/.test(prevChar)) {
+      return seq;
+    }
+    const normalized = seq.split('').map(c => SUPER_CHAR_MAP[c] || c).join('');
+    if (prevChar === '^') {
+      return normalized;
+    }
+    return `^${normalized}`;
+  });
+  str = str.replace(/\^([+\-])\^([0-9a-zA-Z]+)/g, '^$1$2');
+  // 5. Remaining Unicode subscripts
+  str = str.replace(/([₀₁₂₃₄₅₆₇₈₉₊₋ₐₑₒₓₙ]+)/g, (_m, seq, offset, fullStr) => {
+    const prevChar = offset > 0 ? fullStr[offset - 1] : '';
+    const normalized = seq.split('').map(c => SUB_CHAR_MAP[c] || c).join('');
+    if (prevChar === '_') {
+      return normalized;
+    }
+    return `_${normalized}`;
+  });
+  // 6. LaTeX braces
+  str = str.replace(/\^\{([^{}]*)\}/g, '^$1');
+  str = str.replace(/_\{([^{}]*)\}/g, '_$1');
+  return str;
+}
+
 export function sanitizePdfText(text: string): string {
   if (!text) return '';
 
@@ -36,12 +171,13 @@ export function sanitizePdfText(text: string): string {
     .replace(/\\frac\{1\}\{2\}/g, '½')
     .replace(/\\frac\{1\}\{4\}/g, '¼')
     .replace(/\\frac\{3\}\{4\}/g, '¾');
-  // General fractions: \frac{a}{b} -> (a)/(b)  [two passes for nested]
-  str = str.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)');
-  str = str.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)');
-  // Square root
-  str = str.replace(/\\sqrt\{([^{}]*)\}/g, 'sqrt($1)');
-  str = str.replace(/\\sqrt\s+(\S+)/g, 'sqrt($1)');
+
+  // Balanced root and fraction replacements
+  str = replaceRoots(str);
+  str = replaceFractions(str);
+
+  // Balanced super/subscripts and chemical formula normalization
+  str = healSuperscriptsAndSubscripts(str);
 
   // Common units and powers to real superscripts (supported in WinAnsi)
   str = str
@@ -62,10 +198,6 @@ export function sanitizePdfText(text: string): string {
     .replace(/\^\{2\}/g, '²')
     .replace(/\^\{3\}/g, '³')
     .replace(/\^\{1\}/g, '¹');
-
-  // General superscript/subscript braces
-  str = str.replace(/\^\{([^{}]*)\}/g, '^$1');
-  str = str.replace(/_\{([^{}]*)\}/g, '_$1');
 
   // 0d. Bracket/delimiter commands
   str = str
@@ -122,7 +254,10 @@ export function sanitizePdfText(text: string): string {
     .replace(/\\Sigma\b/g, 'Sigma').replace(/\\Upsilon\b/g, 'Upsilon').replace(/\\Phi\b/g, 'Phi')
     .replace(/\\Psi\b/g, 'Psi').replace(/\\Omega\b/g, 'Omega');
 
-  // 0j. Text formatting commands (extract content)
+  // 0j. Ellipsis
+  str = str.replace(/\\(?:dots|cdots|ldots|vdots|ddots)\b/g, '...');
+
+  // 0k. Text formatting commands (extract content)
   str = str
     .replace(/\\textbf\{([^{}]*)\}/g, '$1')
     .replace(/\\textit\{([^{}]*)\}/g, '$1')
@@ -140,19 +275,19 @@ export function sanitizePdfText(text: string): string {
     .replace(/\\dot\{([^{}]*)\}/g, '$1.')
     .replace(/\\ddot\{([^{}]*)\}/g, '$1..');
 
-  // 0k. Spacing commands
+  // 0l. Spacing commands
   str = str
     .replace(/\\quad\b/g, '  ').replace(/\\qquad\b/g, '    ')
     .replace(/\\,/g, ' ').replace(/\\;/g, ' ').replace(/\\:/g, ' ').replace(/\\!/g, '')
     .replace(/\\\\/g, ' ');
 
-  // 0l. Strip LaTeX environments: \begin{...} ... \end{...}
+  // 0m. Strip LaTeX environments: \begin{...} ... \end{...}
   str = str.replace(/\\begin\{[^{}]*\}/g, '').replace(/\\end\{[^{}]*\}/g, '');
 
-  // 0m. Strip any remaining unknown \command or \command{...} patterns
+  // 0n. Strip any remaining unknown \command or \command{...} patterns
   str = str.replace(/\\[a-zA-Z]+(?:\{[^{}]*\})?/g, ' ');
 
-  // 0n. Remove lone curly braces left from LaTeX grouping
+  // 0o. Remove lone curly braces left from LaTeX grouping
   str = str.replace(/\{([^{}]*)\}/g, '$1').replace(/[{}]/g, '');
 
   // 1. Normalize Unicode IPA Pronunciation & Phonetic Symbols to readable Latin typography
@@ -195,28 +330,6 @@ export function sanitizePdfText(text: string): string {
     .replace(/8\uFE0F?\u20E3/gu, '8. ')
     .replace(/9\uFE0F?\u20E3/gu, '9. ')
     .replace(/\u{1F51F}/gu, '10. ');
-
-  // 2b. Unicode Superscript & Subscript characters
-  // NOTE: ¹ (\u00B9), ² (\u00B2), and ³ (\u00B3) ARE natively supported in WinAnsi/Helvetica!
-  // We keep them as real superscripts, and map only non-WinAnsi superscripts.
-  const nonWinAnsiSuperscripts: Record<string, string> = {
-    '\u2070': '^0', '\u2074': '^4', '\u2075': '^5', '\u2076': '^6',
-    '\u2077': '^7', '\u2078': '^8', '\u2079': '^9', '\u207B': '^-',
-    '\u207A': '^+', '\u207F': '^n', '\u2071': '^i',
-  };
-  const subscriptMap: Record<string, string> = {
-    '\u2080': '_0', '\u2081': '_1', '\u2082': '_2', '\u2083': '_3',
-    '\u2084': '_4', '\u2085': '_5', '\u2086': '_6', '\u2087': '_7',
-    '\u2088': '_8', '\u2089': '_9', '\u208A': '_+', '\u208B': '_-',
-    '\u2090': '_a', '\u2091': '_e', '\u2092': '_o', '\u2093': '_x',
-    '\u2099': '_n',
-  };
-  for (const [ch, rep] of Object.entries(nonWinAnsiSuperscripts)) {
-    str = str.split(ch).join(rep);
-  }
-  for (const [ch, rep] of Object.entries(subscriptMap)) {
-    str = str.split(ch).join(rep);
-  }
 
   // 3. Mathematical Greek & Scientific Unicode symbols mapping for core standard PDF fonts
   str = str

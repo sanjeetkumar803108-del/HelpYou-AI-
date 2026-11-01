@@ -96,8 +96,8 @@ const EVENING_STUDY_MESSAGES: { title: string; body: string }[] = [
     body: "Research any complex topic grounded in real-time across top university sources. Tap to explore! 🔍"
   },
   {
-    title: "🛡️ Check Your Mistake Vault!",
-    body: "Review today's tricky traps and master the concepts so you never lose marks on exams! 🧠"
+    title: "🎯 Boost Your Exam Score Today!",
+    body: "Practice quick daily questions and master challenging concepts with HelpYou AI! ✨"
   },
   {
     title: "😴 Sleep Smarter with Tonight's Quick Recap!",

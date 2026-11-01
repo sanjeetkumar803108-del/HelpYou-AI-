@@ -1,7 +1,7 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { safeGetItem, safeRemoveItem } from '../utils/storage';
+import { safeGetItem } from '../utils/storage';
 import Login from './Login';
 import SplashScreen from './SplashScreen';
 import Onboarding from './Onboarding';
@@ -22,9 +22,12 @@ interface AuthGuardProps {
 }
 
 /**
- * Isolated Auth & Onboarding Stack Guard.
- * Renders Welcome (Onboarding), Sign-In (Login), and Country/Grade/Stream (AcademicSetup)
- * in an isolated full-screen view (headerShown: false), completely preventing white screens and header peeking.
+ * Isolated Auth & Launch Flow Guard:
+ * 1. Splash Screen
+ * 2. Welcoming Pages (Onboarding - Interactive app features)
+ * 3. Selection Pages (AcademicSetup - Country, Grade, Stream selection)
+ * 4. Sign-In / Sign-Up (Login - If unauthenticated)
+ * 5. Main Dashboard (Home Tabs)
  */
 export default function AuthGuard({
   user,
@@ -76,7 +79,6 @@ export default function AuthGuard({
   }
 
   // 3. Cached session hold: ONLY if user is not yet resolved, auth is actively loading, AND timer hasn't expired.
-  // The instant authLoading finishes (false) OR timer expires (true), we NEVER block the user!
   if (!activeUser && hasCachedSession && authLoading && !cachedCheckExpired) {
     return (
       <div className={containerClass}>
@@ -85,31 +87,24 @@ export default function AuthGuard({
     );
   }
 
-  // If auth finished and there is no activeUser, clean up stale session marker
-  if (!activeUser && hasCachedSession && (!authLoading || cachedCheckExpired)) {
-    try {
-      safeRemoveItem('helpyou_active_user_session');
-    } catch (_) {}
-  }
-
-  // 3. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
-  // If user is unauthenticated, ALWAYS show Login first!
+  // 4. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
+  // If user is unauthenticated, prompt Login directly so new users can sign up and returning users can sign in.
   if (!activeUser) {
     return (
       <div className={containerClass}>
-        <ErrorBoundary>
+        <ErrorBoundary featureName="Login">
           <Suspense fallback={fallbackSkeleton}>
             <Login 
               onClose={() => {}} 
-              onLoginSuccess={(target) => {
-                if (target === 'main') {
-                  setShowOnboarding(false);
+              onLoginSuccess={(target?: string) => {
+                if (target === 'onboarding') {
+                  setShowOnboarding(true);
                   setShowAcademicSetup(false);
                 } else if (target === 'setup') {
                   setShowOnboarding(false);
                   setShowAcademicSetup(true);
-                } else if (target === 'onboarding') {
-                  setShowOnboarding(true);
+                } else {
+                  setShowOnboarding(false);
                   setShowAcademicSetup(false);
                 }
               }} 
@@ -121,11 +116,23 @@ export default function AuthGuard({
     );
   }
 
-  // 4. Isolated Onboarding Stack (Welcome Screen) - Full-screen, no header
-  if (showOnboarding) {
+  // Check if returning user already completed the 4 academic selection pages (Country, Exam, Grade, Subjects)
+  const isUserSetupComplete = Boolean(
+    safeGetItem(`isOnboardingComplete_${activeUser.uid}`) === 'true' ||
+    safeGetItem(`academic_setup_completed_${activeUser.uid}`) === 'true'
+  );
+
+  // Check if welcoming tutorial slides are completed or skipped
+  const isWelcomingComplete = Boolean(
+    safeGetItem(`onboarding_completed_${activeUser.uid}`) === 'true' ||
+    isUserSetupComplete
+  );
+
+  // 5. Isolated Onboarding Stack (Welcoming Pages) - ONLY for new users whose welcoming slides are NOT completed/skipped
+  if (!isUserSetupComplete && !isWelcomingComplete && showOnboarding) {
     return (
       <div className={containerClass}>
-        <ErrorBoundary>
+        <ErrorBoundary featureName="Onboarding" onReset={() => setShowOnboarding(false)}>
           <Suspense fallback={fallbackSkeleton}>
             <Onboarding 
               onComplete={() => {
@@ -139,14 +146,14 @@ export default function AuthGuard({
     );
   }
 
-  // 5. Isolated Onboarding Academic Setup Stack (Country, Grade, Stream Screens) - Full-screen, no header
-  if (showAcademicSetup) {
+  // 6. Isolated Academic Setup Stack (Country, Exam, Grade, Subject Selection Pages) - MANDATORY until all 4 steps are finished!
+  if (!isUserSetupComplete && (showAcademicSetup || isWelcomingComplete)) {
     return (
       <div className={containerClass}>
-        <ErrorBoundary>
+        <ErrorBoundary featureName="Academic Setup" onReset={() => setShowAcademicSetup(false)}>
           <Suspense fallback={fallbackSkeleton}>
             <AcademicSetup 
-              userId={activeUser.uid}
+              userId={activeUser?.uid || ''}
               onComplete={() => {
                 setShowAcademicSetup(false);
                 setShowOnboarding(false);
@@ -158,7 +165,6 @@ export default function AuthGuard({
     );
   }
 
-  // 6. Main App Stack (Home Tabs)
-  return <ErrorBoundary>{children}</ErrorBoundary>;
+  // 7. Main App Stack (Home Tabs) - Returning users land directly here in 0ms!
+  return <ErrorBoundary featureName="Main App">{children}</ErrorBoundary>;
 }
-

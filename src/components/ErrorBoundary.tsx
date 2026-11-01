@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Sparkles, RefreshCw, Home } from 'lucide-react';
 import { triggerVibration } from '../utils/vibrate';
-import { safeRemoveItem, safePurgeKeysByPrefix, safeClearAll } from '../utils/storage';
+import { safeRemoveItem, safePurgeKeysByPrefix } from '../utils/storage';
 import { resetAllLazyChunks, isChunkLoadError } from '../utils/resilientLazy';
 import { showToast } from '../utils/toast';
 
@@ -22,12 +22,11 @@ interface State {
 }
 
 /**
- * Crash-Proof & Self-Healing ErrorBoundary:
- * 1. Automatically intercepts ChunkLoadErrors and silently refreshes bundle with 15s debounce.
- * 2. Automatically purges corrupt cache for the feature.
- * 3. Silently auto-recovers without showing ugly error screens.
- * 4. Gracefully falls back to Home Dashboard if a feature cannot render, keeping the app alive and usable.
- * 5. Eliminates scary "This screen keeps crashing" dialogs permanently.
+ * Crash-Proof & Resilient ErrorBoundary:
+ * 1. Intercepts ChunkLoadErrors and gives a single smooth chunk reload (500ms).
+ * 2. Purges corrupt cache for the specific feature.
+ * 3. Never enters infinite setState / setTimeout loops that freeze the browser.
+ * 4. Gracefully exits to Dashboard when requested, keeping the rest of the app 100% smooth.
  */
 export default class ErrorBoundary extends Component<Props, State> {
   private autoHealTimer: any = null;
@@ -44,46 +43,37 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     const feature = this.props.featureName || 'App Feature';
-    console.warn(`[CrashProof Boundary - ${feature}] Caught hitch:`, error.message);
+    console.warn(`[CrashProof Boundary - ${feature}] Caught hitch:`, error?.message);
 
     try { triggerVibration(10); } catch (_) {}
 
-    // 1. Reset lazy chunks smoothly without reloading the entire app
+    // 1. Invalidate stale lazy chunks
     resetAllLazyChunks();
 
     // 2. Automatically purge any corrupt local cache keys for this feature
     this.autoPurgeCorruptCache();
 
-    // Invalidate stale lazy chunks
-    resetAllLazyChunks();
-
-    // 3. Silent self-healing attempt
-    const currentAttempts = this.state.autoHealAttempts;
-    if (currentAttempts < 2) {
-      this.setState(prev => ({ autoHealAttempts: prev.autoHealAttempts + 1 }));
-      this.autoHealTimer = setTimeout(() => {
-        console.log(`[CrashProof Boundary - ${feature}] Performing silent auto-heal attempt ${currentAttempts + 1}...`);
-        try {
-          window.dispatchEvent(new CustomEvent('app-force-refresh'));
-        } catch (_) {}
-        if (this.props.onRetry) {
-          try { this.props.onRetry(); } catch (_) {}
-        }
-        this.setState({ hasError: false, error: null });
-      }, 80);
-      return;
+    // 3. Stale chunk / rebuild detection:
+    // When a new build deploys, old chunk hashes 404. Auto-reload immediately to sync latest assets.
+    const isChunkError = isChunkLoadError(error);
+    if (isChunkError) {
+      const RELOAD_KEY = 'app_stale_chunk_reload_epoch';
+      const now = Date.now();
+      const lastReload = parseInt(sessionStorage.getItem(RELOAD_KEY) || '0', 10);
+      if (now - lastReload > 4000) {
+        sessionStorage.setItem(RELOAD_KEY, String(now));
+        console.warn(`[CrashProof Boundary - ${feature}] Stale chunk 404 detected after rebuild. Auto-reloading to sync fresh assets...`);
+        window.location.reload();
+        return;
+      }
     }
 
-    // 4. If the feature repeatedly fails rendering, gracefully exit back to Dashboard
-    console.warn(`[CrashProof Boundary - ${feature}] Auto-exiting feature to keep user experience smooth.`);
-    this.autoHealTimer = setTimeout(() => {
-      this.handleGracefulExit();
-    }, 100);
+    // For general JavaScript errors, do NOT loop!
+    // The screen remains stable so the user can easily click "Resume Feature" or "Back to Dashboard".
   }
 
   public componentDidMount() {
     window.addEventListener('online', this.handleNetworkRecovery);
-    window.addEventListener('app-force-refresh', this.handleNetworkRecovery);
   }
 
   public componentWillUnmount() {
@@ -91,7 +81,6 @@ export default class ErrorBoundary extends Component<Props, State> {
       clearTimeout(this.autoHealTimer);
     }
     window.removeEventListener('online', this.handleNetworkRecovery);
-    window.removeEventListener('app-force-refresh', this.handleNetworkRecovery);
   }
 
   private autoPurgeCorruptCache = () => {
@@ -113,17 +102,19 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   private handleNetworkRecovery = () => {
     if (this.state.hasError) {
-      console.log(`[CrashProof Boundary] Network restored / force-refresh event: auto-healing view...`);
+      console.log(`[CrashProof Boundary] Network restored: auto-healing view...`);
       this.handleSoftReset();
     }
   };
 
   private handleSoftReset = () => {
     try { triggerVibration(15); } catch (_) {}
+    if (isChunkLoadError(this.state.error)) {
+      console.log('[CrashProof Boundary] Stale chunk manual reload requested...');
+      window.location.reload();
+      return;
+    }
     resetAllLazyChunks();
-    try {
-      window.dispatchEvent(new CustomEvent('app-force-refresh'));
-    } catch (_) {}
 
     if (this.props.onRetry) {
       try { this.props.onRetry(); } catch (_) {}
@@ -177,6 +168,16 @@ export default class ErrorBoundary extends Component<Props, State> {
           Self-healing and optimizing your session. Your study progress and streak are completely safe.
         </p>
 
+        {this.state.error && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-[11px] font-mono max-w-xs text-left overflow-auto max-h-36 select-all">
+            <p className="font-bold text-red-900 mb-1">Feature: {this.props.featureName || 'App'}</p>
+            <p className="font-semibold">{this.state.error.message || String(this.state.error)}</p>
+            {this.state.error.stack && (
+              <pre className="text-[9px] mt-1 text-red-600 whitespace-pre-wrap">{this.state.error.stack.slice(0, 300)}</pre>
+            )}
+          </div>
+        )}
+
         {/* Clean Action Buttons */}
         <div className="flex flex-col gap-2 mt-5 w-full max-w-[220px]">
           <button
@@ -184,7 +185,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             className="w-full px-5 py-2.5 bg-zinc-900 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-zinc-800 shadow-sm cursor-pointer active:scale-95 transition-transform"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            Resume Feature
+            {isChunkLoadError(this.state.error) ? 'Update & Refresh App' : 'Resume Feature'}
           </button>
 
           <button

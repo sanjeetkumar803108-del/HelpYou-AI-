@@ -34,18 +34,28 @@ export function resetAllLazyChunks() {
   });
 }
 
-export function retryImport<T>(fn: () => Promise<T>, retriesLeft = 4, interval = 400): Promise<T> {
+export function retryImport<T>(fn: () => Promise<T>, retriesLeft = 2, interval = 300): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     fn()
       .then(resolve)
       .catch((error) => {
+        if (isChunkLoadError(error)) {
+          const RELOAD_KEY = 'app_stale_chunk_reload_epoch';
+          const now = Date.now();
+          const lastReload = parseInt(sessionStorage.getItem(RELOAD_KEY) || '0', 10);
+          if (now - lastReload > 5000) {
+            sessionStorage.setItem(RELOAD_KEY, String(now));
+            console.warn('[ResilientLazy] Stale chunk 404 detected after rebuild. Auto-reloading to sync fresh assets...');
+            window.location.reload();
+            return;
+          }
+        }
         if (retriesLeft <= 0) {
           console.error('[ResilientLazy] Dynamic asset import failed after retries:', error);
           return reject(error);
         }
-        // Smooth exponential backoff retry without ever restarting or reloading the app
         setTimeout(() => {
-          retryImport(fn, retriesLeft - 1, Math.min(Math.round(interval * 1.6), 2500)).then(resolve, reject);
+          retryImport(fn, retriesLeft - 1, Math.min(Math.round(interval * 1.5), 1500)).then(resolve, reject);
         }, interval);
       });
   });

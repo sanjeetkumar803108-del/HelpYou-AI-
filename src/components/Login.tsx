@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { X, UserPlus, LogIn, Chrome, LogOut, Loader2, Eye, EyeOff, Check } from 'lucide-react';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { safeClearAll, safeSetItem, safeGetItem, safeRemoveItem } from '../utils/storage';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword, 
@@ -77,7 +77,7 @@ const Alert = {
 };
 
 
-export default function Login({ onClose, onLoginSuccess, hideClose = false }: { onClose: () => void, onLoginSuccess: (target?: 'main' | 'setup' | 'onboarding') => void, hideClose?: boolean }) {
+export default function Login({ onClose, onLoginSuccess, hideClose = false }: { onClose: () => void, onLoginSuccess: (target?: 'main' | 'setup' | 'onboarding' | 'dashboard') => void, hideClose?: boolean }) {
   const [isSignUp, setIsSignUp] = useState(() => {
     return !safeGetItem('session_conflict_notice');
   });
@@ -110,6 +110,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     isRoutingRef.current = true;
     safeSetItem('helpyou_active_user_session', 'true');
     safeSetItem('last_logged_in_user', currentUser.uid);
+    safeRemoveItem('helpyou_auth_in_progress');
 
     // Register active device session in Firestore so any other mobile device is immediately logged out
     try {
@@ -131,11 +132,115 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
                            safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
 
         if (isComplete) {
-          // Returning user: Skip onboarding and route directly to MainApp / HomeTabs
+          // Returning user: Sync 100% saved exam, profile, subjects, blueprint and notes across all devices
+          if (userData?.targetExam || userData?.exam || userData?.academic_exam) {
+            const savedExam = userData.targetExam || userData.exam || userData.academic_exam;
+            safeSetItem('academic_exam', savedExam);
+            safeSetItem('target_exam', savedExam);
+            safeSetItem(`academic_exam_${currentUser.uid}`, savedExam);
+            safeSetItem(`target_exam_${currentUser.uid}`, savedExam);
+          }
+          const savedCountry = userData?.academic_country || userData?.country;
+          if (savedCountry) {
+            safeSetItem('academic_country', savedCountry);
+            safeSetItem(`academic_country_${currentUser.uid}`, savedCountry);
+          }
+          const savedGrade = userData?.academic_grade || userData?.grade;
+          if (savedGrade) {
+            safeSetItem('academic_grade', savedGrade);
+            safeSetItem(`academic_grade_${currentUser.uid}`, savedGrade);
+          }
+          const savedSubjects = userData?.academic_subjects || userData?.subjects;
+          if (savedSubjects) {
+            const subjStr = Array.isArray(savedSubjects) ? JSON.stringify(savedSubjects) : String(savedSubjects);
+            safeSetItem('academic_subjects', subjStr);
+            safeSetItem(`academic_subjects_${currentUser.uid}`, subjStr);
+          }
+          const savedSubject = userData?.academic_subject || userData?.subject || userData?.stream || userData?.academic_stream;
+          if (savedSubject) {
+            safeSetItem('academic_subject', savedSubject);
+            safeSetItem('subject', savedSubject);
+            safeSetItem(`academic_subject_${currentUser.uid}`, savedSubject);
+          }
+          const savedBp = userData?.academicBlueprint || userData?.examBlueprint;
+          if (savedBp && typeof savedBp === 'object') {
+            const bpStr = JSON.stringify(savedBp);
+            safeSetItem('user_exam_blueprint', bpStr);
+            safeSetItem('academic_exam_blueprint', bpStr);
+            safeSetItem(`user_exam_blueprint_${currentUser.uid}`, bpStr);
+          }
+
+          // Restore VIP / Pro Subscription status across all devices
+          if (userData?.isPro || userData?.study_is_vip) {
+            safeSetItem('study_is_vip', 'true');
+            safeSetItem(`study_is_vip_${currentUser.uid}`, 'true');
+            window.dispatchEvent(new CustomEvent('study-vip-updated', { detail: true }));
+          }
+
+          // Restore XP & Gamification points
+          const savedXP = userData?.study_total_xp ?? userData?.xp;
+          if (savedXP !== undefined && savedXP !== null) {
+            const numXP = String(savedXP);
+            safeSetItem('study_total_xp', numXP);
+            safeSetItem(`study_total_xp_${currentUser.uid}`, numXP);
+            window.dispatchEvent(new CustomEvent('study-xp-updated', { detail: Number(numXP) }));
+          }
+
+          // Restore Study Streak discipline
+          const savedStreak = userData?.study_streak_days ?? userData?.currentStreak ?? userData?.study_punches;
+          if (savedStreak !== undefined && savedStreak !== null) {
+            const strStreak = String(savedStreak);
+            safeSetItem('study_streak_days', strStreak);
+            safeSetItem('study_punches', strStreak);
+            safeSetItem(`study_streak_days_${currentUser.uid}`, strStreak);
+            safeSetItem(`study_punches_${currentUser.uid}`, strStreak);
+            window.dispatchEvent(new CustomEvent('study-streak-updated', { detail: Number(strStreak) }));
+          }
+
+          // Restore App Usage Tracker statistics
+          if (userData?.usageStats && typeof userData.usageStats === 'object') {
+            safeSetItem('study_passive_usage_data', JSON.stringify(userData.usageStats));
+          }
+
+          // Restore Coins
+          if (typeof userData?.coins === 'number') {
+            safeSetItem(`study_daily_limit_${currentUser.uid}`, String(userData.coins));
+            window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: userData.coins }));
+          }
+
+          // Restore user's Topper Notes from Cloud Firestore to mobile local storage
+          try {
+            const notesQ = query(collection(db, 'user_notes'), where('userId', '==', currentUser.uid));
+            const notesSnap = await getDocs(notesQ);
+            if (!notesSnap.empty) {
+              const restoredNotes: any[] = [];
+              notesSnap.forEach(d => {
+                const nd = d.data();
+                restoredNotes.push({
+                  id: d.id,
+                  timestamp: nd.createdAt?.toMillis ? nd.createdAt.toMillis() : Date.now(),
+                  chapter: nd.chapter,
+                  subject: nd.subject,
+                  exam: nd.exam,
+                  data: nd.data
+                });
+              });
+              restoredNotes.sort((a, b) => b.timestamp - a.timestamp);
+              safeSetItem('helpyou_ai_saved_notes', JSON.stringify(restoredNotes));
+              safeSetItem(`user_notes_${currentUser.uid}`, JSON.stringify(restoredNotes));
+            }
+          } catch (notesErr) {
+            console.warn('[Login Sync] Restoring user notes notice:', notesErr);
+          }
+
+          try {
+            window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+          } catch (_) {}
+
           safeSetItem(`onboarding_completed_${currentUser.uid}`, 'true');
           safeSetItem(`academic_setup_completed_${currentUser.uid}`, 'true');
           safeSetItem(`isOnboardingComplete_${currentUser.uid}`, 'true');
-          onLoginSuccess('main');
+          onLoginSuccess('dashboard');
           onClose();
           return;
         } else {
@@ -157,7 +262,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     const userOnboardingCompleted = safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true';
     const userSetupCompleted = safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true';
     if (userSetupCompleted) {
-      onLoginSuccess('main');
+      onLoginSuccess('dashboard');
     } else if (userOnboardingCompleted) {
       onLoginSuccess('setup');
     } else {
@@ -180,7 +285,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     const clearStaleSession = async () => {
       try {
         const hasActiveSession = safeGetItem('helpyou_active_user_session') === 'true';
-        if (hasActiveSession) {
+        const isAuthInProgress = safeGetItem('helpyou_auth_in_progress') === 'true';
+        if (hasActiveSession || isAuthInProgress || userInitiatedAuth.current) {
           console.log('[Login Mount] Active session exists, skipping stale session wipe.');
           return;
         }
@@ -231,6 +337,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     // Mark that the user actively initiated authentication and register active session immediately
     userInitiatedAuth.current = true;
     safeSetItem('helpyou_active_user_session', 'true');
+    safeSetItem('helpyou_auth_in_progress', 'true');
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
@@ -339,7 +446,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         onClose();
       }
     } catch (err: any) {
-      safeRemoveItem('helpyou_active_user_session');
+      safeRemoveItem('helpyou_auth_in_progress');
       console.warn('[Auth Error]', err?.code, err?.message);
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
         const errMsg = 'Incorrect password, or this email is registered via Google Sign-In. Please use the Google button below.';
@@ -374,6 +481,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     // Mark that the user actively initiated authentication before any async call and register active session
     userInitiatedAuth.current = true;
     safeSetItem('helpyou_active_user_session', 'true');
+    safeSetItem('helpyou_auth_in_progress', 'true');
     const googleLoadingTimer = setTimeout(() => {
       setLoading(false);
     }, 15000);
@@ -463,6 +571,17 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
       if (!loggedUser) {
         throw new Error('Google Sign-In did not return a valid user session. Please try again.');
+      }
+
+      // CRITICAL: Immediately lock in active user session & user ID BEFORE any background listener fires
+      safeSetItem('helpyou_active_user_session', 'true');
+      safeSetItem('last_logged_in_user', loggedUser.uid);
+      safeRemoveItem('helpyou_auth_in_progress');
+
+      try {
+        await registerActiveSession(loggedUser.uid);
+      } catch (sessErr) {
+        console.warn('[Google Auth] Immediate session registration notice:', sessErr);
       }
       
       // Check if user document already exists in Firestore non-blockingly

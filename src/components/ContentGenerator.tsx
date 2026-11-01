@@ -17,7 +17,8 @@ import SafePdfViewer from './SafePdfViewer';
 import { deductCoins, getCoins } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
-import { getUserProfileData } from '../utils/profile';
+import { getUserProfileData, getProfilePayload } from '../utils/profile';
+import { getExamEssayCalibration } from '../utils/examEssayCalibration';
 
 interface ContentGeneratorProps {
   onBack: () => void;
@@ -257,10 +258,18 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
     }
   };
 
+  const userProfile = getUserProfileData();
+  const examCalibration = getExamEssayCalibration(userProfile.targetExam, userProfile.country, userProfile.gradeLevel);
+
   const [topic, setTopic] = useState('');
   const [selectedType, setSelectedType] = useState('Essay');
-  const [selectedTone, setSelectedTone] = useState('Academic');
-  const [selectedFormat, setSelectedFormat] = useState('Standard');
+  const [selectedTone, setSelectedTone] = useState(() => examCalibration.defaultTone);
+  const [selectedFormat, setSelectedFormat] = useState(() => examCalibration.defaultFormat);
+
+  useEffect(() => {
+    setSelectedTone(examCalibration.defaultTone);
+    setSelectedFormat(examCalibration.defaultFormat);
+  }, [userProfile.targetExam, userProfile.country, userProfile.gradeLevel]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -304,8 +313,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
 
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const userProfile = getUserProfileData();
-
+  
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (loading && !result) {
@@ -426,15 +434,7 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({ 
-          topic, 
-          type: selectedType,
-          tone: selectedTone,
-          format: selectedType === 'Essay' ? selectedFormat : 'Standard',
-          gradeLevel: profile.gradeLevel,
-          stream: profile.stream,
-          country: profile.country
-        })
+        body: JSON.stringify(getProfilePayload({ topic, type: selectedType, tone: selectedTone, format: selectedType === 'Essay' ? selectedFormat : 'Standard' }))
       });
       
       clearTimeout(timeoutId);
@@ -781,16 +781,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       ) : !result ? (
           <div className="flex-1 flex flex-col w-full max-w-md mx-auto mb-12">
             <div className="bg-white border border-zinc-200 rounded-3xl p-4 sm:p-6 shadow-md">
-              {/* Active Student Profile Calibrator Badge */}
-              <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-100 rounded-2xl text-cyan-900 text-xs font-bold mb-3.5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
-                  <span className="truncate">Calibrated for {userProfile.gradeLevel}</span>
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-white border border-cyan-200 rounded-md text-cyan-700 shrink-0">
-                  {userProfile.stream ? (userProfile.stream.length > 15 ? userProfile.stream.substring(0, 15) + '...' : userProfile.stream) : 'Academic'}
-                </span>
-              </div>
 
               <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Content Type (Slide to select)</label>
               
@@ -841,56 +831,96 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                 </div>
               </div>
 
+              {/* Exam Calibration Badge */}
+              <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 bg-gradient-to-r from-cyan-50 via-sky-50 to-blue-50 border border-cyan-200/80 rounded-2xl mb-3.5 shadow-2xs">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <div className="w-6 h-6 rounded-lg bg-cyan-600/10 flex items-center justify-center text-cyan-700 shrink-0">
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="truncate">
+                    <p className="text-[10px] font-black tracking-wider text-cyan-600 uppercase">Exam Calibration</p>
+                    <p className="text-xs font-black text-zinc-900 truncate">{examCalibration.badgeLabel}</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Tone Selection Row */}
               <div className="mb-3">
-                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Tone</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">Tone</label>
+                  <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200">
+                    Exam Calibrated
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  {["Academic", "Persuasive", "Creative", "Casual"].map((tone) => {
-                    const isSelected = selectedTone === tone;
+                  {examCalibration.tones.map((toneObj) => {
+                    const isSelected = selectedTone === toneObj.label;
                     return (
                       <button
-                        key={tone}
+                        key={toneObj.id}
                         type="button"
-                        onClick={() => setSelectedTone(tone)}
+                        onClick={() => {
+                          triggerVibration(10);
+                          setSelectedTone(toneObj.label);
+                        }}
+                        title={toneObj.desc}
                         className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-200 cursor-pointer ${
                           isSelected
-                            ? 'bg-cyan-50 border-cyan-200 text-cyan-700 shadow-sm font-extrabold'
-                            : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:border-zinc-300'
+                            ? 'bg-cyan-50 border-cyan-300 text-cyan-800 shadow-xs font-extrabold ring-1 ring-cyan-400/50'
+                            : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300'
                         }`}
                       >
-                        {tone}
+                        {toneObj.label}
                       </button>
                     );
                   })}
                 </div>
+                {examCalibration.tones.find(t => t.label === selectedTone)?.desc && (
+                  <p className="text-[11px] text-zinc-500 font-medium mt-1.5 pl-1 italic">
+                    💡 {examCalibration.tones.find(t => t.label === selectedTone)?.desc}
+                  </p>
+                )}
               </div>
 
               {/* Academic Formats (Visible only if 'Essay' is selected) */}
               {selectedType === 'Essay' && (
                 <div className="mb-4">
-                  <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Academic Format</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">Academic Format</label>
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                      Real Exam Rubric
+                    </span>
+                  </div>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {["Standard", "APA Format", "MLA Format"].map((fmt) => {
-                      const isSelected = selectedFormat === fmt;
+                    {examCalibration.formats.map((fmtObj) => {
+                      const isSelected = selectedFormat === fmtObj.label;
                       return (
                         <button
-                          key={fmt}
+                          key={fmtObj.id}
                           type="button"
-                          onClick={() => setSelectedFormat(fmt)}
+                          onClick={() => {
+                            triggerVibration(10);
+                            setSelectedFormat(fmtObj.label);
+                          }}
+                          title={fmtObj.desc}
                           className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-200 cursor-pointer ${
                             isSelected
-                              ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm font-extrabold'
-                              : 'bg-zinc-50 border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:border-zinc-300'
+                              ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-xs font-extrabold ring-1 ring-blue-400/50'
+                              : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 hover:border-zinc-300'
                           }`}
                         >
-                          {fmt}
+                          {fmtObj.label}
                         </button>
                       );
                     })}
                   </div>
+                  {examCalibration.formats.find(f => f.label === selectedFormat)?.desc && (
+                    <p className="text-[11px] text-zinc-500 font-medium mt-1.5 pl-1 italic">
+                      📌 {examCalibration.formats.find(f => f.label === selectedFormat)?.desc}
+                    </p>
+                  )}
                 </div>
               )}
-              
               {error && (
                 <div className="bg-red-50 text-red-600 text-sm font-bold px-4 py-3 rounded-xl border border-red-100 mb-4">
                   {error}

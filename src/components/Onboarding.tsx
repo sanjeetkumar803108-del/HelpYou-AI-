@@ -138,16 +138,16 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       }
     },
     {
-      topicIcon: <Database className="w-2.5 h-2.5 text-indigo-500" />,
+      topicIcon: <GraduationCap className="w-2.5 h-2.5 text-indigo-500" />,
       helpyou: {
-        title: "The Mistake Vault",
-        desc: "analyzes errors",
+        title: "AI Test Prep",
+        desc: "Personalized Practice",
         icon: <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />,
-        highlight: "Mistake Vault"
+        highlight: "AI Test Prep"
       },
       other: {
-        title: "Mistakes",
-        desc: "Ignored, No Analysis",
+        title: "Static Quizzes",
+        desc: "Generic, Outdated Tests",
         icon: <ShieldAlert className="w-3.5 h-3.5 text-zinc-400" />
       }
     }

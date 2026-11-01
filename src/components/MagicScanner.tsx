@@ -1,4 +1,4 @@
-import { getProfileContext, getUserProfileData } from "../utils/profile";
+import { getProfileContext, getUserProfileData, appendProfileToFormData } from "../utils/profile";
 import { detectAndLogMistake } from "../utils/mistakes";
 import { triggerVibration } from "../utils/vibrate";
 import { safeGetItem } from "../utils/storage";
@@ -403,13 +403,10 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
 
     try {
       const formData = new FormData();
+      appendProfileToFormData(formData);
       formData.append('message', newMsg);
       const userProfile = getUserProfileData();
-      formData.append('gradeLevel', userProfile.gradeLevel);
       formData.append('academicStream', userProfile.stream);
-      formData.append('academic_stream', userProfile.stream);
-      formData.append('country', userProfile.country);
-      formData.append('academic_country', userProfile.country);
       if (activeMode === 'Translate' && selectedLanguage) {
         formData.append('targetLanguage', selectedLanguage);
       }

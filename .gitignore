@@ -18,4 +18,5 @@ android/build/
 android/.idea/
 android/captures/
 scratch/
-
+edge_user_data_debug/
+subscriptions.json

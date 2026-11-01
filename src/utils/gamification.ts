@@ -1,6 +1,8 @@
 import { safeGetItem, safeSetItem, safeJsonParse } from './storage';
 import { triggerVibration } from './vibrate';
 import confetti from 'canvas-confetti';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 export interface StudyLevel {
   level: number;
@@ -61,7 +63,8 @@ export const ALL_BADGES: AchievementBadge[] = [
  * Get current total Study XP
  */
 export function getStudyXP(): number {
-  const xpStr = safeGetItem('study_total_xp');
+  const uid = auth.currentUser?.uid;
+  const xpStr = (uid ? safeGetItem(`study_total_xp_${uid}`) : null) || safeGetItem('study_total_xp');
   if (!xpStr) {
     safeSetItem('study_total_xp', '150');
     return 150;
@@ -198,6 +201,19 @@ export function addStudyXP(
 
   const newXP = currentXP + effectiveAmount;
   safeSetItem('study_total_xp', String(newXP));
+  if (auth.currentUser?.uid) {
+    const uid = auth.currentUser.uid;
+    safeSetItem(`study_total_xp_${uid}`, String(newXP));
+    try {
+      setDoc(doc(db, 'users', uid), {
+        xp: newXP,
+        study_total_xp: newXP,
+        lastXpAwardedAt: new Date().toISOString()
+      }, { merge: true }).catch((err) => {
+        console.warn('[Gamification] Background XP cloud sync failed:', err);
+      });
+    } catch (_) {}
+  }
   
   const newLevelDetails = getStudyLevel(newXP);
   const leveledUp = newLevelDetails.currentLevel.level > oldLevel.level;

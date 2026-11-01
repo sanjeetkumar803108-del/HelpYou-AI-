@@ -45,6 +45,18 @@ export function cleanMarkdownMath(content: string): string {
   if (!content) return '';
   let text = healUnitSuperscripts(String(content));
 
+  // Strip trailing pipe artifacts attached to math delimiters: e.g. "$|" or "$$|"
+  text = text.replace(/(\${1,2})\s*\|/g, '$1');
+  text = text.replace(/\|\s*(\${1,2})/g, '$1');
+
+  // Normalize 3 or more dollar signs "$$$" or "$$$$" -> "$$"
+  text = text.replace(/\${3,}/g, '$$');
+
+  // Fix stray single dollar inside display math statements before numbers/symbols:
+  // e.g. "$$\frac{45}{68}\approx$ 0.6618$$" -> "$$\frac{45}{68}\approx 0.6618$$"
+  text = text.replace(/(\$\$[^\$\n]+)\$\s*([0-9a-zA-Z._\-]+)\s*\$\$/g, '$1 $2$$');
+  text = text.replace(/(\\(?:approx|equiv|sim|leq|geq|neq|times|div|pm|mp)|[=+\-*/^_])\s*\$\s*([0-9a-zA-Z])/g, '$1 $2');
+
   // Deduplicate accidental double backslashes before known LaTeX commands
   text = text.replace(/\\\\(text|frac|sqrt|quad|qquad|approx|rightarrow|leftarrow|Rightarrow|Leftarrow|cdot|times|pm|left|right|theta|pi|alpha|beta|gamma|delta|lambda|mu|sigma|omega|Delta|Omega|sin|cos|tan|log|ln|lim|sum|int|partial|boxed|mathbf|mathrm)\b/g, '\\$1');
 
@@ -66,10 +78,32 @@ export function cleanMarkdownMath(content: string): string {
   text = text.replace(/(^|[\s$(=_])ext\{/g, '$1\\text{');
   text = text.replace(/(^|[\s$(=_])heta([\s$_^0-9A-Za-z])/g, '$1\\theta$2');
 
-  // 3. Fix unclosed/unmatched $$ on single line
+  // 3. Fix unclosed/unmatched $$ on single line & balance delimiters
   const lines = text.split('\n');
   const fixedLines = lines.map(line => {
-    const trimmed = line.trim();
+    let trimmed = line.trim();
+    if (!trimmed) return line;
+
+    if (trimmed.endsWith('|')) {
+      trimmed = trimmed.replace(/\s*\|\s*$/, '').trim();
+    }
+
+    if (/^\$\$[^$\n]+\$$/.test(trimmed)) {
+      return trimmed + '$';
+    }
+
+    if (/^\$[^$\n]+\$\$$/.test(trimmed)) {
+      return '$' + trimmed;
+    }
+
+    if (trimmed.startsWith('$$') && (trimmed.match(/\$/g) || []).length === 2 && !trimmed.endsWith('$$')) {
+      return trimmed + '$$';
+    }
+
+    if (!trimmed.startsWith('$$') && trimmed.endsWith('$$') && (trimmed.match(/\$/g) || []).length === 2) {
+      return '$$' + trimmed;
+    }
+
     const count = (trimmed.match(/\$\$/g) || []).length;
     if (count === 1) {
       if (trimmed.endsWith('$$')) {
@@ -80,6 +114,7 @@ export function cleanMarkdownMath(content: string): string {
     }
     return line;
   });
+  text = fixedLines.join('\n');
   // 4. Deduplicate accidental double answers before \boxed{...} (e.g. "1 + 4 = 5 \boxed{5}" -> "1 + 4 = \boxed{5}")
   text = text.replace(/([=:])\s*([0-9a-zA-Z._\-]+|\\[a-zA-Z]+(?:\{[^{}]*\})+)\s*(?:\\quad|\\;|\\,|~|\s)*\\boxed\{\s*\2\s*\}/g, '$1 \\boxed{$2}');
   text = text.replace(/(?<=[=+\-*/(\s]|^)([0-9a-zA-Z._\-]+|\\[a-zA-Z]+(?:\{[^{}]*\})+)\s*(?:\\quad|\\;|\\,|~|\s)*\\boxed\{\s*\1\s*\}/g, '\\boxed{$1}');
@@ -270,6 +305,19 @@ function healSingleQuizLine(line: string): string {
     return match;
   });
 
+  // 5. Restore all protected math blocks
+  for (let i = 0; i < mathBlocks.length; i++) {
+    const block = mathBlocks[i];
+    const inner = block.slice(1, -1).trim();
+    // If the block is pure non-math text/acronym like "$B.Tech$" or "$Ph.D.$", strip $ so it appears natural
+    const isPureAcronym = /^[a-zA-Z0-9.\s\-_/()]+$/.test(inner) && !/[=+\-*/\\^_{}]/.test(inner) && !/\b(?:frac|sqrt|sin|cos|tan)\b/i.test(inner);
+    const replacement = isPureAcronym ? inner : block;
+    mixed = mixed.split(`__MATH_BLOCK_${i}__`).join(replacement);
+  }
+
+  // Safety guard against any orphaned placeholders
+  mixed = mixed.replace(/_{2,3}MATH_BLOCK_\d+_{2,3}/g, '');
+
   return mixed;
 }
 
@@ -287,6 +335,49 @@ export function formatQuizMath(content: string): string {
 }
 
 export const prepareQuizMath = formatQuizMath;
+
+/**
+ * Dedicated math, LaTeX, subscript, and superscript healer for AI Handwritten Notes:
+ * Transforms Bullet Points, Formulas, Concept Maps, and Numerical steps
+ * into valid KaTeX math while preserving chemical subscripts (H_2O, CO_2) and powers (10^-19).
+ */
+export function formatNotesMath(content: string): string {
+  if (!content) return '';
+  let text = cleanMarkdownMath(String(content)).trim();
+  if (text.includes('```')) return text;
+
+  // Protect already valid $...$ and $$...$$ blocks
+  const mathBlocks: string[] = [];
+  text = text.replace(/(\$\$[\s\S]*?\$\$|\$[^\n$]+\$)/g, (m) => {
+    mathBlocks.push(m);
+    return `__MATH_BLOCK_${mathBlocks.length - 1}__`;
+  });
+
+  // Convert standalone chemical formulas with subscripts outside math: e.g. H_2O -> $H_2O$, CO_2 -> $CO_2$
+  text = text.replace(/(?<![a-zA-Z0-9$\\])([A-Z][a-z]?_\{?[0-9]+\}?(?:[A-Z][a-z]?_\{?[0-9]+\}?)*)(?![a-zA-Z0-9$])/g, '$$$1$$');
+
+  // Convert chemical formulas with Unicode subscripts outside math: e.g. H₂O -> $H_2O$, CO₂ -> $CO_2$
+  const unicodeSubMap: Record<string, string> = { '₀':'0', '₁':'1', '₂':'2', '₃':'3', '₄':'4', '₅':'5', '₆':'6', '₇':'7', '₈':'8', '₉':'9' };
+  text = text.replace(/(?<![a-zA-Z0-9$\\])([A-Z][a-z]?)([₀₁₂₃₄₅₆₇₈₉]+)((?:[A-Z][a-z]?)([₀₁₂₃₄₅₆₇₈₉]+))*(?![a-zA-Z0-9$])/g, (match) => {
+    let replaced = match;
+    for (const [u, d] of Object.entries(unicodeSubMap)) {
+      replaced = replaced.split(u).join(`_${d}`);
+    }
+    return `$$${replaced}$$`;
+  });
+
+  // Restore protected math blocks
+  for (let i = 0; i < mathBlocks.length; i++) {
+    text = text.split(`__MATH_BLOCK_${i}__`).join(mathBlocks[i]);
+  }
+  text = text.replace(/_{2,3}MATH_BLOCK_\d+_{2,3}/g, '');
+
+  const lines = text.split('\n');
+  return lines.map(healSingleQuizLine).join('\n');
+}
+
+export const prepareNotesMath = formatNotesMath;
+
 
 
 const remarkPluginsList = [remarkMath, remarkGfm];
@@ -318,22 +409,49 @@ const defaultComponents = {
     <li className="leading-relaxed" {...props} />
   ),
   table: ({ node, ...props }: any) => (
-    <div className="overflow-x-auto my-4 rounded-xl border border-zinc-200 shadow-2xs">
-      <table className="w-full text-left border-collapse text-xs sm:text-sm" {...props} />
+    <div className="overflow-x-auto my-3.5 rounded-2xl border border-zinc-200 shadow-2xs bg-white text-left">
+      <table className="w-full text-left border-collapse text-xs sm:text-[13px]" {...props} />
     </div>
   ),
   thead: ({ node, ...props }: any) => (
-    <thead className="bg-zinc-50/90 border-b border-zinc-200" {...props} />
+    <thead className="bg-zinc-50/95 border-b border-zinc-200 text-zinc-800 font-extrabold" {...props} />
   ),
   th: ({ node, ...props }: any) => (
-    <th className="px-3.5 py-2.5 font-bold text-zinc-800 border-b border-zinc-200 whitespace-nowrap text-xs" {...props} />
+    <th className="px-3.5 py-2.5 font-bold text-zinc-800 border-b border-zinc-200 whitespace-nowrap text-xs tracking-tight" {...props} />
   ),
   td: ({ node, ...props }: any) => (
-    <td className="px-3.5 py-2.5 border-b border-zinc-100 text-zinc-700 text-xs" {...props} />
+    <td className="px-3.5 py-2.5 border-b border-zinc-100 text-zinc-700 text-xs font-medium" {...props} />
   ),
   tr: ({ node, ...props }: any) => (
-    <tr className="hover:bg-zinc-50/50 transition-colors" {...props} />
+    <tr className="hover:bg-zinc-50/60 transition-colors" {...props} />
   ),
+  pre: ({ node, ...props }: any) => (
+    <div className="my-3.5 rounded-2xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-sm overflow-hidden text-left">
+      <div className="bg-zinc-900/90 px-3.5 py-1.5 border-b border-zinc-800 flex items-center justify-between text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Figure / Diagram / Data Graph</span>
+        </span>
+      </div>
+      <div className="p-3.5 overflow-x-auto text-xs sm:text-[13px] font-mono leading-relaxed select-text">
+        <pre {...props} className="bg-transparent p-0 m-0 border-0 font-mono text-zinc-200" />
+      </div>
+    </div>
+  ),
+  code: ({ node, inline, className, children, ...props }: any) => {
+    if (inline) {
+      return (
+        <code className="bg-zinc-100 text-purple-700 font-mono text-[11px] px-1.5 py-0.5 rounded-md border border-zinc-200/60 font-semibold" {...props}>
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code className="font-mono text-xs sm:text-[13px] leading-relaxed block text-zinc-200" {...props}>
+        {children}
+      </code>
+    );
+  },
   stepbox: ({ node, ...props }: any) => (
     <div className="bg-white border border-zinc-200/80 shadow-2xs rounded-2xl p-4 my-3 font-sans text-zinc-800" {...props} />
   ),
@@ -415,6 +533,14 @@ export function healGlobalMarkdown(content: string): string {
     }
     return line;
   }).join('\n');
+
+  // 3.8. Wrap binary arithmetic expressions containing LaTeX operators:
+  // e.g. "5 \div 68", "x \pm y", "10 \times 20", "a \cdot b"
+  text = text.replace(/([0-9a-zA-Z]+)\s*(\\(?:div|times|pm|mp|approx|cdot|leq|geq|neq))\s*([0-9a-zA-Z]+)/g, (match) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${match}$`);
+    return token;
+  });
 
   // 4. Standalone complex LaTeX expressions with 1-level nested braces:
   // \frac{...}{...}, \sqrt{...}, \boxed{...}
@@ -537,9 +663,19 @@ export function healGlobalMarkdown(content: string): string {
 
   // 13. Restore all Math Blocks using function replacers to 100% preserve literal $$
   for (let i = 0; i < mathPlaceholders.length; i++) {
-    const val = mathPlaceholders[i];
-    text = text.replace(`___MATH_BLOCK_${i}___`, () => val);
+    let val = mathPlaceholders[i];
+    if (val.startsWith('$') && val.endsWith('$') && !val.startsWith('$$')) {
+      const inner = val.slice(1, -1).trim();
+      const isPureAcronym = /^[a-zA-Z0-9.\s\-_/()]+$/.test(inner) && !/[=+\-*/\\^_{}]/.test(inner) && !/\b(?:frac|sqrt|sin|cos|tan)\b/i.test(inner);
+      if (isPureAcronym) {
+        val = inner;
+      }
+    }
+    text = text.split(`___MATH_BLOCK_${i}___`).join(val);
   }
+
+  // Safety guard against any orphaned placeholders
+  text = text.replace(/_{2,3}MATH_BLOCK_\d+_{2,3}/g, '');
 
   // 14. Restore all Code Blocks
   for (let i = 0; i < codePlaceholders.length; i++) {

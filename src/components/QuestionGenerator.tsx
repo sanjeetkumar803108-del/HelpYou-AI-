@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ArrowLeft, HelpCircle, Loader2, Share2, 
   Sparkles, BookOpen, GraduationCap, Clock, FileText, 
   ChevronRight, Save, History, Trash2, Send, PenTool, CheckCircle2,
-  RefreshCw, ExternalLink, Camera, Plus, Image, X, Info, Award, Flag
+  RefreshCw, ExternalLink, Camera, Plus, Image, X, Info, Award, Flag, ChevronDown, ChevronUp
 } from 'lucide-react';
 import ReportAIModal from './ReportAIModal';
 import { motion, AnimatePresence } from 'motion/react';
@@ -12,7 +12,9 @@ import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, de
 import { deductCoins, getCoins, isUserLoggedIn, isProUser } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
-import { getUserProfileData } from '../utils/profile';
+import { getUserProfileData, getProfilePayload } from '../utils/profile';
+import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
+import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
 import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
@@ -58,6 +60,7 @@ interface SavedSet {
   id: string;
   topic: string;
   count: number;
+  difficulty?: 'Easy' | 'Medium' | 'Hard' | string;
   gradeLevel: string;
   stream: string;
   questions: QuestionItem[];
@@ -132,6 +135,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     }
   };
   const [questionCount, setQuestionCount] = useState<number>(5);
+  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [previewPdfUri, setPreviewPdfUri] = useState<string | null>(null);
   const [previewPdfName, setPreviewPdfName] = useState<string>('');
   const [customTopic, setCustomTopic] = useState('');
@@ -162,10 +166,16 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [historyPdfUri, setHistoryPdfUri] = useState<string | null>(null);
 
   const [isPro, setIsPro] = useState(() => isProUser());
+  const sessionSeenQuestionsRef = useRef<string[]>([]);
 
   const isMountedRef = useRef(true);
   useEffect(() => {
     isMountedRef.current = true;
+    // Pre-load history so previously seen questions are immediately available to prevent duplicates
+    loadLocalHistory();
+    if (auth.currentUser?.uid) {
+      fetchHistory();
+    }
     return () => {
       isMountedRef.current = false;
     };
@@ -218,13 +228,110 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [gradeLevel, setGradeLevel] = useState('11th Grade (Junior)');
   const [stream, setStream] = useState('STEM / Engineering');
   const [country, setCountry] = useState('United States');
+  const [targetExam, setTargetExam] = useState('');
+  const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
+  const [syllabusResearchState, setSyllabusResearchState] = useState<'idle' | 'researching' | 'completed'>('idle');
+  const [blueprintRevision, setBlueprintRevision] = useState(0);
 
-  // Load profile from local storage / context
+  // Proactively deep research syllabus units for user's chosen subjects & exam
   useEffect(() => {
-    const profile = getUserProfileData();
-    if (profile.gradeLevel) setGradeLevel(profile.gradeLevel);
-    if (profile.stream) setStream(profile.stream);
-    if (profile.country) setCountry(profile.country);
+    let isMounted = true;
+    const conductLiveSyllabusResearch = async () => {
+      const profile = getUserProfileData();
+      const currentBp = getStoredExamBlueprint();
+      const currentTargetExam = profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+
+      const chosenSubjects: string[] = [];
+      if (Array.isArray(profile.subjects) && profile.subjects.length > 0) {
+        profile.subjects.forEach(s => {
+          const str = String(s).trim();
+          if (str && !chosenSubjects.includes(str)) chosenSubjects.push(str);
+        });
+      }
+      const rawAcademicSubjects = safeGetItem('academic_subjects');
+      if (rawAcademicSubjects) {
+        try {
+          const parsed = JSON.parse(rawAcademicSubjects);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(s => {
+              const str = String(s).trim();
+              if (str && !chosenSubjects.includes(str)) chosenSubjects.push(str);
+            });
+          }
+        } catch (_) {}
+      }
+      const rawSingleSubject = safeGetItem('academic_subject') || safeGetItem('subject') || safeGetItem('selected_subject');
+      if (rawSingleSubject) {
+        rawSingleSubject.split(',').forEach(s => {
+          const str = s.trim();
+          if (str && !chosenSubjects.includes(str)) chosenSubjects.push(str);
+        });
+      }
+
+      if (chosenSubjects.length === 0) return;
+
+      const missing = chosenSubjects.filter(subj => {
+        const cleanSubj = subj.toLowerCase().trim();
+        const found = currentBp ? Object.keys(currentBp).find(k => {
+          const cleanK = k.toLowerCase().trim();
+          return cleanK === cleanSubj || cleanSubj.includes(cleanK) || cleanK.includes(cleanSubj);
+        }) : null;
+        return !found || !Array.isArray(currentBp[found]?.coreUnits) || currentBp[found].coreUnits.length === 0;
+      });
+
+      if (missing.length > 0) {
+        setSyllabusResearchState('researching');
+        try {
+          const res = await fetch(getApiUrl('/api/deep-research-exam-blueprint'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              country: profile.country,
+              examName: currentTargetExam || 'Standardized Examination',
+              subjects: missing,
+              gradeLevel: profile.gradeLevel
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.blueprint && typeof data.blueprint === 'object') {
+              const updated = { ...(currentBp || {}), ...data.blueprint };
+              saveStoredExamBlueprint(updated);
+              if (isMounted) {
+                setBlueprintRevision(prev => prev + 1);
+                setSyllabusResearchState('completed');
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Live syllabus research error:', err);
+        } finally {
+          if (isMounted) setSyllabusResearchState('idle');
+        }
+      }
+    };
+
+    conductLiveSyllabusResearch();
+    return () => { isMounted = false; };
+  }, [gradeLevel, stream, country]);
+
+  const mergedSubjects = useMemo(() => {
+    return getScalableRelevantQuizzes(gradeLevel, stream, country);
+  }, [gradeLevel, stream, country, blueprintRevision]);
+
+  // Load profile from local storage / context & listen for updates
+  useEffect(() => {
+    const syncProfile = () => {
+      const profile = getUserProfileData();
+      if (profile.gradeLevel) setGradeLevel(profile.gradeLevel);
+      if (profile.stream) setStream(profile.stream);
+      if (profile.country) setCountry(profile.country);
+      if (profile.targetExam) setTargetExam(profile.targetExam);
+      setBlueprintRevision(prev => prev + 1);
+    };
+    syncProfile();
+    window.addEventListener('academic_profile_updated', syncProfile);
+    return () => window.removeEventListener('academic_profile_updated', syncProfile);
   }, []);
 
   // Suggestions states and auto-refresh logic
@@ -245,6 +352,20 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   };
 
   const refreshSuggestions = () => {
+    const blueprint = getStoredExamBlueprint();
+    if (blueprint && typeof blueprint === 'object') {
+      const units: string[] = [];
+      for (const [subjName, bp] of Object.entries(blueprint)) {
+        if (Array.isArray(bp.coreUnits)) {
+          units.push(...bp.coreUnits);
+        }
+      }
+      if (units.length >= 2) {
+        const shuffled = [...units].sort(() => 0.5 - Math.random());
+        setSuggestedTopics(shuffled.slice(0, 4));
+        return;
+      }
+    }
     const key = getPoolKey(stream);
     const pool = TOPIC_POOLS[key] || TOPIC_POOLS.default;
     // Shuffle and pick 4 topics randomly
@@ -272,6 +393,53 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     if (!q) return '';
     if (typeof q === 'string') return q;
     return q.question || '';
+  };
+
+  const getAvoidQuestionsList = (targetTopic: string): string[] => {
+    const list: string[] = [];
+    const norm = (targetTopic || '').toLowerCase().trim();
+
+    // 1. Current active session questions
+    if (sessionSeenQuestionsRef.current && sessionSeenQuestionsRef.current.length > 0) {
+      sessionSeenQuestionsRef.current.forEach(q => {
+        if (q && q.trim()) list.push(q.trim());
+      });
+    }
+
+    // 2. Saved history items (both cloud and local)
+    (historyItems || []).forEach(item => {
+      const itemTopic = (item.topic || '').toLowerCase().trim();
+      const match = !norm || itemTopic.includes(norm) || norm.includes(itemTopic) || list.length < 15;
+      if (match && Array.isArray(item.questions)) {
+        item.questions.forEach((q: any) => {
+          const text = getQuestionText(q);
+          if (text) list.push(text.trim());
+        });
+      }
+    });
+
+    // 3. Persistent seen questions pool from local storage
+    try {
+      const stored = JSON.parse(safeGetItem('helpyou_seen_subjective_questions_pool') || '[]');
+      if (Array.isArray(stored)) {
+        stored.forEach((item: any) => {
+          if (typeof item === 'string' && item.trim()) list.push(item.trim());
+        });
+      }
+    } catch (_) {}
+
+    // Deduplicate and return top 30
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const item of list) {
+      const key = item.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 70);
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        result.push(item);
+      }
+      if (result.length >= 30) break;
+    }
+    return result;
   };
 
   const getExpectedAnswer = (q: any): string => {
@@ -309,7 +477,17 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
   const normalizeQuestionBreaks = (text: string): string => {
     if (!text) return '';
-    return text.replace(/([^\n])\s*(Part\s+[A-D]:|\([a-d]\)|\([i|v|x]+\))\s*/gi, '$1\n\n$2 ');
+    // Protect code blocks and diagrams from receiving accidental mid-block break splits
+    const codeBlocks: string[] = [];
+    let safe = text.replace(/```[\s\S]*?```/g, (m) => {
+      codeBlocks.push(m);
+      return `___CODE_BLOCK_${codeBlocks.length - 1}___`;
+    });
+    safe = safe.replace(/([^\n])\s*(Part\s+[A-D]:|\([a-d]\)|\([i|v|x]+\))\s*/gi, '$1\n\n$2 ');
+    for (let i = 0; i < codeBlocks.length; i++) {
+      safe = safe.replace(`___CODE_BLOCK_${i}___`, codeBlocks[i]);
+    }
+    return safe;
   };
 
   // Loading animation variables
@@ -437,6 +615,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     const payload = {
       topic: topicLabel,
       count: questionCount,
+      difficulty,
       gradeLevel,
       stream,
       questions: generatedQuestions,
@@ -558,16 +737,22 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
     try {
       const profile = getUserProfileData();
+      const avoidList = getAvoidQuestionsList(customTopic);
       const response = await fetch(getApiUrl('/api/generate-questions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          topic: customTopic, 
-          count: questionCount, 
-          gradeLevel: profile.gradeLevel || gradeLevel, 
+        body: JSON.stringify(getProfilePayload({
+          topic: customTopic,
+          count: questionCount,
+          difficulty,
+          difficultyLevel: difficulty,
+          gradeLevel: profile.gradeLevel || gradeLevel,
           stream: profile.stream || stream,
-          country: profile.country || country
-        })
+          country: profile.country || country,
+          avoidPrompts: avoidList,
+          avoidQuestions: avoidList,
+          randomSeed: `${Date.now()}_${Math.random().toString(36).substring(7)}`
+        }))
       });
 
       if (!response.ok) {
@@ -584,6 +769,15 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         setLoadingProgress(100);
         // Deduct 2 coins now that the output has been successfully generated by the AI
         deductCoins(2, "AI Subjective Questions");
+
+        // Record questions to session and persistent storage so they never repeat in future generations
+        const newTexts = data.questions.map((q: any) => getQuestionText(q)).filter(Boolean);
+        sessionSeenQuestionsRef.current.push(...newTexts);
+        try {
+          const stored = JSON.parse(safeGetItem('helpyou_seen_subjective_questions_pool') || '[]');
+          const combined = Array.from(new Set([...newTexts, ...(Array.isArray(stored) ? stored : [])])).slice(0, 100);
+          safeSetItem('helpyou_seen_subjective_questions_pool', JSON.stringify(combined));
+        } catch (_) {}
 
         setQuestions(data.questions);
         setLoading(false);
@@ -803,7 +997,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       month: 'long',
       day: 'numeric'
     });
-    doc.text(`Grade Level: ${customGrade || gradeLevel}  |  Stream: ${customStream || stream}  |  Date: ${dateStr}`, margin, currentY);
+    doc.text(`Grade Level: ${customGrade || gradeLevel}  |  Stream: ${customStream || stream}  |  Difficulty: ${difficulty}  |  Date: ${dateStr}`, margin, currentY);
     currentY += 6;
 
     // Thin separator
@@ -1230,27 +1424,31 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     <div className="w-full min-h-[500px] flex flex-col text-zinc-900 bg-[#FAF9F6] font-sans relative">
       
       {/* Dynamic Header */}
-      <div className="px-6 py-5 flex items-center justify-between border-b border-zinc-200/40 bg-[#FAF9F6]/80 backdrop-blur-md sticky top-0 z-20">
-        <button
-          onClick={handleHeaderBack}
-          className="w-10 h-10 rounded-full flex items-center justify-center bg-white border border-zinc-200/60 text-zinc-700 hover:text-zinc-950 shadow-sm active:scale-95 transition-all cursor-pointer"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex flex-col items-center text-center">
-          <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 flex items-center gap-1">
-            <Sparkles className="w-3 h-3" /> Magic AI Tutor
-          </span>
-          <h2 className="font-black text-sm text-zinc-900">AI Subjective Questions</h2>
+      <div className="sticky top-0 bg-[#FAF9F6]/95 backdrop-blur-md pt-5 pb-3.5 px-6 z-20 border-b border-zinc-200/80 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <button
+            onClick={handleHeaderBack}
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-white border border-zinc-200/60 text-zinc-700 hover:text-zinc-950 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0"
+            aria-label="Go Back"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="min-w-0">
+            <h2 className="text-lg md:text-xl font-bold flex items-center tracking-tight text-zinc-900 line-clamp-1">
+              <HelpCircle className="w-5 h-5 text-purple-600 mr-2 shrink-0" />
+              <span className="truncate">AI Subjective Questions</span>
+            </h2>
+          </div>
         </div>
         <button
           onClick={handleToggleHistory}
-          className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all cursor-pointer ${
+          className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all cursor-pointer shrink-0 active:scale-95 ${
             showHistory 
-              ? 'bg-purple-600 text-white border-purple-600' 
+              ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/20' 
               : 'bg-white text-zinc-700 border-zinc-200/60 hover:text-purple-600 shadow-sm'
           }`}
           title="History Log"
+          aria-label="History Log"
         >
           <History className="w-5 h-5" />
         </button>
@@ -1384,9 +1582,16 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
               {/* Output Header Status Card */}
               <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-[2rem] p-6 shadow-md text-left flex justify-between items-center relative overflow-hidden">
                 <div className="relative z-10 space-y-1">
-                  <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
-                    PRACTICE MODE • QUESTIONS ONLY
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2.5 py-1 rounded-full text-white">
+                      PRACTICE MODE • QUESTIONS ONLY
+                    </span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white ${
+                      difficulty === 'Easy' ? 'bg-emerald-500/80' : difficulty === 'Hard' ? 'bg-rose-500/80' : 'bg-amber-500/80'
+                    }`}>
+                      {difficulty}
+                    </span>
+                  </div>
                   <h3 className="font-black text-lg tracking-tight">
                     {customTopic ? customTopic : `${stream} Set`}
                   </h3>
@@ -1734,6 +1939,214 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
               className="space-y-6"
             >
               
+                            {/* CARD: SPECIFY TOPIC / INQUIRY FIELD */}
+              <div className="bg-white border border-zinc-200 rounded-[2rem] p-6 shadow-sm text-left space-y-4">
+                <div>
+                  <h3 className="font-black text-sm text-zinc-900 tracking-tight flex items-center gap-1.5">
+                    <span className="text-purple-600 text-lg">🎯</span> Target Subject / Topic
+                  </h3>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customTopic}
+                    onChange={(e) => setCustomTopic(e.target.value)}
+                    placeholder="e.g. Mitochondria, OOP Polymorphism, Supply Shock..."
+                    className="w-full bg-zinc-50 hover:bg-zinc-100/55 focus:bg-white border border-zinc-200 rounded-2xl py-4 pl-4 pr-12 text-xs text-zinc-800 placeholder-zinc-400 font-semibold focus:outline-none focus:ring-1 focus:ring-purple-400 transition-all shadow-inner"
+                  />
+                  {customTopic && (
+                    <button
+                      onClick={() => setCustomTopic('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center text-[10px] font-black cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* USER'S EXAM SUBJECTS & CHAPTERS/UNITS SELECTOR */}
+                <div className="pt-3 border-t border-zinc-100">
+                  <div className="flex items-center justify-between mb-3 px-0.5">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+                      Your Exam Subjects & Chapters
+                    </h3>
+                    {syllabusResearchState === 'researching' ? (
+                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                        <Sparkles className="w-2.5 h-2.5 animate-spin text-purple-600" />
+                        AI Verifying Syllabus...
+                      </span>
+                    ) : targetExam ? (
+                      <span className="text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-100/60 px-2.5 py-0.5 rounded-lg truncate max-w-[150px]">
+                        {targetExam}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-3">
+                    {mergedSubjects.map((subject) => {
+                      const isExpanded = expandedSubject === subject.id;
+                      const hasActiveTopic = customTopic && (subject.topics || []).some(t => customTopic.toLowerCase() === t.toLowerCase());
+
+                      return (
+                        <div
+                          key={subject.id}
+                          className={`bg-white border rounded-3xl overflow-hidden shadow-sm transition-all duration-300 ${
+                            hasActiveTopic || customTopic === subject.title
+                              ? 'border-purple-300 ring-1 ring-purple-200 shadow-md'
+                              : 'border-zinc-200/80 hover:border-zinc-300'
+                          }`}
+                        >
+                          {/* Main Subject Card Header - Identical to AI Quizzes */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              triggerVibration(10);
+                              setExpandedSubject(prev => prev === subject.id ? null : subject.id);
+                            }}
+                            className={`w-full p-4 flex items-center justify-between text-left transition-colors duration-300 cursor-pointer ${
+                              isExpanded ? 'bg-zinc-50/50' : 'hover:bg-zinc-50/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 pr-2">
+                              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-base shrink-0 shadow-sm ${subject.themeColor || 'bg-purple-100 text-purple-700'}`}>
+                                {subject.icon || '📚'}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-extrabold text-sm text-zinc-800 leading-snug truncate">
+                                  {subject.title}
+                                </h4>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-lg">
+                                {(subject.topics || []).length} {subject.nomenclature || 'Chapters'}
+                              </span>
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-zinc-400 shrink-0" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Collapsible Sub-topics List - Clean and Styled like AI Quizzes */}
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2, ease: "easeInOut" }}
+                                className="border-t border-zinc-100"
+                              >
+                                <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
+                                  {/* All Chapters / Comprehensive Full Syllabus Option */}
+                                  {(() => {
+                                    const cleanSubj = cleanSubjectTitle(subject.title);
+                                    const allTopicsList = (subject.topics || []).join(', ');
+                                    const allTargetStr = `${cleanSubj} - All ${subject.nomenclature || 'Chapters'} (Full Syllabus: ${allTopicsList})`;
+                                    const isAllSelected = customTopic === allTargetStr || (customTopic.includes(cleanSubj) && /all (chapters?|units?|domains?|topics?|full syllabus)/i.test(customTopic));
+
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          triggerVibration(15);
+                                          setCustomTopic(allTargetStr);
+                                        }}
+                                        className={`w-full py-3.5 px-4 rounded-2xl border-2 flex items-center justify-between text-left transition-all group/all shadow-xs cursor-pointer mb-1 active:scale-[0.995] ${
+                                          isAllSelected
+                                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 border-purple-600 text-white font-extrabold shadow-md'
+                                            : 'bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-indigo-50/90 border-indigo-200/90 hover:border-indigo-400 hover:from-indigo-100/80 hover:to-purple-100/80 text-indigo-950 font-bold'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2.5 flex-1 pr-2 min-w-0">
+                                          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-xs shrink-0 flex items-center gap-1 ${
+                                            isAllSelected ? 'bg-white/20 text-white border border-white/30' : 'text-white bg-indigo-600'
+                                          }`}>
+                                            ⚡ Full Test
+                                          </span>
+                                          <div className="min-w-0">
+                                            <span className={`font-black text-xs block truncate ${
+                                              isAllSelected ? 'text-white' : 'text-indigo-950 group-hover/all:text-indigo-700'
+                                            }`}>
+                                              All {subject.nomenclature || 'Chapters'} ({cleanSubj})
+                                            </span>
+                                            <span className={`text-[10px] font-semibold block truncate ${
+                                              isAllSelected ? 'text-purple-100' : 'text-zinc-500'
+                                            }`}>
+                                              Covers all {(subject.topics || []).length} {(subject.nomenclature || 'Chapters').toLowerCase()} in this subject
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <span className={`text-[11px] font-black px-3 py-1 rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1 ${
+                                          isAllSelected
+                                            ? 'bg-white text-purple-700'
+                                            : 'text-white bg-indigo-600 group-hover/all:bg-indigo-700'
+                                        }`}>
+                                          {isAllSelected ? 'Selected ✓' : 'Practice All →'}
+                                        </span>
+                                      </button>
+                                    );
+                                  })()}
+
+                                  {/* Individual Chapters / Units */}
+                                  {(subject.topics || []).map((topicItem, idx) => {
+                                    const cleanSubj = cleanSubjectTitle(subject.title);
+                                    const topicTargetStr = `${cleanSubj} - ${topicItem}`;
+                                    const isSelected = customTopic === topicItem || customTopic === topicTargetStr;
+                                    return (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => {
+                                          triggerVibration(15);
+                                          setCustomTopic(topicTargetStr);
+                                        }}
+                                        className={`w-full border active:scale-[0.995] py-2.5 px-3.5 rounded-2xl flex items-center justify-between text-left transition-all shadow-xs cursor-pointer ${
+                                          isSelected
+                                            ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-500/20'
+                                            : 'bg-white border-zinc-200/70 hover:bg-purple-50/40 hover:border-purple-200'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-2.5 flex-1 pr-2 min-w-0">
+                                          <span className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded-md shrink-0 border ${
+                                            isSelected
+                                              ? 'text-white bg-purple-600 border-purple-600'
+                                              : 'text-purple-600 bg-purple-50 border-purple-100'
+                                          }`}>
+                                            {(subject.singularNomenclature || (subject.nomenclature ? subject.nomenclature.replace(/s$/, '') : 'Chapter'))} {String(idx + 1).padStart(2, '0')}
+                                          </span>
+                                          <span className={`text-xs leading-snug truncate ${
+                                            isSelected ? 'font-black text-purple-950' : 'font-bold text-zinc-800'
+                                          }`}>
+                                            {topicItem}
+                                          </span>
+                                        </div>
+                                        <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-lg shrink-0 flex items-center gap-1 ${
+                                          isSelected
+                                            ? 'bg-purple-600 text-white shadow-2xs'
+                                            : 'text-purple-600 bg-purple-50'
+                                        }`}>
+                                          {isSelected ? 'Selected ✓' : 'Select →'}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               {/* CARD: HOW MANY QUESTIONS SELECTOR */}
               <div className="bg-white border border-zinc-200 rounded-[2rem] p-6 shadow-sm text-left space-y-4">
                 <div>
@@ -1763,63 +2176,42 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                 </div>
               </div>
 
-              {/* CARD: SPECIFY TOPIC / INQUIRY FIELD */}
+              {/* CARD: DIFFICULTY LEVEL SELECTOR */}
               <div className="bg-white border border-zinc-200 rounded-[2rem] p-6 shadow-sm text-left space-y-4">
                 <div>
                   <h3 className="font-black text-sm text-zinc-900 tracking-tight flex items-center gap-1.5">
-                    <span className="text-purple-600 text-lg">🎯</span> Target Subject / Topic
+                    <span className="text-purple-600 text-lg">⚡</span> Difficulty Level
                   </h3>
                 </div>
 
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={customTopic}
-                    onChange={(e) => setCustomTopic(e.target.value)}
-                    placeholder="e.g. Mitochondria, OOP Polymorphism, Supply Shock..."
-                    className="w-full bg-zinc-50 hover:bg-zinc-100/55 focus:bg-white border border-zinc-200 rounded-2xl py-4 pl-4 pr-12 text-xs text-zinc-800 placeholder-zinc-400 font-semibold focus:outline-none focus:ring-1 focus:ring-purple-400 transition-all shadow-inner"
-                  />
-                  {customTopic && (
-                    <button
-                      onClick={() => setCustomTopic('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center text-[10px] font-black cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {(['Easy', 'Medium', 'Hard'] as const).map((lvl) => {
+                    const isSelected = difficulty === lvl;
+                    const colors = {
+                      Easy: { active: 'bg-emerald-600 border-emerald-600 text-white shadow-md', dot: '🟢' },
+                      Medium: { active: 'bg-amber-500 border-amber-500 text-white shadow-md', dot: '🟡' },
+                      Hard: { active: 'bg-rose-600 border-rose-600 text-white shadow-md', dot: '🔴' }
+                    }[lvl];
 
-                {/* Subject Suggestions chips */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">
-                      Suggested topics for you
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleManualRefresh}
-                      className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-zinc-400 hover:text-purple-600 transition-colors cursor-pointer bg-transparent border-0 outline-none select-none"
-                    >
-                      <span>Refresh</span>
-                      <RefreshCw className={`w-2.5 h-2.5 transition-transform ${isRefreshing ? 'animate-spin text-purple-600' : ''}`} />
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {(suggestedTopics.length > 0 ? suggestedTopics : getSuggestedTopics()).map((suggestion) => (
+                    return (
                       <button
-                        key={suggestion}
+                        key={lvl}
                         type="button"
                         onClick={() => {
                           triggerVibration(10);
-                          setCustomTopic(suggestion);
+                          setDifficulty(lvl);
                         }}
-                        className="bg-purple-50/55 hover:bg-purple-50 text-purple-700 text-[10px] font-black py-2 px-3 rounded-full border border-purple-100/40 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                        className={`py-3.5 rounded-2xl border font-black text-xs transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                          isSelected
+                            ? colors.active
+                            : 'bg-zinc-50 border-zinc-200/60 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900'
+                        }`}
                       >
-                        <span>{suggestion}</span>
-                        <ChevronRight className="w-3 h-3 shrink-0 opacity-40" />
+                        <span className="text-xs">{colors.dot}</span>
+                        <span>{lvl}</span>
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
 

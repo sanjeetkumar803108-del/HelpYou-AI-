@@ -1,3 +1,6 @@
+import { safeGetItem } from './storage';
+import { getStoredExamBlueprint } from './academicBlueprint';
+
 export interface CurriculumSubject {
   id: string;
   key: string;
@@ -6,6 +9,8 @@ export interface CurriculumSubject {
   themeColor: string;
   icon: string;
   topics: string[];
+  nomenclature?: string;
+  singularNomenclature?: string;
   isCore: boolean;
   tierLabel: string;
 }
@@ -359,8 +364,357 @@ export const MASTER_CURRICULUM_MAP: Record<string, Record<string, Record<string,
   }
 };
 
+// Curated authentic syllabus chapters for standard academic subjects
+export const CURATED_SUBJECT_CHAPTERS: Record<string, { icon: string; themeColor: string; units: string[] }> = {
+  'mathematics': {
+    icon: '📐',
+    themeColor: 'bg-blue-50/70 text-blue-600 border-blue-100',
+    units: [
+      'Limits, Continuity & Differentiability',
+      'Derivatives & Applications of Derivatives',
+      'Integrals & Fundamental Theorem of Calculus',
+      'Differential Equations & Mathematical Modeling',
+      'Matrices, Determinants & Linear Algebra',
+      'Vector Algebra & Three-Dimensional Geometry',
+      'Probability, Distributions & Permutations',
+      'Relations, Functions & Inverse Trigonometry',
+      'Trigonometric Functions & Complex Numbers'
+    ]
+  },
+  'physics': {
+    icon: '⚡',
+    themeColor: 'bg-indigo-50/70 text-indigo-600 border-indigo-100',
+    units: [
+      'Units, Measurements & Vector Kinematics',
+      'Newton’s Laws of Motion & Friction',
+      'Work, Energy, Power & Collisions',
+      'System of Particles & Rotational Dynamics',
+      'Gravitation & Satellite Motion',
+      'Thermodynamics, Heat & Kinetic Theory',
+      'Oscillations & Simple Harmonic Motion',
+      'Waves, Acoustics & Doppler Effect',
+      'Electrostatics, Coulomb’s Law & Capacitance',
+      'Current Electricity & DC Circuits',
+      'Magnetic Effects of Current & Magnetism',
+      'Electromagnetic Induction & AC Circuits',
+      'Optics: Ray Optics & Wave Optics',
+      'Modern Physics, Atoms, Nuclei & Semiconductors'
+    ]
+  },
+  'chemistry': {
+    icon: '🧪',
+    themeColor: 'bg-purple-50/70 text-purple-600 border-purple-100',
+    units: [
+      'Atomic Structure & Quantum Numbers',
+      'Periodic Classification & Chemical Bonding',
+      'Thermodynamics, Enthalpy & Spontaneity',
+      'Chemical & Ionic Equilibrium',
+      'Redox Reactions & Electrochemistry',
+      'Chemical Kinetics & Reaction Rates',
+      'Solutions & Colligative Properties',
+      'Coordination Compounds & Transition Elements',
+      'Organic Chemistry: Hydrocarbons & Haloalkanes',
+      'Alcohols, Phenols, Ethers & Carbonyls',
+      'Amines, Diazonium Salts & Nitrogen Chemistry',
+      'Biomolecules, Polymers & Practical Chemistry'
+    ]
+  },
+  'biology': {
+    icon: '🧬',
+    themeColor: 'bg-emerald-50/70 text-emerald-600 border-emerald-100',
+    units: [
+      'The Living World & Biological Classification',
+      'Plant Kingdom & Morphology of Flowering Plants',
+      'Animal Kingdom & Structural Organisation',
+      'Cell: The Unit of Life & Cell Cycle',
+      'Biomolecules & Enzyme Catalysis',
+      'Plant Physiology: Photosynthesis & Respiration',
+      'Human Physiology: Circulation, Breathing & Digestion',
+      'Neural Control, Coordination & Endocrine System',
+      'Reproduction in Flowering Plants & Humans',
+      'Genetics: Principles of Inheritance & Molecular Basis',
+      'Evolution, Adaptation & Population Dynamics',
+      'Biotechnology: Principles, Recombinant DNA & Applications',
+      'Ecology, Ecosystems, Biodiversity & Conservation'
+    ]
+  },
+  'computer': {
+    icon: '💻',
+    themeColor: 'bg-cyan-50/70 text-cyan-600 border-cyan-100',
+    units: [
+      'Programming Foundations & Control Flow',
+      'Functions, Recursion & Scope',
+      'Data Structures: Arrays, Lists, Stacks & Queues',
+      'Algorithms: Sorting, Searching & Complexity Analysis',
+      'Object-Oriented Programming (OOP) Principles',
+      'Relational Databases, SQL Queries & Normalization',
+      'Computer Networks, Protocols & Web Architecture',
+      'Boolean Logic, Hardware Architecture & Operating Systems'
+    ]
+  },
+  'history': {
+    icon: '🏛️',
+    themeColor: 'bg-amber-50/70 text-amber-600 border-amber-100',
+    units: [
+      'Ancient Civilizations & Early Societies',
+      'Empires, Feudal Structures & Global Trade',
+      'Renaissance, Enlightenment & Scientific Awakening',
+      'Industrial Revolution & Socio-Political Transformation',
+      'National Movements, Colonialism & Decolonization',
+      'The World Wars & Interwar Geopolitics',
+      'Post-War Cold War Politics, Non-Alignment & Globalization'
+    ]
+  },
+  'economics': {
+    icon: '📊',
+    themeColor: 'bg-emerald-50/70 text-emerald-600 border-emerald-100',
+    units: [
+      'Consumer Behavior, Utility & Demand Elasticity',
+      'Production Functions, Cost Curves & Revenue',
+      'Market Structures: Perfect Competition & Monopolies',
+      'National Income Accounting & Macro Aggregates',
+      'Money, Banking & Central Bank Monetary Policy',
+      'Government Budget, Fiscal Deficits & Public Policy',
+      'Balance of Payments, Foreign Exchange & Global Trade'
+    ]
+  },
+  'english': {
+    icon: '📖',
+    themeColor: 'bg-rose-50/70 text-rose-600 border-rose-100',
+    units: [
+      'Reading Comprehension & Critical Inferences',
+      'Poetry Interpretation & Literary Devices',
+      'Analytical, Argumentative & Persuasive Essays',
+      'Formal Letters, Notices & Professional Writing',
+      'Grammar, Sentence Transformations, Voice & Syntax',
+      'Vocabulary Mastery, Phrasal Verbs & Rhetorical Analysis'
+    ]
+  },
+  'geography': {
+    icon: '🌍',
+    themeColor: 'bg-teal-50/70 text-teal-600 border-teal-100',
+    units: [
+      'Geomorphology & Earth’s Crust Dynamics',
+      'Climatology, Atmospheric Pressure & Wind Systems',
+      'Oceanography, Marine Currents & Tides',
+      'Biogeography, Soils & Ecosystem Distribution',
+      'Human Geography, Population & Migration Patterns',
+      'Economic Geography, Natural Resources & Energy',
+      'Regional Development, Geopolitics & Cartography'
+    ]
+  }
+};
+
+export function getCuratedUnitsForSubject(subjectName: string): { icon: string; themeColor: string; units: string[] } {
+  const clean = (subjectName || '').toLowerCase();
+  if (clean.includes('math') || clean.includes('calc') || clean.includes('algebra') || clean.includes('stat') || clean.includes('geom') || clean.includes('functions')) {
+    return CURATED_SUBJECT_CHAPTERS['mathematics'];
+  }
+  if (clean.includes('phys') || clean.includes('mechanic') || clean.includes('optics') || clean.includes('electro')) {
+    return CURATED_SUBJECT_CHAPTERS['physics'];
+  }
+  if (clean.includes('chem') || clean.includes('organic') || clean.includes('inorganic')) {
+    return CURATED_SUBJECT_CHAPTERS['chemistry'];
+  }
+  if (clean.includes('bio') || clean.includes('zoolog') || clean.includes('botan') || clean.includes('genetics') || clean.includes('life')) {
+    return CURATED_SUBJECT_CHAPTERS['biology'];
+  }
+  if (clean.includes('comput') || clean.includes('coding') || clean.includes('software') || clean.includes('program') || clean.includes('it') || clean.includes('cs') || clean.includes('data')) {
+    return CURATED_SUBJECT_CHAPTERS['computer'];
+  }
+  if (clean.includes('econ') || clean.includes('financ') || clean.includes('commerc') || clean.includes('account') || clean.includes('business')) {
+    return CURATED_SUBJECT_CHAPTERS['economics'];
+  }
+  if (clean.includes('hist') || clean.includes('pol') || clean.includes('civic') || clean.includes('social') || clean.includes('governance')) {
+    return CURATED_SUBJECT_CHAPTERS['history'];
+  }
+  if (clean.includes('geog') || clean.includes('earth') || clean.includes('terrain') || clean.includes('climate')) {
+    return CURATED_SUBJECT_CHAPTERS['geography'];
+  }
+  if (clean.includes('eng') || clean.includes('literat') || clean.includes('writ') || clean.includes('verbal')) {
+    return CURATED_SUBJECT_CHAPTERS['english'];
+  }
+  return {
+    icon: '📚',
+    themeColor: 'bg-indigo-50/70 text-indigo-600 border-indigo-100',
+    units: [
+      'Core Principles & Foundational Concepts',
+      'Advanced Theoretical Frameworks',
+      'Analytical Problem Solving & Methodologies',
+      'Case Studies, Real-World Scenarios & Evidence',
+      'Official Exam Traps, Formulas & Critical Synthesis',
+      'Comprehensive High-Yield Examination Review'
+    ]
+  };
+}
+
+/**
+ * Resolves the authentic educational term used for subdivisions (Chapters vs Units vs Domains vs Topics)
+ * based on the user's exam board, level, and country.
+ */
+export function getExamNomenclature(examName?: string, country?: string): { plural: string; singular: string } {
+  const normExam = (examName || '').toLowerCase();
+  const normCountry = (country || '').toLowerCase();
+
+  // Netherlands / European university entrance (e.g., Colloquium Doctum, VWO, HAVO)
+  if (normExam.includes('colloquium') || normExam.includes('doctum') || normExam.includes('vwo') || normExam.includes('havo') || normCountry.includes('netherland') || normCountry.includes('dutch') || normCountry.includes('nl')) {
+    return { plural: 'Domains', singular: 'Domain' };
+  }
+
+  // International Baccalaureate (IB)
+  if (normExam.includes('ib') || normExam.includes('baccalaureate')) {
+    return { plural: 'Themes', singular: 'Theme' };
+  }
+
+  // UK & Commonwealth (GCSE, A-Levels, Cambridge, Edexcel, Ofqual)
+  if (normExam.includes('gcse') || normExam.includes('a-level') || normExam.includes('alevel') || normCountry.includes('uk') || normCountry.includes('united kingdom') || normCountry.includes('britain')) {
+    return { plural: 'Topics', singular: 'Topic' };
+  }
+
+  // USA Standardized & AP (College Board AP, SAT, ACT)
+  if (normExam.includes('ap ') || normExam.startsWith('ap') || normExam.includes('advanced placement') || normExam.includes('sat') || normExam.includes('act') || normCountry.includes('usa') || normCountry.includes('us')) {
+    return { plural: 'Units', singular: 'Unit' };
+  }
+
+  // India & National Systems (CBSE, ICSE, NEET, JEE, State Boards)
+  if (normCountry.includes('india') || normExam.includes('neet') || normExam.includes('jee') || normExam.includes('cbse') || normExam.includes('icse') || normExam.includes('upsc')) {
+    if (normExam.includes('neet') || normExam.includes('jee')) {
+      return { plural: 'Units', singular: 'Unit' };
+    }
+    return { plural: 'Chapters', singular: 'Chapter' };
+  }
+
+  // Medical / Professional
+  if (normExam.includes('usmle') || normExam.includes('plab') || normExam.includes('mcat') || normExam.includes('nclex')) {
+    return { plural: 'Modules', singular: 'Module' };
+  }
+
+  // Default international standard
+  return { plural: 'Chapters', singular: 'Chapter' };
+}
+
+/**
+ * Strips exam names, parentheticals, and verbose prefix noise from subject titles
+ * so students instantly recognize the subject (e.g. "Mathematics A", "Physics").
+ */
+export function cleanSubjectTitle(rawTitle: string): string {
+  if (!rawTitle || typeof rawTitle !== 'string') return '';
+  let clean = rawTitle.trim();
+
+  // Pattern 1: Leading exam name with parentheses and colon: "Colloquium Doctum (Entrance Exam): Mathematics A"
+  clean = clean.replace(/^[^(:]+\([^)]*\)\s*:\s*/i, '');
+
+  // Pattern 2: Any prefix before a colon: e.g. "CBSE Class 12: Chemistry" -> "Chemistry"
+  if (clean.includes(':')) {
+    const parts = clean.split(':');
+    const candidate = parts[parts.length - 1].trim();
+    if (candidate.length >= 2) {
+      clean = candidate;
+    }
+  }
+
+  // Pattern 3: Leading exam name with parentheses and hyphen: "Colloquium Doctum (...) - Mathematics A"
+  clean = clean.replace(/^[^(–—\-]+\([^)]*\)\s*[–—\-]\s*/i, '');
+
+  // Pattern 4: Strip leading exam names with dash: e.g. "Colloquium Doctum - Mathematics"
+  if (clean.includes(' - ') || clean.includes(' – ') || clean.includes(' — ')) {
+    const parts = clean.split(/\s+[–—\-]\s+/);
+    const rightPart = parts[parts.length - 1].trim();
+    if (rightPart.length >= 2) {
+      clean = rightPart;
+    }
+  }
+
+  // Pattern 5: Strip trailing exam name in parentheses: e.g. "Mathematics A (Colloquium Doctum)" -> "Mathematics A"
+  clean = clean.replace(/\s*\([^)]*(?:Exam|Examination|Board|Level|Grade|Colloquium|Curriculum|Course|Entrance)[^)]*\)\s*/gi, ' ').trim();
+
+  // Remove duplicate internal whitespace
+  clean = clean.replace(/\s+/g, ' ').trim();
+
+  return clean || rawTitle.trim();
+}
+
 // Main dynamic curriculum resolver
 export function getScalableRelevantQuizzes(grade: string, track: string, countryRegion: string = 'USA') {
+  // 1. Dynamic Check: Prioritize user's chosen subjects & calibrated exam blueprint 100%!
+  const blueprint = getStoredExamBlueprint();
+  const targetExam = safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+  const nomenclature = getExamNomenclature(targetExam, countryRegion);
+
+  // Gather all subjects the user explicitly selected across all profile sources
+  const subjectsList: { rawKey: string; cleanTitle: string }[] = [];
+  const seenClean = new Set<string>();
+
+  const addSubjectCandidate = (cand: string) => {
+    const raw = (cand || '').trim();
+    if (!raw) return;
+    const clean = cleanSubjectTitle(raw);
+    const lowerClean = clean.toLowerCase();
+    if (!seenClean.has(lowerClean)) {
+      seenClean.add(lowerClean);
+      subjectsList.push({ rawKey: raw, cleanTitle: clean });
+    }
+  };
+
+  const rawSubjs = safeGetItem('academic_subjects');
+  if (rawSubjs) {
+    try {
+      const parsed = JSON.parse(rawSubjs);
+      if (Array.isArray(parsed)) {
+        parsed.forEach(s => addSubjectCandidate(String(s)));
+      }
+    } catch (_) {}
+  }
+
+  const rawSingle = safeGetItem('academic_subject') || safeGetItem('subject') || safeGetItem('selected_subject');
+  if (rawSingle) {
+    rawSingle.split(',').forEach(s => addSubjectCandidate(s));
+  }
+
+  if (blueprint && typeof blueprint === 'object') {
+    Object.keys(blueprint).forEach(k => addSubjectCandidate(k));
+  }
+
+  // If user has chosen subjects, ALWAYS render their chosen subjects with clean names!
+  if (subjectsList.length > 0) {
+    return subjectsList.map(({ rawKey, cleanTitle }, idx) => {
+      // Find matching blueprint entry (case-insensitive or partial)
+      let bpMatch = null;
+      if (blueprint && typeof blueprint === 'object') {
+        const cleanTarget = cleanTitle.toLowerCase().trim();
+        const foundKey = Object.keys(blueprint).find(k => {
+          const cleanK = cleanSubjectTitle(k).toLowerCase().trim();
+          const rawK = k.toLowerCase().trim();
+          return cleanK === cleanTarget || rawK.includes(cleanTarget) || cleanTarget.includes(cleanK);
+        });
+        if (foundKey) bpMatch = blueprint[foundKey];
+      }
+
+      const curated = getCuratedUnitsForSubject(cleanTitle);
+
+      // Prefer live-researched coreUnits from blueprint if available and has >= 4 units; otherwise use curated units
+      const topics = (bpMatch && Array.isArray(bpMatch.coreUnits) && bpMatch.coreUnits.length >= 4)
+        ? bpMatch.coreUnits
+        : curated.units;
+
+      const subNomenclature = bpMatch?.nomenclature || nomenclature.plural;
+      const subSingular = (bpMatch?.nomenclature ? bpMatch.nomenclature.replace(/s$/, '') : nomenclature.singular);
+
+      return {
+        id: `user_subj_${idx}_${cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        key: `user_subj_${idx}_${cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        title: cleanTitle,
+        subtitle: '', // Strictly no verbose descriptions per student UX mandate
+        themeColor: curated.themeColor,
+        icon: curated.icon,
+        topics,
+        nomenclature: subNomenclature,
+        singularNomenclature: subSingular,
+        isCore: true,
+        tierLabel: ''
+      };
+    });
+  }
   const normalizedCountry = countryRegion === 'US' || countryRegion === 'USA' ? 'USA' :
                              countryRegion === 'UK' ? 'UK' :
                              countryRegion === 'CA' || countryRegion === 'Canada' ? 'CA' :
@@ -409,11 +763,12 @@ export function getScalableRelevantQuizzes(grade: string, track: string, country
 
   // Map to the required UI presentation schema
   return finalQuizzes.map(item => {
+    const cleanTitle = cleanSubjectTitle(item.title);
     return {
       id: item.key,
       key: item.key,
-      title: item.title,
-      subtitle: item.subtitle,
+      title: cleanTitle,
+      subtitle: '', // Strictly no verbose descriptions per student UX mandate
       themeColor: item.key.includes('math') || item.key.includes('calc') || item.key.includes('functions') || item.key.includes('mcr3u') || item.key.includes('mhf4u') || item.key.includes('mcv4u') ? 'bg-blue-50/70 text-blue-600 border-blue-100' :
                   item.key.includes('sci') || item.key.includes('physics') || item.key.includes('sph') ? 'bg-indigo-50/70 text-indigo-600 border-indigo-100' :
                   item.key.includes('bio') || item.key.includes('biology') || item.key.includes('sbi') ? 'bg-emerald-50/70 text-emerald-600 border-emerald-100' :
@@ -421,8 +776,10 @@ export function getScalableRelevantQuizzes(grade: string, track: string, country
                   'bg-purple-50/70 text-purple-600 border-purple-100',
       icon: item.icon,
       topics: item.topics,
-      isCore: item.key.includes('math') || item.key.includes('reading') || item.key.includes('english') || item.key.includes('functions') || item.key.includes('mcr3u') || item.key.includes('mhf4u') || item.key.includes('mcv4u'),
-      tierLabel: gradeGroup === '9-10' ? 'High School (9-10)' : gradeGroup === '11-12' ? 'Senior High (11-12)' : 'College 101'
+      nomenclature: nomenclature.plural,
+      singularNomenclature: nomenclature.singular,
+      isCore: true,
+      tierLabel: ''
     };
   });
 }

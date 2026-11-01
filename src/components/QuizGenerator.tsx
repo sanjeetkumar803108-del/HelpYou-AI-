@@ -1,5 +1,5 @@
 import { getApiUrl } from '../utils/api';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   BookOpen, Loader2, ArrowLeft, Award, CheckCircle2, XCircle, 
   RotateCcw, HelpCircle, Coins, ChevronDown, ChevronUp,
@@ -15,7 +15,7 @@ import { db, auth } from '../lib/firebase';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
 import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
-import { getUserProfileData } from '../utils/profile';
+import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { detectUserRegion } from '../utils/regionDetector';
 import { useSettings } from '../hooks/useSettings';
 import { saveMistakeToVault } from '../utils/mistakes';
@@ -39,7 +39,8 @@ import {
   Area 
 } from 'recharts';
 
-import { getScalableRelevantQuizzes } from '../utils/curriculumMap';
+import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
+import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
 
 interface Question {
   question: string;
@@ -963,8 +964,83 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
     };
   }, []);
 
-  // Dynamic quiz generation (Grade Tier + Academic Track + Region Alias System)
-  const mergedSubjects = getScalableRelevantQuizzes(gradeLevel, academicTrack, regionSystem);
+  const [syllabusResearchState, setSyllabusResearchState] = useState<'idle' | 'researching' | 'completed'>('idle');
+  const [blueprintRevision, setBlueprintRevision] = useState(0);
+
+  // Proactively deep research syllabus units for user's chosen subjects & exam
+  useEffect(() => {
+    let isMounted = true;
+    const conductLiveSyllabusResearch = async () => {
+      const profile = getUserProfileData();
+      const currentBp = getStoredExamBlueprint();
+      const targetExam = profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+
+      const chosenSubjects: string[] = [];
+      if (Array.isArray(profile.subjects) && profile.subjects.length > 0) {
+        profile.subjects.forEach(s => {
+          const str = String(s).trim();
+          if (str && !chosenSubjects.includes(str)) chosenSubjects.push(str);
+        });
+      }
+      if (chosenSubjects.length === 0 && profile.subject) {
+        profile.subject.split(',').forEach(s => {
+          const str = s.trim();
+          if (str && !chosenSubjects.includes(str)) chosenSubjects.push(str);
+        });
+      }
+
+      if (chosenSubjects.length === 0) return;
+
+      // Check if any chosen subject lacks coreUnits in blueprint
+      const missing = chosenSubjects.filter(subj => {
+        const cleanSubj = subj.toLowerCase().trim();
+        const found = currentBp ? Object.keys(currentBp).find(k => {
+          const cleanK = k.toLowerCase().trim();
+          return cleanK === cleanSubj || cleanSubj.includes(cleanK) || cleanK.includes(cleanSubj);
+        }) : null;
+        return !found || !Array.isArray(currentBp[found]?.coreUnits) || currentBp[found].coreUnits.length === 0;
+      });
+
+      if (missing.length > 0) {
+        setSyllabusResearchState('researching');
+        try {
+          const res = await fetch(getApiUrl('/api/deep-research-exam-blueprint'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              country: profile.country,
+              examName: targetExam || 'Standardized Examination',
+              grade: profile.gradeLevel,
+              subjects: chosenSubjects
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted && data && data.subjectsBlueprint) {
+              const updated = { ...(currentBp || {}), ...data.subjectsBlueprint };
+              saveStoredExamBlueprint(updated);
+              setBlueprintRevision(prev => prev + 1);
+              setSyllabusResearchState('completed');
+            }
+          }
+        } catch (err) {
+          console.warn('[QuizGenerator] Background syllabus research notice:', err);
+          if (isMounted) setSyllabusResearchState('idle');
+        }
+      } else {
+        setSyllabusResearchState('completed');
+      }
+    };
+
+    conductLiveSyllabusResearch();
+    return () => { isMounted = false; };
+  }, [gradeLevel, academicTrack]);
+
+  // Dynamic quiz generation (Grade Tier + Academic Track + Region Alias System + Live Blueprint)
+  const mergedSubjects = useMemo(() => {
+    return getScalableRelevantQuizzes(gradeLevel, academicTrack, regionSystem);
+  }, [gradeLevel, academicTrack, regionSystem, blueprintRevision]);
 
   const [loading, setLoading] = useState(false);
   const [quiz, setQuiz] = useState<Question[]>([]);
@@ -1486,6 +1562,14 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
         // Deduct 2 coins now that the output has been successfully generated by the AI
         deductCoins(2, "AI Quizzes");
 
+        // Save questions to seen pool to prevent repeats
+        try {
+          const stored = JSON.parse(safeGetItem('helpyou_seen_quiz_questions_pool') || '[]');
+          const newQues = data.quiz.map((q: any) => typeof q === 'string' ? q : (q.question || '')).filter(Boolean);
+          const updated = Array.from(new Set([...newQues, ...(Array.isArray(stored) ? stored : [])])).slice(0, 100);
+          safeSetItem('helpyou_seen_quiz_questions_pool', JSON.stringify(updated));
+        } catch (_) {}
+
         setQuiz(data.quiz);
         setQuizState('playing');
         setCurrentIndex(0);
@@ -1605,16 +1689,32 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
 
     try {
       const profile = getUserProfileData();
+      // Collect previously seen quiz questions to guarantee zero duplicates
+      const seenQuizPool: string[] = [];
+      try {
+        const stored = JSON.parse(safeGetItem('helpyou_seen_quiz_questions_pool') || '[]');
+        if (Array.isArray(stored)) seenQuizPool.push(...stored);
+      } catch (_) {}
+      (quizHistory || []).forEach(h => {
+        if (Array.isArray(h.questions)) {
+          h.questions.forEach((q: any) => {
+            const txt = typeof q === 'string' ? q : (q.question || '');
+            if (txt) seenQuizPool.push(txt.trim());
+          });
+        }
+      });
+      const uniqueAvoid = Array.from(new Set(seenQuizPool)).slice(0, 30);
+
       const response = await fetch(getApiUrl('/api/generate-quiz'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(getProfilePayload({
           topic: activeTopic,
-          gradeLevel: profile.gradeLevel,
-          stream: profile.stream,
-          country: profile.country,
-          count: selectedCount
-        }),
+          count: selectedCount,
+          avoidPrompts: uniqueAvoid,
+          avoidQuestions: uniqueAvoid,
+          randomSeed: `${Date.now()}_${Math.random().toString(36).substring(7)}`
+        })),
       });
 
       if (!response.ok) {
@@ -2409,9 +2509,6 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           <h4 className="font-extrabold text-sm text-zinc-800 leading-snug">
                             Upload PDF
                           </h4>
-                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-md">
-                            Elite AI
-                          </span>
                         </div>
                         <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
                           Notes to MCQs
@@ -2424,78 +2521,11 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                   </div>
                 </div>
 
-                {/* Textbook Photo to Quiz Card */}
-                <div 
-                  onClick={async () => {
-                    if (isOffline) return;
-                    triggerVibration(10);
-                    if (Capacitor.isNativePlatform()) {
-                      try {
-                        const picked = await takeNativePhoto();
-                        if (picked) {
-                          if ('error' in picked) {
-                            if (picked.error === 'blocked') {
-                              showToast('Camera Permission Blocked: Please enable Camera in Device Settings', 'warning');
-                            } else if (picked.error === 'denied') {
-                              showToast('Camera Permission Denied: Camera is required to capture textbook pages.', 'warning');
-                            } else {
-                              photoInputRef.current?.click();
-                            }
-                          } else {
-                            const fakeEvent = {
-                              target: {
-                                files: [picked.fileObj]
-                              }
-                            } as unknown as React.ChangeEvent<HTMLInputElement>;
-                            await handlePhotoUpload(fakeEvent);
-                          }
-                        }
-                      } catch (err: any) {
-                        console.error("Native camera photo failed", err);
-                        photoInputRef.current?.click();
-                      }
-                    } else {
-                      photoInputRef.current?.click();
-                    }
-                  }}
-                  className={`mb-6 cursor-pointer relative overflow-hidden rounded-3xl border border-zinc-200/80 p-4 transition-all duration-300 shadow-sm ${isOffline ? 'bg-zinc-100/50 opacity-50 cursor-not-allowed pointer-events-none' : 'bg-white hover:border-amber-200 hover:shadow-md active:scale-[0.99] group'}`}
-                >
-                  <input 
-                    type="file" 
-                    ref={photoInputRef} 
-                    onChange={handlePhotoUpload} 
-                    accept="image/*" 
-                    className="hidden" 
-                  />
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shadow-sm shrink-0 group-hover:scale-105 transition-transform">
-                        <Camera className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-extrabold text-sm text-zinc-800 leading-snug">
-                            Upload Photo
-                          </h4>
-                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-md">
-                            Visual AI
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
-                          Snap to Quiz
-                        </p>
-                      </div>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-zinc-50 border border-zinc-200/50 flex items-center justify-center text-amber-600 shadow-sm shrink-0 group-hover:translate-x-0.5 transition-transform">
-                      <span className="text-xs filter drop-shadow-sm select-none">📸</span>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Presets Accordion */}
                 <div className="mb-6 flex-1">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  <div className="flex items-center justify-between mb-3 px-0.5">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
                       Curriculum Practice Quizzes
                     </h3>
                   </div>
@@ -2520,23 +2550,15 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                                 {subject.icon}
                               </div>
                               <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="font-extrabold text-sm text-zinc-800 leading-snug">
-                                    {subject.title}
-                                  </h4>
-                                  {subject.isCore && (
-                                    <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 uppercase tracking-wider">
-                                      Universal Core
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">{subject.subtitle}</p>
+                                <h4 className="font-extrabold text-sm text-zinc-800 leading-snug">
+                                  {cleanSubjectTitle(subject.title)}
+                                </h4>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-extrabold text-zinc-400 bg-zinc-100 px-2 py-1 rounded-lg uppercase tracking-wider">
-                                0/{subject.topics.length} Modules
+                              <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-lg">
+                                {(subject.topics || []).length} {subject.nomenclature || 'Chapters'}
                               </span>
                               {isExpanded ? (
                                 <ChevronUp className="w-4 h-4 text-zinc-400 shrink-0" />
@@ -2557,24 +2579,55 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                                 className="border-t border-zinc-100"
                               >
                                 <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
+                                  {/* All Chapters / Comprehensive Full Syllabus Option */}
+                                  <button
+                                    onClick={() => {
+                                      triggerVibration(15);
+                                      const cleanSubj = cleanSubjectTitle(subject.title);
+                                      const allTopicsList = (subject.topics || []).join(', ');
+                                      handleTopicClick(cleanSubj, `All ${subject.nomenclature || 'Chapters'} (Full Syllabus: ${allTopicsList})`);
+                                    }}
+                                    disabled={loading}
+                                    className="w-full bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-indigo-50/90 border-2 border-indigo-200/90 hover:border-indigo-400 hover:from-indigo-100/80 hover:to-purple-100/80 active:scale-[0.995] py-3.5 px-4 rounded-2xl flex items-center justify-between text-left transition-all group/all shadow-xs cursor-pointer mb-1"
+                                  >
+                                    <div className="flex items-center gap-2.5 flex-1 pr-2">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-white bg-indigo-600 px-2 py-0.5 rounded-md shadow-xs shrink-0 flex items-center gap-1">
+                                        ⚡ Full Test
+                                      </span>
+                                      <div className="min-w-0">
+                                        <span className="font-black text-xs text-indigo-950 group-hover/all:text-indigo-700 transition-colors block truncate">
+                                          All {subject.nomenclature || 'Chapters'} ({cleanSubjectTitle(subject.title)})
+                                        </span>
+                                        <span className="text-[10px] font-semibold text-zinc-500 block truncate">
+                                          Covers all {(subject.topics || []).length} {(subject.nomenclature || 'Chapters').toLowerCase()} in this subject
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <span className="text-[11px] font-black text-white bg-indigo-600 group-hover/all:bg-indigo-700 px-3 py-1 rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1">
+                                      Practice All &rarr;
+                                    </span>
+                                  </button>
+
                                   {(subject.topics || []).map((topicItem, index) => (
                                     <button
                                       key={index}
                                       onClick={() => {
                                         triggerVibration(15);
-                                        handleTopicClick(subject.title, topicItem);
+                                        handleTopicClick(cleanSubjectTitle(subject.title), topicItem);
                                       }}
                                       disabled={loading}
-                                      className="w-full bg-white border border-zinc-200/60 hover:bg-zinc-50 hover:border-zinc-300/80 active:scale-[0.995] py-3.5 px-4 rounded-2xl flex items-center justify-between text-left transition-all group/topic shadow-sm"
+                                      className="w-full bg-white border border-zinc-200/70 hover:bg-indigo-50/40 hover:border-indigo-200 active:scale-[0.995] py-3 px-3.5 rounded-2xl flex items-center justify-between text-left transition-all group/topic shadow-xs cursor-pointer"
                                     >
-                                      <div className="flex items-center gap-2.5">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                                        <span className="font-bold text-xs text-zinc-700 group-hover/topic:text-indigo-600 transition-colors">
+                                      <div className="flex items-center gap-2.5 flex-1 pr-2">
+                                        <span className="text-[10px] font-black font-mono text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md shrink-0">
+                                          {(subject.singularNomenclature || (subject.nomenclature ? subject.nomenclature.replace(/s$/, '') : 'Unit'))} {String(index + 1).padStart(2, '0')}
+                                        </span>
+                                        <span className="font-bold text-xs text-zinc-800 group-hover/topic:text-indigo-600 transition-colors leading-snug">
                                           {topicItem}
                                         </span>
                                       </div>
-                                      <span className="text-xs font-black text-indigo-500 opacity-60 group-hover/topic:opacity-100 group-hover/topic:translate-x-0.5 transition-all">
-                                        &rarr;
+                                      <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg opacity-80 group-hover/topic:opacity-100 group-hover/topic:bg-indigo-600 group-hover/topic:text-white transition-all shrink-0 flex items-center gap-1">
+                                        Practice &rarr;
                                       </span>
                                     </button>
                                   ))}

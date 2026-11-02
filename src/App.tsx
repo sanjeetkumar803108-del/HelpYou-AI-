@@ -671,16 +671,19 @@ export default function App() {
                       const nd = d.data();
                       restoredNotes.push({
                         id: d.id,
-                        timestamp: nd.createdAt?.toMillis ? nd.createdAt.toMillis() : Date.now(),
-                        chapter: nd.chapter,
-                        subject: nd.subject,
-                        exam: nd.exam,
+                        timestamp: nd.createdAt?.toMillis ? nd.createdAt.toMillis() : (nd.timestamp || Date.now()),
+                        chapter: nd.chapter || nd.data?.metadata?.chapter || 'AI Topper Note',
+                        subject: nd.subject || nd.data?.metadata?.subject || 'General',
+                        exam: nd.exam || nd.data?.metadata?.exam || 'Official Exam',
                         data: nd.data
                       });
                     });
                     restoredNotes.sort((a, b) => b.timestamp - a.timestamp);
                     safeSetItem('helpyou_ai_saved_notes', JSON.stringify(restoredNotes));
                     safeSetItem(`user_notes_${currentUser.uid}`, JSON.stringify(restoredNotes));
+                    try {
+                      window.dispatchEvent(new CustomEvent('sync_cloud_notes'));
+                    } catch (_) {}
                   }
                 } catch (notesErr) {
                   // Gracefully fall back to local storage if Firestore rules or connectivity are unavailable

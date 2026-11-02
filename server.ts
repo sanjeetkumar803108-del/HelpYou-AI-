@@ -2753,6 +2753,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
 app.post("/api/generate-flashcards", async (req, res) => {
   try {
     const text = req.body.text || req.body.topic || req.body.content || "";
+    const topic = req.body.topic || text || "";
     const gradeLevel = req.body.gradeLevel || req.body.userGrade;
     const stream = req.body.stream || req.body.academic_stream;
     const country = req.body.country || req.body.academic_country;
@@ -2762,7 +2763,8 @@ app.post("/api/generate-flashcards", async (req, res) => {
       return res.status(400).json({ error: "Missing text or topic" });
     }
 
-    const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
+    const hasExplicitCount = count !== undefined && count !== null && count !== '' && !isNaN(parseInt(count));
+    const requestedCount = hasExplicitCount ? Math.min(Math.max(parseInt(count) || 10, 1), 30) : null;
     const targetExam = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam, examBlueprint, stream || text);
@@ -2774,19 +2776,30 @@ app.post("/api/generate-flashcards", async (req, res) => {
     const allChaptersDirective = isAllChapters ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - The user has chosen an "ALL CHAPTERS / FULL SYLLABUS" mock assessment specifically for this subject.
-- You MUST systematically distribute the ${requestedCount} questions evenly across ALL the chapters/domains listed in the topic.
-- ABSOLUTELY STRICT SUBJECT ISOLATION: ALL ${requestedCount} questions MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
+- You MUST systematically distribute the flashcards evenly across ALL the chapters/domains listed in the topic.
+- ABSOLUTELY STRICT SUBJECT ISOLATION: ALL flashcards MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
 ` : '';
+
+    const countDirective = requestedCount ? `
+Your mission is to generate exactly ${requestedCount} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || 'Standard'}.
+
+CRITICAL COUNT MANDATE:
+The output JSON array MUST contain EXACTLY ${requestedCount} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount} cards, and never omit questions. The output array length MUST be ${requestedCount}.
+` : `
+Your mission is to generate a comprehensive, high-yield active recall flashcard revision deck calibrated for a student in Grade: ${gradeLevel || 'Standard'}.
+
+CRITICAL COMPREHENSIVE CHAPTER / UNIT COVERAGE MANDATE:
+- NO FIXED CARD COUNT: Do NOT restrict yourself to an arbitrary number of flashcards.
+- DYNAMIC FULL-CHAPTER COVERAGE: Thoroughly analyze the selected chapter/unit/topic. Generate as many flashcards as are needed to comprehensively master every foundational definition, core mechanism, governing law/theorem, essential formula, real-world application, common misconception, and key exam takeaway for this chapter/unit without redundancy.
+- Typically, thoroughly covering a chapter or unit requires between 10 to 25+ comprehensive flashcards. Generate as many as required to cover all key subtopics completely.
+`;
 
     const systemInstruction = `${gradeDirective}
 ${examBlueprintDirective ? `\nOFFICIAL EXAM CALIBRATION DIRECTIVE:\n${examBlueprintDirective}\n` : ''}
 ${allChaptersDirective}
 
 Act as an Elite Cognitive Scientist and Active Recall Specialist.
-Your mission is to generate exactly ${requestedCount} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || 'Standard'}.
-
-CRITICAL COUNT MANDATE:
-The output JSON array MUST contain EXACTLY ${requestedCount} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount} cards, and never omit questions. The output array length MUST be ${requestedCount}.
+${countDirective}
 
 CRITICAL ACTIVE RECALL & CONCISE LENGTH RULES:
 1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept appropriate to their grade level.
@@ -2809,6 +2822,10 @@ Format:
   }
 ]`;
 
+    const userPromptText = requestedCount
+      ? `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || 'Standard'}. You must provide all ${requestedCount} cards:\n\n${text}`
+      : `Generate a comprehensive high-yield active recall flashcard deck covering all key concepts, definitions, formulas, and mechanisms for this chapter/topic for a student in Grade: ${gradeLevel || 'Standard'}. Generate as many flashcards as needed to master this entire chapter/unit thoroughly without any fixed limit:\n\n${text}`;
+
     const response = await safeGenerateContent({
       gradeLevel,
       stream,
@@ -2818,7 +2835,7 @@ Format:
       model: "gemini-flash-lite-latest",
       contents: [{
         role: "user",
-        parts: [{ text: `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || 'Standard'}. You must provide all ${requestedCount} cards:\n\n${text}` }]
+        parts: [{ text: userPromptText }]
       }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },

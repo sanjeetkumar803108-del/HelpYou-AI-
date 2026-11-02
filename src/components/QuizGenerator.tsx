@@ -2186,7 +2186,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
             <div className="min-w-0">
               <h2 className="text-lg md:text-xl font-bold flex items-center tracking-tight line-clamp-1 text-zinc-900">
                 <BookOpen className="w-5 h-5 text-indigo-600 mr-2 shrink-0" />
-                <span className="truncate">AI Practice Quizzes</span>
+                <span className="truncate">AI Quizzes</span>
               </h2>
             </div>
           </div>

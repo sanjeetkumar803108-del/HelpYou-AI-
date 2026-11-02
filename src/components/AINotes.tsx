@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  ArrowLeft, Sparkles, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, 
-  Check, Loader2, AlertCircle, BookOpen, Layers, 
-  Trash2, Calendar, Compass, Award, X, CheckCircle2
+  ArrowLeft, Download, Printer, Sparkles, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, 
+  RotateCcw, Check, Loader2, AlertCircle, BookOpen, Layers, 
+  Trash2, Calendar, Compass, Award, X, CheckCircle2, Cloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, where, serverTimestamp } from 'firebase/firestore';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getStoredExamBlueprint, SubjectBlueprint } from '../utils/academicBlueprint';
 import { getScalableRelevantQuizzes } from '../utils/curriculumMap';
@@ -150,9 +150,103 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       return [];
     }
   });
+  const [syncingCloud, setSyncingCloud] = useState<boolean>(false);
+  const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const viewMode = 'slides';
   const [slideIndex, setSlideIndex] = useState<number>(0);
   const touchStartX = useRef<number | null>(null);
+
+  // Cross-Device Cloud Sync: Fetch user's saved notes from Cloud Firestore
+  const fetchCloudNotes = async (targetUid?: string) => {
+    const uid = targetUid || auth.currentUser?.uid || safeGetItem('last_logged_in_user');
+    if (!uid) return;
+
+    try {
+      setSyncingCloud(true);
+      const q = query(
+        collection(db, 'user_notes'),
+        where('userId', '==', uid)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const cloudNotes: SavedNoteItem[] = [];
+        snap.forEach((docSnap) => {
+          const nd = docSnap.data();
+          if (nd && nd.data) {
+            cloudNotes.push({
+              id: docSnap.id,
+              timestamp: nd.createdAt?.toMillis ? nd.createdAt.toMillis() : (nd.timestamp || Date.now()),
+              chapter: nd.chapter || nd.data?.metadata?.chapter || 'AI Topper Note',
+              subject: nd.subject || nd.data?.metadata?.subject || 'General',
+              exam: nd.exam || nd.data?.metadata?.exam || 'Official Exam',
+              data: nd.data
+            });
+          }
+        });
+
+        cloudNotes.sort((a, b) => b.timestamp - a.timestamp);
+
+        setHistoryItems((prev) => {
+          const map = new Map<string, SavedNoteItem>();
+          cloudNotes.forEach((item) => map.set(item.id, item));
+          prev.forEach((item) => {
+            if (!map.has(item.id)) {
+              map.set(item.id, item);
+            }
+          });
+          const merged = Array.from(map.values()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+          safeSetItem('helpyou_ai_saved_notes', JSON.stringify(merged));
+          safeSetItem(`user_notes_${uid}`, JSON.stringify(merged));
+          return merged;
+        });
+      }
+    } catch (err) {
+      console.warn('[AINotes] Cross-device cloud sync fallback to local storage:', err);
+    } finally {
+      setSyncingCloud(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCloudNotes();
+    const handleSyncEvent = () => fetchCloudNotes();
+    window.addEventListener('sync_cloud_notes', handleSyncEvent);
+    return () => window.removeEventListener('sync_cloud_notes', handleSyncEvent);
+  }, []);
+
+  const handleOpenNote = (item: SavedNoteItem) => {
+    triggerVibration(15);
+    setNotesData(item.data);
+    setSelectedSubject(item.subject);
+    setSelectedChapter(item.chapter);
+    setShowHistoryModal(false);
+    setSlideIndex(0);
+  };
+
+  const handleDeleteNote = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    triggerVibration(20);
+    const updated = historyItems.filter(h => h.id !== id);
+    setHistoryItems(updated);
+    safeSetItem('helpyou_ai_saved_notes', JSON.stringify(updated));
+    const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user');
+    if (uid) {
+      safeSetItem(`user_notes_${uid}`, JSON.stringify(updated));
+    }
+
+    if (auth.currentUser && !id.startsWith('note_')) {
+      try {
+        await deleteDoc(doc(db, 'user_notes', id));
+      } catch (err) {
+        console.warn('[AINotes] Failed to delete note from cloud:', err);
+      }
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    triggerVibration(15);
+    window.print();
+  };
 
   useEffect(() => {
     if (mergedSubjects.length > 0 && !selectedSubject) {
@@ -233,36 +327,21 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
         deductCoins(2, "AI Topper Handwritten Notes");
       }
 
-      // 1. Auto-save 100% to local mobile storage (user-scoped and global)
-      const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
-      const newHistoryItem: SavedNoteItem = {
-        id: 'note_' + Date.now(),
-        timestamp: Date.now(),
-        chapter: chapterName,
-        subject: selectedSubject,
-        exam: targetExam,
-        data
-      };
-      const updatedHistory = [newHistoryItem, ...historyItems.slice(0, 29)];
-      setHistoryItems(updatedHistory);
-      safeSetItem('helpyou_ai_saved_notes', JSON.stringify(updatedHistory));
-      if (uid) {
-        safeSetItem(`user_notes_${uid}`, JSON.stringify(updatedHistory));
-      }
-
-      // 2. Auto-save 100% to user's Cloud Email Account (Firebase Firestore)
+      // 1. Auto-save 100% to user's Cloud Email Account (Firebase Firestore)
+      let savedDocId = 'note_' + Date.now();
       if (auth.currentUser) {
         try {
-          // Save complete structured note for cross-device retrieval
-          await addDoc(collection(db, 'user_notes'), {
+          const docRef = await addDoc(collection(db, 'user_notes'), {
             userId: auth.currentUser.uid,
             userEmail: auth.currentUser.email || '',
             chapter: chapterName,
             subject: selectedSubject,
             exam: targetExam,
             data,
+            timestamp: Date.now(),
             createdAt: serverTimestamp()
           });
+          savedDocId = docRef.id;
 
           // Also register as a Pocket Item so it appears in student study resources
           await addDoc(collection(db, 'pocket_items'), {
@@ -271,12 +350,29 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
             type: 'note',
             topic: `${selectedSubject}: ${chapterName}`,
             subject: selectedSubject,
-            text: `# ${data.title}\n\n**Subject**: ${data.subject} | **Exam**: ${data.exam}\n\n${(data.pages || []).map(p => `## ${p.title}\n${p.content}`).join('\n\n')}`,
+            text: `# ${data.metadata?.title || chapterName}\n\n**Subject**: ${data.metadata?.subject || selectedSubject} | **Exam**: ${data.metadata?.exam || targetExam}\n\n${(data.pages || []).map(p => `## ${p.pageTitle || 'Page'}\n${(p.points || []).join('\n')}`).join('\n\n')}`,
             createdAt: serverTimestamp()
           });
         } catch (cloudErr) {
           console.warn('[AINotes] Cloud auto-sync notice:', cloudErr);
         }
+      }
+
+      // 2. Auto-save 100% to local mobile storage (user-scoped and global)
+      const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
+      const newHistoryItem: SavedNoteItem = {
+        id: savedDocId,
+        timestamp: Date.now(),
+        chapter: chapterName,
+        subject: selectedSubject,
+        exam: targetExam,
+        data
+      };
+      const updatedHistory = [newHistoryItem, ...historyItems.filter(h => h.id !== savedDocId).slice(0, 49)];
+      setHistoryItems(updatedHistory);
+      safeSetItem('helpyou_ai_saved_notes', JSON.stringify(updatedHistory));
+      if (uid) {
+        safeSetItem(`user_notes_${uid}`, JSON.stringify(updatedHistory));
       }
 
     } catch (err: any) {
@@ -383,7 +479,34 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
           </div>
         </div>
 
-        <div className="w-9" />
+        <div className="flex items-center gap-2">
+          {/* Saved Notes History Button with Cloud Sync Status */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerVibration(15);
+              fetchCloudNotes();
+              setShowHistoryModal(true);
+            }}
+            className="px-3 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 border border-purple-200 flex items-center gap-1.5 transition-all cursor-pointer font-bold text-xs shadow-2xs"
+            title="My Saved Notes (Cross-Device Cloud Synced)"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${syncingCloud ? 'animate-spin text-purple-600' : 'text-purple-600'}`} />
+            <span>Saved ({historyItems.length})</span>
+          </button>
+
+          {notesData && (
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 active:scale-95 text-white rounded-full font-black text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+              title="Save as PDF or Print"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Download</span> PDF
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -1407,6 +1530,147 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
 
       </div>
 
+      {/* Saved Notes (Cross-Device Cloud Synced) History Modal */}
+      <AnimatePresence>
+        {showHistoryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 no-print"
+            onClick={() => setShowHistoryModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-zinc-200"
+            >
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 border-b border-zinc-100 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold shadow-xs">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm sm:text-base text-zinc-900 leading-tight flex items-center gap-2">
+                      <span>My Saved Notes</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                        <Cloud className="w-3 h-3" /> Cloud Synced
+                      </span>
+                    </h3>
+                    <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
+                      {historyItems.length} {historyItems.length === 1 ? 'note' : 'notes'} saved across all your devices
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowHistoryModal(false)}
+                  className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body - Notes List */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+                {syncingCloud && (
+                  <div className="p-3 bg-purple-50/80 border border-purple-200/80 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-purple-700">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Syncing latest notes from your cloud account...</span>
+                  </div>
+                )}
+
+                {historyItems.length === 0 ? (
+                  <div className="py-12 text-center flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-purple-50 text-purple-400 flex items-center justify-center text-2xl mb-3 shadow-inner">
+                      📓
+                    </div>
+                    <h4 className="font-extrabold text-sm text-zinc-800">No Saved Notes Yet</h4>
+                    <p className="text-xs text-zinc-500 max-w-xs mt-1 leading-relaxed">
+                      Generate notes for any chapter above. They will automatically be 100% securely backed up to your cloud account across all your devices!
+                    </p>
+                  </div>
+                ) : (
+                  historyItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleOpenNote(item)}
+                      className="p-3.5 bg-zinc-50/80 hover:bg-purple-50/50 border border-zinc-200/80 hover:border-purple-300 rounded-2xl transition-all cursor-pointer group flex items-center justify-between gap-3 shadow-2xs"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">
+                            {item.subject}
+                          </span>
+                          <span className="text-[10px] font-bold text-zinc-400">
+                            {item.exam}
+                          </span>
+                        </div>
+                        <h4 className="font-black text-xs sm:text-sm text-zinc-900 truncate group-hover:text-purple-700 transition-colors">
+                          {item.chapter}
+                        </h4>
+                        <p className="text-[10px] font-semibold text-zinc-400 mt-0.5 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(item.timestamp).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenNote(item);
+                          }}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                          <span>Open</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteNote(item.id, e)}
+                          className="p-1.5 rounded-xl hover:bg-red-50 text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
+                          title="Delete Note"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-3.5 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between text-[11px] font-bold text-zinc-500 shrink-0">
+                <div className="flex items-center gap-1 text-emerald-600">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Protected by Cloud Backup</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerVibration(10);
+                    fetchCloudNotes();
+                  }}
+                  className="text-purple-600 hover:text-purple-700 flex items-center gap-1 font-black cursor-pointer"
+                >
+                  <RotateCcw className={`w-3 h-3 ${syncingCloud ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

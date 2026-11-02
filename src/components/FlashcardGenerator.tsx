@@ -187,8 +187,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     triggerVibration(15);
     const fullTopic = topicName.includes(subjectTitle) ? topicName : `${subjectTitle} - ${topicName}`;
     setSourceText(fullTopic);
-    setShowConfig(true);
-    setConfigCount(10);
+    handleGenerateReal(fullTopic);
   };
 
   const [showConfig, setShowConfig] = useState(false);
@@ -453,11 +452,13 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     const t = (topicStr || sourceText).trim();
     if (!t) return;
     setSourceText(t);
-    setShowConfig(true);
-    setConfigCount(10);
+    handleGenerateReal(t);
   };
 
-  const handleGenerateReal = async (selectedCount: number) => {
+  const handleGenerateReal = async (targetTopic?: string, selectedCount?: number) => {
+    const topicToUse = (targetTopic || sourceText).trim();
+    if (!topicToUse) return;
+
     const coins = getCoins();
     if (coins < 2) {
       window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "AI Flashcards", cost: 2 } }));
@@ -484,10 +485,15 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 35000);
 
+      const requestPayload: any = { text: topicToUse, topic: topicToUse };
+      if (selectedCount) {
+        requestPayload.count = selectedCount;
+      }
+
       const response = await fetch(getApiUrl('/api/generate-flashcards'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(getProfilePayload({ text: sourceText, topic: sourceText, count: selectedCount })),
+        body: JSON.stringify(getProfilePayload(requestPayload)),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -515,8 +521,13 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     if (generatedCards.length === 0) {
       try {
         console.log("Failing over to rapid /api/chat for flashcard generation...");
-        const chatPrompt = `Generate EXACTLY ${selectedCount} active recall flashcards for: "${sourceText}".
+        const chatPrompt = selectedCount
+          ? `Generate EXACTLY ${selectedCount} active recall flashcards for: "${topicToUse}".
 CRITICAL COUNT MANDATE: The output JSON array MUST contain EXACTLY ${selectedCount} flashcard objects. Never stop early or generate fewer than ${selectedCount}.
+Return ONLY a valid JSON array of objects with keys "question" and "answer" (answers 15-25 words max):
+[{"question":"...","answer":"..."}]`
+          : `Generate a comprehensive high-yield active recall flashcard deck covering all key concepts, definitions, formulas, and mechanisms for: "${topicToUse}".
+COMPREHENSIVE FULL-CHAPTER COVERAGE: Do NOT limit to an arbitrary fixed number. Generate as many flashcards as needed to cover this entire chapter/unit thoroughly without fluff (typically 10-25 cards).
 Return ONLY a valid JSON array of objects with keys "question" and "answer" (answers 15-25 words max):
 [{"question":"...","answer":"..."}]`;
 
@@ -531,7 +542,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
             gradeLevel: profile.gradeLevel,
             stream: profile.stream,
             country: profile.country,
-            topic: sourceText
+            topic: topicToUse
           }),
           signal: chatController.signal
         });
@@ -553,14 +564,15 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
     // LAYER 3: Smart Instant Synthesis Fallback (Zero Latency Guaranteed)
     // =========================================================================
     if (generatedCards.length === 0) {
-      const sentences = sourceText.split(/[.!?\n]+/).map(s => s.trim()).filter(s => s.length > 20);
+      const sentences = topicToUse.split(/[.!?\n]+/).map(s => s.trim()).filter(s => s.length > 20);
       if (sentences.length >= 2) {
-        generatedCards = sentences.slice(0, selectedCount).map((sent, idx) => ({
-          question: `Key Concept ${idx + 1}: What is the core principle of "${sourceText.slice(0, 32)}..."?`,
+        const sentenceCards = selectedCount ? sentences.slice(0, selectedCount) : sentences.slice(0, 20);
+        generatedCards = sentenceCards.map((sent, idx) => ({
+          question: `Key Concept ${idx + 1}: What is the core principle of "${topicToUse.slice(0, 32)}..."?`,
           answer: sent.length > 150 ? sent.slice(0, 147) + '...' : sent
         }));
       } else {
-        const cleanTopic = sourceText.trim().replace(/^["']|["']$/g, '') || "Academic Topic";
+        const cleanTopic = topicToUse.trim().replace(/^["']|["']$/g, '') || "Academic Topic";
         const templates = [
           { q: `What is the foundational definition of ${cleanTopic}?`, a: `${cleanTopic} represents the primary framework defining mechanisms, fundamental principles, and essential interactions in this study.` },
           { q: `What is the governing law or mechanism behind ${cleanTopic}?`, a: `It is governed by foundational equilibrium states, energy conservation principles, and consistent cause-and-effect physical relations.` },
@@ -578,13 +590,11 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           { q: `What safety or error-prevention rule applies when analyzing ${cleanTopic}?`, a: `Always account for instrumental uncertainty, calibration tolerances, and systematic propagation of observational errors.` },
           { q: `What is the ultimate exam takeaway concept for ${cleanTopic}?`, a: `Master the foundational definition, identify key governing equations, and verify limiting cases for comprehensive recall.` }
         ];
-        generatedCards = Array.from({ length: selectedCount }, (_, i) => {
-          const t = templates[i % templates.length];
-          return {
-            question: i >= templates.length ? `[Concept ${i + 1}] ${t.q}` : t.q,
-            answer: t.a
-          };
-        });
+        const templateCards = selectedCount ? templates.slice(0, selectedCount) : templates;
+        generatedCards = templateCards.map((t, i) => ({
+          question: t.q,
+          answer: t.a
+        }));
       }
     }
 
@@ -658,10 +668,8 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           </button>
           <div>
             <h2 className="text-lg md:text-xl font-black flex items-center tracking-tight text-zinc-900">
-              <span className="w-7 h-7 rounded-lg bg-pink-500/10 border border-pink-500/30 text-pink-600 flex items-center justify-center mr-2 shrink-0">
-                <Brain className="w-4 h-4" />
-              </span>
-              <span>Active Recall Flashcards</span>
+              <Brain className="w-5 h-5 text-purple-600 mr-2 shrink-0" />
+              <span>AI Flashcards</span>
             </h2>
           </div>
         </div>
@@ -783,76 +791,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           </div>
         </motion.div>
       ) : flashcards.length === 0 ? (
-        showConfig ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full py-4"
-          >
-            <div className="bg-white rounded-3xl border border-zinc-200/90 p-6 shadow-xl shadow-zinc-200/50 flex flex-col gap-5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-pink-100/50 rounded-full blur-3xl pointer-events-none" />
-              
-              <div className="text-center">
-                <span className="w-12 h-12 rounded-2xl bg-pink-50 border border-pink-200 text-pink-600 inline-flex items-center justify-center mb-2">
-                  <Brain className="w-6 h-6" />
-                </span>
-                <h3 className="text-xl font-black text-zinc-900 tracking-tight">Active Recall Deck Size</h3>
-                <p className="text-xs text-zinc-500 font-bold mt-1">Select the number of revision flashcards</p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2.5">
-                {[5, 10, 15].map((num) => {
-                  const isSelected = configCount === num;
-                  return (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => {
-                        triggerVibration(10);
-                        setConfigCount(num);
-                      }}
-                      className={`py-3.5 rounded-2xl font-black text-lg border transition-all active:scale-[0.97] cursor-pointer flex flex-col items-center justify-center ${
-                        isSelected
-                          ? 'bg-gradient-to-tr from-pink-500 to-rose-600 border-pink-500 text-white shadow-lg shadow-pink-500/25'
-                          : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                      }`}
-                    >
-                      <span className="text-xl">{num}</span>
-                      <span className={`text-[9px] font-black uppercase tracking-wider mt-0.5 ${
-                        isSelected ? 'text-pink-100' : 'text-zinc-400'
-                      }`}>Cards</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-3 mt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerVibration(15);
-                    setShowConfig(false);
-                  }}
-                  className="flex-1 py-3.5 rounded-2xl border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 font-black text-xs active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  Go Back
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerVibration(20);
-                    handleGenerateReal(configCount);
-                  }}
-                  className="flex-[2] bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg shadow-pink-500/20 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-pink-500/30"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>Start Revision Deck</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
+        <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
 
             {/* Custom Input Box: What do you want to practice? */}
             <div className="mb-4">
@@ -939,7 +878,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                   type="button"
                   onClick={() => {
                     setError(null);
-                    handleGenerateReal(configCount || 10);
+                    handleGenerateReal(sourceText);
                   }}
                   className="px-3 py-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-xl text-[11px] font-black transition-all cursor-pointer shrink-0 shadow-xs"
                 >

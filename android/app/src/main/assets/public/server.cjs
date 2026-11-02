@@ -2441,6 +2441,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
 app.post("/api/generate-flashcards", async (req, res) => {
   try {
     const text = req.body.text || req.body.topic || req.body.content || "";
+    const topic = req.body.topic || text || "";
     const gradeLevel = req.body.gradeLevel || req.body.userGrade;
     const stream = req.body.stream || req.body.academic_stream;
     const country = req.body.country || req.body.academic_country;
@@ -2448,7 +2449,8 @@ app.post("/api/generate-flashcards", async (req, res) => {
     if (!text || !text.trim()) {
       return res.status(400).json({ error: "Missing text or topic" });
     }
-    const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
+    const hasExplicitCount = count !== void 0 && count !== null && count !== "" && !isNaN(parseInt(count));
+    const requestedCount = hasExplicitCount ? Math.min(Math.max(parseInt(count) || 10, 1), 30) : null;
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream || text);
@@ -2458,9 +2460,22 @@ app.post("/api/generate-flashcards", async (req, res) => {
     const allChaptersDirective = isAllChapters ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - The user has chosen an "ALL CHAPTERS / FULL SYLLABUS" mock assessment specifically for this subject.
-- You MUST systematically distribute the ${requestedCount} questions evenly across ALL the chapters/domains listed in the topic.
-- ABSOLUTELY STRICT SUBJECT ISOLATION: ALL ${requestedCount} questions MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
+- You MUST systematically distribute the flashcards evenly across ALL the chapters/domains listed in the topic.
+- ABSOLUTELY STRICT SUBJECT ISOLATION: ALL flashcards MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
 ` : "";
+    const countDirective = requestedCount ? `
+Your mission is to generate exactly ${requestedCount} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || "Standard"}.
+
+CRITICAL COUNT MANDATE:
+The output JSON array MUST contain EXACTLY ${requestedCount} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount} cards, and never omit questions. The output array length MUST be ${requestedCount}.
+` : `
+Your mission is to generate a comprehensive, high-yield active recall flashcard revision deck calibrated for a student in Grade: ${gradeLevel || "Standard"}.
+
+CRITICAL COMPREHENSIVE CHAPTER / UNIT COVERAGE MANDATE:
+- NO FIXED CARD COUNT: Do NOT restrict yourself to an arbitrary number of flashcards.
+- DYNAMIC FULL-CHAPTER COVERAGE: Thoroughly analyze the selected chapter/unit/topic. Generate as many flashcards as are needed to comprehensively master every foundational definition, core mechanism, governing law/theorem, essential formula, real-world application, common misconception, and key exam takeaway for this chapter/unit without redundancy.
+- Typically, thoroughly covering a chapter or unit requires between 10 to 25+ comprehensive flashcards. Generate as many as required to cover all key subtopics completely.
+`;
     const systemInstruction = `${gradeDirective}
 ${examBlueprintDirective ? `
 OFFICIAL EXAM CALIBRATION DIRECTIVE:
@@ -2469,10 +2484,7 @@ ${examBlueprintDirective}
 ${allChaptersDirective}
 
 Act as an Elite Cognitive Scientist and Active Recall Specialist.
-Your mission is to generate exactly ${requestedCount} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || "Standard"}.
-
-CRITICAL COUNT MANDATE:
-The output JSON array MUST contain EXACTLY ${requestedCount} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount} cards, and never omit questions. The output array length MUST be ${requestedCount}.
+${countDirective}
 
 CRITICAL ACTIVE RECALL & CONCISE LENGTH RULES:
 1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept appropriate to their grade level.
@@ -2494,6 +2506,11 @@ Format:
     "answer": "Every interacting force creates an equal and opposite reaction acting simultaneously on two distinct interacting physical objects."
   }
 ]`;
+    const userPromptText = requestedCount ? `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount} cards:
+
+${text}` : `Generate a comprehensive high-yield active recall flashcard deck covering all key concepts, definitions, formulas, and mechanisms for this chapter/topic for a student in Grade: ${gradeLevel || "Standard"}. Generate as many flashcards as needed to master this entire chapter/unit thoroughly without any fixed limit:
+
+${text}`;
     const response = await safeGenerateContent({
       gradeLevel,
       stream,
@@ -2503,9 +2520,7 @@ Format:
       model: "gemini-flash-lite-latest",
       contents: [{
         role: "user",
-        parts: [{ text: `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount} cards:
-
-${text}` }]
+        parts: [{ text: userPromptText }]
       }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3624,12 +3639,12 @@ Format when invalid:
 });
 app.post("/api/generate-content", async (req, res) => {
   try {
-    const { topic: topic2, type, tone = "Academic", format = "Standard", gradeLevel, stream, country } = req.body;
+    const { topic, type, tone = "Academic", format = "Standard", gradeLevel, stream, country } = req.body;
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
     const examDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream);
-    const wordCount = topic2 ? topic2.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
-    if (!topic2 || !type) {
+    const wordCount = topic ? topic.trim().split(/\s+/).filter((w) => w.length > 0).length : 0;
+    if (!topic || !type) {
       return res.status(400).json({ error: "Missing topic or type" });
     }
     const aiClient = getAI();
@@ -3844,7 +3859,7 @@ ${toneSpecificRules}`;
       country ? `Curriculum: ${country}` : ""
     ].filter(Boolean).join(" | ");
     const promptText = `TASK: Generate a high-quality ${type} on the topic below.
-TOPIC: ${topic2}
+TOPIC: ${topic}
 STUDENT PROFILE: ${studentContext || "Standard Academic Profile"}
 CONTENT TYPE: ${type}
 TONE: ${tone}
@@ -4392,7 +4407,7 @@ Ensure that for Full Detailed Notes, NO concept, formula, or sub-topic is omitte
 });
 app.post("/api/generate-questions", async (req, res) => {
   try {
-    const topic2 = req.body.topic || req.body.prompt || req.body.text || "";
+    const topic = req.body.topic || req.body.prompt || req.body.text || "";
     const gradeLevel = req.body.gradeLevel || req.body.userGrade || "10th Grade / Secondary";
     const count = req.body.count;
     const stream = req.body.stream;
@@ -4402,7 +4417,7 @@ app.post("/api/generate-questions", async (req, res) => {
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream);
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
-    const topicText = topic2 && topic2.trim() ? topic2.trim() : `important core concepts in ${stream || "academic curriculum"}`;
+    const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || "academic curriculum"}`;
     const isAllChaptersQ = /all (chapter|unit|domain|topic)|comprehensive|full syllabus/i.test(topicText) || stream && topicText.toLowerCase() === stream.toLowerCase();
     const allChaptersDirectiveQ = isAllChaptersQ ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
@@ -5154,13 +5169,13 @@ var AP_CODE_MATH_LATEX_FORMATTING = `CRITICAL CODE, MATH & LATEX FORMATTING:
   * Always double-escape backslashes in JSON output: \\\\frac, \\\\le, \\\\ge, \\\\to, \\\\infty, \\\\begin{cases}, \\\\end{cases}, \\\\begin{array}, \\\\end{array}.`;
 app.post("/api/generate-ap-questions", async (req, res) => {
   try {
-    const { subject, unit, topic: topic2, questionType, count, gradeLevel, avoidPrompts, randomSeed } = req.body;
+    const { subject, unit, topic, questionType, count, gradeLevel, avoidPrompts, randomSeed } = req.body;
     if (!subject) {
       return res.status(400).json({ error: "Missing AP Subject" });
     }
     const type = questionType === "subjective" ? "subjective" : "objective";
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
-    const targetTopic = [topic2, unit, subject].filter(Boolean).join(" - ");
+    const targetTopic = [topic, unit, subject].filter(Boolean).join(" - ");
     const subjectGuidelines = getCollegeBoardSubjectGuidelines(subject, type);
     const s = (subject || "").toLowerCase();
     const g = (gradeLevel || "").toLowerCase();
@@ -5649,7 +5664,7 @@ The Gemini API is currently experiencing rate limits. Please try again in 60 sec
 });
 app.post("/api/ap-trap-radar", async (req, res) => {
   try {
-    const { action = "generate_challenge", subject, unit, topic: topic2, count, gradeLevel, customQuestion, images, format = "objective", questionPrompt, wrongInput, correctConcept, trapType } = req.body;
+    const { action = "generate_challenge", subject, unit, topic, count, gradeLevel, customQuestion, images, format = "objective", questionPrompt, wrongInput, correctConcept, trapType } = req.body;
     if (action === "explain_mistake") {
       const explainSystemInstruction = `You are a world-renowned College Board AP Exam Chief Reader, Lead Psychometrician, and Master Educational Diagnostician.
 A high school AP student was practicing with the "AP TRAP RADAR\u2122" and fell into a deceptive College Board distractor trap.
@@ -5803,7 +5818,7 @@ STRICT JSON OUTPUT FORMAT (WHEN VALID):
     if (!subject) {
       return res.status(400).json({ error: "Missing AP Subject" });
     }
-    const targetTopic = [topic2, unit, subject].filter(Boolean).join(" - ");
+    const targetTopic = [topic, unit, subject].filter(Boolean).join(" - ");
     if (format === "subjective") {
       const requestedCount2 = Math.min(Math.max(parseInt(count) || 3, 1), 5);
       const subjectiveSystemInstruction = `You are an elite Senior College Board AP Exam Chief Reader, Lead Item Writer, and Free-Response (FRQ) Scoring Director.
@@ -6300,17 +6315,17 @@ ${promptGoal}`;
 });
 app.post("/api/generate-quiz", async (req, res) => {
   try {
-    const { topic: topic2, gradeLevel, stream, country, count } = req.body;
-    if (!topic2) {
+    const { topic, gradeLevel, stream, country, count } = req.body;
+    if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
     }
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
-    const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream || topic2);
+    const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream || topic);
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
-    const isAllChapters = /all (chapter|unit|domain|topic)|comprehensive|full syllabus/i.test(topic2);
+    const isAllChapters = /all (chapter|unit|domain|topic)|comprehensive|full syllabus/i.test(topic);
     const allChaptersDirective = isAllChapters ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - The user has chosen an "ALL CHAPTERS / FULL SYLLABUS" mock assessment specifically for this subject.
@@ -6372,7 +6387,7 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
         targetExam: targetExam2,
         examBlueprint: examBlueprint2,
         model: "gemini-flash-lite-latest",
-        contents: { parts: [{ text: `Topic: ${topic2}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
+        contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
@@ -6456,7 +6471,7 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
         if (arr) return res.json({ quiz: deduplicateQuiz(arr) });
       }
     }
-    return res.json({ quiz: fallbackQuiz(topic2, requestedCount) });
+    return res.json({ quiz: fallbackQuiz(topic, requestedCount) });
   } catch (error) {
     console.error("Quiz generation endpoint error:", error);
     const requestedCount = Math.min(Math.max(parseInt(req.body.count) || 3, 1), 10);
@@ -7052,7 +7067,7 @@ function pickUnseenFallbackQuestions(streamKey, count, excludeQuestions) {
 }
 app.all(["/api/generate-trivia", "/api/daily-trivia"], async (req, res) => {
   try {
-    const { gradeLevel, academicStream, studyLevel, topic: topic2, excludeQuestions, country, isBonus, count, dateKey } = req.body;
+    const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country, isBonus, count, dateKey } = req.body;
     const requestedCount = Math.max(3, Math.min(10, Number(count) || 3));
     const currentDateKey = dateKey || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const isBonusSession = isBonus === true || isBonus === "true";
@@ -7143,7 +7158,7 @@ STRICT SUBJECT MODEL:
 Target: High-Yield Micro-Assessment focusing on "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
 Curricular Subject Breakdown:
 ${subjectCurriculumGuidance}
-${topic2 && topic2.trim().length > 0 ? `Specific Focus Theme: ${topic2}` : `Theme: High-Yield Exam Traps (Seed: ${randomSeed})`}
+${topic && topic.trim().length > 0 ? `Specific Focus Theme: ${topic}` : `Theme: High-Yield Exam Traps (Seed: ${randomSeed})`}
 ${studentCountry ? `Curricular Context: Aligned with standard national/competitive syllabus for ${studentCountry}.` : ""}
 ${excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0 ? `FORBIDDEN QUESTIONS (DO NOT REPEAT OR PARAPHRASE ANY OF THESE): ${JSON.stringify(excludeQuestions.slice(-60))}` : ""}
 

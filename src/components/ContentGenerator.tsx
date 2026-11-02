@@ -801,19 +801,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                 </div>
               </div>
 
-              {/* Exam Calibration Badge */}
-              <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 bg-gradient-to-r from-cyan-50 via-sky-50 to-blue-50 border border-cyan-200/80 rounded-2xl mb-3.5 shadow-2xs">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <div className="w-6 h-6 rounded-lg bg-cyan-600/10 flex items-center justify-center text-cyan-700 shrink-0">
-                    <Sparkles className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="truncate">
-                    <p className="text-[10px] font-black tracking-wider text-cyan-600 uppercase">Exam Calibration</p>
-                    <p className="text-xs font-black text-zinc-900 truncate">{examCalibration.badgeLabel}</p>
-                  </div>
-                </div>
-              </div>
-
               {/* Tone Selection Row */}
               <div className="mb-3">
                 <div className="flex items-center justify-between mb-1.5">
@@ -833,7 +820,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                           triggerVibration(10);
                           setSelectedTone(toneObj.label);
                         }}
-                        title={toneObj.desc}
                         className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-200 cursor-pointer ${
                           isSelected
                             ? 'bg-cyan-50 border-cyan-300 text-cyan-800 shadow-xs font-extrabold ring-1 ring-cyan-400/50'
@@ -845,11 +831,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                     );
                   })}
                 </div>
-                {examCalibration.tones.find(t => t.label === selectedTone)?.desc && (
-                  <p className="text-[11px] text-zinc-500 font-medium mt-1.5 pl-1 italic">
-                    💡 {examCalibration.tones.find(t => t.label === selectedTone)?.desc}
-                  </p>
-                )}
               </div>
 
               {/* Academic Formats (Visible only if 'Essay' is selected) */}
@@ -872,7 +853,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                             triggerVibration(10);
                             setSelectedFormat(fmtObj.label);
                           }}
-                          title={fmtObj.desc}
                           className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-200 cursor-pointer ${
                             isSelected
                               ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-xs font-extrabold ring-1 ring-blue-400/50'
@@ -884,11 +864,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
                       );
                     })}
                   </div>
-                  {examCalibration.formats.find(f => f.label === selectedFormat)?.desc && (
-                    <p className="text-[11px] text-zinc-500 font-medium mt-1.5 pl-1 italic">
-                      📌 {examCalibration.formats.find(f => f.label === selectedFormat)?.desc}
-                    </p>
-                  )}
                 </div>
               )}
               {error && (

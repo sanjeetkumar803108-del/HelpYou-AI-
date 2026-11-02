@@ -1087,7 +1087,9 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
           )}
         </div>
         <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
-          💡 You can update these anytime inside your Profile menu
+          {step === 4
+            ? "💡 You can update your subjects anytime inside your Profile menu"
+            : "🔒 Calibrating your personalized academic curriculum"}
         </p>
       </div>
 

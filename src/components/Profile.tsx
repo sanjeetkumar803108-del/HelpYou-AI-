@@ -1256,14 +1256,16 @@ export default function Profile({
       // 1. Check whether the user currently holds an active subscription
       const wasPro = isProUser() || isVip || safeGetItem('study_is_vip') === 'true' || safeGetItem(`study_is_vip_${uid}`) === 'true';
 
-      // 2. Collections where userId maps to uid
+      // 2. Comprehensive list of all Firestore collections storing user data or conversations
       const collectionsToWipe = [
-        'pocket_items',
-        'ai_tutor_chats',
-        'quiz_results',
-        'generated_questions',
-        'MistakeVault',
-        'pdf_history'
+        'pocket_items',        // Study Vault, Summaries, Essays, Grammar, Voice Calls, Scanned Docs
+        'ai_tutor_chats',      // AI Tutor full conversation histories
+        'user_notes',          // AI Notes & Topper Notes pages and cloud documents
+        'quiz_results',        // AI Quiz and Test results & accuracy
+        'generated_questions', // AI Subjective and Practice questions
+        'MistakeVault',        // Mistake logs & bookmarks
+        'pdf_history',         // Downloaded & generated PDF metadata
+        'ai_content_reports'   // Moderation / user report logs
       ];
 
       // Concurrently query and delete all related documents across all collections in parallel
@@ -1271,23 +1273,36 @@ export default function Profile({
         try {
           const q = query(collection(db, colName), where('userId', '==', uid));
           const querySnapshot = await getDocs(q);
-          const deletePromises = querySnapshot.docs.map(docSnap => deleteDoc(docSnap.ref));
+          const deletePromises = querySnapshot.docs.map(docSnap => 
+            deleteDoc(docSnap.ref).catch(err => console.warn(`Error deleting doc ${docSnap.id} in ${colName}:`, err))
+          );
           await Promise.all(deletePromises);
         } catch (err) {
           console.warn(`Error wiping collection ${colName}:`, err);
         }
       });
 
-      // 3. Execute all Firestore wipes concurrently with a fast safety timeout so it never hangs
+      // Direct document deletions (User Profile and Allocated Email tokens)
+      const cleanEmail = user.email?.trim().toLowerCase();
+      const directDeletions: Promise<any>[] = [
+        deleteDoc(doc(db, 'users', uid)).catch(e => console.warn("Error deleting user doc:", e))
+      ];
+      if (cleanEmail) {
+        directDeletions.push(
+          deleteDoc(doc(db, 'allocated_emails', cleanEmail)).catch(e => console.warn("Error deleting allocated_emails doc:", e))
+        );
+      }
+
+      // 3. Execute all Firestore wipes concurrently with a robust 15-second safety timeout so it never cuts off prematurely
       await Promise.race([
         Promise.allSettled([
-          deleteDoc(doc(db, 'users', uid)).catch(e => console.warn("Error deleting user doc:", e)),
+          ...directDeletions,
           ...wipePromises
         ]),
-        new Promise(resolve => setTimeout(resolve, 3500))
+        new Promise(resolve => setTimeout(resolve, 15000))
       ]);
 
-      // 4. Wipe local IndexedDB cache (cached PDFs, offline audios, etc.)
+      // 4. Wipe local IndexedDB cache (cached PDFs, offline audios, binary blobs)
       try {
         await clearIndexedDB();
       } catch (idbErr) {
@@ -1303,10 +1318,20 @@ export default function Profile({
         console.warn("Auth user.delete() requires re-authentication, proceeding with clean sign out:", authErr);
       }
 
-      // 6. Wipe all local study data, stats, coins, chat history, mistake vaults, streaks
+      // 6. Wipe all local study data, stats, coins, chat history, mistake vaults, streaks, notes
       safeClearAll();
+      try {
+        window.sessionStorage.clear();
+      } catch (_) {}
       safeRemoveItem('helpyou_active_user_session');
+      safeRemoveItem('helpyou_ai_saved_notes');
+      safeRemoveItem(`user_notes_${uid}`);
       clearLocalSessionId(uid);
+
+      // Broadcast storage clear events to update all open memory listeners
+      window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+      window.dispatchEvent(new CustomEvent('pdf-history-updated', { detail: { cleared: true } }));
+      window.dispatchEvent(new CustomEvent('sync_cloud_notes'));
 
       // 7. PRESERVE ACTIVE PURCHASED SUBSCRIPTION:
       // If the user bought a subscription, preserve their Pro entitlement on this device!

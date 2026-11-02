@@ -132,8 +132,11 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     } else if (flashcards.length > 0) {
       setFlashcards([]);
       setShowConfig(false);
+      setPendingFile(null);
     } else if (showConfig) {
       setShowConfig(false);
+      setPendingFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } else {
       onBack();
     }
@@ -187,11 +190,14 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     triggerVibration(15);
     const fullTopic = topicName.includes(subjectTitle) ? topicName : `${subjectTitle} - ${topicName}`;
     setSourceText(fullTopic);
+    setPendingFile(null);
+    setShowConfig(false);
     handleGenerateReal(fullTopic);
   };
 
   const [showConfig, setShowConfig] = useState(false);
   const [configCount, setConfigCount] = useState<number>(10);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const flashcardSteps = [
     "Analyzing topic & cognitive anchors...",
@@ -364,6 +370,15 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     }
 
     triggerVibration([20, 40]);
+    setError(null);
+    setPendingFile(file);
+    const friendlyName = file.name.replace(/\.[^/.]+$/, "");
+    setSourceText(friendlyName);
+    setShowConfig(true);
+    setConfigCount(10);
+  };
+
+  const processPendingFile = async (file: File, selectedCount: number) => {
     setIsParsingFile(true);
     setError(null);
 
@@ -376,12 +391,17 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
         if (text) {
           setSourceText(text);
           triggerVibration(25);
+          handleGenerateReal(text, selectedCount);
         }
         setIsParsingFile(false);
+        setPendingFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       };
       reader.onerror = () => {
         setError("Failed to read text file.");
         setIsParsingFile(false);
+        setPendingFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       };
       reader.readAsText(file);
     } else {
@@ -389,6 +409,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       if (coins < 2) {
         if (fileInputRef.current) fileInputRef.current.value = "";
         setIsParsingFile(false);
+        setPendingFile(null);
         window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "AI Flashcards (PDF)", cost: 2 } }));
         return;
       }
@@ -396,7 +417,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       const profile = getUserProfileData();
       const formData = new FormData();
       formData.append('pdf', file);
-      formData.append('count', '15');
+      formData.append('count', String(selectedCount || 10));
       formData.append('action', 'flashcards-json');
       formData.append('gradeLevel', profile.gradeLevel);
       if (profile.stream) formData.append('stream', profile.stream);
@@ -430,11 +451,12 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
           setCurrentIndex(0);
           setFlipped(false);
           setSaved(false);
-          autoSaveFlashcardsToPocket(extracted, 'Flashcards').catch(e => console.error("Flashcard save failed:", e));
+          autoSaveFlashcardsToPocket(extracted, file.name.replace(/\.[^/.]+$/, "") || 'Flashcards').catch(e => console.error("Flashcard save failed:", e));
           triggerVibration([30, 50, 30]);
         } else if (data.text) {
           setSourceText(data.text);
           triggerVibration(30);
+          handleGenerateReal(data.text, selectedCount);
         } else {
           setError("AI could not generate flashcards from this document. Please try another PDF.");
         }
@@ -444,6 +466,8 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
         setError(isNetworkErr ? "Connection interrupted while analyzing document. Please try again." : (err.message || "Failed to process PDF. Please try again."));
       } finally {
         setIsParsingFile(false);
+        setPendingFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     }
   };
@@ -452,7 +476,19 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     const t = (topicStr || sourceText).trim();
     if (!t) return;
     setSourceText(t);
-    handleGenerateReal(t);
+    setPendingFile(null);
+    setShowConfig(true);
+    setConfigCount(10);
+  };
+
+  const handleStartDeckFromConfig = () => {
+    triggerVibration(20);
+    setShowConfig(false);
+    if (pendingFile) {
+      processPendingFile(pendingFile, configCount);
+    } else {
+      handleGenerateReal(sourceText, configCount);
+    }
   };
 
   const handleGenerateReal = async (targetTopic?: string, selectedCount?: number) => {
@@ -791,7 +827,77 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           </div>
         </motion.div>
       ) : flashcards.length === 0 ? (
-        <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
+        showConfig ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full py-4"
+          >
+            <div className="bg-white rounded-3xl border border-zinc-200/90 p-6 shadow-xl shadow-zinc-200/50 flex flex-col gap-5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-pink-100/50 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="text-center">
+                <span className="w-12 h-12 rounded-2xl bg-pink-50 border border-pink-200 text-pink-600 inline-flex items-center justify-center mb-2">
+                  <Brain className="w-6 h-6" />
+                </span>
+                <h3 className="text-xl font-black text-zinc-900 tracking-tight">Active Recall Deck Size</h3>
+                <p className="text-xs text-zinc-500 font-bold mt-1">
+                  {pendingFile ? `Select flashcards count for "${pendingFile.name}"` : 'Select the number of revision flashcards'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                {[5, 10, 15].map((num) => {
+                  const isSelected = configCount === num;
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        triggerVibration(10);
+                        setConfigCount(num);
+                      }}
+                      className={`py-3.5 rounded-2xl font-black text-lg border transition-all active:scale-[0.97] cursor-pointer flex flex-col items-center justify-center ${
+                        isSelected
+                          ? 'bg-gradient-to-tr from-pink-500 to-rose-600 border-pink-500 text-white shadow-lg shadow-pink-500/25'
+                          : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                      }`}
+                    >
+                      <span className="text-xl">{num}</span>
+                      <span className={`text-[9px] font-black uppercase tracking-wider mt-0.5 ${
+                        isSelected ? 'text-pink-100' : 'text-zinc-400'
+                      }`}>Cards</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-3 mt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerVibration(15);
+                    setShowConfig(false);
+                    setPendingFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="flex-1 py-3.5 rounded-2xl border border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 font-black text-xs active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  Go Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartDeckFromConfig}
+                  className="flex-[2] bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg shadow-pink-500/20 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-pink-500/30"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Start Revision Deck</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
 
             {/* Custom Input Box: What do you want to practice? */}
             <div className="mb-4">
@@ -1015,6 +1121,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
       </div>
 
           </div>
+        )
       ) : (
         <motion.div 
           initial={{ opacity: 0, y: 15 }}

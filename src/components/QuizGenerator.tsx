@@ -522,33 +522,62 @@ const CustomTooltip = ({ active, payload }: any) => {
     const title = data.topic || data.fullLabel || data.title || getQuizTitle(data) || 'Practice Quiz';
     const accuracyItem = payload.find((p: any) => p.dataKey === 'accuracy');
     const speedItem = payload.find((p: any) => p.dataKey === 'speed');
+    const isPerQ = Boolean(data.isQuestionMode);
 
     return (
-      <div className="bg-white/95 backdrop-blur-md border border-zinc-200/90 p-3.5 rounded-2xl shadow-xl text-xs z-50 min-w-[160px]">
+      <div className="bg-white/95 backdrop-blur-md border border-zinc-200/90 p-3 rounded-2xl shadow-xl text-xs z-50 min-w-[150px]">
         <p className="font-black text-zinc-800 mb-0.5 leading-snug">{title}</p>
-        {data.subtitle && (
-          <p className="text-[10px] font-bold text-zinc-400 mb-2">{data.subtitle}</p>
+        {isPerQ ? (
+          <div className="space-y-1.5 font-bold mt-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-zinc-500 text-[11px]">Outcome:</span>
+              <span className={`text-[11px] font-black px-2 py-0.5 rounded-md ${data.isCorrect ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                {data.isCorrect ? 'Correct ✅' : 'Incorrect ❌'}
+              </span>
+            </div>
+            {speedItem && (
+              <p className="text-amber-700 flex items-center justify-between gap-3 text-[11px]">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-xs" />
+                  <span>Time Spent:</span>
+                </span>
+                <span className="font-black">{data.realSpeed !== undefined ? data.realSpeed : speedItem.value}s</span>
+              </p>
+            )}
+            {accuracyItem && (
+              <p className="text-indigo-600 flex items-center justify-between gap-3 text-[10px] text-zinc-400 font-semibold border-t border-zinc-100 pt-1 mt-1">
+                <span>Running Avg:</span>
+                <span className="font-black text-indigo-600">{accuracyItem.value}%</span>
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            {data.subtitle && (
+              <p className="text-[10px] font-bold text-zinc-400 mb-2">{data.subtitle}</p>
+            )}
+            <div className="space-y-1.5 font-bold">
+              {accuracyItem && (
+                <p className="text-indigo-600 flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block shadow-xs" />
+                    <span>Accuracy:</span>
+                  </span>
+                  <span className="font-black">{accuracyItem.value}%</span>
+                </p>
+              )}
+              {speedItem && (
+                <p className="text-amber-700 flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-xs" />
+                    <span>Speed:</span>
+                  </span>
+                  <span className="font-black">{speedItem.value}s</span>
+                </p>
+              )}
+            </div>
+          </>
         )}
-        <div className="space-y-1.5 font-bold">
-          {accuracyItem && (
-            <p className="text-indigo-600 flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block shadow-xs" />
-                <span>Accuracy:</span>
-              </span>
-              <span className="font-black">{accuracyItem.value}%</span>
-            </p>
-          )}
-          {speedItem && (
-            <p className="text-amber-700 flex items-center justify-between gap-3">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-xs" />
-                <span>Speed:</span>
-              </span>
-              <span className="font-black">{speedItem.value}s</span>
-            </p>
-          )}
-        </div>
       </div>
     );
   }
@@ -731,24 +760,30 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   const askAILoading = !!askAILoadingMode;
   const askAICacheRef = useRef<Record<number, { hint?: string; step_by_step?: string }>>({});
   const [askAICache, setAskAICache] = useState<Record<number, { hint?: string; step_by_step?: string }>>({});
+  // Track active AI Doubt Mode per question index so output renders directly under that question
+  const [activeQuestionAIMode, setActiveQuestionAIMode] = useState<Record<number, 'hint' | 'step_by_step' | null>>({});
+
   const handleOpenAskAI = (currentQ?: Question) => {
     triggerVibration(15);
-    const cached = askAICacheRef.current[currentIndex] || askAICache[currentIndex];
-    if (cached?.step_by_step || cached?.hint) {
-      setAskAIMode(cached.step_by_step ? 'step_by_step' : 'hint');
-    } else {
-      setAskAIMode('choose');
-    }
+    setAskAIMode('choose'); // ALWAYS show the 2 options selection sheet
     setShowAskAIModal(true);
   };
 
-  const handleRequestAIHelp = async (targetMode: 'hint' | 'step_by_step') => {
+  const handleSelectAIHelpOption = (targetMode: 'hint' | 'step_by_step', targetIdx: number = currentIndex) => {
+    triggerVibration(15);
+    setShowAskAIModal(false); // Close selection sheet immediately! Output will appear under the question
+    setActiveQuestionAIMode(prev => ({ ...prev, [targetIdx]: targetMode }));
+    handleRequestAIHelp(targetMode, targetIdx);
+  };
+
+  const handleRequestAIHelp = async (targetMode: 'hint' | 'step_by_step', targetIdx: number = currentIndex) => {
     triggerVibration(15);
     setAskAIMode(targetMode);
+    setActiveQuestionAIMode(prev => ({ ...prev, [targetIdx]: targetMode }));
     setCopiedAiHelp(false);
 
     // 1. Instant Cache Check: If this question and mode are already cached, switch instantly without re-fetching
-    const cachedItem = askAICacheRef.current[currentIndex]?.[targetMode] || askAICache[currentIndex]?.[targetMode];
+    const cachedItem = askAICacheRef.current[targetIdx]?.[targetMode] || askAICache[targetIdx]?.[targetMode];
     if (cachedItem) {
       return;
     }
@@ -759,7 +794,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
     }
 
     setAskAILoadingMode(targetMode);
-    const curQ = quiz[currentIndex];
+    const curQ = quiz[targetIdx];
     if (!curQ) {
       setAskAILoadingMode(null);
       return;
@@ -886,17 +921,17 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
       }
 
       // Save into synchronous ref FIRST (immune to race conditions and closure staleness)
-      if (!askAICacheRef.current[currentIndex]) {
-        askAICacheRef.current[currentIndex] = {};
+      if (!askAICacheRef.current[targetIdx]) {
+        askAICacheRef.current[targetIdx] = {};
       }
-      askAICacheRef.current[currentIndex][targetMode] = explanationText;
+      askAICacheRef.current[targetIdx][targetMode] = explanationText;
 
       // Update React state to trigger clean UI re-render
       setAskAICache(prev => ({
         ...prev,
-        [currentIndex]: {
-          ...(prev[currentIndex] || {}),
-          ...askAICacheRef.current[currentIndex],
+        [targetIdx]: {
+          ...(prev[targetIdx] || {}),
+          ...askAICacheRef.current[targetIdx],
           [targetMode]: explanationText
         }
       }));
@@ -2833,7 +2868,10 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                             topic: `${shortTopic} (Q${qIdx + 1})`,
                             subtitle: isCorrect ? '✅ Correct Answer' : '❌ Needs Review',
                             accuracy: cumulativeAcc,
-                            speed: Math.round(rawSpeed * 10) / 10
+                            speed: Math.min(Math.round(rawSpeed * 10) / 10, 60),
+                            realSpeed: Math.round(rawSpeed * 10) / 10,
+                            isCorrect: isCorrect,
+                            isQuestionMode: true
                           };
                         });
                         isQuestionMode = true;
@@ -2848,7 +2886,10 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                             topic: `${shortTopic} (Baseline)`,
                             subtitle: 'Baseline Start',
                             accuracy: 0,
-                            speed: Math.round(qSpeed * 1.2 * 10) / 10
+                            speed: Math.round(qSpeed * 1.2 * 10) / 10,
+                            realSpeed: Math.round(qSpeed * 1.2 * 10) / 10,
+                            isCorrect: true,
+                            isQuestionMode: true
                           },
                           {
                             name: 'Q1',
@@ -2856,7 +2897,10 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                             topic: `${shortTopic} (Q1)`,
                             subtitle: isCorrect ? '✅ Correct Answer' : '❌ Needs Review',
                             accuracy: isCorrect ? 100 : 0,
-                            speed: Math.round(qSpeed * 10) / 10
+                            speed: Math.min(Math.round(qSpeed * 10) / 10, 60),
+                            realSpeed: Math.round(qSpeed * 10) / 10,
+                            isCorrect: isCorrect,
+                            isQuestionMode: true
                           }
                         ];
                         isQuestionMode = true;
@@ -2878,15 +2922,24 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           topic: cleanTitle.split(' - ').pop() || cleanTitle,
                           subtitle: `Accuracy: ${Math.round(accuracy)}% • Avg: ${speed.toFixed(1)}s`,
                           accuracy: Math.round(accuracy),
-                          speed: Math.round(speed * 10) / 10
+                          speed: Math.round(speed * 10) / 10,
+                          isQuestionMode: false
                         };
                       });
                     }
                   }
 
+                  const activeQuizDurations: number[] = Array.isArray(activeQuizForTrends?.questionDurations) ? activeQuizForTrends.questionDurations : [];
+                  const activeQuizCorrects: boolean[] = Array.isArray(activeQuizForTrends?.correctAnswers) ? activeQuizForTrends.correctAnswers : [];
+
+                  const flashCount = activeQuizDurations.filter((d, i) => d < 6 && (activeQuizCorrects[i] !== undefined ? activeQuizCorrects[i] : true)).length;
+                  const deepCount = activeQuizDurations.filter((d, i) => d >= 6 && (activeQuizCorrects[i] !== undefined ? activeQuizCorrects[i] : true)).length;
+                  const tukkaCount = activeQuizDurations.filter((d, i) => d <= 4 && (activeQuizCorrects[i] !== undefined ? !activeQuizCorrects[i] : false)).length;
+                  const timeTrapCount = activeQuizDurations.filter((d, i) => d >= 25 && (activeQuizCorrects[i] !== undefined ? !activeQuizCorrects[i] : false)).length;
+
                   return (
                     <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm">
-                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2.5 mb-4">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2.5 mb-3">
                         <div>
                           <h4 className="text-sm font-extrabold text-zinc-800 flex items-center gap-1.5">
                             <TrendingUp className="w-4 h-4 text-indigo-500" />
@@ -2939,6 +2992,28 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                         </div>
                       </div>
 
+                      {/* Tukka & Time-Trap Category Badges (Per-Question Mode) */}
+                      {isQuestionMode && activeQuizDurations.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap mb-3.5 pb-2.5 border-b border-zinc-100 text-[10px] font-black select-none">
+                          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700">
+                            ⚡ Flash: {flashCount}
+                          </span>
+                          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700">
+                            🧠 Deep: {deepCount}
+                          </span>
+                          {tukkaCount > 0 && (
+                            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-50 border border-amber-200/80 text-amber-800">
+                              🎲 Tukka: {tukkaCount}
+                            </span>
+                          )}
+                          {timeTrapCount > 0 && (
+                            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700">
+                              ⏳ Time Trap: {timeTrapCount}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* CHART WRAPPER */}
                       <div className="w-full h-64 md:h-72 min-h-[256px]">
                         <ResponsiveContainer width="100%" height="100%">
@@ -2969,9 +3044,10 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                             <YAxis 
                               yAxisId="right" 
                               orientation="right" 
-                              domain={[0, (dataMax: number) => Math.max(10, Math.ceil(dataMax + 2))]}
+                              domain={[0, (dataMax: number) => Math.min(Math.max(15, Math.ceil(dataMax + 2)), 60)]}
                               tickLine={false} 
                               axisLine={false}
+                              tickFormatter={(v) => `${v}s`}
                               tick={{ fill: '#D97706', fontSize: 10, fontWeight: 'bold' }} 
                             />
                             <Tooltip content={<CustomTooltip />} />
@@ -2983,8 +3059,47 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                               strokeWidth={3}
                               fillOpacity={1} 
                               fill="url(#colorAccuracy)" 
-                              dot={{ r: 4.5, fill: '#4F46E5', stroke: '#FFFFFF', strokeWidth: 2 }}
-                              activeDot={{ r: 6.5, fill: '#4F46E5', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              dot={(dotProps: any) => {
+                                const { cx, cy, payload } = dotProps;
+                                if (!cx || !cy) return null;
+                                if (isQuestionMode && payload?.isCorrect !== undefined) {
+                                  return (
+                                    <circle
+                                      key={`dot-${dotProps.index}`}
+                                      cx={cx}
+                                      cy={cy}
+                                      r={5}
+                                      fill={payload.isCorrect ? '#10B981' : '#EF4444'}
+                                      stroke="#FFFFFF"
+                                      strokeWidth={2}
+                                    />
+                                  );
+                                }
+                                return (
+                                  <circle
+                                    key={`dot-${dotProps.index}`}
+                                    cx={cx}
+                                    cy={cy}
+                                    r={4.5}
+                                    fill="#4F46E5"
+                                    stroke="#FFFFFF"
+                                    strokeWidth={2}
+                                  />
+                                );
+                              }}
+                              activeDot={(dotProps: any) => {
+                                const { cx, cy, payload } = dotProps;
+                                if (!cx || !cy) return null;
+                                const dotColor = (isQuestionMode && payload?.isCorrect !== undefined)
+                                  ? (payload.isCorrect ? '#10B981' : '#EF4444')
+                                  : '#4F46E5';
+                                return (
+                                  <g key={`activedot-${dotProps.index}`}>
+                                    <circle cx={cx} cy={cy} r={8} fill={dotColor} fillOpacity={0.25} />
+                                    <circle cx={cx} cy={cy} r={6} fill={dotColor} stroke="#FFFFFF" strokeWidth={2} />
+                                  </g>
+                                );
+                              }}
                               connectNulls={true}
                               name="Accuracy"
                             />
@@ -2994,24 +3109,64 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                               dataKey="speed" 
                               stroke="#F59E0B" 
                               strokeWidth={3}
-                              dot={{ r: 4.5, fill: '#F59E0B', stroke: '#FFFFFF', strokeWidth: 2 }}
-                              activeDot={{ r: 6.5, fill: '#F59E0B', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              dot={{ r: 4, fill: '#F59E0B', stroke: '#FFFFFF', strokeWidth: 1.5 }}
+                              activeDot={{ r: 6, fill: '#F59E0B', stroke: '#FFFFFF', strokeWidth: 2 }}
                               connectNulls={true}
                               name="Avg Speed"
                             />
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
-                      <div className="flex justify-center items-center gap-6 mt-3 text-[10px] font-black">
+
+                      {/* Legend */}
+                      <div className="flex justify-center items-center gap-3 sm:gap-5 mt-3 text-[10px] font-black flex-wrap">
                         <span className="flex items-center gap-1.5 text-indigo-600">
                           <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block shadow-xs" />
-                          Accuracy (%, left axis)
+                          Accuracy (% left)
                         </span>
+                        {isQuestionMode && (
+                          <>
+                            <span className="flex items-center gap-1.5 text-emerald-600">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-xs" />
+                              Correct (●)
+                            </span>
+                            <span className="flex items-center gap-1.5 text-rose-600">
+                              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-xs" />
+                              Incorrect (●)
+                            </span>
+                          </>
+                        )}
                         <span className="flex items-center gap-1.5 text-amber-600">
                           <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-xs" />
-                          Speed (sec/q, right axis)
+                          Speed (sec right)
                         </span>
                       </div>
+
+                      {/* 1-Line Personalized AI Coach Advice */}
+                      {(() => {
+                        let coachTip = '';
+                        if (isQuestionMode) {
+                          if (tukkaCount > 0) {
+                            coachTip = `💡 AI Coach: ${tukkaCount} question${tukkaCount > 1 ? 's were' : ' was'} answered in <4s and missed — take a quick breath before submitting!`;
+                          } else if (timeTrapCount > 0) {
+                            coachTip = `💡 AI Coach: ${timeTrapCount} question${timeTrapCount > 1 ? 's' : ''} took 25s+ and missed — skip and move ahead to save exam time!`;
+                          } else if (flashCount >= Math.ceil((activeQuizDurations.length || 1) / 2)) {
+                            coachTip = `💡 AI Coach: Exceptional speed & accuracy! You dominated the clock with high precision.`;
+                          } else {
+                            coachTip = `💡 AI Coach: Balanced pacing! Maintaining this rhythm will maximize your score in exams.`;
+                          }
+                        } else {
+                          coachTip = safeHistory.length > 1
+                            ? `💡 AI Coach: Tracking overall trends across ${safeHistory.length} quizzes — steady improvement unlocked!`
+                            : `💡 AI Coach: Complete more quizzes to unlock long-term speed and accuracy trend analysis.`;
+                        }
+
+                        return (
+                          <div className="mt-3 px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200/70 flex items-center gap-2 text-[11px] font-bold text-zinc-700 shadow-2xs">
+                            <span className="leading-snug">{coachTip}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
@@ -3145,6 +3300,169 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                 </GlobalMarkdown>
               </div>
             </motion.div>
+
+            {/* AI Doubt Output under the Question */}
+            <AnimatePresence>
+              {activeQuestionAIMode[currentIndex] && (
+                <motion.div
+                  key={`ai-doubt-${currentIndex}-${activeQuestionAIMode[currentIndex]}`}
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.18 }}
+                  className={`rounded-[2rem] p-5 mb-6 border shadow-sm overflow-hidden ${
+                    activeQuestionAIMode[currentIndex] === 'hint'
+                      ? 'bg-gradient-to-br from-amber-50/90 via-orange-50/25 to-white border-amber-200/90'
+                      : 'bg-gradient-to-br from-indigo-50/90 via-purple-50/25 to-white border-indigo-200/90'
+                  }`}
+                >
+                  {/* Top Bar */}
+                  <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-zinc-200/60">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                        activeQuestionAIMode[currentIndex] === 'hint'
+                          ? 'bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-sm shadow-amber-500/20'
+                          : 'bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-sm shadow-indigo-600/20'
+                      }`}>
+                        {activeQuestionAIMode[currentIndex] === 'hint' ? (
+                          <Lightbulb className="w-4 h-4 stroke-[2.5]" />
+                        ) : (
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-black text-zinc-900 leading-tight">
+                            {activeQuestionAIMode[currentIndex] === 'hint' ? 'AI Question Hint & Clue' : 'AI Step-by-Step Solution'}
+                          </span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                            activeQuestionAIMode[currentIndex] === 'hint'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-indigo-100 text-indigo-800'
+                          }`}>
+                            Q{currentIndex + 1}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">
+                          {activeQuestionAIMode[currentIndex] === 'hint' ? 'Guided Conceptual Clues (Answer Hidden)' : 'Complete Working & Option Analysis'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Mode Switcher & Dismiss */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = activeQuestionAIMode[currentIndex] === 'hint' ? 'step_by_step' : 'hint';
+                          handleSelectAIHelpOption(target, currentIndex);
+                        }}
+                        className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 shadow-xs active:scale-95 transition-all cursor-pointer flex items-center gap-1"
+                        title={activeQuestionAIMode[currentIndex] === 'hint' ? 'Switch to Full Step-by-Step Solution' : 'Switch to Hint & Concept'}
+                      >
+                        {activeQuestionAIMode[currentIndex] === 'hint' ? (
+                          <>
+                            <Sparkles className="w-3 h-3 text-indigo-600" />
+                            <span>See Solution</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lightbulb className="w-3 h-3 text-amber-500" />
+                            <span>See Hint</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerVibration(10);
+                          setActiveQuestionAIMode(prev => ({ ...prev, [currentIndex]: null }));
+                        }}
+                        className="w-7 h-7 rounded-full bg-white/90 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 border border-zinc-200/80 flex items-center justify-center cursor-pointer transition-colors active:scale-95"
+                        title="Dismiss AI Doubt Help"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Body Content */}
+                  {askAILoadingMode === activeQuestionAIMode[currentIndex] ? (
+                    <div className="py-7 flex flex-col items-center justify-center text-center space-y-3">
+                      <div className="relative">
+                        <div className={`w-11 h-11 rounded-full border-3 ${
+                          activeQuestionAIMode[currentIndex] === 'hint'
+                            ? 'border-amber-200 border-t-amber-600'
+                            : 'border-indigo-200 border-t-indigo-600'
+                        } animate-spin`} />
+                        <Sparkles className={`w-5 h-5 absolute inset-0 m-auto animate-pulse ${
+                          activeQuestionAIMode[currentIndex] === 'hint' ? 'text-amber-500' : 'text-indigo-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-black text-zinc-800">
+                          {activeQuestionAIMode[currentIndex] === 'hint'
+                            ? `Formulating guided hint for Question ${currentIndex + 1}...`
+                            : `Computing step-by-step solution for Question ${currentIndex + 1}...`}
+                        </h5>
+                        <p className="text-[10px] text-zinc-400 font-bold mt-0.5">
+                          Generating crystal-clear explanations with formulas
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="text-xs md:text-sm text-zinc-800 leading-relaxed font-medium bg-white/90 rounded-2xl p-4 border border-zinc-150 shadow-xs overflow-x-auto">
+                        <GlobalMarkdown className="text-xs md:text-sm text-zinc-800 leading-relaxed space-y-3 font-medium">
+                          {formatQuizMath(
+                            askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                            askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                            'Explanation unavailable.'
+                          )}
+                        </GlobalMarkdown>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerVibration(10);
+                            const text = askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                              askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] || '';
+                            if (text) {
+                              navigator.clipboard?.writeText(text);
+                              showToast('Copied AI explanation!');
+                            }
+                          }}
+                          className="text-[10.5px] font-bold text-zinc-500 hover:text-indigo-600 flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copy Answer</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerVibration(15);
+                            const curQ = quiz[currentIndex];
+                            const text = askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                              askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] || '';
+                            setReportSnippet(`Question ${currentIndex + 1}: ${curQ.question}\nAI Help Mode: ${activeQuestionAIMode[currentIndex]}\nAI Response:\n${text}`);
+                            setReportModalOpen(true);
+                          }}
+                          className="text-[10.5px] font-bold text-zinc-400 hover:text-rose-600 flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Report Inaccurate AI Output"
+                        >
+                          <Flag className="w-3 h-3 text-rose-400" />
+                          <span>Report AI</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Options List */}
             <div className="grid grid-cols-1 gap-3 mb-6">
@@ -3573,7 +3891,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
       </AnimatePresence>
 
       {/* ========================================================= */}
-      {/* ASK AI MODAL / PAGE SHEET */}
+      {/* ASK AI MODAL / PAGE SHEET (SELECTION ONLY) */}
       {/* ========================================================= */}
       <AnimatePresence>
         {showAskAIModal && quiz[currentIndex] && (
@@ -3624,7 +3942,6 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
               </div>
 
               {/* Question Context Pill / Preview */}
-              {/* Question Context Pill / Preview */}
               <div className="px-6 py-3 bg-zinc-50/70 border-b border-zinc-100">
                 <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 block mb-1">
                   Question {currentIndex + 1} of {quiz.length}
@@ -3636,166 +3953,76 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                 </div>
               </div>
 
-              {/* Content Area */}
+              {/* Content Area: Strictly the 2 Options for Selection */}
               <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-                {/* Mode = 'choose' : Show the 2 Big Options */}
-                {askAIMode === 'choose' && (
-                  <div className="space-y-4 py-2">
-                    <div className="text-center mb-5">
-                      <span className="text-3xl filter drop-shadow-sm select-none">✨</span>
-                      <h4 className="text-lg font-black text-zinc-900 mt-1">How can AI help you?</h4>
-                      <p className="text-xs text-zinc-500 font-bold mt-0.5">Select an option below to guide your learning</p>
-                    </div>
-
-                    {/* OPTION 1: Explain Question & Hint */}
-                    <motion.button
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleRequestAIHelp('hint')}
-                      className="w-full bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 hover:border-amber-500 rounded-3xl p-5 text-left transition-all shadow-sm flex items-start gap-4 cursor-pointer group"
-                    >
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shrink-0 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-                        <Lightbulb className="w-6 h-6 stroke-[2.5]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-                            Option 1 • Concept & Clue
-                          </span>
-                        </div>
-                        <h4 className="text-sm md:text-base font-black text-zinc-900 leading-snug">
-                          Explain Question & Hint by AI
-                        </h4>
-                        <p className="text-xs text-zinc-600 font-medium mt-1 leading-relaxed">
-                          Understand what the question is really asking, key variables, and get a guided hint without revealing the answer immediately.
-                        </p>
-                      </div>
-                    </motion.button>
-
-                    {/* OPTION 2: Explain Step-by-Step Answer */}
-                    <motion.button
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleRequestAIHelp('step_by_step')}
-                      className="w-full bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border-2 border-indigo-400/40 hover:border-indigo-500 rounded-3xl p-5 text-left transition-all shadow-sm flex items-start gap-4 cursor-pointer group"
-                    >
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-                        <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
-                            Option 2 • Full Walkthrough
-                          </span>
-                        </div>
-                        <h4 className="text-sm md:text-base font-black text-zinc-900 leading-snug">
-                          Explain Step-by-Step Answer by AI
-                        </h4>
-                        <p className="text-xs text-zinc-600 font-medium mt-1 leading-relaxed">
-                          Get a complete step-by-step mathematical & conceptual explanation leading directly to the correct answer.
-                        </p>
-                      </div>
-                    </motion.button>
+                <div className="space-y-4 py-2">
+                  <div className="text-center mb-5">
+                    <span className="text-3xl filter drop-shadow-sm select-none">✨</span>
+                    <h4 className="text-lg font-black text-zinc-900 mt-1">How can AI help you?</h4>
+                    <p className="text-xs text-zinc-500 font-bold mt-0.5">Select an option below to guide your learning</p>
                   </div>
-                )}
 
-                {/* Mode = 'hint' or 'step_by_step' */}
-                {askAIMode !== 'choose' && (
-                  <div className="space-y-4">
-                    {/* Segmented Switcher between Hint & Step-by-Step */}
-                    <div className="flex bg-zinc-100 p-1 rounded-2xl border border-zinc-200">
-                      <button
-                        type="button"
-                        onClick={() => handleRequestAIHelp('hint')}
-                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-                          askAIMode === 'hint'
-                            ? 'bg-white text-amber-700 shadow-sm border border-amber-200/50'
-                            : 'text-zinc-500 hover:text-zinc-800'
-                        }`}
-                      >
-                        <Lightbulb className="w-3.5 h-3.5" />
-                        <span>Question & Hint</span>
-                        {askAILoadingMode === 'hint' && <Loader2 className="w-3 h-3 animate-spin ml-1 text-amber-600" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRequestAIHelp('step_by_step')}
-                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-                          askAIMode === 'step_by_step'
-                            ? 'bg-white text-indigo-700 shadow-sm border border-indigo-200/50'
-                            : 'text-zinc-500 hover:text-zinc-800'
-                        }`}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Step-by-Step Answer</span>
-                        {askAILoadingMode === 'step_by_step' && <Loader2 className="w-3 h-3 animate-spin ml-1 text-indigo-600" />}
-                      </button>
+                  {/* OPTION 1: Explain Question & Hint */}
+                  <motion.button
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleSelectAIHelpOption('hint')}
+                    className="w-full bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-400/40 hover:border-amber-500 rounded-3xl p-5 text-left transition-all shadow-sm flex items-start gap-4 cursor-pointer group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shrink-0 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
+                      <Lightbulb className="w-6 h-6 stroke-[2.5]" />
                     </div>
-
-                    {/* Loading State for active mode */}
-                    {askAILoadingMode === askAIMode && (
-                      <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
-                        <div className="relative">
-                          <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
-                          <Sparkles className="w-6 h-6 text-amber-400 absolute inset-0 m-auto animate-pulse" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-zinc-800">
-                            {askAIMode === 'hint' ? 'Analyzing Question & Formulating Hint...' : 'Computing Step-by-Step Solution...'}
-                          </h4>
-                          <p className="text-xs text-zinc-400 font-bold mt-1">
-                            Generating crystal-clear explanations with formulas
-                          </p>
-                        </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                          Option 1 • Concept & Clue
+                        </span>
                       </div>
-                    )}
+                      <h4 className="text-sm md:text-base font-black text-zinc-900 leading-snug">
+                        Explain Question & Hint by AI
+                      </h4>
+                      <p className="text-xs text-zinc-600 font-medium mt-1 leading-relaxed">
+                        Understand what the question is really asking, key variables, and get a guided hint without revealing the answer immediately.
+                      </p>
+                    </div>
+                  </motion.button>
 
-                    {/* Content Render (checked from both synchronous ref and reactive state) */}
-                    {askAILoadingMode !== askAIMode && (askAICacheRef.current[currentIndex]?.[askAIMode] || askAICache[currentIndex]?.[askAIMode]) && (
-                      <div className="bg-zinc-50/80 border border-zinc-200/80 rounded-2xl p-4 md:p-5 shadow-xs">
-                        <GlobalMarkdown className="text-xs md:text-sm text-zinc-800 leading-relaxed space-y-3 font-medium">
-                          {formatQuizMath(
-                            askAICacheRef.current[currentIndex]?.[askAIMode] ||
-                            askAICache[currentIndex]?.[askAIMode] || ''
-                          )}
-                        </GlobalMarkdown>
+                  {/* OPTION 2: Explain Step-by-Step Answer */}
+                  <motion.button
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleSelectAIHelpOption('step_by_step')}
+                    className="w-full bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border-2 border-indigo-400/40 hover:border-indigo-500 rounded-3xl p-5 text-left transition-all shadow-sm flex items-start gap-4 cursor-pointer group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                      <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
+                          Option 2 • Full Walkthrough
+                        </span>
                       </div>
-                    )}
-                  </div>
-                )}
+                      <h4 className="text-sm md:text-base font-black text-zinc-900 leading-snug">
+                        Explain Step-by-Step Answer by AI
+                      </h4>
+                      <p className="text-xs text-zinc-600 font-medium mt-1 leading-relaxed">
+                        Get a complete step-by-step mathematical & conceptual explanation leading directly to the correct answer.
+                      </p>
+                    </div>
+                  </motion.button>
+                </div>
               </div>
 
-              {/* Footer Toolbar */}
-              <div className="px-6 py-4 border-t border-zinc-100 bg-white flex items-center justify-between gap-3">
-                {askAIMode !== 'choose' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setAskAIMode('choose')}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-                    >
-                      <span>Change Mode</span>
-                    </button>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowAskAIModal(false)}
-                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition-all shadow-md shadow-indigo-600/15 cursor-pointer active:scale-95"
-                      >
-                        Back to Quiz
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowAskAIModal(false)}
-                    className="w-full py-3 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 text-xs font-bold transition-all cursor-pointer active:scale-95"
-                  >
-                    Close & Resume Quiz
-                  </button>
-                )}
+              {/* Footer Toolbar: Always Close & Resume */}
+              <div className="px-6 py-4 border-t border-zinc-100 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setShowAskAIModal(false)}
+                  className="w-full py-3 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                >
+                  Close & Resume Quiz
+                </button>
               </div>
             </motion.div>
           </div>

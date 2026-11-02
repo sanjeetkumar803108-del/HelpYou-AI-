@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ArrowLeft, Download, Printer, Sparkles, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, 
   RotateCcw, Check, Loader2, AlertCircle, BookOpen, Layers, 
-  Trash2, Calendar, Share2, Compass, Award
+  Trash2, Calendar, Share2, Compass, Award, Presentation, FileText, X, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -16,7 +16,7 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getApiUrl } from '../utils/api';
 import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
 import { generateAINotesPDFBlob } from '../utils/aiNotesPdfExporter';
-import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
+import GlobalMarkdown, { formatNotesMath, formatFormulaBoxContent } from './GlobalMarkdown';
 
 interface AINotesProps {
   onBack: () => void;
@@ -152,6 +152,10 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
     }
   });
   const [exportingPdf, setExportingPdf] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'slides' | 'document'>('slides');
+  const [slideIndex, setSlideIndex] = useState<number>(0);
+  const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     if (mergedSubjects.length > 0 && !selectedSubject) {
@@ -223,6 +227,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
 
       const data: AINotesData = await response.json();
       setNotesData(data);
+      setSlideIndex(0);
       setLoading(false);
       triggerVibration(30);
 
@@ -288,13 +293,14 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
     }
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (orientation: 'landscape' | 'portrait' = 'landscape') => {
     if (!notesData) return;
     triggerVibration(15);
     setExportingPdf(true);
+    setShowPdfModal(false);
     try {
-      const filename = `${notesData.metadata.chapter || 'AI_Topper_Notes'}_Handwritten_Notes.pdf`;
-      const blob = generateAINotesPDFBlob(notesData);
+      const filename = `${notesData.metadata.chapter || 'AI_Topper_Notes'}_${orientation === 'landscape' ? '16x9_Slides' : 'Notes'}.pdf`;
+      const blob = generateAINotesPDFBlob(notesData, { orientation });
       await savePDFMobile(blob, filename);
     } catch (err: any) {
       console.error("Failed to download PDF:", err);
@@ -304,17 +310,17 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
     }
   };
 
-  const handleShareNotes = async () => {
+  const handleShareNotes = async (orientation: 'landscape' | 'portrait' = 'landscape') => {
     if (!notesData) return;
     triggerVibration(15);
     setExportingPdf(true);
     try {
-      const filename = `${notesData.metadata.chapter || 'AI_Topper_Notes'}_Handwritten_Notes.pdf`;
-      const blob = generateAINotesPDFBlob(notesData);
+      const filename = `${notesData.metadata.chapter || 'AI_Topper_Notes'}_${orientation === 'landscape' ? '16x9_Slides' : 'Notes'}.pdf`;
+      const blob = generateAINotesPDFBlob(notesData, { orientation });
       const shared = await sharePDFMobile(blob, filename);
       if (!shared) {
         // Fallback to text share only if device does not support native document sharing
-        const text = `📚 ${notesData.metadata.chapter} - Handwritten Toppers Notes\nSubject: ${notesData.metadata.subject} | Exam: ${notesData.metadata.exam}\nGenerated with HelpYou AI`;
+        const text = `📚 ${notesData.metadata.chapter} - Handwritten Toppers Notes (16:9 Widescreen)\nSubject: ${notesData.metadata.subject} | Exam: ${notesData.metadata.exam}\nGenerated with HelpYou AI`;
         await shareTextMobile(notesData.metadata.title, text);
       }
     } catch (err: any) {
@@ -671,13 +677,11 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
                   { 
                     id: 'detailed', 
                     label: 'Full Detailed Notes', 
-                    desc: 'Exhaustive In-Depth Coverage', 
                     icon: '📖' 
                   },
                   { 
                     id: 'revision', 
                     label: 'Short Revision Notes', 
-                    desc: 'Quick High-Yield Summary', 
                     icon: '⚡' 
                   }
                 ].map((mode) => {
@@ -696,15 +700,12 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
                           : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-lg select-none">{mode.icon}</span>
                         {isSelected && <Check className="w-4 h-4 text-white" />}
                       </div>
                       <div>
                         <p className="font-black text-xs leading-tight">{mode.label}</p>
-                        <p className={`text-[10px] font-medium ${isSelected ? 'text-purple-200' : 'text-zinc-400'}`}>
-                          {mode.desc}
-                        </p>
                       </div>
                     </button>
                   );

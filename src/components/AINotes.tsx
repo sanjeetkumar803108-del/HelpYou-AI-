@@ -487,6 +487,37 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
           /* STEP 1: CONFIGURATION & CHAPTER SELECTION SCREEN */
           <div className="no-print w-full max-w-lg mx-auto space-y-4 mb-16">
             
+            {/* Selected Topic Confirmation / Or Type Specific Custom Topic */}
+            <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 flex items-center gap-1">
+                  <span>🎯</span> Selected Chapter:
+                </span>
+                {selectedSubject && (
+                  <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md">
+                    {selectedSubject}
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={selectedChapter}
+                  onChange={(e) => setSelectedChapter(e.target.value)}
+                  placeholder="Type custom topic or select from chapters below..."
+                  className="w-full bg-zinc-50 focus:bg-white border border-zinc-200 rounded-xl py-2.5 pl-3 pr-10 text-xs font-bold text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-500 shadow-inner"
+                />
+                {selectedChapter && (
+                  <button
+                    onClick={() => setSelectedChapter('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center text-[9px] font-black cursor-pointer hover:bg-zinc-300"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* EXAM CURRICULUM SUBJECTS & CHAPTERS (IDENTICAL TO AI PRACTICE QUIZZES) */}
             <div className="w-full space-y-3">
               <div className="flex items-center justify-between px-0.5">
@@ -669,38 +700,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
             );
           })()}
         </div>
-
-              {/* Selected Topic Confirmation / Or Type Specific Custom Topic */}
-              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 flex items-center gap-1">
-                    <span>🎯</span> Selected Chapter:
-                  </span>
-                  {selectedSubject && (
-                    <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md">
-                      {selectedSubject}
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={selectedChapter}
-                    onChange={(e) => setSelectedChapter(e.target.value)}
-                    placeholder="Choose chapter above or type any specific custom topic..."
-                    className="w-full bg-zinc-50 focus:bg-white border border-zinc-200 rounded-xl py-2.5 pl-3 pr-10 text-xs font-bold text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-purple-500 shadow-inner"
-                  />
-                  {selectedChapter && (
-                    <button
-                      onClick={() => setSelectedChapter('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-zinc-200 text-zinc-600 flex items-center justify-center text-[9px] font-black cursor-pointer hover:bg-zinc-300"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+      </div>
 
             {/* CARD 3: NOTE TYPE SELECTOR */}
             <div className="bg-white border border-zinc-200 rounded-[2rem] p-5 shadow-sm space-y-3">

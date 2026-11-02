@@ -629,22 +629,12 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
                 </p>
               </div>
 
-              {/* ONE-TIME COUNTRY SELECTION WARNING BANNER */}
-              <div className="mb-3.5 p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/40 text-amber-950 flex items-start gap-3 shadow-xs shrink-0">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 stroke-[2.5]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 font-black text-amber-950 text-xs">
-                    <span>⚠️ Important: Permanent One-Time Selection</span>
-                    <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded">
-                      Cannot Edit Later
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-amber-900/90 font-semibold mt-1 leading-relaxed">
-                    Your country can only be set <strong>once</strong> and <strong>cannot be changed or edited later</strong> in your profile. Please select your official country carefully.
-                  </p>
-                </div>
+              {/* COMPACT ONE-TIME COUNTRY SELECTION WARNING */}
+              <div className="mb-3 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
+                <p className="text-[11px] text-amber-900 font-bold leading-snug">
+                  <span className="font-black text-amber-950">One-Time Setting:</span> Country cannot be changed later. Please select carefully.
+                </p>
               </div>
 
               {/* Country Selection Cards */}
@@ -782,22 +772,12 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
 
               {/* Clean Exam Type Box - NO LIST */}
               <div className="space-y-3.5">
-                {/* ONE-TIME PERMANENT SELECTION WARNING BANNER */}
-                <div className="p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/40 text-amber-950 flex items-start gap-3 shadow-xs">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 stroke-[2.5]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 font-black text-amber-950 text-xs">
-                      <span>⚠️ Important: Permanent One-Time Setting</span>
-                      <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded">
-                        Cannot Edit Later
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-amber-900/90 font-semibold mt-1 leading-relaxed">
-                      Your target exam can only be set <strong>once</strong> and <strong>cannot be changed or edited later</strong> in your profile. Please write your official exam name accurately in English.
-                    </p>
-                  </div>
+                {/* COMPACT ONE-TIME EXAM WARNING */}
+                <div className="py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
+                  <p className="text-[11px] text-amber-900 font-bold leading-snug">
+                    <span className="font-black text-amber-950">One-Time Setting:</span> Target exam cannot be changed later. Please type accurately in English.
+                  </p>
                 </div>
 
                 <div className={`bg-white border-2 rounded-2xl p-4 shadow-sm transition-all ${
@@ -901,22 +881,12 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
                 </p>
               </div>
 
-              {/* ONE-TIME GRADE SELECTION WARNING BANNER */}
-              <div className="mb-3.5 p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/40 text-amber-950 flex items-start gap-3 shadow-xs shrink-0">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 stroke-[2.5]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 font-black text-amber-950 text-xs">
-                    <span>⚠️ Important: Permanent One-Time Selection</span>
-                    <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded">
-                      Cannot Edit Later
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-amber-900/90 font-semibold mt-1 leading-relaxed">
-                    Your grade level can only be set <strong>once</strong> and <strong>cannot be changed or edited later</strong> in your profile. Please select your official grade/class carefully.
-                  </p>
-                </div>
+              {/* COMPACT ONE-TIME GRADE SELECTION WARNING */}
+              <div className="mb-3 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
+                <p className="text-[11px] text-amber-900 font-bold leading-snug">
+                  <span className="font-black text-amber-950">One-Time Setting:</span> Grade level cannot be changed later. Please select carefully.
+                </p>
               </div>
 
               {/* Scrollable Grade Grid */}

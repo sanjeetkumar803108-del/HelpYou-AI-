@@ -32,7 +32,8 @@ export function getDynamicCurriculums(targetExam?: string): string[] {
     if (match) {
       return [match, ...base.filter(b => b !== match)];
     } else {
-      return [trimmed, ...base];
+      const formatted = trimmed.length <= 4 ? trimmed.toUpperCase() : (trimmed.charAt(0).toUpperCase() + trimmed.slice(1));
+      return [formatted, ...base];
     }
   }
   return base;
@@ -48,6 +49,127 @@ const SUBJECT_OPTIONS: Record<string, string[]> = {
   'IELTS / TOEFL': ['Task 2 (Opinion/Argument)', 'Task 1 (Academic)', 'IELTS General Writing', 'TOEFL Independent Essay', 'TOEFL Integrated Essay'],
   'UPSC / Civil Services': ['UPSC Mains General Studies Essay', 'Philosophical & Abstract Essay', 'Policy & Governance Analysis', 'Socio-Economic Dimensions']
 };
+
+export function getSubjectOptions(curriculumName?: string): string[] {
+  if (!curriculumName) {
+    return SUBJECT_OPTIONS['Standard High School'];
+  }
+  if (SUBJECT_OPTIONS[curriculumName] && SUBJECT_OPTIONS[curriculumName].length > 0) {
+    return SUBJECT_OPTIONS[curriculumName];
+  }
+  
+  const lower = curriculumName.toLowerCase().trim();
+  
+  // 1. Check exact or partial match in existing SUBJECT_OPTIONS keys
+  for (const [key, opts] of Object.entries(SUBJECT_OPTIONS)) {
+    if (lower === key.toLowerCase() || lower.includes(key.toLowerCase()) || key.toLowerCase().includes(lower)) {
+      return opts;
+    }
+  }
+
+  // 2. Medical / Biology / Health Sciences (NEET, MCAT, USMLE, AIIMS, Pre-Med, etc.)
+  if (
+    lower.includes('neet') || 
+    lower.includes('mcat') || 
+    lower.includes('usmle') || 
+    lower.includes('aiims') || 
+    lower.includes('medical') || 
+    lower.includes('biology') ||
+    lower.includes('mbbs') ||
+    lower.includes('bds')
+  ) {
+    return [
+      'Argumentative Essay',
+      'Scientific & Medical Inquiry',
+      'Bioethics & Healthcare Perspectives',
+      'Analytical Case-Study',
+      'Expository Essay',
+      'Persuasive Essay'
+    ];
+  }
+
+  // 3. Engineering / Physical Science / STEM (JEE, GATE, STEM, Physics, Tech, etc.)
+  if (
+    lower.includes('jee') || 
+    lower.includes('gate') || 
+    lower.includes('engineering') || 
+    lower.includes('tech') || 
+    lower.includes('physics') || 
+    lower.includes('math') ||
+    lower.includes('stem')
+  ) {
+    return [
+      'Argumentative Essay',
+      'Scientific Expository Paper',
+      'Analytical Case-Study',
+      'Technological Innovation & Ethics',
+      'Deductive Reasoning Analysis',
+      'Persuasive Essay'
+    ];
+  }
+
+  // 4. Law / Judicial Exams (CLAT, LSAT, Judiciary, etc.)
+  if (
+    lower.includes('clat') || 
+    lower.includes('lsat') || 
+    lower.includes('law') || 
+    lower.includes('legal') || 
+    lower.includes('judiciar')
+  ) {
+    return [
+      'Argumentative Essay',
+      'Constitutional & Legal Argument',
+      'Critical Case Brief Analysis',
+      'Policy & Jurisprudence Essay',
+      'Persuasive Essay'
+    ];
+  }
+
+  // 5. Commerce / Business / Economics (CAT, GMAT, CA, CFA, MBA, etc.)
+  if (
+    lower.includes('cat') || 
+    lower.includes('gmat') || 
+    lower.includes('ca ') || 
+    lower.includes('mba') || 
+    lower.includes('business') || 
+    lower.includes('commerce') || 
+    lower.includes('economics')
+  ) {
+    return [
+      'Argumentative Essay',
+      'Business Strategy Case Study',
+      'Analytical Writing Assessment (AWA)',
+      'Socio-Economic Dimensions',
+      'Persuasive Essay'
+    ];
+  }
+
+  // 6. Civil Services / Public Affairs (UPSC, IAS, PCS, etc.)
+  if (
+    lower.includes('upsc') || 
+    lower.includes('civil') || 
+    lower.includes('ias') || 
+    lower.includes('pcs')
+  ) {
+    return [
+      'Argumentative Essay',
+      'UPSC Mains General Studies Essay',
+      'Philosophical & Abstract Essay',
+      'Policy & Governance Analysis',
+      'Socio-Economic Dimensions'
+    ];
+  }
+
+  // 7. Universal Fallback: High-scoring academic essay formats (NEVER EMPTY)
+  return [
+    'Argumentative Essay',
+    'Expository Essay',
+    'Analytical Case-Study',
+    'Persuasive Essay',
+    'Literary Analysis',
+    'Narrative Essay'
+  ];
+}
 
 export default function EssayGrader({ onBack }: { onBack: () => void }) {
   const handleHeaderBack = () => {
@@ -66,12 +188,13 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
   const userProfile = getUserProfileData();
   const dynamicCurriculums = getDynamicCurriculums(userProfile.targetExam);
   const [curriculum, setCurriculum] = useState(() => dynamicCurriculums[0]);
-  const [subject, setSubject] = useState(() => (SUBJECT_OPTIONS[dynamicCurriculums[0]] || SUBJECT_OPTIONS['Standard High School'])[0]);
+  const [subject, setSubject] = useState(() => getSubjectOptions(dynamicCurriculums[0])[0]);
 
   useEffect(() => {
     const list = getDynamicCurriculums(userProfile.targetExam);
     setCurriculum(list[0]);
-    setSubject((SUBJECT_OPTIONS[list[0]] || SUBJECT_OPTIONS['Standard High School'])[0]);
+    const available = getSubjectOptions(list[0]);
+    setSubject((prev) => available.includes(prev) ? prev : available[0]);
   }, [userProfile.targetExam]);
   const [isCurriculumOpen, setIsCurriculumOpen] = useState(false);
   const [isSubjectOpen, setIsSubjectOpen] = useState(false);

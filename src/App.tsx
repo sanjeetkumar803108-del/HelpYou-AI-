@@ -677,7 +677,8 @@ export default function App() {
                     safeSetItem(`user_notes_${currentUser.uid}`, JSON.stringify(restoredNotes));
                   }
                 } catch (notesErr) {
-                  console.warn('[App Auth] Notes cross-device restore notice:', notesErr);
+                  // Gracefully fall back to local storage if Firestore rules or connectivity are unavailable
+                  console.debug('[App Auth] Notes cross-device restore fallback to local storage:', notesErr);
                 }
 
                 try {
@@ -839,7 +840,7 @@ export default function App() {
         })();
 
         // Fast-path timeout: 0ms if returning user already unblocked, or max 250ms for first-time login
-        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, hasCompletedLocalSetup ? 0 : 250));
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, hasCompletedLocalAcademicSetup ? 0 : 250));
 
         Promise.race([fetchPromise, timeoutPromise])
           .finally(() => {

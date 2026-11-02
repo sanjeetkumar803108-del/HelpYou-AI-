@@ -518,22 +518,34 @@ const getQuizTitle = (attempt: any): string => {
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    const cleanTopic = getQuizTitle(data);
+    const data = payload[0]?.payload || {};
+    const title = data.topic || data.fullLabel || data.title || getQuizTitle(data) || 'Practice Quiz';
+    const accuracyItem = payload.find((p: any) => p.dataKey === 'accuracy');
+    const speedItem = payload.find((p: any) => p.dataKey === 'speed');
+
     return (
-      <div className="bg-white border border-zinc-200 p-3.5 rounded-2xl shadow-lg text-xs">
-        <p className="font-black text-zinc-800 mb-1 leading-snug max-w-xs">{cleanTopic}</p>
-        <div className="space-y-1 mt-1.5 font-bold">
-          <p className="text-indigo-600 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" />
-            <span>Accuracy:</span>
-            <span className="font-extrabold">{payload[0].value}%</span>
-          </p>
-          {payload[1] && (
-            <p className="text-purple-600 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block" />
-              <span>Speed:</span>
-              <span className="font-extrabold">{payload[1].value}s / q</span>
+      <div className="bg-white/95 backdrop-blur-md border border-zinc-200/90 p-3.5 rounded-2xl shadow-xl text-xs z-50 min-w-[160px]">
+        <p className="font-black text-zinc-800 mb-0.5 leading-snug">{title}</p>
+        {data.subtitle && (
+          <p className="text-[10px] font-bold text-zinc-400 mb-2">{data.subtitle}</p>
+        )}
+        <div className="space-y-1.5 font-bold">
+          {accuracyItem && (
+            <p className="text-indigo-600 flex items-center justify-between gap-3">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block shadow-xs" />
+                <span>Accuracy:</span>
+              </span>
+              <span className="font-black">{accuracyItem.value}%</span>
+            </p>
+          )}
+          {speedItem && (
+            <p className="text-purple-600 flex items-center justify-between gap-3">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-500 inline-block shadow-xs" />
+                <span>Speed:</span>
+              </span>
+              <span className="font-black">{speedItem.value}s</span>
             </p>
           )}
         </div>
@@ -1102,6 +1114,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any | null>(null);
+  const [trendViewType, setTrendViewType] = useState<'overall' | 'questions'>('overall');
   const [currentQuizRecordId, setCurrentQuizRecordId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -1695,7 +1708,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
         const stored = JSON.parse(safeGetItem('helpyou_seen_quiz_questions_pool') || '[]');
         if (Array.isArray(stored)) seenQuizPool.push(...stored);
       } catch (_) {}
-      (quizHistory || []).forEach(h => {
+      (history || []).forEach(h => {
         if (Array.isArray(h.questions)) {
           h.questions.forEach((q: any) => {
             const txt = typeof q === 'string' ? q : (q.question || '');
@@ -2732,96 +2745,234 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                 </div>
 
                 {/* CHART 1: TRENDS OVER TIME */}
-                <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <h4 className="text-sm font-extrabold text-zinc-800 flex items-center gap-1.5">
-                        <TrendingUp className="w-4 h-4 text-indigo-500" />
-                        <span>Performance Trends Over Time</span>
-                      </h4>
-                      <p className="text-[10px] font-bold text-zinc-400">Chronological accuracy (%) & question speed (sec)</p>
-                    </div>
-                    <span className="text-[9px] font-black uppercase bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-md">
-                      {safeHistory.length === 0 ? 'Diagnostic Data' : 'Live Results'}
-                    </span>
-                  </div>
+                {(() => {
+                  const isSingleAttempt = safeHistory.length === 1;
+                  const activeQuizForTrends = selectedHistoryItem || (safeHistory.length > 0 ? safeHistory[safeHistory.length - 1] : null);
 
-                  {/* CHART WRAPPER */}
-                  <div className="w-full h-64 md:h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart
-                        data={(safeHistory.length === 0 ? DEMO_HISTORY : safeHistory).map((item, index) => {
-                          const cleanTitle = getQuizTitle(item);
+                  let isQuestionMode = false;
+                  let trendData: any[] = [];
+
+                  if (safeHistory.length === 0) {
+                    isQuestionMode = false;
+                    trendData = DEMO_HISTORY.map((item, index) => {
+                      const cleanTitle = getQuizTitle(item);
+                      return {
+                        name: `Qz ${index + 1}`,
+                        fullLabel: `Quiz ${index + 1}`,
+                        topic: cleanTitle.split(' - ').pop() || cleanTitle,
+                        subtitle: `Diagnostic Attempt ${index + 1}`,
+                        accuracy: Math.round(Number(item.accuracy) || 0),
+                        speed: Math.round((Number(item.averageTimePerQuestion) || 10) * 10) / 10
+                      };
+                    });
+                  } else {
+                    const shouldShowQuestions = trendViewType === 'questions' || isSingleAttempt;
+                    if (shouldShowQuestions && activeQuizForTrends) {
+                      const durations: number[] = Array.isArray(activeQuizForTrends.questionDurations) ? activeQuizForTrends.questionDurations : [];
+                      const corrects: boolean[] = Array.isArray(activeQuizForTrends.correctAnswers) ? activeQuizForTrends.correctAnswers : [];
+                      const totalQ = activeQuizForTrends.totalQuestions || (activeQuizForTrends.questions && activeQuizForTrends.questions.length) || durations.length || 5;
+                      const count = Math.max(durations.length, corrects.length, totalQ);
+                      const cleanTitle = getQuizTitle(activeQuizForTrends);
+                      const shortTopic = cleanTitle.split(' - ').pop() || cleanTitle;
+
+                      if (count >= 2) {
+                        let runningCorrect = 0;
+                        trendData = Array.from({ length: count }).map((_, qIdx) => {
+                          const isCorrect = corrects[qIdx] !== undefined ? Boolean(corrects[qIdx]) : true;
+                          if (isCorrect) runningCorrect++;
+                          const cumulativeAcc = Math.round((runningCorrect / (qIdx + 1)) * 100);
+                          const rawSpeed = typeof durations[qIdx] === 'number' && !isNaN(durations[qIdx])
+                            ? durations[qIdx]
+                            : (activeQuizForTrends.averageTimePerQuestion || 10);
+
                           return {
-                            index: index + 1,
-                            topic: cleanTitle.split(' - ').pop() || cleanTitle,
-                            accuracy: item.accuracy,
-                            speed: item.averageTimePerQuestion
+                            name: `Q${qIdx + 1}`,
+                            fullLabel: `Question ${qIdx + 1}`,
+                            topic: `${shortTopic} (Q${qIdx + 1})`,
+                            subtitle: isCorrect ? '✅ Correct Answer' : '❌ Needs Review',
+                            accuracy: cumulativeAcc,
+                            speed: Math.round(rawSpeed * 10) / 10
                           };
-                        })}
-                        margin={{ top: 10, right: -5, left: -25, bottom: 0 }}
-                      >
-                        <defs>
-                          <linearGradient id="colorAccuracy" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.01}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                        <XAxis 
-                          dataKey="index" 
-                          tickLine={false} 
-                          axisLine={false}
-                          tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 'bold' }} 
-                        />
-                        <YAxis 
-                          yAxisId="left" 
-                          domain={[0, 100]} 
-                          tickLine={false} 
-                          axisLine={false}
-                          tick={{ fill: '#4F46E5', fontSize: 10, fontWeight: 'bold' }} 
-                        />
-                        <YAxis 
-                          yAxisId="right" 
-                          orientation="right" 
-                          tickLine={false} 
-                          axisLine={false}
-                          tick={{ fill: '#7C3AED', fontSize: 10, fontWeight: 'bold' }} 
-                        />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area 
-                          yAxisId="left"
-                          type="monotone" 
-                          dataKey="accuracy" 
-                          stroke="#4F46E5" 
-                          strokeWidth={2.5}
-                          fillOpacity={1} 
-                          fill="url(#colorAccuracy)" 
-                          name="Accuracy"
-                        />
-                        <Line 
-                          yAxisId="right"
-                          type="monotone" 
-                          dataKey="speed" 
-                          stroke="#7C3AED" 
-                          strokeWidth={2}
-                          dot={{ r: 4, strokeWidth: 1, fill: '#FFFFFF' }}
-                          name="Avg Speed"
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex justify-center items-center gap-6 mt-2 text-[10px] font-black">
-                    <span className="flex items-center gap-1.5 text-indigo-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />
-                      Accuracy (%, left axis)
-                    </span>
-                    <span className="flex items-center gap-1.5 text-purple-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" />
-                      Speed (sec/q, right axis)
-                    </span>
-                  </div>
-                </div>
+                        });
+                        isQuestionMode = true;
+                      } else {
+                        // Edge case fallback: exactly 1 question in quiz -> baseline 0% to Q1
+                        const isCorrect = corrects[0] !== undefined ? Boolean(corrects[0]) : true;
+                        const qSpeed = typeof durations[0] === 'number' && !isNaN(durations[0]) ? durations[0] : (activeQuizForTrends.averageTimePerQuestion || 10);
+                        trendData = [
+                          {
+                            name: 'Start',
+                            fullLabel: 'Session Start',
+                            topic: `${shortTopic} (Baseline)`,
+                            subtitle: 'Baseline Start',
+                            accuracy: 0,
+                            speed: Math.round(qSpeed * 1.2 * 10) / 10
+                          },
+                          {
+                            name: 'Q1',
+                            fullLabel: 'Question 1',
+                            topic: `${shortTopic} (Q1)`,
+                            subtitle: isCorrect ? '✅ Correct Answer' : '❌ Needs Review',
+                            accuracy: isCorrect ? 100 : 0,
+                            speed: Math.round(qSpeed * 10) / 10
+                          }
+                        ];
+                        isQuestionMode = true;
+                      }
+                    } else {
+                      isQuestionMode = false;
+                      trendData = safeHistory.map((item, index) => {
+                        const cleanTitle = getQuizTitle(item);
+                        const accuracy = typeof item.accuracy === 'number' && !isNaN(item.accuracy)
+                          ? item.accuracy
+                          : (item.totalQuestions > 0 ? Math.round(((item.score || 0) / item.totalQuestions) * 100) : 0);
+                        const speed = typeof item.averageTimePerQuestion === 'number' && !isNaN(item.averageTimePerQuestion)
+                          ? item.averageTimePerQuestion
+                          : 10;
+
+                        return {
+                          name: `Qz ${index + 1}`,
+                          fullLabel: `Quiz ${index + 1}`,
+                          topic: cleanTitle.split(' - ').pop() || cleanTitle,
+                          subtitle: `Accuracy: ${Math.round(accuracy)}% • Avg: ${speed.toFixed(1)}s`,
+                          accuracy: Math.round(accuracy),
+                          speed: Math.round(speed * 10) / 10
+                        };
+                      });
+                    }
+                  }
+
+                  return (
+                    <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2.5 mb-4">
+                        <div>
+                          <h4 className="text-sm font-extrabold text-zinc-800 flex items-center gap-1.5">
+                            <TrendingUp className="w-4 h-4 text-indigo-500" />
+                            <span>Performance Trends Over Time</span>
+                          </h4>
+                          <p className="text-[10px] font-bold text-zinc-400">
+                            {isQuestionMode
+                              ? 'Per-question accuracy progression (%) & response speed (sec)'
+                              : 'Chronological quiz accuracy (%) & question speed (sec)'}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                          {safeHistory.length > 1 && (
+                            <div className="bg-zinc-100 p-0.5 rounded-xl flex items-center gap-1 text-[10px] font-black">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerVibration(10);
+                                  setTrendViewType('overall');
+                                }}
+                                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                                  !isQuestionMode
+                                    ? 'bg-white text-indigo-600 shadow-xs'
+                                    : 'text-zinc-500 hover:text-zinc-800'
+                                }`}
+                              >
+                                All Quizzes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerVibration(10);
+                                  setTrendViewType('questions');
+                                }}
+                                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                                  isQuestionMode
+                                    ? 'bg-white text-indigo-600 shadow-xs'
+                                    : 'text-zinc-500 hover:text-zinc-800'
+                                }`}
+                              >
+                                Per-Question
+                              </button>
+                            </div>
+                          )}
+
+                          <span className="text-[9px] font-black uppercase bg-indigo-50 border border-indigo-100/80 text-indigo-600 px-2.5 py-1 rounded-lg shrink-0">
+                            {safeHistory.length === 0 ? 'Diagnostic Data' : (isSingleAttempt ? 'Quiz 1 Flow' : 'Live Results')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* CHART WRAPPER */}
+                      <div className="w-full h-64 md:h-72 min-h-[256px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart
+                            data={trendData}
+                            margin={{ top: 15, right: 10, left: -20, bottom: 5 }}
+                          >
+                            <defs>
+                              <linearGradient id="colorAccuracy" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.25}/>
+                                <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.02}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                            <XAxis 
+                              dataKey="name" 
+                              tickLine={false} 
+                              axisLine={false}
+                              tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 'bold' }} 
+                            />
+                            <YAxis 
+                              yAxisId="left" 
+                              domain={[0, 100]} 
+                              tickLine={false} 
+                              axisLine={false}
+                              tick={{ fill: '#4F46E5', fontSize: 10, fontWeight: 'bold' }} 
+                            />
+                            <YAxis 
+                              yAxisId="right" 
+                              orientation="right" 
+                              domain={[0, (dataMax: number) => Math.max(10, Math.ceil(dataMax + 2))]}
+                              tickLine={false} 
+                              axisLine={false}
+                              tick={{ fill: '#7C3AED', fontSize: 10, fontWeight: 'bold' }} 
+                            />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Area 
+                              yAxisId="left"
+                              type="monotone" 
+                              dataKey="accuracy" 
+                              stroke="#4F46E5" 
+                              strokeWidth={3}
+                              fillOpacity={1} 
+                              fill="url(#colorAccuracy)" 
+                              dot={{ r: 4.5, fill: '#4F46E5', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              activeDot={{ r: 6.5, fill: '#4F46E5', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              connectNulls={true}
+                              name="Accuracy"
+                            />
+                            <Line 
+                              yAxisId="right"
+                              type="monotone" 
+                              dataKey="speed" 
+                              stroke="#7C3AED" 
+                              strokeWidth={2.5}
+                              dot={{ r: 4.5, fill: '#7C3AED', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              activeDot={{ r: 6.5, fill: '#7C3AED', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              connectNulls={true}
+                              name="Avg Speed"
+                            />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex justify-center items-center gap-6 mt-3 text-[10px] font-black">
+                        <span className="flex items-center gap-1.5 text-indigo-600">
+                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block shadow-xs" />
+                          Accuracy (%, left axis)
+                        </span>
+                        <span className="flex items-center gap-1.5 text-purple-600">
+                          <span className="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block shadow-xs" />
+                          Speed (sec/q, right axis)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* CURRENT / SELECTED ATTEMPT DRILLDOWN */}
                 {(() => {

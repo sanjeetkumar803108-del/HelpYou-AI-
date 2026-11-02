@@ -230,7 +230,8 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
               safeSetItem(`user_notes_${currentUser.uid}`, JSON.stringify(restoredNotes));
             }
           } catch (notesErr) {
-            console.warn('[Login Sync] Restoring user notes notice:', notesErr);
+            // Gracefully fall back to local storage if Firestore rules or connectivity are unavailable
+            console.debug('[Login Sync] Restoring user notes fallback to local storage:', notesErr);
           }
 
           try {

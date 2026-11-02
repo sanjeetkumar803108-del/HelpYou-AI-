@@ -8,9 +8,7 @@ import {
   ChevronLeft, 
   ChevronUp,
   ChevronDown,
-  Share2, 
   Check, 
-  Shuffle, 
   History, 
   Trash2, 
   Calendar, 
@@ -35,7 +33,6 @@ import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem, safeJsonParse } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
-import { shareTextMobile } from '../utils/mobileSaver';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
 
@@ -373,15 +370,6 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     } catch (err) {
       console.error("Failed to delete item:", err);
     }
-  };
-
-  const handleShareDeck = async () => {
-    if (flashcards.length === 0) return;
-    triggerVibration(10);
-    const deckTitle = `Flashcards: ${sourceText || 'Revision Set'}`;
-    const textToShare = `📚 Flashcard Study Deck: ${sourceText || 'Revision Set'}\n\n` + 
-      (flashcards || []).map((f, i) => `Q${i + 1}: ${f?.question || ''}\nA${i + 1}: ${f?.answer || ''}`).join('\n\n');
-    await shareTextMobile(deckTitle, textToShare);
   };
 
   const autoSaveFlashcardsToPocket = async (cards: any[], customTitle?: string, sourceType: 'upload' | 'custom' = 'custom') => {
@@ -732,16 +720,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
     } else {
       setCurrentIndex((prev) => Math.max(0, prev - 1));
     }
-  };
-
-  const shuffleFlashcards = () => {
-    triggerVibration(20);
-    setFlipped(false);
-    setIsDeckCompleted(false);
-    const shuffled = [...flashcards].sort(() => Math.random() - 0.5);
-    setFlashcards(shuffled);
-    setCurrentIndex(0);
-    setGrades({});
   };
 
   const handleSrsGrade = (grade: 'hard' | 'good' | 'easy') => {
@@ -1386,22 +1364,16 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
             <div className="flex items-center justify-between w-full px-2 mb-4">
               <button 
                 onClick={prevCard} 
-                className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 active:scale-95 transition-all cursor-pointer"
+                disabled={currentIndex === 0}
+                className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Previous Card (Left Arrow)"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
 
-              <button
-                onClick={() => {
-                  triggerVibration(12);
-                  setFlipped(true);
-                }}
-                className="px-5 py-3 rounded-2xl bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-700 font-black text-xs transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
-              >
-                <Sparkles className="w-4 h-4 text-pink-600" />
-                <span>Reveal Answer</span>
-              </button>
+              <span className="text-xs font-black text-zinc-600 bg-white border border-zinc-200/90 px-4 py-2 rounded-2xl shadow-xs">
+                {currentIndex + 1} / {flashcards.length}
+              </span>
 
               <button 
                 onClick={nextCard} 
@@ -1428,35 +1400,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
             <Flag className="w-3.5 h-3.5 text-rose-500" />
             <span>Report Flashcard</span>
           </button>
-
-          <div className="flex gap-2">
-            <button 
-              onClick={handleShareDeck}
-              className="flex-1 py-3.5 rounded-2xl font-black text-xs shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 border bg-white hover:bg-zinc-50 text-purple-700 border-purple-200 cursor-pointer"
-            >
-              <Share2 className="w-4 h-4 text-purple-600" />
-              <span>Share Deck</span>
-            </button>
-            <button 
-              onClick={shuffleFlashcards}
-              title="Shuffle Deck Order"
-              className="px-4 py-3.5 rounded-2xl font-black text-xs shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 border bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200 cursor-pointer"
-            >
-              <Shuffle className="w-4 h-4" />
-              <span>Shuffle</span>
-            </button>
-            <button 
-              onClick={() => {
-                triggerVibration(15);
-                setFlashcards([]);
-                setSourceText('');
-              }}
-              className="px-4 py-3.5 rounded-2xl font-black text-xs shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 border bg-white hover:bg-zinc-50 text-zinc-600 border-zinc-200 cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>New Topic</span>
-            </button>
-          </div>
         </motion.div>
       )}
       </div>

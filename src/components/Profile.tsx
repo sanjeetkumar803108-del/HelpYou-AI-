@@ -1384,6 +1384,20 @@ export default function Profile({
         )}
       </AnimatePresence>
 
+      {/* Owner-Only 4-Step Academic Calibration Modal */}
+      {isOwnerTester && showOwnerAcademicSetup && (
+        <div className="fixed inset-0 z-[120]">
+          <AcademicSetup
+            userId={auth.currentUser?.uid || user?.uid || ''}
+            onComplete={() => {
+              setShowOwnerAcademicSetup(false);
+              showToast('🎯 Academic profile recalibrated successfully!');
+            }}
+            onCancel={() => setShowOwnerAcademicSetup(false)}
+          />
+        </div>
+      )}
+
       {/* Main Profile Tab Screen */}
       <div className="flex-1 flex flex-col h-full overflow-y-auto pb-36">
         {/* Custom Header Area */}
@@ -1555,6 +1569,20 @@ export default function Profile({
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-black tracking-wider text-zinc-400 block">Academic Track</span>
+                {isOwnerTester && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerVibration(15);
+                      setShowOwnerAcademicSetup(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-extrabold transition-all cursor-pointer shadow-2xs active:scale-95"
+                    title="Owner Testing: Recalibrate Exam, Class & Grade Setup"
+                  >
+                    <Sparkles className="w-3 h-3 text-purple-600" />
+                    <span>Edit Setup (4 Steps)</span>
+                  </button>
+                )}
               </div>
               
               <div className="grid grid-cols-2 gap-3 relative">

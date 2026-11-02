@@ -177,7 +177,6 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [loadingStep, setLoadingStep] = useState(0);
 
   const profile = getUserProfileData();
-  const targetExam = profile.targetExam || 'Official Examination';
   const gradeLevel = profile.gradeLevel || '12th Grade';
   const stream = profile.stream || 'STEM / Engineering';
   const country = profile.country || 'India';
@@ -1042,11 +1041,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                   <BookOpen className="w-3.5 h-3.5 text-pink-500" />
                   <span>Curriculum Practice Flashcards</span>
                 </h3>
-                {targetExam && (
-                  <span className="text-[10px] font-bold text-pink-700 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-lg truncate max-w-[180px]">
-                    {targetExam}
-                  </span>
-                )}
               </div>
 
               <div className="space-y-3">

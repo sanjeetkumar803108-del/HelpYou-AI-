@@ -6922,6 +6922,54 @@ CRITICAL SOCRATIC AP TUTORING PRINCIPLES:
   }
 });
 
+const sanitizeQuizItems = (quizList: any[]): any[] => {
+  if (!Array.isArray(quizList)) return [];
+  const mathKeywords = new Set([
+    'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp', 'lim',
+    'dx', 'dy', 'dt', 'text', 'frac', 'sqrt', 'cdot', 'times', 'div',
+    'pm', 'mp', 'sum', 'prod', 'int', 'alpha', 'beta', 'gamma', 'delta',
+    'theta', 'lambda', 'mu', 'pi', 'sigma', 'omega', 'phi', 'psi', 'circ'
+  ]);
+
+  return quizList.map(item => {
+    if (!item || typeof item !== 'object') return item;
+    const cleanOption = (txt: string) => {
+      if (typeof txt !== 'string') return txt;
+      let trimmed = txt.trim();
+      const prefixMatch = trimmed.match(/^([A-Da-d][\)\.]|\([A-Da-d]\))\s*/);
+      const prefix = prefixMatch ? prefixMatch[0] : '';
+      let body = prefixMatch ? trimmed.slice(prefix.length).trim() : trimmed;
+
+      if (body.startsWith('$') && body.endsWith('$') && body.length > 2) {
+        const inner = body.slice(1, -1).trim();
+        const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
+        const narrativeWords = words.filter(w => !mathKeywords.has(w.toLowerCase()));
+        if (narrativeWords.length >= 2 && !inner.includes('\\text{')) {
+          body = inner;
+        }
+      }
+      return prefix + body;
+    };
+
+    const rawOptions = Array.isArray(item.options) ? item.options : [];
+    const options = rawOptions.map(cleanOption);
+    let correctAnswer = typeof item.correctAnswer === 'string' ? cleanOption(item.correctAnswer) : item.correctAnswer;
+    if (options.length > 0 && !options.includes(correctAnswer)) {
+      const match = options.find(o => 
+        o.toLowerCase().trim() === correctAnswer.toLowerCase().trim() ||
+        o.replace(/^[A-Da-d][\)\.]\s*/, '').trim() === correctAnswer.replace(/^[A-Da-d][\)\.]\s*/, '').trim()
+      );
+      if (match) correctAnswer = match;
+    }
+
+    return {
+      ...item,
+      options,
+      correctAnswer
+    };
+  });
+};
+
 app.post("/api/generate-quiz", async (req, res) => {
   try {
     const { topic, gradeLevel, stream, country, count } = req.body;
@@ -6955,17 +7003,22 @@ Your ONLY job is to generate a highly accurate, exam-level Multiple Choice Quiz 
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array. Do not return an array of multiple correct answers.
-4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
-5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
-   - Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
-   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\frac{d}{dx}[u \cdot v] = u'v + uv'$.
-   - In options, write: "A) $3x^2 \cdot e^x$", "B) $3x^2 \cdot e^x + x^3 \cdot e^x$".
+4. OPTION LENGTH SYMMETRY & DISTRACTOR BALANCE MANDATE (ANTI-LENGTH BIAS):
+   - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within ±15% of each other).
+   - NEVER make the correct answer significantly longer, more verbose, or more elaborate than the wrong choices (distractors). Length cueing is strictly prohibited!
+   - Every incorrect option (distractor) must be realistic, plausible, sophisticated, and written with the exact same grammatical structure, tone, and level of academic detail as the correct option so that students cannot guess the answer based on option length.
+5. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+6. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX VS PLAIN ENGLISH):
+   - Wrap ONLY genuine mathematical equations, algebraic expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
+   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\\frac{d}{dx}[u \\cdot v] = u'v + uv'$.
+   - In math options, write: "A) $3x^2 \\cdot e^x$", "B) $3x^2 \\cdot e^x + x^3 \\cdot e^x$".
+   - NEVER wrap ordinary English descriptive text, sentences, options, phrases, definitions, or statements in dollar signs ($). If an option is an English sentence (e.g. "A) Dividends are tax-deferred, whereas capital gains are taxed immediately."), it MUST be written in plain standard English text with normal spaces and ZERO dollar signs!
    - NEVER output raw carets (^) or raw asterisks (*) for math without LaTeX delimiters (NEVER write 'x^3 * e^x').
    - For chemistry and subscripts, write $H_2O$, $CO_2$, $x_1$, $x_2$.
    - NEVER wrap non-mathematical English abbreviations, college degrees, acronyms, or proper nouns (such as B.Tech, M.Tech, Ph.D., NIT, IIT, NASA, CBSE) in dollar signs ($). Dollar signs are strictly and exclusively for mathematical and chemical formulas.
-6. STRICT ZERO-REPETITION & ANTI-DUPLICATION MANDATE:
+7. STRICT ZERO-REPETITION & ANTI-DUPLICATION MANDATE:
    - Every single question in the generated ${requestedCount} questions MUST test a completely unique concept, formula, mechanism, or scenario.
    - ABSOLUTELY ZERO redundancy or duplicate questions within the quiz.
    - If an EXCLUDED QUESTIONS list is provided, you are STRICTLY FORBIDDEN from generating questions that repeat, duplicate, or rephrase those questions. Explore distinct, fresh curriculum subtopics.
@@ -7079,15 +7132,15 @@ Use this exact JSON structure:
     if (quizText) {
       const parsed = safeParseJSON(quizText, 'array');
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return res.json({ quiz: deduplicateQuiz(parsed) });
+        return res.json({ quiz: sanitizeQuizItems(deduplicateQuiz(parsed)) });
       }
       if (parsed && typeof parsed === 'object') {
         const arr = Object.values(parsed).find(v => Array.isArray(v) && v.length > 0);
-        if (arr) return res.json({ quiz: deduplicateQuiz(arr as any[]) });
+        if (arr) return res.json({ quiz: sanitizeQuizItems(deduplicateQuiz(arr as any[])) });
       }
     }
 
-    return res.json({ quiz: fallbackQuiz(topic, requestedCount) });
+    return res.json({ quiz: sanitizeQuizItems(fallbackQuiz(topic, requestedCount)) });
 
   } catch (error: any) {
     console.error("Quiz generation endpoint error:", error);
@@ -7153,13 +7206,18 @@ You are an expert exam creator. Analyze the provided study material and extract 
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
-4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
-5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
-   - Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
-   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\frac{d}{dx}[u \cdot v] = u'v + uv'$.
-   - In options, write: "A) $3x^2 \cdot e^x$", "B) $3x^2 \cdot e^x + x^3 \cdot e^x$".
+4. OPTION LENGTH SYMMETRY & DISTRACTOR BALANCE MANDATE (ANTI-LENGTH BIAS):
+   - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within ±15% of each other).
+   - NEVER make the correct answer significantly longer, more verbose, or more elaborate than the wrong choices (distractors). Length cueing is strictly prohibited!
+   - Every incorrect option (distractor) must be realistic, plausible, sophisticated, and written with the exact same grammatical structure, tone, and level of academic detail as the correct option so that students cannot guess the answer based on option length.
+5. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+6. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX VS PLAIN ENGLISH):
+   - Wrap ONLY genuine mathematical equations, algebraic expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
+   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\\frac{d}{dx}[u \\cdot v] = u'v + uv'$.
+   - In options, write: "A) $3x^2 \\cdot e^x$", "B) $3x^2 \\cdot e^x + x^3 \\cdot e^x$".
+   - NEVER wrap ordinary English descriptive text, sentences, options, phrases, definitions, or statements in dollar signs ($). If an option is an English sentence (e.g. "A) Dividends are tax-deferred, whereas capital gains are taxed immediately."), it MUST be written in plain standard English text with normal spaces and ZERO dollar signs!
    - NEVER output raw carets (^) or raw asterisks (*) for math without LaTeX delimiters (NEVER write 'x^3 * e^x').
    - For chemistry and subscripts, write $H_2O$, $CO_2$, $x_1$, $x_2$.
    - NEVER wrap non-mathematical English abbreviations, college degrees, acronyms, or proper nouns (such as B.Tech, M.Tech, Ph.D., NIT, IIT, NASA, CBSE) in dollar signs ($). Dollar signs are strictly and exclusively for mathematical and chemical formulas.
@@ -7226,7 +7284,7 @@ Use this exact JSON structure:
       const parsed = safeParseJSON(quizText, 'array');
       if (Array.isArray(parsed) && parsed.length > 0) {
         console.log(`[PDF Quiz API] Successfully parsed quiz with ${parsed.length} questions.`);
-        return res.json({ quiz: parsed });
+        return res.json({ quiz: sanitizeQuizItems(parsed) });
       }
     } catch (parseError) {
       console.error("[PDF Quiz API] JSON parse error for PDF quiz output:", parseError, quizText);
@@ -7268,13 +7326,18 @@ You are an expert exam creator and visual analyzer. Analyze the textbook page, q
     
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with A), B), C), D)) and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
-4. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
-5. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX):
-   - Wrap ALL mathematical equations, expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
-   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\frac{d}{dx}[u \cdot v] = u'v + uv'$.
-   - In options, write: "A) $3x^2 \cdot e^x$", "B) $3x^2 \cdot e^x + x^3 \cdot e^x$".
+4. OPTION LENGTH SYMMETRY & DISTRACTOR BALANCE MANDATE (ANTI-LENGTH BIAS):
+   - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within ±15% of each other).
+   - NEVER make the correct answer significantly longer, more verbose, or more elaborate than the wrong choices (distractors). Length cueing is strictly prohibited!
+   - Every incorrect option (distractor) must be realistic, plausible, sophisticated, and written with the exact same grammatical structure, tone, and level of academic detail as the correct option so that students cannot guess the answer based on option length.
+5. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
+6. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX VS PLAIN ENGLISH):
+   - Wrap ONLY genuine mathematical equations, algebraic expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
+   - ALWAYS format math as valid LaTeX: write $x^3$, $3x^2$, $e^x$, $f(x) = x^3 \cdot e^x$, $\\frac{d}{dx}[u \\cdot v] = u'v + uv'$.
+   - In options, write: "A) $3x^2 \\cdot e^x$", "B) $3x^2 \\cdot e^x + x^3 \\cdot e^x$".
+   - NEVER wrap ordinary English descriptive text, sentences, options, phrases, definitions, or statements in dollar signs ($). If an option is an English sentence (e.g. "A) Dividends are tax-deferred, whereas capital gains are taxed immediately."), it MUST be written in plain standard English text with normal spaces and ZERO dollar signs!
    - NEVER output raw carets (^) or raw asterisks (*) for math without LaTeX delimiters (NEVER write 'x^3 * e^x').
    - For chemistry and subscripts, write $H_2O$, $CO_2$, $x_1$, $x_2$.
    - NEVER wrap non-mathematical English abbreviations, college degrees, acronyms, or proper nouns (such as B.Tech, M.Tech, Ph.D., NIT, IIT, NASA, CBSE) in dollar signs ($). Dollar signs are strictly and exclusively for mathematical and chemical formulas.
@@ -7308,7 +7371,7 @@ Use this exact JSON structure:
     try {
       const parsed = safeParseJSON(quizText, 'array');
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return res.json({ quiz: parsed });
+        return res.json({ quiz: sanitizeQuizItems(parsed) });
       }
     } catch (parseError) {
       console.error("JSON parse error for image quiz output:", parseError, quizText);

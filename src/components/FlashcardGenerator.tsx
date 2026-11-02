@@ -154,6 +154,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       setFlashcards([]);
       setShowConfig(false);
       setPendingFile(null);
+      setIsDeckCompleted(false);
     } else if (showConfig) {
       setShowConfig(false);
       setPendingFile(null);
@@ -169,6 +170,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isDeckCompleted, setIsDeckCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportSnippet, setReportSnippet] = useState('');
@@ -226,6 +228,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       setSaved(false);
       setGrades({});
       setError(null);
+      setIsDeckCompleted(false);
       return;
     }
 
@@ -553,6 +556,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     setFlipped(false);
     setGrades({});
     setShowConfig(false);
+    setIsDeckCompleted(false);
     
     const profile = getUserProfileData();
     let generatedCards: Flashcard[] = [];
@@ -711,19 +715,29 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
     if (flashcards.length === 0) return;
     triggerVibration(15);
     setFlipped(false);
-    setCurrentIndex((prev) => (prev + 1) % flashcards.length);
+    if (currentIndex >= flashcards.length - 1) {
+      setIsDeckCompleted(true);
+    } else {
+      setCurrentIndex((prev) => prev + 1);
+    }
   };
 
   const prevCard = () => {
     if (flashcards.length === 0) return;
     triggerVibration(15);
     setFlipped(false);
-    setCurrentIndex((prev) => (prev - 1 + flashcards.length) % flashcards.length);
+    if (isDeckCompleted) {
+      setIsDeckCompleted(false);
+      setCurrentIndex(flashcards.length - 1);
+    } else {
+      setCurrentIndex((prev) => Math.max(0, prev - 1));
+    }
   };
 
   const shuffleFlashcards = () => {
     triggerVibration(20);
     setFlipped(false);
+    setIsDeckCompleted(false);
     const shuffled = [...flashcards].sort(() => Math.random() - 0.5);
     setFlashcards(shuffled);
     setCurrentIndex(0);
@@ -1181,6 +1195,40 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
 
           </div>
         )
+      ) : isDeckCompleted ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex-1 flex flex-col justify-center items-center max-w-md mx-auto w-full py-8 text-center"
+        >
+          <div className="bg-white rounded-3xl border border-zinc-200/90 p-8 shadow-xl shadow-zinc-200/40 flex flex-col items-center gap-6 w-full relative overflow-hidden">
+            <div className="w-16 h-16 rounded-3xl bg-pink-50 border border-pink-200 text-pink-600 flex items-center justify-center shadow-sm">
+              <CheckCircle2 className="w-8 h-8 text-pink-600" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-zinc-900 tracking-tight">Deck Completed!</h3>
+              <p className="text-xs text-zinc-500 font-bold">
+                You have reviewed all {flashcards.length} flashcards in this deck.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerVibration(20);
+                setCurrentIndex(0);
+                setFlipped(false);
+                setGrades({});
+                setIsDeckCompleted(false);
+              }}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 text-white font-black text-sm shadow-lg shadow-pink-500/25 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Restart</span>
+            </button>
+          </div>
+        </motion.div>
       ) : (
         <motion.div 
           initial={{ opacity: 0, y: 15 }}

@@ -84,15 +84,15 @@ export function formatFormulaBoxContent(rawFormula: string): string {
     });
 
     // B. Wrap function superscripts/subscripts like f^{-1}(x), x^2, f(x), g(x), 10^{-5}
-    result = result.replace(/(?<![\w$\\])([a-zA-Z]\^\{[^{}]+\}(?:\([a-zA-Z0-9,\s\-+*/]+\))?)(?![\w$])/g, '$$$1$$');
-    result = result.replace(/(?<![\w$\\])([a-zA-Z]_[0-9a-zA-Z]+(?:\([a-zA-Z0-9,\s\-+*/]+\))?)(?![\w$])/g, '$$$1$$');
-    result = result.replace(/(?<![\w$\\])([a-zA-Z]\([a-zA-Z0-9,\s\-+*/]+\))(?![\w$])/g, '$$$1$$');
+    result = result.replace(/(?<![\w$\\])([a-zA-Z]\^\{[^{}]+\}(?:\([a-zA-Z0-9,\s+*/-]+\))?)(?![\w$])/g, (_, m) => `$${m}$`);
+    result = result.replace(/(?<![\w$\\])([a-zA-Z]_[0-9a-zA-Z]+(?:\([a-zA-Z0-9,\s+*/-]+\))?)(?![\w$])/g, (_, m) => `$${m}$`);
+    result = result.replace(/(?<![\w$\\])([a-zA-Z]\([a-zA-Z0-9,\s+*/-]+\))(?![\w$])/g, (_, m) => `$${m}$`);
 
     // C. Wrap isolated equations like y = x, a = b, x > 0
-    result = result.replace(/(?<![\w$\\])([a-zA-Z0-9_()\-]+)\s*([=<>≤≥≠≈])\s*([a-zA-Z0-9_()\-+*/\\]+)(?![\w$])/g, '$$$1 $2 $3$$');
+    result = result.replace(/(?<![\w$\\])([a-zA-Z0-9_()-]+)\s*([=<>≤≥≠≈])\s*([a-zA-Z0-9_()+*/\\-]+)(?![\w$])/g, (_, a, op, b) => `$${a} ${op} ${b}$`);
 
     // D. Wrap standard LaTeX commands like \frac{...}{...}, \sqrt{...}
-    result = result.replace(/(?<![\w$\\])(\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\])*)(?![\w$])/g, '$$$1$$');
+    result = result.replace(/(?<![\w$\\])(\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\])*)(?![\w$])/g, (_, m) => `$${m}$`);
 
     // Restore protected blocks
     for (let i = 0; i < mathBlocks.length; i++) {
@@ -122,6 +122,13 @@ export function cleanMarkdownMath(content: string): string {
   if (!content) return '';
   let text = healUnitSuperscripts(String(content));
 
+  // Separate fused prepositions/words from math: e.g. "off^{-1}" -> "of f^{-1}", "iff(x)" -> "if f(x)", "andf(x)" -> "and f(x)"
+  text = text.replace(/\b(of|if|and|let|for|where|with|at|in|to|from|the|find|state)(f|g|h|y|x)\^/gi, '$1 $2^');
+  text = text.replace(/\b(of|if|and|let|for|where|with|at|in|to|from|the|find|state)(f|g|h|y|x)\(/gi, '$1 $2(');
+
+  // Clean stray single dollar before punctuation: e.g. "off^{-1}(x) $." -> "off^{-1}(x)."
+  text = text.replace(/(?<=\S)\s+\$\s*([.?!,:;])/g, '$1');
+
   // Strip trailing pipe artifacts attached to math delimiters: e.g. "$|" or "$$|"
   text = text.replace(/(\${1,2})\s*\|/g, '$1');
   text = text.replace(/\|\s*(\${1,2})/g, '$1');
@@ -130,8 +137,8 @@ export function cleanMarkdownMath(content: string): string {
   text = text.replace(/\${3,}/g, '$$');
 
   // Fix mismatched inline delimiters: e.g. "$f(x) = \frac{2x - 3}{x + 4}$$" -> "$$f(x) = \frac{2x - 3}{x + 4}$$"
-  text = text.replace(/(?<!\$)\$([^\$\n]+?)\$\$(?!\$)/g, '$$$$$1$$$$');
-  text = text.replace(/(?<!\$)\$\$([^\$\n]+?)\$(?!\$)/g, '$$$$$1$$$$');
+  text = text.replace(/(?<!\$)\$([^\$\n]+?)\$\$(?!\$)/g, (_, m) => '$$' + m + '$$');
+  text = text.replace(/(?<!\$)\$\$([^\$\n]+?)\$(?!\$)/g, (_, m) => '$$' + m + '$$');
 
   // Fix stray single dollar inside display math statements before numbers/symbols:
   // e.g. "$$\frac{45}{68}\approx$ 0.6618$$" -> "$$\frac{45}{68}\approx 0.6618$$"

@@ -22,6 +22,7 @@ import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { clearGoogleCredentialState } from '../utils/clearGoogleCredential';
 import { registerActiveSession } from '../utils/sessionManager';
+import { resolveRealCountry } from '../utils/profile';
 import appLogo from '../assets/logo.svg';
 
 // React Native web-compatibility components & helpers
@@ -140,10 +141,16 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
             safeSetItem(`academic_exam_${currentUser.uid}`, savedExam);
             safeSetItem(`target_exam_${currentUser.uid}`, savedExam);
           }
-          const savedCountry = userData?.academic_country || userData?.country;
-          if (savedCountry) {
+          const savedCountry = resolveRealCountry(
+            userData?.academic_country || userData?.country,
+            userData?.academic_custom_country || userData?.customCountry,
+            userData?.targetExam || userData?.exam || userData?.academic_exam
+          );
+          if (savedCountry && savedCountry !== 'Others' && savedCountry !== 'Other') {
             safeSetItem('academic_country', savedCountry);
+            safeSetItem('academic_custom_country', savedCountry);
             safeSetItem(`academic_country_${currentUser.uid}`, savedCountry);
+            safeSetItem(`academic_custom_country_${currentUser.uid}`, savedCountry);
           }
           const savedGrade = userData?.academic_grade || userData?.grade;
           if (savedGrade) {

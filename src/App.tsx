@@ -27,6 +27,7 @@ import { getStudyXP, getStudyLevel, getDailyXPStatus } from './utils/gamificatio
 import { showToast } from './utils/toast';
 import { setupDailyLocalNotifications } from './utils/notifications';
 import confetti from 'canvas-confetti';
+import { resolveRealCountry } from './utils/profile';
 
 import { retryImport } from './utils/resilientLazy';
 import ToolsDashboard from './components/ToolsDashboard';
@@ -633,10 +634,18 @@ export default function App() {
                   safeSetItem(`academic_subject_${currentUser.uid}`, savedStream);
                   safeSetItem(`subject_${currentUser.uid}`, savedStream);
                 }
-                if (userData.country || userData.academic_country) {
-                  const savedCountry = userData.country || userData.academic_country;
-                  safeSetItem('academic_country', savedCountry);
-                  safeSetItem(`academic_country_${currentUser.uid}`, savedCountry);
+                if (userData.country || userData.academic_country || userData.academic_custom_country || userData.customCountry) {
+                  const resolvedCountry = resolveRealCountry(
+                    userData.country || userData.academic_country,
+                    userData.academic_custom_country || userData.customCountry,
+                    userData.targetExam || userData.academic_exam
+                  );
+                  if (resolvedCountry && resolvedCountry !== 'Others' && resolvedCountry !== 'Other') {
+                    safeSetItem('academic_country', resolvedCountry);
+                    safeSetItem('academic_custom_country', resolvedCountry);
+                    safeSetItem(`academic_country_${currentUser.uid}`, resolvedCountry);
+                    safeSetItem(`academic_custom_country_${currentUser.uid}`, resolvedCountry);
+                  }
                 }
                 if (userData.subjects || userData.academic_subjects) {
                   const savedSubjects = userData.academic_subjects || userData.subjects;

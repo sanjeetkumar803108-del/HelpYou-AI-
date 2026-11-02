@@ -19,6 +19,49 @@ export interface UserProfileData {
 }
 
 /**
+ * Resolves the genuine country name, guarding against literal 'Others' or 'Other'.
+ * If the user selected 'Others' and entered a custom country, it returns the custom country.
+ * If targetExam strongly identifies an authentic curriculum (e.g. NEET / JEE / CBSE -> India),
+ * it seamlessly resolves to that genuine country rather than generic 'Others'.
+ */
+export function resolveRealCountry(rawCountry?: string | null, customCountry?: string | null, targetExam?: string | null): string {
+  const custom = (customCountry || '').trim();
+  if (custom && custom.toLowerCase() !== 'others' && custom.toLowerCase() !== 'other') {
+    return custom;
+  }
+
+  const raw = (rawCountry || '').trim();
+  if (raw && raw.toLowerCase() !== 'others' && raw.toLowerCase() !== 'other') {
+    return raw;
+  }
+
+  const exam = (targetExam || '').toLowerCase().trim();
+  if (
+    exam.includes('neet') ||
+    exam.includes('jee') ||
+    exam.includes('cbse') ||
+    exam.includes('icse') ||
+    exam.includes('upsc') ||
+    exam.includes('gate') ||
+    exam.includes('nda') ||
+    exam.includes('cuet') ||
+    exam.includes('clat')
+  ) {
+    return 'India';
+  }
+
+  if (exam.includes('sat') || exam.includes('act') || exam.includes('ap ') || exam.endsWith(' ap')) {
+    return 'United States';
+  }
+
+  if (exam.includes('gcse') || exam.includes('a level') || exam.includes('a-level')) {
+    return 'United Kingdom';
+  }
+
+  return raw && raw.toLowerCase() !== 'others' && raw.toLowerCase() !== 'other' ? raw : 'United States';
+}
+
+/**
  * Retrieves the comprehensive profile data for the active user.
  * Seamlessly resolves localized cache keys and active user session overrides.
  */
@@ -53,19 +96,43 @@ export function getUserProfileData(): UserProfileData {
 
   const stream = subject;
 
-  const country = (uid ? safeGetItem(`academic_country_${uid}`) : null) ||
-    safeGetItem('academic_country') ||
-    'United States';
-
-  const region = (uid ? safeGetItem(`academic_region_${uid}`) : null) ||
-    safeGetItem('academic_region') ||
-    'USA';
-
   const targetExam = (uid ? safeGetItem(`academic_exam_${uid}`) : null) ||
     (uid ? safeGetItem(`target_exam_${uid}`) : null) ||
     safeGetItem('academic_exam') ||
     safeGetItem('target_exam') ||
     '';
+
+  const rawCountry = (uid ? safeGetItem(`academic_country_${uid}`) : null) ||
+    safeGetItem('academic_country');
+
+  const customCountry = (uid ? safeGetItem(`academic_custom_country_${uid}`) : null) ||
+    safeGetItem('academic_custom_country') ||
+    (uid ? safeGetItem(`custom_country_${uid}`) : null) ||
+    safeGetItem('custom_country');
+
+  const country = resolveRealCountry(rawCountry, customCountry, targetExam);
+
+  // If local storage has 'Others', auto-repair it so future accesses are clean
+  if (rawCountry === 'Others' || rawCountry === 'Other') {
+    safeSetItem('academic_country', country);
+    safeSetItem('academic_custom_country', country);
+    if (uid) {
+      safeSetItem(`academic_country_${uid}`, country);
+      safeSetItem(`academic_custom_country_${uid}`, country);
+    }
+  }
+
+  let region = (uid ? safeGetItem(`academic_region_${uid}`) : null) ||
+    safeGetItem('academic_region');
+  
+  if (!region || region === 'Global') {
+    if (country === 'India') region = 'India';
+    else if (country === 'United States') region = 'USA';
+    else if (country === 'United Kingdom') region = 'UK';
+    else if (country === 'Canada') region = 'CA';
+    else if (country === 'Australia') region = 'AU';
+    else region = country;
+  }
 
   const role = safeGetItem('onboarding_role') || 'High School Student';
   const studyLevel = (uid ? safeGetItem(`onboarding_grade_${uid}`) : null) ||

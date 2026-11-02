@@ -539,6 +539,18 @@ function extractUserQuery(params: any): string {
 }
 
 /**
+ * Sanitizes country string, ensuring literal 'Others' or 'Other' is never passed to AI models.
+ */
+function sanitizeCountry(country?: string, fallback: string = 'Global'): string {
+  if (!country) return fallback;
+  const trimmed = country.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'others' || trimmed.toLowerCase() === 'other') {
+    return fallback;
+  }
+  return trimmed;
+}
+
+/**
  * 4-Tier Pedagogical Calibration Engine:
  * Strictly maps any student grade/academic level string to concrete vocabulary tiers,
  * sentence length constraints, mathematical limits, and analogy rules so HelpYou AI
@@ -578,7 +590,8 @@ function getGradePedagogicalDirective(gradeLevel?: string, stream?: string, coun
   }
 
   const streamInfo = stream ? `Stream/Track: ${stream}` : 'Track: General Academic';
-  const countryInfo = country ? `Curriculum: ${country}` : 'Curriculum: Global Academic';
+  const cleanCountry = sanitizeCountry(country, '');
+  const countryInfo = cleanCountry ? `Curriculum & Educational Region: ${cleanCountry}` : 'Curriculum: Global Academic';
 
   let tierGuidelines = '';
 
@@ -616,14 +629,16 @@ function getGradePedagogicalDirective(gradeLevel?: string, stream?: string, coun
 • TONE: Scholarly, collegiate, and uncompromising in technical depth.`;
   }
 
+  const countryMandate = cleanCountry ? `\n• AUTHENTIC COUNTRY CURRICULUM MANDATE: The student is officially enrolled under the genuine educational curriculum of "${cleanCountry}". You MUST formulate all explanations, nomenclature, question framing, regional examples, and evaluation criteria strictly aligned with "${cleanCountry}". Never refer to the student's country as "Others".` : '';
+
   return `=======================================================
 STUDENT GRADE PEDAGOGICAL CALIBRATION (${tierTitle}):
-Active Profile: Grade: ${gradeLevel || 'Standard'} | ${streamInfo} | ${countryInfo}
+Active Profile: Grade: ${gradeLevel || 'Standard'} | ${streamInfo} | ${countryInfo}${countryMandate}
 
 ${tierGuidelines}
 
 CRITICAL ANTI-GENERIC MANDATE:
-Do NOT output a generic, one-size-fits-all answer. Your tone, depth, vocabulary, and explanation complexity MUST authentically and recognizably reflect this specific student's grade (${gradeLevel || 'Selected Level'}).
+Do NOT output a generic, one-size-fits-all answer. Your tone, depth, vocabulary, and explanation complexity MUST authentically and recognizably reflect this specific student's grade (${gradeLevel || 'Selected Level'}) and curriculum (${cleanCountry || 'Standard'}).
 =======================================================`;
 }
 
@@ -3397,7 +3412,7 @@ app.post("/api/verify-and-research-exam", async (req, res) => {
     }
 
     const trimmedExam = examName.trim();
-    const userCountry = (country || 'Global').trim();
+    const userCountry = sanitizeCountry(country, 'Global');
 
     const promptText = `
 User Selected Country / Region: "${userCountry}"
@@ -3634,7 +3649,7 @@ app.post("/api/deep-research-exam-blueprint", async (req, res) => {
       return res.status(400).json({ error: "Missing exam name or subjects" });
     }
 
-    const normCountry = (country || "Global").trim();
+    const normCountry = sanitizeCountry(country, "Global");
     const normExam = (examName || "Standardized Examination").trim();
     const normGrade = (grade || "Senior Secondary").trim();
     const cleanSubjects: string[] = subjects.map((s: any) => String(s).trim()).filter(Boolean);
@@ -3914,7 +3929,7 @@ app.post("/api/verify-and-research-subject", async (req, res) => {
 
     const normSubject = subjectName.trim();
     const normExam = (examName || "Standardized Examination").trim();
-    const normCountry = (country || "Global").trim();
+    const normCountry = sanitizeCountry(country, "Global");
     const normGrade = (grade || "Senior Secondary").trim();
     const cleanExisting: string[] = Array.isArray(existingSubjects) ? existingSubjects.map((s: any) => String(s).trim()) : [];
 
@@ -7726,7 +7741,7 @@ app.all(["/api/generate-trivia", "/api/daily-trivia"], async (req, res) => {
     // 2. PRACTICE BONUS BOOSTER: UNIQUE, PERSONALIZED, STRICT ZERO REPETITION FOR EACH USER
     const studentGrade = gradeLevel || studyLevel || "11th Grade";
     const studentStream = academicStream || "STEM / Science & Engineering";
-    const studentCountry = country || "Global";
+    const studentCountry = sanitizeCountry(country, "Global");
 
     const normalizeStr = (s: string) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
     const excludesSet = new Set((excludeQuestions || []).map((q: string) => normalizeStr(q)));

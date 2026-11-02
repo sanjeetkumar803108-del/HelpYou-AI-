@@ -33,6 +33,7 @@ import { useSettings } from '../hooks/useSettings';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { billingService } from '../services/BillingService';
 import { REGIONAL_TRACKS, DEFAULT_SUBJECTS, COUNTRIES } from './AcademicSetup';
+import { resolveRealCountry } from '../utils/profile';
 import { getApiUrl } from '../utils/api';
 import { getStoredExamBlueprint, saveStoredExamBlueprint, getSubjectBlueprint } from '../utils/academicBlueprint';
 import { cleanSubjectTitle } from '../utils/curriculumMap';
@@ -323,9 +324,6 @@ export default function Profile({
   const [streamMajor, setStreamMajor] = useState(() => {
     return userSubjects[0] || 'Mathematics';
   });
-  const [selectedCountryName, setSelectedCountryName] = useState(() => {
-    return safeGetItem('academic_country') || 'United States';
-  });
   const [targetExam, setTargetExam] = useState<string>(() => {
     const uid = auth.currentUser?.uid;
     return (uid ? safeGetItem(`academic_exam_${uid}`) : null) ||
@@ -334,8 +332,26 @@ export default function Profile({
       safeGetItem('target_exam') ||
       '';
   });
+  const [selectedCountryName, setSelectedCountryName] = useState(() => {
+    const uid = auth.currentUser?.uid;
+    const raw = (uid ? safeGetItem(`academic_country_${uid}`) : null) || safeGetItem('academic_country');
+    const custom = (uid ? safeGetItem(`academic_custom_country_${uid}`) : null) || safeGetItem('academic_custom_country');
+    const exam = (uid ? safeGetItem(`academic_exam_${uid}`) : null) || safeGetItem('academic_exam') || safeGetItem('target_exam');
+    const resolved = resolveRealCountry(raw, custom, exam);
+    if (raw === 'Others' || raw === 'Other') {
+      safeSetItem('academic_country', resolved);
+      safeSetItem('academic_custom_country', resolved);
+      if (uid) {
+        safeSetItem(`academic_country_${uid}`, resolved);
+        safeSetItem(`academic_custom_country_${uid}`, resolved);
+      }
+    }
+    return resolved;
+  });
   const [isEditingExam, setIsEditingExam] = useState(false);
   const [tempExam, setTempExam] = useState('');
+  const [isEditingCountry, setIsEditingCountry] = useState(false);
+  const [tempCountryInput, setTempCountryInput] = useState('');
 
   const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
   const [isSubjectsDropdownOpen, setIsSubjectsDropdownOpen] = useState(false);
@@ -584,6 +600,57 @@ export default function Profile({
     triggerVibration(15);
   };
 
+  const handleSaveCountry = async (countryToSave: string) => {
+    const trimmed = countryToSave.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'others' || trimmed.toLowerCase() === 'other') return;
+    setSelectedCountryName(trimmed);
+    setIsEditingCountry(false);
+    safeSetItem('academic_country', trimmed);
+    safeSetItem('academic_custom_country', trimmed);
+    const region = trimmed.toLowerCase() === 'india' ? 'India' : 'Global';
+    safeSetItem('academic_region', region);
+    if (auth.currentUser?.uid) {
+      safeSetItem(`academic_country_${auth.currentUser.uid}`, trimmed);
+      safeSetItem(`academic_custom_country_${auth.currentUser.uid}`, trimmed);
+      safeSetItem(`academic_region_${auth.currentUser.uid}`, region);
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          country: trimmed,
+          academic_country: trimmed,
+          academic_custom_country: trimmed,
+          customCountry: trimmed,
+          regionSystem: region,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.error('Failed to update country in Firestore:', err);
+      }
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+    } catch (_) {}
+    showToast('🌍 Country updated successfully!');
+    triggerVibration(15);
+  };
+
+  // Sync profile when external academic profile updates
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      const uid = auth.currentUser?.uid;
+      const raw = (uid ? safeGetItem(`academic_country_${uid}`) : null) || safeGetItem('academic_country');
+      const custom = (uid ? safeGetItem(`academic_custom_country_${uid}`) : null) || safeGetItem('academic_custom_country');
+      const exam = (uid ? safeGetItem(`academic_exam_${uid}`) : null) || safeGetItem('academic_exam') || safeGetItem('target_exam');
+      const resolved = resolveRealCountry(raw, custom, exam);
+      if (resolved && resolved !== 'Others' && resolved !== 'Other') {
+        setSelectedCountryName(resolved);
+      }
+      if (exam) setTargetExam(exam);
+    };
+
+    window.addEventListener('academic_profile_updated', handleProfileUpdate);
+    return () => window.removeEventListener('academic_profile_updated', handleProfileUpdate);
+  }, []);
+
   const { deepFocus, setDeepFocus } = useSettings();
 
   // Modal & Popup State in Settings
@@ -710,6 +777,20 @@ export default function Profile({
           // Overwrite local storage and update state
           safeSetItem('study_passive_usage_data', JSON.stringify(firestoreUsage));
           setChartData(generateChartData(firestoreUsage));
+
+          // Seamlessly resolve and sync real country
+          const firestoreCountry = resolveRealCountry(
+            userData.country || userData.academic_country,
+            userData.academic_custom_country || userData.customCountry,
+            userData.targetExam || userData.academic_exam
+          );
+          if (firestoreCountry && firestoreCountry !== 'Others' && firestoreCountry !== 'Other') {
+            setSelectedCountryName(firestoreCountry);
+            safeSetItem('academic_country', firestoreCountry);
+            safeSetItem('academic_custom_country', firestoreCountry);
+            safeSetItem(`academic_country_${user.uid}`, firestoreCountry);
+            safeSetItem(`academic_custom_country_${user.uid}`, firestoreCountry);
+          }
         }
       } catch (err) {
         console.error("[UsageTracker] Error loading Firestore usage stats:", err);
@@ -1652,10 +1733,57 @@ export default function Profile({
               <div className="space-y-1.5 pt-1 relative">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-zinc-500">Country / Curriculum System</label>
+                  {(!selectedCountryName || selectedCountryName === 'Others' || selectedCountryName === 'Other') && !isEditingCountry ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempCountryInput('');
+                        setIsEditingCountry(true);
+                      }}
+                      className="text-[10px] font-extrabold text-purple-600 hover:text-purple-700 hover:underline cursor-pointer"
+                    >
+                      + Set Country
+                    </button>
+                  ) : null}
                 </div>
 
-                {selectedCountryName ? (
-                  /* CLEAN READ-ONLY COUNTRY CARD */
+                {isEditingCountry ? (
+                  /* INLINE COUNTRY INPUT */
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={tempCountryInput}
+                        onChange={(e) => setTempCountryInput(e.target.value)}
+                        placeholder="e.g. India, Germany, UAE, Canada..."
+                        className="flex-1 bg-white border border-purple-500 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 font-sans"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveCountry(tempCountryInput);
+                          } else if (e.key === 'Escape') {
+                            setIsEditingCountry(false);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCountry(tempCountryInput)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingCountry(false)}
+                        className="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 px-2.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : selectedCountryName && selectedCountryName !== 'Others' && selectedCountryName !== 'Other' ? (
+                  /* CLEAN READ-ONLY COUNTRY CARD WITH REAL COUNTRY NAME */
                   <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
@@ -1678,7 +1806,7 @@ export default function Profile({
                       }}
                       className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
                     >
-                      <span className="truncate pr-2">Select Country</span>
+                      <span className="truncate pr-2">{selectedCountryName || 'Select Country'}</span>
                       <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
                     </button>
 
@@ -1696,27 +1824,21 @@ export default function Profile({
                               <div 
                                 key={c.name}
                                 onClick={() => {
-                                  setSelectedCountryName(c.name);
-                                  safeSetItem('academic_country', c.name);
-                                  safeSetItem('academic_region', c.regionSystem);
-                                  if (auth.currentUser?.uid) {
-                                    safeSetItem(`academic_country_${auth.currentUser.uid}`, c.name);
-                                    safeSetItem(`academic_region_${auth.currentUser.uid}`, c.regionSystem);
-                                    setDoc(doc(db, 'users', auth.currentUser.uid), {
-                                      country: c.name,
-                                      academic_country: c.name,
-                                      regionSystem: c.regionSystem,
-                                      updatedAt: new Date().toISOString()
-                                    }, { merge: true }).catch(() => {});
+                                  if (c.id === 'Other') {
+                                    setIsCountryDropdownOpen(false);
+                                    setTempCountryInput('');
+                                    setIsEditingCountry(true);
+                                  } else {
+                                    handleSaveCountry(c.name);
+                                    setIsCountryDropdownOpen(false);
                                   }
-                                  setIsCountryDropdownOpen(false);
                                   triggerVibration(10);
                                 }}
                                 className={`px-3 py-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${selectedCountryName === c.name ? 'bg-zinc-50 font-bold text-zinc-900' : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'}`}
                               >
                                 <span className="flex items-center gap-2">
                                   <span>{c.flag}</span>
-                                  <span>{c.name}</span>
+                                  <span>{c.id === 'Other' ? 'Other Countries (Type Custom)' : c.name}</span>
                                 </span>
                                 {selectedCountryName === c.name && <Check className="w-3.5 h-3.5 text-zinc-900 shrink-0" />}
                               </div>

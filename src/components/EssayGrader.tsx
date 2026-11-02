@@ -705,9 +705,9 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
       ) : !result ? (
         <div className="flex-1 flex flex-col">
           {/* DYNAMIC CASCADING DROPDOWNS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 relative z-30">
             {/* DROPDOWN 1: CURRICULUM */}
-            <div className={`relative ${isCurriculumOpen ? 'z-30' : 'z-20'}`}>
+            <div className={`relative ${isCurriculumOpen ? 'z-50' : 'z-20'}`}>
               <label className="block text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Select Curriculum / Exam</label>
               <div className="relative">
                 <button
@@ -778,7 +778,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* DROPDOWN 2: SUBJECT / ESSAY TYPE */}
-            <div className={`relative ${isSubjectOpen ? 'z-30' : 'z-10'}`}>
+            <div className={`relative ${isSubjectOpen ? 'z-50' : 'z-20'}`}>
               <label className="block text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Select Subject / Essay Type</label>
               <div className="relative">
                 <button
@@ -844,7 +844,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
-          <div className="relative mb-4">
+          <div className="relative z-0 mb-4">
             <textarea
               value={essayText}
               onChange={(e) => setEssayText(e.target.value)}

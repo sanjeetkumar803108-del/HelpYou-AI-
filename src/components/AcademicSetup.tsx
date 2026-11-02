@@ -74,7 +74,13 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
     return matched ? matched.id : (savedCountry && savedCountry !== 'United States' ? 'Other' : 'USA');
   });
   const [customCountry, setCustomCountry] = useState<string>(() => {
-    return safeGetItem(`academic_custom_country_${userId}`) || safeGetItem('academic_custom_country') || '';
+    const savedCustom = (userId ? safeGetItem(`academic_custom_country_${userId}`) : null) || safeGetItem('academic_custom_country');
+    if (savedCustom && savedCustom !== 'Others' && savedCustom !== 'Other') return savedCustom;
+    const savedCountry = (userId ? safeGetItem(`academic_country_${userId}`) : null) || safeGetItem('academic_country');
+    if (savedCountry && savedCountry !== 'Others' && savedCountry !== 'Other' && !COUNTRIES.some(c => c.name === savedCountry)) {
+      return savedCountry;
+    }
+    return '';
   });
   const [countryError, setCountryError] = useState<string | null>(null);
 
@@ -230,11 +236,21 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
     triggerVibration(15);
 
     if (step === 1) {
-      if (selectedCountryId === 'Other' && !customCountry.trim()) {
-        setCountryError("Please type your country name (e.g. India, Germany, UAE).");
-        customCountryInputRef.current?.focus();
-        triggerVibration(25);
-        return;
+      if (selectedCountryId === 'Other') {
+        const trimmedCustom = customCountry.trim();
+        if (!trimmedCustom) {
+          setCountryError("Please type your country name (e.g. India, Germany, UAE).");
+          customCountryInputRef.current?.focus();
+          triggerVibration(25);
+          return;
+        }
+        // Immediately persist custom country so it is never lost
+        safeSetItem('academic_country', trimmedCustom);
+        safeSetItem('academic_custom_country', trimmedCustom);
+        if (userId) {
+          safeSetItem(`academic_country_${userId}`, trimmedCustom);
+          safeSetItem(`academic_custom_country_${userId}`, trimmedCustom);
+        }
       }
       setCountryError(null);
       setStep(2); // From Country -> Exam
@@ -254,7 +270,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
 
       const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
       const finalCountry = selectedCountryId === 'Other' 
-        ? ((customCountry || '').trim() || 'Others') 
+        ? ((customCountry || '').trim() || 'Global') 
         : countryObj.name;
 
       try {
@@ -378,9 +394,10 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
     
     const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
     const finalCountry = selectedCountryId === 'Other' 
-      ? ((customCountry || '').trim() || 'Others') 
+      ? ((customCountry || '').trim() || 'Global') 
       : countryObj.name;
     const finalExam = (targetExam || '').trim() || 'General Studies';
+    const effectiveRegion = finalCountry.toLowerCase() === 'india' ? 'India' : countryObj.regionSystem;
     
     // Resolve final subjects list from multi-selection
     const finalSubjectsList: string[] = [];
@@ -468,8 +485,8 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
 
     // Save selections locally
     safeSetItem('academic_country', finalCountry);
-    safeSetItem('academic_custom_country', customCountry);
-    safeSetItem('academic_region', countryObj.regionSystem);
+    safeSetItem('academic_custom_country', finalCountry);
+    safeSetItem('academic_region', effectiveRegion);
     safeSetItem('academic_exam', finalExam);
     safeSetItem('target_exam', finalExam);
     safeSetItem('academic_grade', selectedGrade);
@@ -497,8 +514,8 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
       safeSetItem('helpyou_active_user_session', 'true');
       safeSetItem('last_logged_in_user', activeUid);
       safeSetItem(`academic_country_${activeUid}`, finalCountry);
-      safeSetItem(`academic_custom_country_${activeUid}`, customCountry);
-      safeSetItem(`academic_region_${activeUid}`, countryObj.regionSystem);
+      safeSetItem(`academic_custom_country_${activeUid}`, finalCountry);
+      safeSetItem(`academic_region_${activeUid}`, effectiveRegion);
       safeSetItem(`academic_exam_${activeUid}`, finalExam);
       safeSetItem(`target_exam_${activeUid}`, finalExam);
       safeSetItem(`academic_grade_${activeUid}`, selectedGrade);
@@ -526,6 +543,8 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
           isOnboardingCompleted: true,
           country: finalCountry,
           academic_country: finalCountry,
+          academic_custom_country: finalCountry,
+          customCountry: finalCountry,
           targetExam: finalExam,
           exam: finalExam,
           academic_exam: finalExam,
@@ -538,7 +557,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
           academic_subject: finalSubject,
           stream: finalSubject,
           academic_stream: finalSubject,
-          regionSystem: countryObj.regionSystem,
+          regionSystem: effectiveRegion,
           updatedAt: new Date().toISOString()
         };
 
@@ -554,6 +573,10 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
         console.error('[AcademicSetup] Error saving setup state to Firestore:', dbErr);
       }
     }
+
+    try {
+      window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+    } catch (_) {}
 
     // Brief 800ms celebration confirmation for user
     await new Promise(r => setTimeout(r, 800));
@@ -688,8 +711,17 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
                                 type="text"
                                 value={customCountry}
                                 onChange={(e) => {
-                                  setCustomCountry(e.target.value);
+                                  const val = e.target.value;
+                                  setCustomCountry(val);
                                   if (countryError) setCountryError(null);
+                                  if (val.trim()) {
+                                    safeSetItem('academic_custom_country', val.trim());
+                                    safeSetItem('academic_country', val.trim());
+                                    if (userId) {
+                                      safeSetItem(`academic_custom_country_${userId}`, val.trim());
+                                      safeSetItem(`academic_country_${userId}`, val.trim());
+                                    }
+                                  }
                                 }}
                                 placeholder="e.g. India, Germany, UAE, Pakistan, Nigeria..."
                                 className="w-full bg-transparent text-xs font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none"

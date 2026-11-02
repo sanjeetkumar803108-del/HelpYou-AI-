@@ -34,6 +34,83 @@ export function healUnitSuperscripts(content: string): string {
   return str;
 }
 
+const ENGLISH_STOPWORDS = new Set([
+  'what', 'is', 'the', 'derivative', 'of', 'with', 'respect', 'to', 'in', 'for', 'and', 'or', 'so',
+  'using', 'product', 'rule', 'here', 'therefore', 'linear', 'equations', 'have', 'constant', 'rate',
+  'change', 'form', 'calculate', 'limit', 'as', 'value', 'solve', 'which', 'following', 'represents',
+  'because', 'this', 'that', 'from', 'where', 'then', 'when', 'if', 'does', 'not', 'true', 'false',
+  'statement', 'concept', 'step', 'first', 'second', 'both', 'sides', 'divide', 'by', 'add', 'subtract',
+  'multiply', 'substitute', 'hence', 'thus', 'answer', 'correct', 'option', 'explanation', 'notice'
+]);
+
+/**
+ * Dedicated renderer and healer for Formula Box equations and theorems in AI Notes:
+ * Handles pure LaTeX formulas (e.g. "f^{-1}(x) = \frac{ax+b}{cx+d}") as centered display math,
+ * and handles descriptive equations with English sentences (e.g. "Graph of f^{-1}(x) is the reflection of f(x) over y = x")
+ * as clean typography with inline KaTeX formulas, preventing KaTeX font compression, italic word concatenation, and horizontal scrollbars.
+ */
+export function formatFormulaBoxContent(rawFormula: string): string {
+  if (!rawFormula) return '';
+  let f = String(rawFormula).trim();
+
+  // Strip outer delimiters if present
+  if (f.startsWith('$$') && f.endsWith('$$') && f.length > 4) {
+    f = f.slice(2, -2).trim();
+  } else if (f.startsWith('$') && f.endsWith('$') && f.length > 2) {
+    f = f.slice(1, -1).trim();
+  } else if (f.startsWith('\\[') && f.endsWith('\\]') && f.length > 4) {
+    f = f.slice(2, -2).trim();
+  }
+
+  const mathKeywords = new Set([
+    'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'lim', 'det', 'exp', 'max', 'min',
+    'dx', 'dy', 'dt', 'frac', 'sqrt', 'cdot', 'times', 'div', 'pm', 'mp', 'sum', 'prod', 'int',
+    'alpha', 'beta', 'gamma', 'theta', 'lambda', 'mu', 'pi', 'sigma', 'omega', 'phi', 'psi', 'circ'
+  ]);
+
+  const words = f.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{2,}\b/g) || [];
+  const narrativeWords = words.filter(w => !mathKeywords.has(w.toLowerCase()));
+
+  // If there are 2 or more narrative words, this is a descriptive sentence with math expressions:
+  // e.g. "Graph of f^{-1}(x) is the reflection of f(x) over y = x"
+  if (narrativeWords.length >= 2) {
+    let result = f;
+
+    // A. Protect existing $...$ blocks
+    const mathBlocks: string[] = [];
+    result = result.replace(/\$[^$\n]+\$/g, (m) => {
+      mathBlocks.push(m);
+      return `__MB_${mathBlocks.length - 1}__`;
+    });
+
+    // B. Wrap function superscripts/subscripts like f^{-1}(x), x^2, f(x), g(x), 10^{-5}
+    result = result.replace(/(?<![\w$\\])([a-zA-Z]\^\{[^{}]+\}(?:\([a-zA-Z0-9,\s\-+*/]+\))?)(?![\w$])/g, '$$$1$$');
+    result = result.replace(/(?<![\w$\\])([a-zA-Z]_[0-9a-zA-Z]+(?:\([a-zA-Z0-9,\s\-+*/]+\))?)(?![\w$])/g, '$$$1$$');
+    result = result.replace(/(?<![\w$\\])([a-zA-Z]\([a-zA-Z0-9,\s\-+*/]+\))(?![\w$])/g, '$$$1$$');
+
+    // C. Wrap isolated equations like y = x, a = b, x > 0
+    result = result.replace(/(?<![\w$\\])([a-zA-Z0-9_()\-]+)\s*([=<>≤≥≠≈])\s*([a-zA-Z0-9_()\-+*/\\]+)(?![\w$])/g, '$$$1 $2 $3$$');
+
+    // D. Wrap standard LaTeX commands like \frac{...}{...}, \sqrt{...}
+    result = result.replace(/(?<![\w$\\])(\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\])*)(?![\w$])/g, '$$$1$$');
+
+    // Restore protected blocks
+    for (let i = 0; i < mathBlocks.length; i++) {
+      result = result.split(`__MB_${i}__`).join(mathBlocks[i]);
+    }
+    result = result.replace(/__MB_\d+__/g, '');
+
+    // Cleanup double $$ accidentally produced
+    result = result.replace(/\$\$+/g, '$');
+    result = result.replace(/\$\s*\$/g, ' ');
+
+    return result;
+  }
+
+  // Pure standalone equation: render as display math
+  return `$$${f}$$`;
+}
+
 /**
  * Normalizes and heals math/chemical equations for student-friendly crystal-clear KaTeX rendering:
  * 1. Restores escaped/eaten ASCII control codes (\x0D carriage return -> \r, \x09 tab -> \t, etc.)
@@ -148,6 +225,23 @@ export function cleanMarkdownMath(content: string): string {
     return char;
   });
 
+  // Fix English narrative prose mistakenly wrapped in $ ... $ or $$ ... $$ without \text
+  // e.g. "$$Graph of f^{-1}(x) is the reflection of f(x) over y = x$$"
+  text = text.replace(/(\$\$[\s\S]+?\$\$|\$[^\$\n]+?\$)/g, (match) => {
+    const isDouble = match.startsWith('$$');
+    const inner = isDouble ? match.slice(2, -2).trim() : match.slice(1, -1).trim();
+    if (inner.includes('\\text{')) return match;
+    const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
+    const narrativeWords = words.filter(w => 
+      ENGLISH_STOPWORDS.has(w.toLowerCase()) || 
+      /^(?:graph|reflection|symmetry|inverse|domain|range|function|point|curve|line|axis|slope|equal|equals|value|always|never|means|notice|remember|assume|cancel|factor|factors)$/i.test(w)
+    );
+    if (narrativeWords.length >= 2) {
+      return formatFormulaBoxContent(inner);
+    }
+    return match;
+  });
+
   // Heal literal '\n' text sequences (e.g. "What is Quantum Physics?\nQuantum physics...")
   // into actual paragraph linebreaks, preserving valid LaTeX commands starting with \n
   text = text.replace(/([?!:])\s*\\n\s*/g, '$1\n\n');
@@ -156,15 +250,6 @@ export function cleanMarkdownMath(content: string): string {
 
   return text;
 }
-
-const ENGLISH_STOPWORDS = new Set([
-  'what', 'is', 'the', 'derivative', 'of', 'with', 'respect', 'to', 'in', 'for', 'and', 'or', 'so',
-  'using', 'product', 'rule', 'here', 'therefore', 'linear', 'equations', 'have', 'constant', 'rate',
-  'change', 'form', 'calculate', 'limit', 'as', 'value', 'solve', 'which', 'following', 'represents',
-  'because', 'this', 'that', 'from', 'where', 'then', 'when', 'if', 'does', 'not', 'true', 'false',
-  'statement', 'concept', 'step', 'first', 'second', 'both', 'sides', 'divide', 'by', 'add', 'subtract',
-  'multiply', 'substitute', 'hence', 'thus', 'answer', 'correct', 'option', 'explanation', 'notice'
-]);
 
 /**
  * Token-safe replacer: applies a regex replacement only on text segments that are OUTSIDE of $...$ delimiters.

@@ -77,20 +77,21 @@ export interface AINotesData {
 
 /**
  * Universal Toppers Handwritten Notes PDF Generator
- * Creates an authentic, publication-grade multi-page PDF formatted like real notebook paper
+ * Creates an authentic, publication-grade multi-page PDF formatted as 16:9 widescreen presentation slides or standard notebook paper
  */
-export function generateAINotesPDFBlob(notesData: AINotesData): Blob {
+export function generateAINotesPDFBlob(notesData: AINotesData, options?: { orientation?: 'landscape' | 'portrait' }): Blob {
+  const isLandscape = (options?.orientation || 'landscape') === 'landscape';
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: isLandscape ? 'landscape' : 'portrait',
     unit: 'mm',
-    format: 'a4'
+    format: isLandscape ? [297, 167.06] : 'a4'
   });
 
-  const pageWidth = doc.internal.pageSize.getWidth(); // 210mm
-  const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
-  const margin = 15;
-  const contentWidth = pageWidth - (margin * 2); // 180mm
-  const bottomLimit = pageHeight - 20;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = isLandscape ? 12 : 15;
+  const contentWidth = pageWidth - (margin * 2);
+  const bottomLimit = pageHeight - (isLandscape ? 16 : 20);
 
   const metadata = notesData.metadata || {
     title: 'Study Notes',

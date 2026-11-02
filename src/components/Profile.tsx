@@ -1443,9 +1443,6 @@ export default function Profile({
                   <p className="text-xs font-black text-zinc-800 leading-tight">Student</p>
                 </div>
               </div>
-              <span className="bg-purple-50 text-purple-700 text-[9px] font-black px-2.5 py-1 rounded-full border border-purple-150 shrink-0 whitespace-nowrap">
-                Default Strictly Verified
-              </span>
             </div>
 
             {/* Granular Academic Track */}
@@ -1458,18 +1455,11 @@ export default function Profile({
                 <div className="space-y-1.5 relative">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold text-zinc-500">Grade Level</label>
-                    {gradeLevel ? (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded select-none">
-                        <Lock className="w-2.5 h-2.5 text-amber-600" />
-                        Locked
-                      </span>
-                    ) : null}
                   </div>
 
                   {gradeLevel ? (
                     <div className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
                       <span className="truncate pr-1.5 text-zinc-900 font-bold">{gradeLevel}</span>
-                      <Lock className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                     </div>
                   ) : (
                     <>
@@ -1658,22 +1648,16 @@ export default function Profile({
                 </div>
               </div>
 
-              {/* Country / Educational Region Selection - PERMANENTLY LOCKED ONCE SET */}
+              {/* Country / Educational Region Selection */}
               <div className="space-y-1.5 pt-1 relative">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-zinc-500">Country / Curriculum System</label>
-                  {selectedCountryName ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md select-none">
-                      <Lock className="w-2.5 h-2.5 text-amber-600" />
-                      Locked
-                    </span>
-                  ) : null}
                 </div>
 
                 {selectedCountryName ? (
-                  /* PERMANENTLY LOCKED COUNTRY CARD - CANNOT BE EDITED */
-                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
-                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                  /* CLEAN READ-ONLY COUNTRY CARD */
+                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
                         🌍
                       </div>
@@ -1681,14 +1665,7 @@ export default function Profile({
                         <span className="text-zinc-950 font-black text-sm block truncate">
                           {selectedCountryName}
                         </span>
-                        <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
-                          Permanent setting • Calibrated to your educational region
-                        </span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded-lg bg-zinc-200/60 text-zinc-600 text-[10px] font-black border border-zinc-300/50" title="Country is locked and cannot be changed">
-                      <Lock className="w-3 h-3 text-zinc-600" />
-                      <span>Locked</span>
                     </div>
                   </div>
                 ) : (
@@ -1701,7 +1678,7 @@ export default function Profile({
                       }}
                       className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 font-sans"
                     >
-                      <span className="truncate pr-2">Select Country (One-Time)</span>
+                      <span className="truncate pr-2">Select Country</span>
                       <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" />
                     </button>
 
@@ -1752,16 +1729,11 @@ export default function Profile({
                 )}
               </div>
 
-              {/* Target Exam Selection - PERMANENTLY LOCKED ONCE SET */}
+              {/* Target Exam Selection */}
               <div className="space-y-1.5 pt-1 relative">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-zinc-500">Target Exam / Syllabus</label>
-                  {targetExam ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md select-none">
-                      <Lock className="w-2.5 h-2.5 text-amber-600" />
-                      Locked
-                    </span>
-                  ) : !isEditingExam ? (
+                  {!targetExam && !isEditingExam ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -1770,15 +1742,15 @@ export default function Profile({
                       }}
                       className="text-[10px] font-extrabold text-purple-600 hover:text-purple-700 hover:underline cursor-pointer"
                     >
-                      + Set Exam (One-Time)
+                      + Set Exam
                     </button>
                   ) : null}
                 </div>
 
                 {targetExam ? (
-                  /* PERMANENTLY LOCKED EXAM CARD - CANNOT BE EDITED */
-                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
-                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                  /* CLEAN READ-ONLY EXAM CARD */
+                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
                         🎯
                       </div>
@@ -1786,23 +1758,12 @@ export default function Profile({
                         <span className="text-zinc-950 font-black text-sm block truncate">
                           {targetExam}
                         </span>
-                        <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
-                          Permanent setting • Calibrated to your official syllabus
-                        </span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 px-2 py-1 rounded-lg bg-zinc-200/60 text-zinc-600 text-[10px] font-black border border-zinc-300/50" title="Target exam is locked and cannot be changed">
-                      <Lock className="w-3 h-3 text-zinc-600" />
-                      <span>Locked</span>
                     </div>
                   </div>
                 ) : isEditingExam ? (
-                  /* ONE-TIME INPUT FALLBACK IF NEVER SET BEFORE */
+                  /* CLEAN INPUT IF NEVER SET BEFORE */
                   <div className="space-y-2">
-                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-semibold flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>Note: Target exam can only be set once and cannot be changed later.</span>
-                    </div>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="text"
@@ -1824,7 +1785,7 @@ export default function Profile({
                         onClick={handleSaveTargetExam}
                         className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                       >
-                        Save & Lock
+                        Save
                       </button>
                       <button
                         type="button"

@@ -4795,6 +4795,13 @@ CRITICAL PEDAGOGICAL ARCHITECTURE RULES:
        "finalResult": string
      }
 
+4. 16:9 WIDESCREEN SLIDE PRESENTATION & PURE FORMULA RULES:
+   - FORMAT: Each section is rendered as an expansive, modern 16:9 widescreen presentation slide on mobile screens. Structure points cleanly with bullet points, bold keywords, and zero visual clutter.
+   - 'formulaBox.formula': MUST contain STRICTLY pure mathematical/scientific LaTeX equations only (e.g. "f^{-1}(f(x)) = x", "f(a) = b \\iff f^{-1}(b) = a", "E = mc^2", "\\Delta G^\\circ = -RT \\ln K").
+   - CRITICAL FORMULA WARNING: NEVER put narrative English sentences or phrases like "Graph of f^-1(x) is the reflection of f(x) over y = x" inside 'formula'. Put descriptive explanations in 'variables' or 'name'. If words are indispensable inside LaTeX equations, wrap them strictly in "\\text{...}".
+   - 'formulaBox.name': Concise property or theorem name (e.g. "Inverse Function Symmetry Property").
+   - 'comparisonTable': For contrasting concepts or methods, provide a clean 2-to-3 column comparison table.
+
 OUTPUT REQUIREMENT:
 Return ONLY a valid JSON object matching the requested schema. No markdown formatting outside JSON.`;
 

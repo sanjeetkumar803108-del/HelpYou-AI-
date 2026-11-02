@@ -43,6 +43,16 @@ const ENGLISH_STOPWORDS = new Set([
   'multiply', 'substitute', 'hence', 'thus', 'answer', 'correct', 'option', 'explanation', 'notice'
 ]);
 
+export const MATH_OPERATOR_WORDS = new Set([
+  'sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'log', 'ln', 'exp', 'lim',
+  'dx', 'dy', 'dt', 'text', 'frac', 'sqrt', 'left', 'right', 'cdot',
+  'theta', 'alpha', 'beta', 'gamma', 'delta', 'circ', 'rad', 'deg',
+  'sum', 'prod', 'int', 'times', 'div', 'pm', 'mp', 'lambda', 'mu',
+  'pi', 'sigma', 'omega', 'phi', 'psi', 'tau', 'rho', 'det', 'max',
+  'min', 'mod', 'approx', 'equiv', 'leq', 'geq', 'neq', 'infty',
+  'mathbf', 'mathrm', 'mathit', 'mathbb', 'mathcal'
+]);
+
 /**
  * Dedicated renderer and healer for Formula Box equations and theorems in AI Notes:
  * Handles pure LaTeX formulas (e.g. "f^{-1}(x) = \frac{ax+b}{cx+d}") as centered display math,
@@ -233,16 +243,13 @@ export function cleanMarkdownMath(content: string): string {
   });
 
   // Fix English narrative prose mistakenly wrapped in $ ... $ or $$ ... $$ without \text
-  // e.g. "$$Graph of f^{-1}(x) is the reflection of f(x) over y = x$$"
+  // e.g. "$$Graph of f^{-1}(x) is the reflection of f(x) over y = x$$" or "$Dividends are tax-deferred, whereas...$"
   text = text.replace(/(\$\$[\s\S]+?\$\$|\$[^\$\n]+?\$)/g, (match) => {
     const isDouble = match.startsWith('$$');
     const inner = isDouble ? match.slice(2, -2).trim() : match.slice(1, -1).trim();
     if (inner.includes('\\text{')) return match;
     const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
-    const narrativeWords = words.filter(w => 
-      ENGLISH_STOPWORDS.has(w.toLowerCase()) || 
-      /^(?:graph|reflection|symmetry|inverse|domain|range|function|point|curve|line|axis|slope|equal|equals|value|always|never|means|notice|remember|assume|cancel|factor|factors|equilibrium|reaction|exothermic|endothermic|pressure|vessel|temperature|system|evaluate|calculate|determine|state|explain|describe|derive|increase|decrease|total|yield|forward|reverse|ammonia|chemical|engineer|analyzing)$/i.test(w)
-    );
+    const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
     if (narrativeWords.length >= 2) {
       return formatFormulaBoxContent(inner);
     }
@@ -312,12 +319,6 @@ export function formatSuggestionMath(content: string): string {
   return text;
 }
 
-const MATH_OPERATOR_WORDS = new Set([
-  'sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'log', 'ln', 'exp', 'lim',
-  'dx', 'dy', 'dt', 'text', 'frac', 'sqrt', 'left', 'right', 'cdot',
-  'theta', 'alpha', 'beta', 'gamma', 'delta', 'circ', 'rad', 'deg'
-]);
-
 function healSingleQuizLine(line: string): string {
   const l = line.trim();
   if (!l) return line;
@@ -327,9 +328,30 @@ function healSingleQuizLine(line: string): string {
   if (optionPrefixMatch) {
     const prefix = optionPrefixMatch[0];
     const body = line.slice(prefix.length).trim();
-    if (body.startsWith('$') && body.endsWith('$')) {
+
+    // Check if option contains natural language narrative English words
+    const unescapedWords = body.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\]|_\{[^{}]*\}|\^\{[^{}]*\})*/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
+    const narrativeWords = unescapedWords.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
+
+    // Case 1A: Body was already wrapped in $...$
+    if (body.startsWith('$') && body.endsWith('$') && body.length > 2) {
+      const inner = body.slice(1, -1).trim();
+      if (narrativeWords.length >= 2 && !inner.includes('\\text{')) {
+        // Natural language sentence accidentally wrapped in math mode ($...$)
+        // Unpack it using formatFormulaBoxContent so words have normal typography & spaces
+        return `${prefix}${formatFormulaBoxContent(inner)}`;
+      }
       return line;
     }
+
+    // Case 1B: Natural language sentence (e.g. "Dividends are tax-deferred, whereas capital gains...")
+    if (narrativeWords.length >= 2) {
+      // Natural language options should NEVER be wrapped in outer math mode $...$
+      // Instead, format any inline formulas within it safely
+      return `${prefix}${formatFormulaBoxContent(body)}`;
+    }
+
+    // Case 1C: Pure mathematical option (e.g. "3x^2 - 5x + 2" or "\frac{1}{2}")
     if (/[\^_=+\-*/\\√≤≥≠]/.test(body) || /\b(?:sin|cos|tan|log|ln|sqrt|frac)\b/.test(body)) {
       let mathBody = body.replace(/^\$|\$$/g, '').trim();
       mathBody = mathBody.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
@@ -407,7 +429,10 @@ function healSingleQuizLine(line: string): string {
     const inner = block.slice(1, -1).trim();
     // If the block is pure non-math text/acronym like "$B.Tech$" or "$Ph.D.$", strip $ so it appears natural
     const isPureAcronym = /^[a-zA-Z0-9.\s\-_/()]+$/.test(inner) && !/[=+\-*/\\^_{}]/.test(inner) && !/\b(?:frac|sqrt|sin|cos|tan)\b/i.test(inner);
-    const replacement = isPureAcronym ? inner : block;
+    const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
+    const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
+    const isNarrativeProse = narrativeWords.length >= 2 && !inner.includes('\\text{');
+    const replacement = (isPureAcronym || isNarrativeProse) ? formatFormulaBoxContent(inner) : block;
     mixed = mixed.split(`__MATH_BLOCK_${i}__`).join(replacement);
   }
 
@@ -779,10 +804,7 @@ export function healGlobalMarkdown(content: string): string {
       // If inner contains narrative English text without \text, unpack it with formatFormulaBoxContent so KaTeX does not jam words together
       if (!inner.includes('\\text{')) {
         const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
-        const narrativeWords = words.filter(w => 
-          ENGLISH_STOPWORDS.has(w.toLowerCase()) || 
-          /^(?:graph|reflection|symmetry|inverse|domain|range|function|point|curve|line|axis|slope|equal|equals|value|always|never|means|notice|remember|assume|cancel|factor|factors|equilibrium|reaction|exothermic|endothermic|pressure|vessel|temperature|system|evaluate|calculate|determine|state|explain|describe|derive|increase|decrease|total|yield|forward|reverse|ammonia|chemical|engineer|analyzing)$/i.test(w)
-        );
+        const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
         if (narrativeWords.length >= 2) {
           val = formatFormulaBoxContent(inner);
         }

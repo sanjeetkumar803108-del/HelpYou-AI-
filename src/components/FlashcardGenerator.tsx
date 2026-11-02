@@ -32,7 +32,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/re
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { triggerVibration } from '../utils/vibrate';
-import { safeGetItem } from '../utils/storage';
+import { safeGetItem, safeSetItem, safeJsonParse } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
 import { shareTextMobile } from '../utils/mobileSaver';
@@ -43,6 +43,27 @@ interface Flashcard {
   question: string;
   answer: string;
 }
+
+const getCurriculumCacheKey = (subjectTitle: string, topicName: string): string => {
+  const cleanSubject = (subjectTitle || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const cleanTopic = (topicName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const uid = auth.currentUser?.uid || 'guest';
+  return `cached_ch_flashcards_${uid}_${cleanSubject}_${cleanTopic}`;
+};
+
+const getCachedCurriculumDeck = (subjectTitle: string, topicName: string): Flashcard[] | null => {
+  const key = getCurriculumCacheKey(subjectTitle, topicName);
+  const data = safeGetItem(key);
+  if (!data) return null;
+  const parsed = safeJsonParse<Flashcard[]>(data, []);
+  return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+};
+
+const saveCachedCurriculumDeck = (subjectTitle: string, topicName: string, cards: Flashcard[]): void => {
+  if (!Array.isArray(cards) || cards.length === 0) return;
+  const key = getCurriculumCacheKey(subjectTitle, topicName);
+  safeSetItem(key, JSON.stringify(cards));
+};
 
 const parseFlashcardsFromText = (text: string): Flashcard[] => {
   const cards: Flashcard[] = [];
@@ -186,13 +207,30 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     setExpandedSubject(prev => prev === subjectId ? null : subjectId);
   };
 
+  const [cacheVersion, setCacheVersion] = useState(0);
+
   const handleTopicClick = (subjectTitle: string, topicName: string) => {
     triggerVibration(15);
     const fullTopic = topicName.includes(subjectTitle) ? topicName : `${subjectTitle} - ${topicName}`;
     setSourceText(fullTopic);
     setPendingFile(null);
     setShowConfig(false);
-    handleGenerateReal(fullTopic);
+
+    // Instant open if already generated previously!
+    const cachedDeck = getCachedCurriculumDeck(subjectTitle, topicName);
+    if (cachedDeck && cachedDeck.length > 0) {
+      triggerVibration(20);
+      setFlashcards(cachedDeck);
+      setCurrentIndex(0);
+      setFlipped(false);
+      setSaved(false);
+      setGrades({});
+      setError(null);
+      return;
+    }
+
+    // First time generation for this chapter
+    handleGenerateReal(fullTopic, undefined, { isCurriculum: true, subjectTitle, topicName });
   };
 
   const [showConfig, setShowConfig] = useState(false);
@@ -289,6 +327,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       const items: any[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        if (data.sourceType === 'curriculum') return;
         const isFlashcard = data.title === 'Flashcards' || 
                             (data.text && data.text.includes('Flashcards Study Set')) ||
                             (data.title && data.title.toLowerCase().includes('flashcard'));
@@ -342,13 +381,14 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     await shareTextMobile(deckTitle, textToShare);
   };
 
-  const autoSaveFlashcardsToPocket = async (cards: any[], customTitle?: string) => {
+  const autoSaveFlashcardsToPocket = async (cards: any[], customTitle?: string, sourceType: 'upload' | 'custom' = 'custom') => {
     if (!auth.currentUser || !Array.isArray(cards) || cards.length === 0) return;
     try {
       const textContent = cards.map((f: any, i: number) => `**Q${i+1}**: ${f?.question || ''}\n**A${i+1}**: ${f?.answer || ''}`).join('\n\n');
       await addDoc(collection(db, 'pocket_items'), {
         userId: auth.currentUser.uid,
         type: 'note', 
+        sourceType,
         text: `**Flashcards Study Set**\n\n${textContent}`,
         title: customTitle || 'Flashcards',
         createdAt: serverTimestamp()
@@ -451,7 +491,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
           setCurrentIndex(0);
           setFlipped(false);
           setSaved(false);
-          autoSaveFlashcardsToPocket(extracted, file.name.replace(/\.[^/.]+$/, "") || 'Flashcards').catch(e => console.error("Flashcard save failed:", e));
+          autoSaveFlashcardsToPocket(extracted, file.name.replace(/\.[^/.]+$/, "") || 'Flashcards', 'upload').catch(e => console.error("Flashcard save failed:", e));
           triggerVibration([30, 50, 30]);
         } else if (data.text) {
           setSourceText(data.text);
@@ -491,7 +531,11 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const handleGenerateReal = async (targetTopic?: string, selectedCount?: number) => {
+  const handleGenerateReal = async (
+    targetTopic?: string, 
+    selectedCount?: number,
+    curriculumMeta?: { isCurriculum: boolean; subjectTitle: string; topicName: string }
+  ) => {
     const topicToUse = (targetTopic || sourceText).trim();
     if (!topicToUse) return;
 
@@ -640,7 +684,13 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
       deductCoins(2, "AI Flashcards");
       setFlashcards(generatedCards);
       setLoading(false);
-      autoSaveFlashcardsToPocket(generatedCards, sourceText.length < 35 ? sourceText : 'Flashcards').catch(e => console.error("Flashcard save failed:", e));
+      if (curriculumMeta?.isCurriculum) {
+        saveCachedCurriculumDeck(curriculumMeta.subjectTitle, curriculumMeta.topicName, generatedCards);
+        setCacheVersion(prev => prev + 1);
+      } else {
+        autoSaveFlashcardsToPocket(generatedCards, topicToUse.length < 35 ? topicToUse : 'Flashcards', 'custom')
+          .catch(e => console.error("Flashcard save failed:", e));
+      }
       triggerVibration([30, 50, 30]);
     } else {
       const isConnectionIssue = lastErrorMsg.includes("Failed to fetch") || 
@@ -710,7 +760,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           </div>
         </div>
 
-        {auth.currentUser && (
+        {auth.currentUser && flashcards.length === 0 && (
           <button 
             onClick={() => {
               triggerVibration(15);
@@ -1064,7 +1114,9 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                             className="border-t border-zinc-100"
                           >
                             <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
-                              {(subject.topics || []).map((topicItem, index) => (
+                              {(subject.topics || []).map((topicItem, index) => {
+                                const isCached = !!getCachedCurriculumDeck(cleanSubjectTitle(subject.title), topicItem);
+                                return (
                                 <button
                                   key={index}
                                   type="button"
@@ -1082,8 +1134,15 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                                       {topicItem}
                                     </span>
                                   </div>
+                                  {isCached && (
+                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/70 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0 shadow-2xs">
+                                      <Check className="w-2.5 h-2.5" />
+                                      <span>Saved</span>
+                                    </span>
+                                  )}
                                 </button>
-                              ))}
+                                );
+                              })}
                             </div>
                           </motion.div>
                         )}

@@ -697,6 +697,10 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
       setShowHistory(false);
       return;
     }
+    if (showQuestionPalette) {
+      setShowQuestionPalette(false);
+      return;
+    }
     if (quizState === 'playing' || quizState === 'results') {
       setQuizState('initial');
       setQuiz([]);
@@ -1118,6 +1122,23 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
   const [trendViewType, setTrendViewType] = useState<'overall' | 'questions'>('overall');
   const [currentQuizRecordId, setCurrentQuizRecordId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showQuestionPalette, setShowQuestionPalette] = useState(false);
+
+  const handleJumpToQuestion = (targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex >= quiz.length) return;
+    triggerVibration(10);
+    setCurrentIndex(targetIndex);
+    const prevAnswer = userAnswers[targetIndex];
+    if (prevAnswer !== undefined) {
+      setSelectedOption(prevAnswer);
+      setIsAnswered(true);
+    } else {
+      setSelectedOption(null);
+      setIsAnswered(false);
+      setQuestionStartTime(Date.now());
+    }
+    setShowQuestionPalette(false);
+  };
 
   const handleToggleHistory = () => {
     triggerVibration(10);
@@ -2191,20 +2212,38 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
             </div>
           </div>
 
-          {/* History Icon Button: Top-Right Corner, Icon only, no text */}
-          <button
-            type="button"
-            onClick={handleToggleHistory}
-            className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all cursor-pointer shrink-0 active:scale-95 ${
-              showHistory
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                : 'bg-white text-zinc-700 border-zinc-200/80 hover:text-indigo-600 hover:border-indigo-300 shadow-sm'
-            }`}
-            title="Quiz History"
-            aria-label="Quiz History"
-          >
-            <History className="w-5 h-5" />
-          </button>
+          {/* Top-Right Header Action: "Q" Button during playing quiz, History button otherwise */}
+          {quizState === 'playing' ? (
+            <button
+              type="button"
+              onClick={() => {
+                triggerVibration(10);
+                setShowQuestionPalette((prev) => !prev);
+              }}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-white text-zinc-900 border border-zinc-200/90 hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all cursor-pointer shrink-0 active:scale-95 font-black text-sm relative"
+              title="Question Palette"
+              aria-label="Question Palette"
+            >
+              <span>Q</span>
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-xs">
+                {currentIndex + 1}
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleToggleHistory}
+              className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all cursor-pointer shrink-0 active:scale-95 ${
+                showHistory
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                  : 'bg-white text-zinc-700 border-zinc-200/80 hover:text-indigo-600 hover:border-indigo-300 shadow-sm'
+              }`}
+              title="Quiz History"
+              aria-label="Quiz History"
+            >
+              <History className="w-5 h-5" />
+            </button>
+          )}
         </div>
       )}
 
@@ -3132,15 +3171,15 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                     key={idx}
                     disabled={isAnswered}
                     onClick={() => handleOptionSelect(option)}
-                    className={`p-4 rounded-2xl border text-left font-bold text-sm transition-all duration-300 active:scale-[0.99] flex items-center justify-between shadow-sm ${btnStyle}`}
+                    className={`p-4 rounded-2xl border text-left font-bold text-sm transition-all duration-300 active:scale-[0.99] flex items-start justify-between shadow-sm min-w-0 w-full overflow-hidden ${btnStyle}`}
                   >
-                    <span className="pr-4 flex-1">
-                      <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-sm font-bold">
+                    <span className="pr-3 flex-1 min-w-0 break-words [overflow-wrap:anywhere]">
+                      <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-sm font-bold break-words [overflow-wrap:anywhere]">
                         {formatQuizMath(option)}
                       </GlobalMarkdown>
                     </span>
-                    {isAnswered && isCorrectAnswer && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
-                    {isAnswered && isSelected && !isCorrectAnswer && <XCircle className="w-5 h-5 text-rose-600 shrink-0" />}
+                    {isAnswered && isCorrectAnswer && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />}
+                    {isAnswered && isSelected && !isCorrectAnswer && <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />}
                   </button>
                 );
               })}
@@ -3448,13 +3487,13 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           return (
                             <div
                               key={oIdx}
-                              className={`border-2 p-3 rounded-xl text-xs font-bold flex items-start gap-2 ${optStyle}`}
+                              className={`border-2 p-3 rounded-xl text-xs font-bold flex items-start gap-2 min-w-0 w-full overflow-hidden ${optStyle}`}
                             >
-                              <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-black shrink-0">
+                              <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5">
                                 {String.fromCharCode(65 + oIdx)}
                               </span>
-                              <span className="flex-1">
-                                <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-bold">
+                              <span className="flex-1 min-w-0 break-words [overflow-wrap:anywhere]">
+                                <GlobalMarkdown className="inline [&_p]:inline [&_p]:m-0 text-xs font-bold break-words [overflow-wrap:anywhere]">
                                   {formatQuizMath(option)}
                                 </GlobalMarkdown>
                               </span>
@@ -3757,6 +3796,104 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                     Close & Resume Quiz
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================= */}
+      {/* QUESTION NUMBERS PALETTE (SERIAL NUMBER JUMP SHEET) */}
+      {/* ========================================================= */}
+      <AnimatePresence>
+        {showQuestionPalette && quizState === 'playing' && quiz.length > 0 && (
+          <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowQuestionPalette(false)}
+              className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm"
+            />
+
+            {/* Sheet Container */}
+            <motion.div
+              initial={{ opacity: 0, y: "100%" }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: "100%" }}
+              transition={{ type: "spring", damping: 26, stiffness: 280 }}
+              className="bg-white rounded-t-[2.5rem] sm:rounded-[2rem] w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl border border-zinc-200/80 relative z-10 overflow-hidden font-sans"
+            >
+              {/* Header */}
+              <div className="px-6 pt-5 pb-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200/60 flex items-center justify-center text-indigo-700 font-black text-base shadow-2xs">
+                    Q
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-zinc-900 tracking-tight leading-snug">
+                      Question Navigator
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 font-semibold">
+                      Tap any number to jump to that question ({quiz.length} total)
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowQuestionPalette(false)}
+                  className="w-8 h-8 rounded-full bg-white border border-zinc-200/80 hover:bg-zinc-100 flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Number Buttons Grid (Matching User Screenshot) */}
+              <div className="p-6 overflow-y-auto">
+                <div className="grid grid-cols-5 gap-2.5 sm:gap-3">
+                  {quiz.map((_, idx) => {
+                    const isCurrent = idx === currentIndex;
+                    const isAnsweredQ = userAnswers[idx] !== undefined;
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleJumpToQuestion(idx)}
+                        className={`aspect-square rounded-2xl flex flex-col items-center justify-center text-base sm:text-lg transition-all cursor-pointer relative active:scale-95 ${
+                          isCurrent
+                            ? 'border-2 border-zinc-700 bg-zinc-50 text-zinc-950 font-black shadow-xs ring-1 ring-zinc-700/20'
+                            : isAnsweredQ
+                            ? 'border border-indigo-200/90 bg-indigo-50/70 text-indigo-700 font-black hover:bg-indigo-100/70'
+                            : 'border border-zinc-200 bg-[#FAF9F6] text-zinc-700 font-bold hover:bg-zinc-100 hover:border-zinc-300'
+                        }`}
+                      >
+                        <span>{idx + 1}</span>
+                        {isAnsweredQ && !isCurrent && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-0.5" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Status Summary Footer */}
+                <div className="mt-6 pt-4 border-t border-zinc-100 flex items-center justify-between text-[11px] font-bold text-zinc-500 px-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 rounded-lg border-2 border-zinc-700 bg-zinc-50" />
+                    <span>Current ({currentIndex + 1})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 rounded-lg border border-indigo-200 bg-indigo-50/80" />
+                    <span>Answered ({Object.keys(userAnswers).length})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 rounded-lg border border-zinc-200 bg-[#FAF9F6]" />
+                    <span>Remaining ({quiz.length - Object.keys(userAnswers).length})</span>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>

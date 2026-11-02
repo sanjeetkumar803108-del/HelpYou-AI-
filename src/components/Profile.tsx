@@ -49,7 +49,6 @@ import {
   AchievementBadge 
 } from '../utils/gamification';
 import LevelReactorRing from './LevelReactorRing';
-import { runFullAppOptimization, restartAppCleanly, OptimizationResult } from '../utils/optimizer';
 import { showToast } from '../utils/toast';
 import { clearGoogleCredentialState } from '../utils/clearGoogleCredential';
 
@@ -230,67 +229,6 @@ export default function Profile({
       origin: { y: 0.7 }
     });
     showToast(`🎉 Shandaar! You have successfully unlocked the ${days}-Day Study Milestone Badge! 🏆`);
-  };
-
-  // Full App Performance Optimization States
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [optimizationProgress, setOptimizationProgress] = useState(0);
-  const [optimizationStepText, setOptimizationStepText] = useState('');
-  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
-  const [showOptimizationModal, setShowOptimizationModal] = useState(false);
-  const [restartCountdown, setRestartCountdown] = useState<number | null>(null);
-
-  const handleFullAppOptimization = async () => {
-    triggerVibration(hapticEnabled ? 20 : 0);
-    setShowOptimizationModal(true);
-    setIsOptimizing(true);
-    setRestartCountdown(null);
-    setOptimizationProgress(15);
-    setOptimizationStepText("Analyzing system RAM & temporary cache footprint...");
-    setOptimizationResult(null);
-
-    await new Promise(r => setTimeout(r, 400));
-    setOptimizationProgress(40);
-    setOptimizationStepText("Purging dead canvas buffers, stale blob URLs & temp drafts...");
-
-    await new Promise(r => setTimeout(r, 450));
-    setOptimizationProgress(70);
-    setOptimizationStepText("Compacting AI render pipelines & re-indexing memory cache...");
-
-    await new Promise(r => setTimeout(r, 450));
-    setOptimizationProgress(90);
-    setOptimizationStepText("Restoring ultra-fast 60fps responsiveness & latency boost...");
-
-    try {
-      const res = await runFullAppOptimization();
-      setOptimizationProgress(100);
-      setOptimizationResult(res);
-      setIsOptimizing(false);
-
-      confetti({
-        particleCount: 60,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-      showToast("🚀 App fully optimized! Restarting in 2s...");
-
-      // Start auto-restart countdown
-      setRestartCountdown(2);
-      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 2s...");
-      await new Promise(r => setTimeout(r, 1000));
-      
-      setRestartCountdown(1);
-      setOptimizationStepText("✅ App 100% Fully Optimized! Restarting cleanly in 1s...");
-      await new Promise(r => setTimeout(r, 1000));
-
-      setOptimizationStepText("⚡ Restarting App with Fresh Clean Memory...");
-      restartAppCleanly();
-    } catch (e) {
-      console.error("Optimization failed:", e);
-      setIsOptimizing(false);
-      setShowOptimizationModal(false);
-      showToast("App optimization completed.");
-    }
   };
 
   // Profile Edit State
@@ -2655,28 +2593,7 @@ export default function Profile({
 
 
 
-                  {/* Haptic Vibration Toggle */}
-                  <div
-                    onClick={() => {
-                      const newVal = !hapticEnabled;
-                      setHapticEnabled(newVal);
-                      safeSetItem('pref_haptic_enabled', String(newVal));
-                      if (newVal) triggerVibration(15); // Give a test buzz when turning ON
-                      showToast(newVal ? '📳 Vibration turned ON' : '🔇 Vibration turned OFF');
-                    }}
-                    className="p-4 flex justify-between items-center border-t border-zinc-100 bg-white cursor-pointer hover:bg-zinc-50/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-3.5 h-3.5 text-zinc-400" />
-                      <div>
-                        <span className="text-xs font-bold text-zinc-700 block">Haptic Feedback</span>
-                        <span className="text-[10px] text-zinc-400 font-semibold">Vibrations on taps</span>
-                      </div>
-                    </div>
-                    <div className={`w-9 h-5 ${hapticEnabled ? 'bg-emerald-500' : 'bg-zinc-200'} rounded-full relative cursor-pointer shadow-inner transition-colors`}>
-                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${hapticEnabled ? 'right-0.5' : 'left-0.5'}`} />
-                    </div>
-                  </div>
+                  
                 </div>
 
 
@@ -2801,48 +2718,6 @@ export default function Profile({
                       <span>Terms of Service</span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-zinc-400" />
-                  </button>
-                </div>
-
-                {/* FULL APP OPTIMIZER (SPEED & LAG BOOSTER) */}
-                <div className="bg-gradient-to-br from-emerald-500 via-teal-600 to-cyan-600 rounded-[2rem] p-5 text-white shadow-md relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-2.5 relative z-10">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-white backdrop-blur-md">
-                        <Zap className="w-4 h-4 text-white fill-white" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-white leading-tight flex items-center gap-1.5">
-                          Full Optimize App
-                          <span className="text-[8px] bg-white/25 px-1.5 py-0.5 rounded-full uppercase font-black tracking-wider">
-                            Lag-Free ⚡
-                          </span>
-                        </h4>
-                        <p className="text-[9.5px] text-white/80 font-bold mt-0.5">Clear dead RAM caches, fix hang & lag</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-[10px] text-white/90 font-medium leading-relaxed mb-3 relative z-10">
-                    Cleans background blob memory, purges orphaned temporary cache, and restores peak 60fps responsiveness across all AI tools.
-                  </p>
-
-                  <button
-                    onClick={handleFullAppOptimization}
-                    disabled={isOptimizing}
-                    className="w-full bg-white hover:bg-zinc-50 text-emerald-800 active:scale-98 font-black text-xs py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer relative z-10 border-none disabled:opacity-75"
-                  >
-                    {isOptimizing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
-                        <span>Optimizing App Memory...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 text-emerald-600 fill-emerald-600" />
-                        <span>⚡ Run Full Optimization</span>
-                      </>
-                    )}
                   </button>
                 </div>
 
@@ -3502,131 +3377,6 @@ export default function Profile({
                 )}
 
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Full App Optimization Modal */}
-      <AnimatePresence>
-        {showOptimizationModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[110] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-[2.5rem] border border-zinc-200 w-full max-w-sm overflow-hidden p-6 shadow-2xl relative flex flex-col items-center text-center"
-            >
-              {/* Close Button (only active when not currently optimizing) */}
-              {!isOptimizing && (
-                <button
-                  onClick={() => {
-                    triggerVibration(10);
-                    setShowOptimizationModal(false);
-                  }}
-                  className="absolute top-5 right-5 w-8 h-8 rounded-full bg-zinc-100 text-zinc-500 hover:text-zinc-800 flex items-center justify-center cursor-pointer transition-all border-none"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-
-              {/* Glowing Icon */}
-              <div className="relative mb-4 mt-2">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                  {isOptimizing ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                      className="text-white"
-                    >
-                      <Zap className="w-10 h-10 fill-white" />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 15 }}
-                    >
-                      <Check className="w-10 h-10 text-white stroke-[3.5]" />
-                    </motion.div>
-                  )}
-                </div>
-                {isOptimizing && (
-                  <span className="absolute -inset-1 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-                )}
-              </div>
-
-              {/* Header Title */}
-              <h3 className="text-lg font-black text-zinc-900 tracking-tight">
-                {isOptimizing ? "Optimizing HelpYou AI..." : "⚡ 100% Fully Optimized!"}
-              </h3>
-              <p className="text-[11px] font-bold text-zinc-500 mt-1 max-w-xs leading-relaxed">
-                {optimizationStepText}
-              </p>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-zinc-100 h-2.5 rounded-full overflow-hidden mt-4 mb-2 p-0.5 border border-zinc-200/60">
-                <motion.div
-                  className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${optimizationProgress}%` }}
-                />
-              </div>
-              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest font-mono">
-                {optimizationProgress}% Complete
-              </span>
-
-              {/* Optimization Stats (Post-Completion) */}
-              {!isOptimizing && optimizationResult && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="w-full space-y-3 mt-4"
-                >
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-emerald-50 border border-emerald-150 rounded-2xl p-2.5 flex flex-col items-center">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600">Freed RAM</span>
-                      <span className="text-sm font-black text-emerald-800 mt-0.5 font-mono">{optimizationResult.memoryFreedMB} MB</span>
-                    </div>
-                    <div className="bg-teal-50 border border-teal-150 rounded-2xl p-2.5 flex flex-col items-center">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-teal-600">Cache Cleared</span>
-                      <span className="text-sm font-black text-teal-800 mt-0.5 font-mono">{optimizationResult.cacheClearedCount} Items</span>
-                    </div>
-                    <div className="bg-cyan-50 border border-cyan-150 rounded-2xl p-2.5 flex flex-col items-center">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-cyan-600">Latency</span>
-                      <span className="text-sm font-black text-cyan-800 mt-0.5 font-mono">&lt;{optimizationResult.latencyMs}ms</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-3 text-left space-y-1.5">
-                    <span className="text-[9px] font-black uppercase text-zinc-400 tracking-wider block">Completed Actions:</span>
-                    {optimizationResult.optimizedItems.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-700">
-                        <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[3]" />
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-700">
-                      <Check className="w-3 h-3 text-emerald-600 stroke-[3] shrink-0" />
-                      <span>User Notes, Streaks & Coins Preserved</span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      triggerVibration(20);
-                      restartAppCleanly();
-                    }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs py-3.5 rounded-2xl shadow-lg transition-all cursor-pointer border-none mt-2 flex items-center justify-center gap-2"
-                  >
-                    <Sparkles className="w-4 h-4 fill-white" />
-                    <span>
-                      {restartCountdown !== null
-                        ? `Restarting Cleanly in ${restartCountdown}s... (Tap to Restart Now)`
-                        : "Restart App Now & Enjoy 60fps 🚀"}
-                    </span>
-                  </button>
-                </motion.div>
-              )}
             </motion.div>
           </div>
         )}

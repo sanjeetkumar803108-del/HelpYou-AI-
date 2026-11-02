@@ -637,11 +637,41 @@ export function cleanSubjectTitle(rawTitle: string): string {
 // Main dynamic curriculum resolver
 export function getScalableRelevantQuizzes(grade: string, track: string, countryRegion: string = 'USA') {
   // 1. Dynamic Check: Prioritize user's chosen subjects & calibrated exam blueprint 100%!
-  const blueprint = getStoredExamBlueprint();
-  const targetExam = safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+  const uid = safeGetItem('last_logged_in_user');
+  const blueprint = getStoredExamBlueprint(uid);
+  const targetExam = (uid ? safeGetItem(`academic_exam_${uid}`) : null)
+    || safeGetItem('academic_exam') 
+    || safeGetItem('target_exam') 
+    || '';
   const nomenclature = getExamNomenclature(targetExam, countryRegion);
 
-  // Gather all subjects the user explicitly selected across all profile sources
+  // 2. Gather ONLY the subjects the user explicitly chosen in their academic setup / profile
+  let chosenSubjects: string[] = [];
+
+  const rawSubjs = (uid ? safeGetItem(`academic_subjects_${uid}`) : null) || safeGetItem('academic_subjects');
+  if (rawSubjs) {
+    try {
+      const parsed = JSON.parse(rawSubjs);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        chosenSubjects = parsed.map(s => String(s).trim()).filter(Boolean);
+      }
+    } catch (_) {
+      const split = rawSubjs.split(',').map(s => s.trim()).filter(Boolean);
+      if (split.length > 0) chosenSubjects = split;
+    }
+  }
+
+  // Fallback to single subject ONLY if user has no explicit multi-subject list
+  if (chosenSubjects.length === 0) {
+    const rawSingle = (uid ? safeGetItem(`academic_subject_${uid}`) : null)
+      || safeGetItem('academic_subject') 
+      || safeGetItem('selected_subject') 
+      || safeGetItem('subject');
+    if (rawSingle) {
+      chosenSubjects = rawSingle.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+
   const subjectsList: { rawKey: string; cleanTitle: string }[] = [];
   const seenClean = new Set<string>();
 
@@ -656,22 +686,12 @@ export function getScalableRelevantQuizzes(grade: string, track: string, country
     }
   };
 
-  const rawSubjs = safeGetItem('academic_subjects');
-  if (rawSubjs) {
-    try {
-      const parsed = JSON.parse(rawSubjs);
-      if (Array.isArray(parsed)) {
-        parsed.forEach(s => addSubjectCandidate(String(s)));
-      }
-    } catch (_) {}
-  }
-
-  const rawSingle = safeGetItem('academic_subject') || safeGetItem('subject') || safeGetItem('selected_subject');
-  if (rawSingle) {
-    rawSingle.split(',').forEach(s => addSubjectCandidate(s));
-  }
-
-  if (blueprint && typeof blueprint === 'object') {
+  if (chosenSubjects.length > 0) {
+    // ⭐️ USER CHOSEN SUBJECTS: STRICTLY and ONLY render the subjects chosen by the user!
+    // Never append unchosen subjects from blueprint or foreign defaults!
+    chosenSubjects.forEach(s => addSubjectCandidate(s));
+  } else if (blueprint && typeof blueprint === 'object' && Object.keys(blueprint).length > 0) {
+    // Fallback ONLY when user has not configured any subjects:
     Object.keys(blueprint).forEach(k => addSubjectCandidate(k));
   }
 

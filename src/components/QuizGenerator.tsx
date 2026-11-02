@@ -5,7 +5,7 @@ import {
   RotateCcw, HelpCircle, Coins, ChevronDown, ChevronUp,
   TrendingUp, Timer, Percent, Clipboard, Target, ListChecks, Calendar,
   UploadCloud, FileText, Mic, MicOff, Camera, Image, Sparkles,
-  Share2, Download, Check, X, Lightbulb, History, Clock, Trash2, Play, Flag
+  Share2, Download, Check, X, Lightbulb, History, Clock, Trash2, Play, Flag, Copy
 } from 'lucide-react';
 import ReportAIModal from './ReportAIModal';
 import GlobalMarkdown, { formatQuizMath } from './GlobalMarkdown';
@@ -2934,7 +2934,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
 
                   const flashCount = activeQuizDurations.filter((d, i) => d < 6 && (activeQuizCorrects[i] !== undefined ? activeQuizCorrects[i] : true)).length;
                   const deepCount = activeQuizDurations.filter((d, i) => d >= 6 && (activeQuizCorrects[i] !== undefined ? activeQuizCorrects[i] : true)).length;
-                  const tukkaCount = activeQuizDurations.filter((d, i) => d <= 4 && (activeQuizCorrects[i] !== undefined ? !activeQuizCorrects[i] : false)).length;
+                  const guessCount = activeQuizDurations.filter((d, i) => d <= 4 && (activeQuizCorrects[i] !== undefined ? !activeQuizCorrects[i] : false)).length;
                   const timeTrapCount = activeQuizDurations.filter((d, i) => d >= 25 && (activeQuizCorrects[i] !== undefined ? !activeQuizCorrects[i] : false)).length;
 
                   return (
@@ -2992,7 +2992,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                         </div>
                       </div>
 
-                      {/* Tukka & Time-Trap Category Badges (Per-Question Mode) */}
+                      {/* Guess & Time-Trap Category Badges (Per-Question Mode) */}
                       {isQuestionMode && activeQuizDurations.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap mb-3.5 pb-2.5 border-b border-zinc-100 text-[10px] font-black select-none">
                           <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700">
@@ -3001,9 +3001,9 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700">
                             🧠 Deep: {deepCount}
                           </span>
-                          {tukkaCount > 0 && (
+                          {guessCount > 0 && (
                             <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-50 border border-amber-200/80 text-amber-800">
-                              🎲 Tukka: {tukkaCount}
+                              🎲 Guess: {guessCount}
                             </span>
                           )}
                           {timeTrapCount > 0 && (
@@ -3146,8 +3146,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                       {(() => {
                         let coachTip = '';
                         if (isQuestionMode) {
-                          if (tukkaCount > 0) {
-                            coachTip = `💡 AI Coach: ${tukkaCount} question${tukkaCount > 1 ? 's were' : ' was'} answered in <4s and missed — take a quick breath before submitting!`;
+                          if (guessCount > 0) {
+                            coachTip = `💡 AI Coach: ${guessCount} question${guessCount > 1 ? 's were' : ' was'} answered in <4s and missed (rushed guess) — take a quick breath before submitting!`;
                           } else if (timeTrapCount > 0) {
                             coachTip = `💡 AI Coach: ${timeTrapCount} question${timeTrapCount > 1 ? 's' : ''} took 25s+ and missed — skip and move ahead to save exam time!`;
                           } else if (flashCount >= Math.ceil((activeQuizDurations.length || 1) / 2)) {

@@ -511,6 +511,19 @@ export default function Profile({
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(() => {});
     }
+    const currentBlueprint = getStoredExamBlueprint(uid);
+    if (currentBlueprint && typeof currentBlueprint === 'object') {
+      const cleanSubj = subjectToRemove.toLowerCase().trim();
+      const matchKey = Object.keys(currentBlueprint).find(k => {
+        const cleanK = cleanSubjectTitle(k).toLowerCase().trim();
+        return cleanK === cleanSubj || k.toLowerCase().trim() === cleanSubj;
+      });
+      if (matchKey) {
+        delete currentBlueprint[matchKey];
+        saveStoredExamBlueprint(currentBlueprint, uid);
+      }
+    }
+
     try {
       window.dispatchEvent(new CustomEvent('academic_profile_updated'));
     } catch (_) {}

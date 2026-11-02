@@ -3191,58 +3191,56 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                   });
 
                   return (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* BAR CHART: DURATION PER QUESTION */}
-                      <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm w-full">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h4 className="text-xs font-black text-zinc-800 flex items-center gap-1.5">
-                              <Target className="w-4 h-4 text-purple-500" />
-                              <span>Time Spent Per Question</span>
-                            </h4>
-                            <p className="text-[10px] font-bold text-zinc-400 mt-0.5 line-clamp-1">
-                              Analysis of: {getQuizTitle(activeQuiz)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[9px] font-bold">
-                            <span className="flex items-center gap-1 text-emerald-600">
-                              <span className="w-2 h-2 rounded bg-emerald-500" /> Correct
-                            </span>
-                            <span className="flex items-center gap-1 text-rose-600">
-                              <span className="w-2 h-2 rounded bg-rose-500" /> Incorrect
-                            </span>
-                          </div>
+                    <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm w-full">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
+                        <div>
+                          <h4 className="text-xs font-black text-zinc-800 flex items-center gap-1.5">
+                            <Target className="w-4 h-4 text-purple-500" />
+                            <span>Time Spent Per Question</span>
+                          </h4>
+                          <p className="text-[10px] font-bold text-zinc-400 mt-0.5 line-clamp-1">
+                            Analysis of: {getQuizTitle(activeQuiz)}
+                          </p>
                         </div>
+                        <div className="flex items-center gap-3 text-[9px] font-bold">
+                          <span className="flex items-center gap-1 text-emerald-600">
+                            <span className="w-2 h-2 rounded bg-emerald-500" /> Correct
+                          </span>
+                          <span className="flex items-center gap-1 text-rose-600">
+                            <span className="w-2 h-2 rounded bg-rose-500" /> Incorrect
+                          </span>
+                        </div>
+                      </div>
 
-                        {/* BAR CHART COMPONENT */}
-                        <div className="w-full h-48 mt-4">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={questionChartData}
-                              margin={{ top: 10, right: 0, left: -30, bottom: 0 }}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                              <XAxis 
-                                dataKey="name" 
-                                tickLine={false} 
-                                axisLine={false}
-                                tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 'bold' }} 
-                              />
-                              <YAxis 
-                                tickLine={false} 
-                                axisLine={false}
-                                label={{ value: 'Seconds', angle: -90, position: 'insideLeft', fill: '#9CA3AF', fontSize: 9, fontWeight: 'black', offset: 10 }}
-                                tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 'bold' }} 
-                              />
-                              <Tooltip content={<QuestionTooltip />} />
-                              <Bar 
-                                dataKey="duration" 
-                                radius={[8, 8, 0, 0]} 
-                                barSize={24}
-                              />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
+                      {/* BAR CHART COMPONENT */}
+                      <div className="w-full h-56 md:h-64 mt-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={questionChartData}
+                            margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                            <XAxis 
+                              dataKey="name" 
+                              tickLine={false} 
+                              axisLine={false}
+                              interval={0}
+                              tick={{ fill: '#6B7280', fontSize: 10, fontWeight: 'bold' }} 
+                            />
+                            <YAxis 
+                              tickLine={false} 
+                              axisLine={false}
+                              label={{ value: 'Seconds', angle: -90, position: 'insideLeft', fill: '#9CA3AF', fontSize: 9, fontWeight: 'black', offset: 10 }}
+                              tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 'bold' }} 
+                            />
+                            <Tooltip content={<QuestionTooltip />} />
+                            <Bar 
+                              dataKey="duration" 
+                              radius={[6, 6, 0, 0]} 
+                              maxBarSize={28}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
                   );

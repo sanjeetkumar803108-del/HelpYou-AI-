@@ -405,16 +405,9 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
 
         @media print {
           body, html {
-            background: #0B0F19 !important;
-            color: #FFFFFF !important;
+            background: white !important;
             margin: 0 !important;
             padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          @page {
-            size: 297mm 167.06mm;
-            margin: 0;
           }
           .no-print {
             display: none !important;
@@ -424,17 +417,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
             max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-          }
-          .slide-page-16-9 {
-            width: 297mm !important;
-            height: 167.06mm !important;
-            max-width: 297mm !important;
-            max-height: 167.06mm !important;
-            page-break-after: always !important;
-            break-after: page !important;
-            border-radius: 0 !important;
-            box-shadow: none !important;
-            margin: 0 !important;
           }
           .notebook-page {
             width: 100% !important;

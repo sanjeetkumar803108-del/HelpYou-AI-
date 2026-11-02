@@ -10,7 +10,7 @@ import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem } from '../utils/storage';
 import { getUserProfileData, getProfilePayload, appendProfileToFormData } from '../utils/profile';
 import { generateNotesPDFBlob } from '../lib/pdfExporter';
-import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
+import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
 import SafePdfViewer from './SafePdfViewer';
 import { getApiUrl } from '../utils/api';
 import { Capacitor } from '@capacitor/core';
@@ -304,13 +304,6 @@ export default function Summariser({ onBack }: SummariserProps) {
       setLoading(false);
       abortControllerRef.current = null;
     }
-  };
-
-  const handleShareText = async () => {
-    if (!result) return;
-    triggerVibration(10);
-    const title = currentActiveTitle || 'Summary';
-    await shareTextMobile(`Summary: ${title}`, result);
   };
 
   const processFile = async (file: File) => {
@@ -684,14 +677,6 @@ export default function Summariser({ onBack }: SummariserProps) {
               </button>
 
               <button
-                onClick={handleShareText}
-                className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200 shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <Share2 className="w-4 h-4 text-emerald-600" />
-                <span>Share Text Summary</span>
-              </button>
-
-              <button
                 onClick={() => {
                   triggerVibration(15);
                   setReportModalOpen(true);
@@ -701,15 +686,6 @@ export default function Summariser({ onBack }: SummariserProps) {
               >
                 <Flag className="w-3.5 h-3.5 text-rose-500" />
                 <span>Report AI Summary</span>
-              </button>
-              
-              <button 
-                onClick={() => {
-                  setResult(null);
-                }}
-                className="w-full py-3.5 rounded-xl font-extrabold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm cursor-pointer"
-              >
-                Summarise Another
               </button>
             </div>
           </motion.div>

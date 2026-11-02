@@ -123,7 +123,7 @@ export default function App() {
       });
     }
   }, [activeTool]);
-  
+
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [networkStatus, setNetworkStatus] = useState<{
@@ -206,9 +206,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const hasCached =
+      safeGetItem('helpyou_active_user_session') === 'true' ||
+      Boolean(safeGetItem('last_logged_in_user'));
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 400);
+    }, hasCached ? 800 : 500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -250,14 +253,14 @@ export default function App() {
         if (typeof window !== 'undefined' && window.location.search.includes('fresh=')) {
           try {
             window.history.replaceState({}, document.title, window.location.pathname);
-          } catch (_) {}
+          } catch (_) { }
         }
 
         setTimeout(() => {
           showToast('⚡ HelpYou AI 100% Lag-Free & Refreshed! RAM freed & peak 60fps restored.', 'success');
         }, 600);
       }
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   // Background feature pre-warming: Gently preloads top tabs only when main thread is completely idle
@@ -279,7 +282,7 @@ export default function App() {
       topFeatures.forEach((loadFn, idx) => {
         setTimeout(() => {
           runIdle(() => {
-            loadFn().catch(() => {});
+            loadFn().catch(() => { });
           });
         }, 3500 + idx * 3000);
       });
@@ -294,8 +297,8 @@ export default function App() {
   useEffect(() => {
     const prewarmApi = () => {
       try {
-        fetch(getApiUrl('/health'), { method: 'GET', cache: 'no-store' }).catch(() => {});
-      } catch (_) {}
+        fetch(getApiUrl('/health'), { method: 'GET', cache: 'no-store' }).catch(() => { });
+      } catch (_) { }
     };
 
     // 1. Fire immediately on app mount
@@ -321,18 +324,13 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(() => {
-    const hasCachedSession = 
-      safeGetItem('helpyou_active_user_session') === 'true' || 
-      Boolean(safeGetItem('last_logged_in_user'));
-    return !hasCachedSession;
-  });
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // Guaranteed safety unblock: authLoading can NEVER hang longer than 1200ms under any network condition
+  // Guaranteed safety unblock: authLoading can NEVER hang longer than 3500ms under any network condition
   useEffect(() => {
     const safetyTimer = setTimeout(() => {
       setAuthLoading(false);
-    }, 1200);
+    }, 3500);
     return () => clearTimeout(safetyTimer);
   }, []);
   const [pocketItems, setPocketItems] = useState<any[]>(() => {
@@ -341,7 +339,7 @@ export default function App() {
     if (cached) {
       try {
         return JSON.parse(cached);
-      } catch (e) {}
+      } catch (e) { }
     }
     return [];
   });
@@ -363,7 +361,7 @@ export default function App() {
   const [iapHasTrial, setIapHasTrial] = useState(true);
   const [paywallFeature, setPaywallFeature] = useState<string | undefined>(undefined);
   const [mobileToast, setMobileToast] = useState<string | null>(null);
-  
+
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return safeGetItem('study_dark_mode') === 'true';
   });
@@ -495,8 +493,8 @@ export default function App() {
         // a random/stale email and auto-opening the app without user consent.
         const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
         const isAuthInProgress = safeGetItem('helpyou_auth_in_progress') === 'true';
-        const hasActiveSession = 
-          safeGetItem('helpyou_active_user_session') === 'true' || 
+        const hasActiveSession =
+          safeGetItem('helpyou_active_user_session') === 'true' ||
           safeGetItem('last_logged_in_user') === currentUser.uid ||
           isAuthInProgress ||
           isGoogle;
@@ -506,10 +504,10 @@ export default function App() {
           setIsVip(false);
           setAuthLoading(false);
           if (Capacitor.isNativePlatform()) {
-            try { await FirebaseAuthentication.signOut(); } catch (_) {}
-            try { await clearGoogleCredentialState(); } catch (_) {}
+            try { await FirebaseAuthentication.signOut(); } catch (_) { }
+            try { await clearGoogleCredentialState(); } catch (_) { }
           }
-          try { await signOut(auth); } catch (_) {}
+          try { await signOut(auth); } catch (_) { }
           return;
         } else {
           safeSetItem('helpyou_active_user_session', 'true');
@@ -530,7 +528,7 @@ export default function App() {
       setUser(currentUser);
       if (currentUser) {
         refillDailyCoins();
-        
+
         // Dynamic configuration & login to prevent subscription aliasing/wrong email issue
         if (Capacitor.isNativePlatform()) {
           const apiKey = (import.meta.env.VITE_REVENUECAT_API_KEY as string) || '';
@@ -546,10 +544,10 @@ export default function App() {
               });
           }
         }
-        
+
         // 1. Initially set to specific user cached state or active device subscription
-        const cachedUserVip = 
-          safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true' || 
+        const cachedUserVip =
+          safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true' ||
           safeGetItem('helpyou_active_device_subscription') === 'true' ||
           safeGetItem('study_is_vip') === 'true';
         setIsVip(cachedUserVip);
@@ -558,7 +556,7 @@ export default function App() {
           safeSetItem('study_is_vip', 'true');
         }
 
-        const hasCompletedLocalAcademicSetup = 
+        const hasCompletedLocalAcademicSetup =
           safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true' ||
           safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
 
@@ -580,14 +578,14 @@ export default function App() {
           setShowAcademicSetup(false);
           setAuthLoading(false);
         }
-        
+
         // 2. Fresh Fetch on Login: Try Firestore first to ensure high consistency with user profile
         const fetchPromise = (async () => {
           try {
             const userDocSnap = await getDoc(doc(db, 'users', currentUser.uid));
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data();
-              const hasCompletedSetup = 
+              const hasCompletedSetup =
                 userData?.isOnboardingComplete === true ||
                 userData?.isOnboardingCompleted === true ||
                 Boolean(userData?.grade || userData?.stream || userData?.country) ||
@@ -691,7 +689,7 @@ export default function App() {
 
                 try {
                   window.dispatchEvent(new CustomEvent('academic_profile_updated'));
-                } catch (_) {}
+                } catch (_) { }
                 // Restore XP & Gamification points across all devices
                 const savedXP = userData.study_total_xp ?? userData.xp;
                 if (savedXP !== undefined && savedXP !== null) {
@@ -779,7 +777,7 @@ export default function App() {
               const userKey = `study_daily_limit_${currentUser.uid}`;
               safeSetItem(userKey, String(initialCoins));
               window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
-              
+
               await setDoc(doc(db, 'users', currentUser.uid), {
                 userId: currentUser.uid,
                 email: currentUser.email || '',
@@ -792,10 +790,10 @@ export default function App() {
           } catch (fsErr) {
             console.warn('[Auth Check] Firestore fetch failed, falling back to REST/Cache:', fsErr);
             // Fallback onboarding checks
-            const academicSetupCompleted = 
+            const academicSetupCompleted =
               safeGetItem(`academic_setup_completed_${currentUser.uid}`) === 'true' ||
               safeGetItem(`isOnboardingComplete_${currentUser.uid}`) === 'true';
-            const userOnboardingCompleted = 
+            const userOnboardingCompleted =
               safeGetItem(`onboarding_completed_${currentUser.uid}`) === 'true' || academicSetupCompleted;
 
             if (academicSetupCompleted) {
@@ -836,8 +834,8 @@ export default function App() {
           }
 
           // Fallback to cached value or active device subscription
-          const verifiedVal = 
-            safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true' || 
+          const verifiedVal =
+            safeGetItem(`study_is_vip_${currentUser.uid}`) === 'true' ||
             safeGetItem('helpyou_active_device_subscription') === 'true' ||
             safeGetItem('study_is_vip') === 'true';
           setIsVip(verifiedVal);
@@ -859,7 +857,7 @@ export default function App() {
         safeRemoveItem('helpyou_active_user_session');
         setIsVip(false);
         setAuthLoading(false);
-        
+
         // Log out from RevenueCat
         if (Capacitor.isNativePlatform()) {
           Purchases.logOut().catch(err => {
@@ -910,7 +908,7 @@ export default function App() {
     if (cached) {
       try {
         setPocketItems(JSON.parse(cached));
-      } catch (e) {}
+      } catch (e) { }
     }
     const q = query(
       collection(db, 'pocket_items'),
@@ -931,7 +929,7 @@ export default function App() {
                     setPocketItems(parsed);
                     return;
                   }
-                } catch (_) {}
+                } catch (_) { }
               }
             }
             setPocketItems(fetched);
@@ -950,7 +948,7 @@ export default function App() {
             if (Array.isArray(parsed) && parsed.length > 0) {
               setPocketItems(parsed);
             }
-          } catch (_) {}
+          } catch (_) { }
         }
       }
     });
@@ -966,7 +964,7 @@ export default function App() {
       // 1. Check & Refill Daily Coins
       try {
         refillDailyCoins();
-      } catch (_) {}
+      } catch (_) { }
 
       // 2. Refresh User Cloud Profile, Coins, VIP Status & Streak if logged in
       if (user) {
@@ -1032,7 +1030,7 @@ export default function App() {
         window.dispatchEvent(new CustomEvent('study-xp-updated', { detail: { xp: currentXP, level: currentLevel.currentLevel } }));
         window.dispatchEvent(new CustomEvent('study-daily-xp-updated', { detail: dailyStatus }));
         window.dispatchEvent(new CustomEvent('study-quests-updated'));
-      } catch (_) {}
+      } catch (_) { }
 
       // 4. Invalidate and Refresh Feature Caches (PDF History, Academic Profile)
       try {
@@ -1040,7 +1038,7 @@ export default function App() {
         window.dispatchEvent(new CustomEvent('academic_profile_updated', { detail: { refreshed: true } }));
         window.dispatchEvent(new Event('settings_changed'));
         window.dispatchEvent(new Event('storage'));
-      } catch (_) {}
+      } catch (_) { }
 
       // 5. Suspend any lingering background voice synthesizers from previous tools
       try {
@@ -1048,7 +1046,7 @@ export default function App() {
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
           window.speechSynthesis.cancel();
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // 6. Bump Dashboard Refresh Epoch to force full component re-render
       setDashboardRefreshEpoch(Date.now());
@@ -1130,7 +1128,7 @@ export default function App() {
               currentStreak: updatedStreak,
               lastActiveDate: todayStr
             }, { merge: true });
-            
+
             // Sync locally
             safeSetItem('study_punches', String(updatedStreak));
             safeSetItem('study_last_punch_date', todayStr);
@@ -1260,475 +1258,473 @@ export default function App() {
         fallbackSkeleton={<FullPageSkeleton />}
       >
         <div className={`w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-[#FAF9F6] text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative`}>
-        {/* Global Network Status Banner */}
-        <AnimatePresence>
-          {networkStatus.visible && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className={`w-full py-2 px-4 z-[999] flex items-center justify-center gap-2 text-xs font-bold shadow-md select-none ${
-                !networkStatus.connected
-                  ? 'bg-red-600 text-white dark:bg-red-950 dark:text-red-200 border-b border-red-500/30'
-                  : 'bg-emerald-600 text-white dark:bg-emerald-950 dark:text-emerald-200 border-b border-emerald-500/30'
-              }`}
-            >
-              {!networkStatus.connected ? (
-                <>
-                  <WifiOff className="w-3.5 h-3.5 animate-pulse" />
-                  <span>Currently Offline</span>
-                </>
-              ) : (
-                <>
-                  <Wifi className="w-3.5 h-3.5" />
-                  <span>Back Online</span>
-                </>
-              )}
-            </motion.div>
+          {/* Global Network Status Banner */}
+          <AnimatePresence>
+            {networkStatus.visible && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className={`w-full py-2 px-4 z-[999] flex items-center justify-center gap-2 text-xs font-bold shadow-md select-none ${!networkStatus.connected
+                    ? 'bg-red-600 text-white dark:bg-red-950 dark:text-red-200 border-b border-red-500/30'
+                    : 'bg-emerald-600 text-white dark:bg-emerald-950 dark:text-emerald-200 border-b border-emerald-500/30'
+                  }`}
+              >
+                {!networkStatus.connected ? (
+                  <>
+                    <WifiOff className="w-3.5 h-3.5 animate-pulse" />
+                    <span>Currently Offline</span>
+                  </>
+                ) : (
+                  <>
+                    <Wifi className="w-3.5 h-3.5" />
+                    <span>Back Online</span>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {activeTab !== 'scanner' && activeTab !== 'aitutor' && activeTab !== 'notes' && activeTab !== 'profile' && activeTool === null && (
+            <header className="px-6 py-5 bg-white border-b border-zinc-200/60 z-10 flex justify-between items-center">
+              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">HelpYou AI</h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    triggerVibration(10);
+                    toggleDarkMode();
+                  }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors shadow-sm border border-zinc-200/40"
+                  title={isDarkMode ? "Light Mode" : "Dark Mode"}
+                >
+                  {isDarkMode ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={() => {
+                    triggerVibration(15);
+                    setActiveTool(null);
+                    setActiveTab('profile');
+                  }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors shadow-sm border border-zinc-200/40"
+                >
+                  {user ? (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                      {user.email?.[0].toUpperCase() || 'U'}
+                    </div>
+                  ) : (
+                    <UserCircle className="w-6 h-6" />
+                  )}
+                </button>
+              </div>
+            </header>
           )}
-        </AnimatePresence>
-      {activeTab !== 'scanner' && activeTab !== 'aitutor' && activeTab !== 'notes' && activeTab !== 'profile' && activeTool === null && (
-        <header className="px-6 py-5 bg-white border-b border-zinc-200/60 z-10 flex justify-between items-center">
-          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">HelpYou AI</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                triggerVibration(10);
-                toggleDarkMode();
-              }}
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors shadow-sm border border-zinc-200/40"
-              title={isDarkMode ? "Light Mode" : "Dark Mode"}
-            >
-              {isDarkMode ? <Sun className="w-5 h-5 text-amber-500" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <button 
-              onClick={() => {
-                triggerVibration(15);
-                setActiveTool(null);
-                setActiveTab('profile');
-              }}
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition-colors shadow-sm border border-zinc-200/40"
-            >
-              {user ? (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                  {user.email?.[0].toUpperCase() || 'U'}
-                </div>
-              ) : (
-                <UserCircle className="w-6 h-6" />
-              )}
-            </button>
-          </div>
-        </header>
-      )}
-      
-      <main className="w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 overflow-hidden flex flex-col h-full bg-[#FAF9F6]" style={{ position: 'relative' }}>
-        {/* Scanner Tab */}
-        {mountedTabs.has('scanner') && (
-          <div className={activeTab === 'scanner' ? "h-full flex flex-col" : "hidden"}>
-            <ErrorBoundary>
-              <Suspense fallback={<FullPageSkeleton />}>
-                <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
-                  setActiveTab(tab);
-                }} />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        )}
 
-        {/* AI Tutor Tab */}
-        {mountedTabs.has('aitutor') && (
-          <div className={activeTab === 'aitutor' ? "h-full flex flex-col" : "hidden"}>
-            <ErrorBoundary>
-              <Suspense fallback={<FullPageSkeleton />}>
-                <AITutor isVip={isVip} isActive={activeTab === 'aitutor'} />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        )}
-
-        {/* Home/Notes Tab */}
-        {mountedTabs.has('notes') && (
-          <div className={activeTab === 'notes' ? "h-full flex flex-col relative" : "hidden"}>
-            <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
-              <ErrorBoundary featureName="Home Dashboard" onReset={() => setDashboardRefreshEpoch(Date.now())}>
-                <Suspense fallback={<FullPageSkeleton />}>
-                  <ToolsDashboard 
-                    key={`tools-dash-${dashboardRefreshEpoch}`}
-                    isVip={isVip} 
-                    user={user}
-                    pocketItems={pocketItems}
-                    onOpenVip={handleOpenVipFromDashboard}
-                    onOpenProfile={handleOpenProfileFromDashboard}
-                    onOpenLogin={handleOpenLoginFromDashboard}
-                    onSelectTool={handleSelectToolFromDashboard} 
-                    activeTab={activeTab}
-                    onForceSync={handleForceSync}
-                    refreshEpoch={dashboardRefreshEpoch}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            </div>
-
-            {/* Active and Visited Tools - KEEP ALIVE */}
-            {mountedTools.has('essaygrader') && (
-              <div className={activeTool === 'essaygrader' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Essay Grader" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+          <main className="w-full max-w-md mx-auto flex-1 min-h-0 relative z-0 overflow-hidden flex flex-col h-full bg-[#FAF9F6]" style={{ position: 'relative' }}>
+            {/* Scanner Tab */}
+            {mountedTabs.has('scanner') && (
+              <div className={activeTab === 'scanner' ? "h-full flex flex-col" : "hidden"}>
+                <ErrorBoundary>
                   <Suspense fallback={<FullPageSkeleton />}>
-                    <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                      <EssayGrader onBack={() => setActiveTool(null)} />
-                    </LockedFeature>
+                    <MagicScanner isVip={isVip} isFocused={activeTab === 'scanner'} onNavigateToTab={(tab) => {
+                      setActiveTab(tab);
+                    }} />
                   </Suspense>
                 </ErrorBoundary>
               </div>
             )}
-            {mountedTools.has('testprep') && (
-              <div className={activeTool === 'testprep' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Test Prep" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+
+            {/* AI Tutor Tab */}
+            {mountedTabs.has('aitutor') && (
+              <div className={activeTab === 'aitutor' ? "h-full flex flex-col" : "hidden"}>
+                <ErrorBoundary>
                   <Suspense fallback={<FullPageSkeleton />}>
-                    <TestPrep 
-                      onBack={() => setActiveTool(null)} 
+                    <AITutor isVip={isVip} isActive={activeTab === 'aitutor'} />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+
+            {/* Home/Notes Tab */}
+            {mountedTabs.has('notes') && (
+              <div className={activeTab === 'notes' ? "h-full flex flex-col relative" : "hidden"}>
+                <div className={activeTool === null ? "h-full flex flex-col" : "hidden"}>
+                  <ErrorBoundary featureName="Home Dashboard" onReset={() => setDashboardRefreshEpoch(Date.now())}>
+                    <Suspense fallback={<FullPageSkeleton />}>
+                      <ToolsDashboard
+                        key={`tools-dash-${dashboardRefreshEpoch}`}
+                        isVip={isVip}
+                        user={user}
+                        pocketItems={pocketItems}
+                        onOpenVip={handleOpenVipFromDashboard}
+                        onOpenProfile={handleOpenProfileFromDashboard}
+                        onOpenLogin={handleOpenLoginFromDashboard}
+                        onSelectTool={handleSelectToolFromDashboard}
+                        activeTab={activeTab}
+                        onForceSync={handleForceSync}
+                        refreshEpoch={dashboardRefreshEpoch}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
+
+                {/* Active and Visited Tools - KEEP ALIVE */}
+                {mountedTools.has('essaygrader') && (
+                  <div className={activeTool === 'essaygrader' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Essay Grader" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <LockedFeature cost={1} featureName="AI Essay Grader" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                          <EssayGrader onBack={() => setActiveTool(null)} />
+                        </LockedFeature>
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('testprep') && (
+                  <div className={activeTool === 'testprep' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Test Prep" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <TestPrep
+                          onBack={() => setActiveTool(null)}
+                          isVip={isVip}
+                          onOpenVip={() => setShowVipModal(true)}
+                          onNavigateToTab={(tab) => {
+                            setActiveTab(tab);
+                          }}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('pdfhistory') && (
+                  <div className={activeTool === 'pdfhistory' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="PDF History" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <PdfHistoryScreen
+                          onBack={() => setActiveTool(null)}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('contentgenerator') && (
+                  <div className={activeTool === 'contentgenerator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Content Generator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <LockedFeature cost={1} featureName="AI Study Content Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                          <ContentGenerator onBack={() => setActiveTool(null)} />
+                        </LockedFeature>
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('grammar') && (
+                  <div className={activeTool === 'grammar' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Grammar Enhancer" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <LockedFeature cost={1} featureName="AI Grammar Enhancer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                          <GrammarEnhancer onBack={() => setActiveTool(null)} />
+                        </LockedFeature>
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('summariser') && (
+                  <div className={activeTool === 'summariser' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Summarizer" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <LockedFeature cost={1} featureName="AI Text Summarizer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                          <Summariser onBack={() => setActiveTool(null)} />
+                        </LockedFeature>
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('calculator') && (
+                  <div className={activeTool === 'calculator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Calculator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <Calculator
+                          onBack={() => setActiveTool(null)}
+                          onNavigateToTab={(tab) => {
+                            setActiveTab(tab);
+                          }}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('questiongenerator') && (
+                  <div className={activeTool === 'questiongenerator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Question Generator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                          <QuestionGenerator
+                            onBack={() => setActiveTool(null)}
+                            onNavigateToTab={(tab) => {
+                              setActiveTab(tab);
+                            }}
+                          />
+                        </LockedFeature>
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('ainotes') && (
+                  <div className={activeTool === 'ainotes' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="AI Notes" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <LockedFeature cost={2} featureName="AI Notes" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
+                          <AINotes
+                            onBack={() => setActiveTool(null)}
+                            isVip={isVip}
+                          />
+                        </LockedFeature>
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('dailytrivia') && (
+                  <div className={activeTool === 'dailytrivia' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Daily Trivia" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <DailyTrivia isOpen={activeTool === 'dailytrivia'} onBack={() => setActiveTool(null)} />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('coinpage') && (
+                  <div className={activeTool === 'coinpage' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Coin Page" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <CoinPage
+                          isVip={isVip}
+                          onClose={() => setActiveTool(null)}
+                          onSelectTool={(tool) => {
+                            if (tool === 'tab:scanner') {
+                              setActiveTab('scanner');
+                            } else if (tool === 'tab:aitutor') {
+                              setActiveTab('aitutor');
+                            } else {
+                              setActiveTool(tool);
+                            }
+                          }}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+                {mountedTools.has('streakpage') && (
+                  <div className={activeTool === 'streakpage' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
+                    <ErrorBoundary featureName="Streak Details" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                      <Suspense fallback={<FullPageSkeleton />}>
+                        <StreakDetailsPage onBack={() => setActiveTool(null)} />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Profile Tab */}
+            {mountedTabs.has('profile') && (
+              <div className={activeTab === 'profile' ? "h-full flex flex-col" : "hidden"}>
+                <ErrorBoundary>
+                  <Suspense fallback={<FullPageSkeleton />}>
+                    <Profile
+                      user={user}
                       isVip={isVip}
-                      onOpenVip={() => setShowVipModal(true)}
-                      onNavigateToTab={(tab) => {
-                        setActiveTab(tab);
+                      setIsVip={handleSetIsVip}
+                      onClose={() => {
+                        setActiveTab('notes');
+                      }}
+                      isDarkMode={isDarkMode}
+                      onToggleDarkMode={toggleDarkMode}
+                      isTabMode={true}
+                      onOpenLogin={() => setShowLoginModal(true)}
+                      onNavigateToCoinPage={() => {
+                        setActiveTab('notes');
+                        setActiveTool('coinpage');
+                      }}
+                      onNavigateToStreakPage={() => {
+                        setActiveTab('notes');
+                        setActiveTool('streakpage');
+                      }}
+                      onOpenPdfHistory={() => {
+                        setActiveTab('notes');
+                        setActiveTool('pdfhistory');
                       }}
                     />
                   </Suspense>
                 </ErrorBoundary>
               </div>
             )}
-            {mountedTools.has('pdfhistory') && (
-              <div className={activeTool === 'pdfhistory' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="PDF History" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <PdfHistoryScreen 
-                      onBack={() => setActiveTool(null)} 
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('contentgenerator') && (
-              <div className={activeTool === 'contentgenerator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Content Generator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <LockedFeature cost={1} featureName="AI Study Content Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                      <ContentGenerator onBack={() => setActiveTool(null)} />
-                    </LockedFeature>
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('grammar') && (
-              <div className={activeTool === 'grammar' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Grammar Enhancer" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <LockedFeature cost={1} featureName="AI Grammar Enhancer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                      <GrammarEnhancer onBack={() => setActiveTool(null)} />
-                    </LockedFeature>
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('summariser') && (
-              <div className={activeTool === 'summariser' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Summarizer" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <LockedFeature cost={1} featureName="AI Text Summarizer" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                      <Summariser onBack={() => setActiveTool(null)} />
-                    </LockedFeature>
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('calculator') && (
-              <div className={activeTool === 'calculator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Calculator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <Calculator 
-                      onBack={() => setActiveTool(null)} 
-                      onNavigateToTab={(tab) => {
-                        setActiveTab(tab);
-                      }} 
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('questiongenerator') && (
-              <div className={activeTool === 'questiongenerator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Question Generator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                      <QuestionGenerator 
-                        onBack={() => setActiveTool(null)} 
-                        onNavigateToTab={(tab) => {
-                          setActiveTab(tab);
-                        }} 
-                      />
-                    </LockedFeature>
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('ainotes') && (
-              <div className={activeTool === 'ainotes' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="AI Notes" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <LockedFeature cost={2} featureName="AI Notes" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
-                      <AINotes 
-                        onBack={() => setActiveTool(null)} 
-                        isVip={isVip} 
-                      />
-                    </LockedFeature>
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('dailytrivia') && (
-              <div className={activeTool === 'dailytrivia' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Daily Trivia" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <DailyTrivia isOpen={activeTool === 'dailytrivia'} onBack={() => setActiveTool(null)} />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('coinpage') && (
-              <div className={activeTool === 'coinpage' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Coin Page" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <CoinPage 
-                      isVip={isVip}
-                      onClose={() => setActiveTool(null)} 
-                      onSelectTool={(tool) => {
-                        if (tool === 'tab:scanner') {
-                          setActiveTab('scanner');
-                        } else if (tool === 'tab:aitutor') {
-                          setActiveTab('aitutor');
-                        } else {
-                          setActiveTool(tool);
-                        }
-                      }} 
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-            {mountedTools.has('streakpage') && (
-              <div className={activeTool === 'streakpage' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Streak Details" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <StreakDetailsPage onBack={() => setActiveTool(null)} />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-          </div>
-        )}
+          </main>
 
-        {/* Profile Tab */}
-        {mountedTabs.has('profile') && (
-          <div className={activeTab === 'profile' ? "h-full flex flex-col" : "hidden"}>
-            <ErrorBoundary>
-              <Suspense fallback={<FullPageSkeleton />}>
-                <Profile 
-                  user={user}
-                  isVip={isVip}
-                  setIsVip={handleSetIsVip}
-                  onClose={() => {
-                    setActiveTab('notes');
-                  }} 
-                  isDarkMode={isDarkMode}
-                  onToggleDarkMode={toggleDarkMode}
-                  isTabMode={true}
-                  onOpenLogin={() => setShowLoginModal(true)}
-                  onNavigateToCoinPage={() => {
-                    setActiveTab('notes');
-                    setActiveTool('coinpage');
-                  }}
-                  onNavigateToStreakPage={() => {
-                    setActiveTab('notes');
-                    setActiveTool('streakpage');
-                  }}
-                  onOpenPdfHistory={() => {
-                    setActiveTab('notes');
-                    setActiveTool('pdfhistory');
-                  }}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        )}
-      </main>
-
-      {/* Bottom nav is always visible */}
-      <nav className={`absolute bottom-0 w-full border-t pb-safe z-20 transition-all duration-300 ${isDarkMode ? 'bg-zinc-950/95 border-zinc-800' : 'bg-white/95 border-zinc-200'} shadow-[0_-2px_15px_rgba(0,0,0,0.03)]`}>
-        <div className="flex justify-around items-center px-2 py-0.5">
-          <NavItem 
-            icon={<Home className="w-5 h-5" />} 
-            label="Home" 
-            isActive={activeTab === 'notes'} 
-            onClick={() => {
-              if (activeTab === 'notes' && activeTool !== null) {
-                setActiveTool(null);
-              } else {
-                setActiveTab('notes');
-              }
-            }} 
-            isLightTheme={!isDarkMode}
-          />
-          <NavItem 
-            icon={<Camera className="w-5 h-5" />} 
-            label="Scan" 
-            isActive={activeTab === 'scanner'} 
-            onClick={() => {
-              setActiveTab('scanner');
-            }} 
-            isLightTheme={!isDarkMode}
-          />
-          <NavItem 
-            icon={<Sparkles className="w-5 h-5" />} 
-            label="Tutor" 
-            isActive={activeTab === 'aitutor'} 
-            onClick={() => {
-              setActiveTab('aitutor');
-            }} 
-            isLightTheme={!isDarkMode}
-          />
-          <NavItem 
-            icon={<UserCircle className="w-5 h-5" />} 
-            label="Profile" 
-            isActive={activeTab === 'profile'} 
-            onClick={() => {
-              setActiveTab('profile');
-            }} 
-            isLightTheme={!isDarkMode}
-          />
-        </div>
-      </nav>
-
-      <AnimatePresence>
-        {showVipModal && !isVip && (
-          <motion.div key="vip" 
-            initial={{ opacity: 0, y: '100%' }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="absolute inset-0 z-50 bg-[#FAF9F6]"
-          >
-            <Suspense fallback={<FullPageSkeleton />}>
-              <VIPPass 
-                isVip={isVip} 
-                onUpgrade={() => { 
-                  setShowVipModal(false); 
-                  window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "PRO Benefits" } }));
-                }} 
-                onClose={() => setShowVipModal(false)} 
-              />
-            </Suspense>
-          </motion.div>
-        )}
-
-        {showLoginModal && (
-          <motion.div key="login" 
-            initial={{ opacity: 0, y: '100%' }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="absolute inset-0 z-[60] bg-[#FAF9F6]"
-          >
-            <Suspense fallback={<FullPageSkeleton />}>
-              <Login 
-                onClose={() => setShowLoginModal(false)} 
-                onLoginSuccess={(target?: string) => {
-                  setShowLoginModal(false);
-                  if (target === 'onboarding') {
-                    setShowOnboarding(true);
-                    setShowAcademicSetup(false);
-                  } else if (target === 'setup') {
-                    setShowOnboarding(false);
-                    setShowAcademicSetup(true);
+          {/* Bottom nav is always visible */}
+          <nav className={`absolute bottom-0 w-full border-t pb-safe z-20 transition-all duration-300 ${isDarkMode ? 'bg-zinc-950/95 border-zinc-800' : 'bg-white/95 border-zinc-200'} shadow-[0_-2px_15px_rgba(0,0,0,0.03)]`}>
+            <div className="flex justify-around items-center px-2 py-0.5">
+              <NavItem
+                icon={<Home className="w-5 h-5" />}
+                label="Home"
+                isActive={activeTab === 'notes'}
+                onClick={() => {
+                  if (activeTab === 'notes' && activeTool !== null) {
+                    setActiveTool(null);
                   } else {
-                    setShowOnboarding(false);
-                    setShowAcademicSetup(false);
+                    setActiveTab('notes');
                   }
-                }} 
+                }}
+                isLightTheme={!isDarkMode}
+              />
+              <NavItem
+                icon={<Camera className="w-5 h-5" />}
+                label="Scan"
+                isActive={activeTab === 'scanner'}
+                onClick={() => {
+                  setActiveTab('scanner');
+                }}
+                isLightTheme={!isDarkMode}
+              />
+              <NavItem
+                icon={<Sparkles className="w-5 h-5" />}
+                label="Tutor"
+                isActive={activeTab === 'aitutor'}
+                onClick={() => {
+                  setActiveTab('aitutor');
+                }}
+                isLightTheme={!isDarkMode}
+              />
+              <NavItem
+                icon={<UserCircle className="w-5 h-5" />}
+                label="Profile"
+                isActive={activeTab === 'profile'}
+                onClick={() => {
+                  setActiveTab('profile');
+                }}
+                isLightTheme={!isDarkMode}
+              />
+            </div>
+          </nav>
+
+          <AnimatePresence>
+            {showVipModal && !isVip && (
+              <motion.div key="vip"
+                initial={{ opacity: 0, y: '100%' }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="absolute inset-0 z-50 bg-[#FAF9F6]"
+              >
+                <Suspense fallback={<FullPageSkeleton />}>
+                  <VIPPass
+                    isVip={isVip}
+                    onUpgrade={() => {
+                      setShowVipModal(false);
+                      window.dispatchEvent(new CustomEvent('open-paywall-modal', { detail: { featureName: "PRO Benefits" } }));
+                    }}
+                    onClose={() => setShowVipModal(false)}
+                  />
+                </Suspense>
+              </motion.div>
+            )}
+
+            {showLoginModal && (
+              <motion.div key="login"
+                initial={{ opacity: 0, y: '100%' }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="absolute inset-0 z-[60] bg-[#FAF9F6]"
+              >
+                <Suspense fallback={<FullPageSkeleton />}>
+                  <Login
+                    onClose={() => setShowLoginModal(false)}
+                    onLoginSuccess={(target?: string) => {
+                      setShowLoginModal(false);
+                      if (target === 'onboarding') {
+                        setShowOnboarding(true);
+                        setShowAcademicSetup(false);
+                      } else if (target === 'setup') {
+                        setShowOnboarding(false);
+                        setShowAcademicSetup(true);
+                      } else {
+                        setShowOnboarding(false);
+                        setShowAcademicSetup(false);
+                      }
+                    }}
+                  />
+                </Suspense>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Floating Mobile Toast Notification */}
+          <AnimatePresence>
+            {mobileToast && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] w-auto max-w-[90vw] bg-zinc-900 text-white px-5 py-3 rounded-2xl shadow-xl border border-zinc-800 flex items-center justify-between gap-3"
+              >
+                <span className="text-xs font-black tracking-wide leading-relaxed">
+                  {mobileToast}
+                </span>
+                <button
+                  onClick={() => setMobileToast(null)}
+                  className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  title="Close notification"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {showPaywallModal && (
+            <Suspense fallback={null}>
+              <PaywallModal
+                isOpen={showPaywallModal}
+                onClose={() => setShowPaywallModal(false)}
+                featureName={paywallFeature}
+                onSubscribe={(cycle, _hasTrial) => {
+                  setShowPaywallModal(false);
+                  triggerConfetti();
+                  setMobileToast("🚀 Welcome to HelpYou AI PRO!");
+                }}
               />
             </Suspense>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Floating Mobile Toast Notification */}
-      <AnimatePresence>
-        {mobileToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 350, damping: 25 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] w-auto max-w-[90vw] bg-zinc-900 text-white px-5 py-3 rounded-2xl shadow-xl border border-zinc-800 flex items-center justify-between gap-3"
-          >
-            <span className="text-xs font-black tracking-wide leading-relaxed">
-              {mobileToast}
-            </span>
-            <button 
-              onClick={() => setMobileToast(null)} 
-              className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-              title="Close notification"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {showPaywallModal && (
-        <Suspense fallback={null}>
-          <PaywallModal 
-            isOpen={showPaywallModal} 
-            onClose={() => setShowPaywallModal(false)} 
-            featureName={paywallFeature}
-            onSubscribe={(cycle, _hasTrial) => {
-              setShowPaywallModal(false);
-              triggerConfetti();
-              setMobileToast("🚀 Welcome to HelpYou AI PRO!");
-            }}
-          />
-        </Suspense>
-      )}
-      </div>
+          )}
+        </div>
       </AuthGuard>
     </>
   );
 }
 
-function NavItem({ 
-  icon, 
-  label, 
-  isActive, 
-  onClick, 
-  isLightTheme 
-}: { 
-  icon: ReactNode, 
-  label: string, 
-  isActive: boolean, 
-  onClick: () => void, 
-  isLightTheme: boolean 
+function NavItem({
+  icon,
+  label,
+  isActive,
+  onClick,
+  isLightTheme
+}: {
+  icon: ReactNode,
+  label: string,
+  isActive: boolean,
+  onClick: () => void,
+  isLightTheme: boolean
 }) {
   return (
-    <button 
+    <button
       onClick={() => {
         triggerVibration(15);
         onClick();
       }}
-      className={`flex flex-col items-center py-0.5 px-1 rounded-lg transition-all duration-300 ease-in-out w-16 ${
-        isActive 
-          ? isLightTheme ? 'text-zinc-950 font-black' : 'text-purple-400 font-extrabold' 
+      className={`flex flex-col items-center py-0.5 px-1 rounded-lg transition-all duration-300 ease-in-out w-16 ${isActive
+          ? isLightTheme ? 'text-zinc-950 font-black' : 'text-purple-400 font-extrabold'
           : isLightTheme ? 'text-zinc-400 font-bold hover:text-zinc-600' : 'text-gray-500 hover:text-gray-300 font-semibold'
-      }`}
+        }`}
     >
       <div className={`mb-0 transition-transform duration-300 ${isActive ? 'scale-105' : ''}`}>
         {icon}

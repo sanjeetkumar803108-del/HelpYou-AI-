@@ -43,13 +43,13 @@ export default function AuthGuard({
 }: AuthGuardProps) {
   const containerClass = `w-full flex flex-col h-[100dvh] max-w-md mx-auto ${isDarkMode ? 'dark bg-zinc-950 text-zinc-100 sm:border-zinc-800' : 'bg-[#FAF9F6] text-zinc-900 sm:border-zinc-200'} font-sans overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.15)] sm:rounded-[2rem] sm:h-[90vh] sm:mt-[5vh] sm:border relative z-[999]`;
 
-  // Absolute fail-safe: Never allow loading skeleton to trap user for more than 1000ms
+  // Absolute fail-safe: Never allow loading hold to trap user for more than 3500ms
   const [cachedCheckExpired, setCachedCheckExpired] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setCachedCheckExpired(true);
-    }, 1000);
+    }, 3500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -69,26 +69,19 @@ export default function AuthGuard({
     safeGetItem('helpyou_active_user_session') === 'true'
   );
 
-  // 2. Auth Loading Skeleton: ONLY while authLoading is true AND fail-safe timer hasn't expired
-  if (authLoading && !cachedCheckExpired) {
+  // 2. Auth Loading / Cached Session Hold:
+  // If the user has a confirmed cached session from a previous login, OR if auth state is actively resolving,
+  // NEVER show the Login screen! Instead, keep the branded SplashScreen visible until Firebase restores activeUser.
+  if (!activeUser && (authLoading || hasCachedSession) && !cachedCheckExpired) {
     return (
       <div className={containerClass}>
-        {fallbackSkeleton}
+        <SplashScreen />
       </div>
     );
   }
 
-  // 3. Cached session hold: ONLY if user is not yet resolved, auth is actively loading, AND timer hasn't expired.
-  if (!activeUser && hasCachedSession && authLoading && !cachedCheckExpired) {
-    return (
-      <div className={containerClass}>
-        {fallbackSkeleton}
-      </div>
-    );
-  }
-
-  // 4. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
-  // If user is unauthenticated, prompt Login directly so new users can sign up and returning users can sign in.
+  // 3. Isolated Auth Stack (Sign In / Sign Up) - Full-screen, no header
+  // ONLY reached when the user is genuinely unauthenticated (no cached session or session explicitly expired).
   if (!activeUser) {
     return (
       <div className={containerClass}>

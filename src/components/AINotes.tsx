@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  ArrowLeft, Download, Printer, Sparkles, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, 
-  RotateCcw, Check, Loader2, AlertCircle, BookOpen, Layers, 
-  Trash2, Calendar, Share2, Compass, Award, Presentation, FileText, X, CheckCircle2
+  ArrowLeft, Sparkles, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, 
+  Check, Loader2, AlertCircle, BookOpen, Layers, 
+  Trash2, Calendar, Compass, Award, X, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
@@ -14,8 +14,6 @@ import { triggerVibration } from '../utils/vibrate';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getApiUrl } from '../utils/api';
-import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
-import { generateAINotesPDFBlob } from '../utils/aiNotesPdfExporter';
 import GlobalMarkdown, { formatNotesMath, formatFormulaBoxContent } from './GlobalMarkdown';
 
 interface AINotesProps {
@@ -152,10 +150,8 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       return [];
     }
   });
-  const [exportingPdf, setExportingPdf] = useState<boolean>(false);
-  const [viewMode, setViewMode] = useState<'slides' | 'document'>('slides');
+  const viewMode = 'slides';
   const [slideIndex, setSlideIndex] = useState<number>(0);
-  const [showPdfModal, setShowPdfModal] = useState<boolean>(false);
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -294,45 +290,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
     }
   };
 
-  const handleDownloadPDF = async (orientation: 'landscape' | 'portrait' = 'landscape') => {
-    if (!notesData) return;
-    triggerVibration(15);
-    setExportingPdf(true);
-    setShowPdfModal(false);
-    try {
-      const filename = `${notesData.metadata.chapter || 'AI_Topper_Notes'}_${orientation === 'landscape' ? '16x9_Slides' : 'Notes'}.pdf`;
-      const blob = generateAINotesPDFBlob(notesData, { orientation });
-      await savePDFMobile(blob, filename);
-    } catch (err: any) {
-      console.error("Failed to download PDF:", err);
-      window.print();
-    } finally {
-      setExportingPdf(false);
-    }
-  };
-
-  const handleShareNotes = async (orientation: 'landscape' | 'portrait' = 'landscape') => {
-    if (!notesData) return;
-    triggerVibration(15);
-    setExportingPdf(true);
-    try {
-      const filename = `${notesData.metadata.chapter || 'AI_Topper_Notes'}_${orientation === 'landscape' ? '16x9_Slides' : 'Notes'}.pdf`;
-      const blob = generateAINotesPDFBlob(notesData, { orientation });
-      const shared = await sharePDFMobile(blob, filename);
-      if (!shared) {
-        // Fallback to text share only if device does not support native document sharing
-        const text = `📚 ${notesData.metadata.chapter} - Handwritten Toppers Notes (16:9 Widescreen)\nSubject: ${notesData.metadata.subject} | Exam: ${notesData.metadata.exam}\nGenerated with HelpYou AI`;
-        await shareTextMobile(notesData.metadata.title, text);
-      }
-    } catch (err: any) {
-      console.error("Failed to share PDF notes:", err);
-      const text = `📚 ${notesData.metadata.chapter} - Handwritten Toppers Notes\nSubject: ${notesData.metadata.subject} | Exam: ${notesData.metadata.exam}\nGenerated with HelpYou AI`;
-      await shareTextMobile(notesData.metadata.title, text);
-    } finally {
-      setExportingPdf(false);
-    }
-  };
-
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F8FAFC] text-zinc-900 overflow-y-auto select-none print:bg-white print:overflow-visible">
       
@@ -426,18 +383,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {notesData && (
-            <button
-              onClick={handleDownloadPDF}
-              className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
-              title="Save as PDF or Print"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Download PDF</span>
-            </button>
-          )}
-        </div>
+        <div className="w-9" />
       </div>
 
       {/* Main Content Area */}
@@ -766,68 +712,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
           /* STEP 2: INTERACTIVE 16:9 SMARTBOARD LECTURE SLIDES & NOTEBOOK VIEWER */
           <div className="w-full max-w-4xl mx-auto flex flex-col items-center gap-6 print:gap-0 print:max-w-none print:w-full">
             
-            {/* Viewer Action Bar */}
-            <div className="no-print w-full flex items-center justify-between bg-white border border-zinc-200 rounded-2xl p-3 shadow-xs gap-2 flex-wrap">
-              <button
-                onClick={() => setNotesData(null)}
-                className="px-3 py-1.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-100 flex items-center gap-1.5 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Create Another</span>
-              </button>
-
-              {/* View Mode Toggle: 16:9 Slides vs Ruled Paper */}
-              <div className="flex items-center bg-zinc-100 p-1 rounded-xl border border-zinc-200 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerVibration(10);
-                    setViewMode('slides');
-                  }}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                    viewMode === 'slides'
-                      ? 'bg-purple-600 text-white shadow-xs font-black'
-                      : 'text-zinc-600 hover:text-zinc-900'
-                  }`}
-                >
-                  <Presentation className="w-3.5 h-3.5" />
-                  <span>16:9 Slides</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerVibration(10);
-                    setViewMode('document');
-                  }}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                    viewMode === 'document'
-                      ? 'bg-purple-600 text-white shadow-xs font-black'
-                      : 'text-zinc-600 hover:text-zinc-900'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Ruled Paper</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleShareNotes}
-                  className="p-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 cursor-pointer"
-                  title="Share Notes"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={handleDownloadPDF}
-                  className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Save as PDF / Print</span>
-                </button>
-              </div>
-            </div>
-
             {/* VIEW MODE 1: 16:9 WIDESCREEN LECTURE SLIDES (DEFAULT TOPPERS SMARTBOARD) */}
             {viewMode === 'slides' ? (
               <div className="w-full space-y-6 print:space-y-0 print:w-full print:m-0">

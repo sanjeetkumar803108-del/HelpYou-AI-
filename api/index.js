@@ -4367,9 +4367,13 @@ ${allChaptersDirectiveQ}
 
 CRITICAL ARCHITECTURE RULES:
 
-1. SUBJECT & DOMAIN INTEGRITY:
-   - Automatically detect the true academic subject of the given topic (Literature, Science, Mathematics, Social Sciences, Commerce, Computer Science).
-   - Use clean LaTeX ($...$) for all math and science formulas (e.g. $F = ma$, $H_2O$, $V = IR$).
+1. CRITICAL LATEX & MATHEMATICAL NOTATION MANDATE:
+   - Wrap ALL mathematical equations, expressions, variables, formulas, and functions in standard single dollar signs ($...$).
+   - ALWAYS format math as valid LaTeX: write $f(x) = \frac{2x - 3}{x + 4}$, $f^{-1}(x)$, $x^3$, $3x^2$, $e^x$, $sqrt{x^2 + 1}$.
+   - NEVER leave function notation or inverse functions unwrapped (NEVER write plain 'f(x)' or 'f^{-1}(x)'; ALWAYS write '$f(x)$' and '$f^{-1}(x)$').
+   - NEVER split an equation across newlines inside dollar signs. The opening '$' and closing '$' must be on the EXACT SAME line.
+   - NEVER mix single and double dollar signs (NEVER write '$...$$' or '$$...$').
+   - Use clean LaTeX for all formulas ($F = ma$, $H_2O$, $V = IR$).
 
 2. REAL EXAM QUESTION VARIETY & INTRA-BATCH UNIQUENESS:
    - Every single question in the generated ${requestedCount} questions MUST be 100% unique and test a completely distinct concept, law, equation, mechanism, or scenario.
@@ -4379,39 +4383,51 @@ CRITICAL ARCHITECTURE RULES:
      * Standalone Long Analytical / Evaluative Questions (5\u20136 Marks).
      * Multi-part questions ((a) and (b)) only when naturally appropriate.
 
-3. MULTI-MODAL EXAM QUESTIONS (TABLES, GRAPHS & DIAGRAMS):
+3. MANDATORY MULTI-MODAL QUESTIONS (TABLES, GRAPHS & DIAGRAMS):
    Real examination board papers integrate experimental data tables, coordinate graphs, and schematic setups for authentic analytical problem solving.
-   CRITICAL MANDATE: ONLY include a Table, Graph, or Diagram when NATURALLY AND EDUCATIONALLY APPROPRIATE for the specific question and subject! NEVER force them artificially into pure narrative/conceptual questions (e.g. historical, literary, or purely verbal philosophy essays).
+   CRITICAL MANDATE: In every set of questions for STEM, Mathematics, Physics, Chemistry, Economics, or Computer Science:
+   At least 1 to 2 questions MUST actively include a structured visual element:
    
-   - When Appropriate (typically 1\u20132 questions in a set of 5 in STEM, Economics, Commerce, or Quantitative subjects):
-     * EXPERIMENTAL DATA TABLES: For Chemistry, Biology, Physics, or Statistics, provide observation matrices, reaction trials, or frequency tables using clean Markdown tables:
-       | Trial | Initial $[A]$ (M) | Initial Rate ($\\text{M}\\cdot\\text{s}^{-1}$) |
-       | :---: | :---: | :---: |
-       | 1 | 0.10 | $2.5 \\times 10^{-3}$ |
-       | 2 | 0.20 | $5.0 \\times 10^{-3}$ |
-       Followed by: "(a) Determine the reaction order... (b) Calculate rate constant $k$ with units."
-     * SCHEMATIC & SETUP DIAGRAMS: For Physics (pulleys, inclined planes, circuits, ray optics, free-body diagrams), Biology (food webs, Punnett squares, metabolic pathways), or Computer Science (binary trees, logic flow), provide a clean monospace ASCII/box-drawing schematic inside a \`\`\`diagram code block:
-       \`\`\`diagram
-       [ Ceiling ]
-           |
-          (O) Pulley
-         /   \\
-        |     |
-       [m1]  [m2]
-       \`\`\`
-     * COORDINATE GRAPHS & PLOTS: For Physics (velocity-time, force-displacement, thermodynamic $P-V$ cycles), Math (piecewise curves, geometric regions), or Economics (supply-demand equilibrium), provide a clearly labeled coordinate plot or curve with key vertices and axes:
-       \`\`\`graph
-        v (m/s)
-         ^
-       20|       B (t=4s, v=20)
-         |      /|
-         |     / |
-       10|    /  |     C (t=8s, v=10)
-         |   /   |    /
-        0+--+----+---+-----> t (s)
-         0  2    4   8
-       \`\`\`
-     * PURE TEXT QUESTIONS: Conceptual derivations, laws, definitions, or philosophical essays MUST remain pure, articulate text without forced diagrams.
+   * EXPERIMENTAL & OBSERVATION DATA TABLES: For Chemistry, Biology, Physics, Statistics, or Commerce, provide observation matrices, reaction trials, or frequency tables using clean Markdown tables:
+     | Trial | Initial $[A]$ (M) | Initial Rate ($\\text{M}\\cdot\\text{s}^{-1}$) |
+     | :---: | :---: | :---: |
+     | 1 | 0.10 | $2.5 \\times 10^{-3}$ |
+     | 2 | 0.20 | $5.0 \\times 10^{-3}$ |
+     Followed by: "(a) Determine the reaction order... (b) Calculate rate constant $k$ with units."
+     
+   * COORDINATE GRAPHS & PLOTS: For Math (curves, functions, coordinate geometry, transformations), Physics (velocity-time, force-displacement, thermodynamic $P-V$ cycles), or Economics (supply-demand), provide a clearly labeled coordinate plot in a \`\`\`graph code block:
+     \`\`\`graph
+      y = f(x)
+       ^
+     10|           P(3, 10)
+       |          /|
+      5|         / |
+       |        /  |
+      0+-------+---+------> x
+       0       2   3
+     \`\`\`
+     
+   * SCHEMATIC & SETUP DIAGRAMS: For Physics (pulleys, circuits, ray optics, inclined planes), Biology (flowcharts, food webs, pedigrees), provide an ASCII schematic inside a \`\`\`diagram code block:
+     \`\`\`diagram
+     +---[ Resistor R1 = 4\u03A9 ]---+
+     |                          |
+     (E = 12V)                  [ Resistor R2 = 6\u03A9 ]
+     |                          |
+     +--------------------------+
+     \`\`\`
+     
+   * PYTHON SIMULATION & VISUALIZATION (FOR CS & MATH/SCIENCE):
+     When testing algorithmic logic, data visualization, or computational modeling in Mathematics, Computer Science, or Physics, provide clean, idiomatic Python code (using matplotlib/numpy/pandas logic or clean algorithmic code) inside a \`\`\`python code block that models the problem or plots the curve, and ask analytical questions based on it!
+     Example:
+     \`\`\`python
+     import matplotlib.pyplot as plt
+     import numpy as np
+
+     x = np.linspace(-5, 5, 100)
+     y = (2*x - 3) / (x + 4)
+     # Asymptotes at x = -4 and y = 2
+     \`\`\`
+     Followed by: "(a) Identify the vertical and horizontal asymptotes from the function definition. (b) Derive the inverse function $f^{-1}(x)$ and its domain."
 
 4. GRADE & CURRICULUM CALIBRATION:
    - Target Grade: ${gradeLevel}. Match vocabulary and difficulty strictly to this grade level.

@@ -699,36 +699,6 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
             </div>
           )}
 
-          {/* MULTI-ACTION BAR: Share Output, PDF Export & PDF Preview */}
-          <div className="grid grid-cols-3 gap-2.5 mb-3">
-            <button
-              onClick={handleShareOutput}
-              className="py-3.5 px-3 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 active:scale-95 shadow-xs cursor-pointer"
-              title="Share output text directly"
-            >
-              <Share2 className="w-4 h-4" />
-              <span>Share Output</span>
-            </button>
-
-            <button
-              onClick={handlePreviewPDF}
-              className="py-3.5 px-3 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 active:scale-95 shadow-xs cursor-pointer"
-              title="View PDF"
-            >
-              <Eye className="w-4 h-4 text-purple-600" />
-              <span>View PDF</span>
-            </button>
-
-            <button
-              onClick={handleExportPDF}
-              className="py-3.5 px-3 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-purple-500/20 bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 active:scale-95 shadow-md shadow-purple-500/10 cursor-pointer"
-              title="Download PDF"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export PDF</span>
-            </button>
-          </div>
-
           <button
             onClick={() => {
               triggerVibration(15);

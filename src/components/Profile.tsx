@@ -32,7 +32,7 @@ import { clear as clearIndexedDB } from 'idb-keyval';
 import { useSettings } from '../hooks/useSettings';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { billingService } from '../services/BillingService';
-import { REGIONAL_TRACKS, DEFAULT_SUBJECTS, COUNTRIES } from './AcademicSetup';
+import AcademicSetup, { REGIONAL_TRACKS, DEFAULT_SUBJECTS, COUNTRIES } from './AcademicSetup';
 import { resolveRealCountry } from '../utils/profile';
 import { getApiUrl } from '../utils/api';
 import { getStoredExamBlueprint, saveStoredExamBlueprint, getSubjectBlueprint } from '../utils/academicBlueprint';
@@ -185,6 +185,10 @@ export default function Profile({
   onNavigateToStreakPage,
   onOpenPdfHistory
 }: ProfileProps) {
+  // Owner testing mode: strictly restricted to sanjeetkumar803108@gmail.com
+  const currentUserEmail = (auth.currentUser?.email || user?.email || '').toLowerCase().trim();
+  const isOwnerTester = currentUserEmail === 'sanjeetkumar803108@gmail.com';
+  const [showOwnerAcademicSetup, setShowOwnerAcademicSetup] = useState(false);
   // App Settings Toggles
   const [saveHistory] = useState<boolean>(true);
   const [dailyReminders, setDailyReminders] = useState<boolean>(() => {

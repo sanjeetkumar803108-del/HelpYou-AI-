@@ -803,11 +803,8 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
 
               {/* Tone Selection Row */}
               <div className="mb-3">
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="mb-1.5">
                   <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">Tone</label>
-                  <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200">
-                    Exam Calibrated
-                  </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {examCalibration.tones.map((toneObj) => {
@@ -836,11 +833,8 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               {/* Academic Formats (Visible only if 'Essay' is selected) */}
               {selectedType === 'Essay' && (
                 <div className="mb-4">
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="mb-1.5">
                     <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">Academic Format</label>
-                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                      Real Exam Rubric
-                    </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {examCalibration.formats.map((fmtObj) => {

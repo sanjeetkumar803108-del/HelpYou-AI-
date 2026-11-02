@@ -943,7 +943,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     triggerVibration(15);
     const shareTitle = `HelpYou AI - Subjective Questions: ${customTopic || stream}`;
     const shareText = `📝 Subjective Practice Questions from HelpYou AI Tutor!\n\nTopic: ${customTopic || stream}\n\n` + 
-      questions.map((q, i) => `${i + 1}. ${normalizeQuestionBreaks(getQuestionText(q))}`).join('\n\n');
+      questions.map((q, i) => `${i + 1}. ${healGlobalMarkdown(normalizeQuestionBreaks(getQuestionText(q)))}`).join('\n\n');
     await shareTextMobile(shareTitle, shareText);
   };
 
@@ -1029,7 +1029,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     // List Questions
     for (let i = 0; i < qs.length; i++) {
       const qItem = qs[i];
-      const qText = formatMathAndSuperscripts(sanitizePdfText(normalizeQuestionBreaks(getQuestionText(qItem))));
+      const qText = formatMathAndSuperscripts(sanitizePdfText(healGlobalMarkdown(normalizeQuestionBreaks(getQuestionText(qItem)))));
       const questionText = `${i + 1}. ${qText}`;
       
       // Wrap question text
@@ -1113,7 +1113,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       ];
 
       // -- Question label
-      const qLabelText = formatMathAndSuperscripts(sanitizePdfText(`Q${i + 1}. ${normalizeQuestionBreaks(qText)}`));
+      const qLabelText = formatMathAndSuperscripts(sanitizePdfText(`Q${i + 1}. ${healGlobalMarkdown(normalizeQuestionBreaks(qText))}`));
       const wrappedQLabel: string[] = doc.splitTextToSize(qLabelText, contentWidth - 5);
 
       if (currentY + wrappedQLabel.length * 5.5 + 25 > pageHeight - 20) {

@@ -540,9 +540,9 @@ const CustomTooltip = ({ active, payload }: any) => {
             </p>
           )}
           {speedItem && (
-            <p className="text-purple-600 flex items-center justify-between gap-3">
+            <p className="text-amber-700 flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-purple-500 inline-block shadow-xs" />
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-xs" />
                 <span>Speed:</span>
               </span>
               <span className="font-black">{speedItem.value}s</span>
@@ -2972,7 +2972,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                               domain={[0, (dataMax: number) => Math.max(10, Math.ceil(dataMax + 2))]}
                               tickLine={false} 
                               axisLine={false}
-                              tick={{ fill: '#7C3AED', fontSize: 10, fontWeight: 'bold' }} 
+                              tick={{ fill: '#D97706', fontSize: 10, fontWeight: 'bold' }} 
                             />
                             <Tooltip content={<CustomTooltip />} />
                             <Area 
@@ -2992,10 +2992,10 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                               yAxisId="right"
                               type="monotone" 
                               dataKey="speed" 
-                              stroke="#7C3AED" 
-                              strokeWidth={2.5}
-                              dot={{ r: 4.5, fill: '#7C3AED', stroke: '#FFFFFF', strokeWidth: 2 }}
-                              activeDot={{ r: 6.5, fill: '#7C3AED', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              stroke="#F59E0B" 
+                              strokeWidth={3}
+                              dot={{ r: 4.5, fill: '#F59E0B', stroke: '#FFFFFF', strokeWidth: 2 }}
+                              activeDot={{ r: 6.5, fill: '#F59E0B', stroke: '#FFFFFF', strokeWidth: 2 }}
                               connectNulls={true}
                               name="Avg Speed"
                             />
@@ -3007,8 +3007,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block shadow-xs" />
                           Accuracy (%, left axis)
                         </span>
-                        <span className="flex items-center gap-1.5 text-purple-600">
-                          <span className="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block shadow-xs" />
+                        <span className="flex items-center gap-1.5 text-amber-600">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-xs" />
                           Speed (sec/q, right axis)
                         </span>
                       </div>

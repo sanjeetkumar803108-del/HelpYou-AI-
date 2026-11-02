@@ -1294,9 +1294,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                       </div>
                     </div>
 
-                    <div className="text-xs font-bold text-pink-500 flex items-center justify-center gap-1">
-                      <span>👆 Tap card to reveal answer</span>
-                    </div>
+                    <div />
                   </div>
 
                   <div

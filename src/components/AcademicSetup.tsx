@@ -10,6 +10,7 @@ import { getApiUrl } from '../utils/api';
 interface AcademicSetupProps {
   userId: string;
   onComplete: () => void;
+  onCancel?: () => void;
 }
 
 export const COUNTRIES = [
@@ -63,7 +64,7 @@ export const REGIONAL_TRACKS: Record<string, Array<{ id: string; title: string; 
   'Others / International': []
 };
 
-export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps) {
+export default function AcademicSetup({ userId, onComplete, onCancel }: AcademicSetupProps) {
   // 4 Dedicated Selection Steps
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -368,6 +369,8 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
       setStep(2); // From Grade -> Exam
     } else if (step === 2) {
       setStep(1); // From Exam -> Country
+    } else if (step === 1 && onCancel) {
+      onCancel();
     }
   };
 
@@ -600,6 +603,19 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest bg-zinc-100 px-2.5 py-1 rounded-full border border-zinc-150">
             Step {step} of 4
           </span>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerVibration(10);
+                onCancel();
+              }}
+              className="w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
+              title="Close Setup"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1044,7 +1060,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
       {/* Bottom Actions Rail */}
       <div className="w-full px-6 pb-12 pt-4 flex flex-col items-center gap-4 shrink-0 z-10">
         <div className="w-full max-w-sm flex items-center gap-3">
-          {step > 1 && (
+          {(step > 1 || onCancel) && (
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleBackStep}
@@ -1052,7 +1068,7 @@ export default function AcademicSetup({ userId, onComplete }: AcademicSetupProps
               className="px-4 py-4 bg-zinc-100 hover:bg-zinc-150 border border-zinc-200 rounded-[1.25rem] text-zinc-700 font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span className="text-xs">Back</span>
+              <span className="text-xs">{step === 1 ? 'Cancel' : 'Back'}</span>
             </motion.button>
           )}
           

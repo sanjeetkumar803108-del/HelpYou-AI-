@@ -134,6 +134,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
   const [expandedSubject, setExpandedSubject] = useState<string | null>(() => {
     return mergedSubjects[0]?.id || null;
   });
+  const [showAllSubjects, setShowAllSubjects] = useState<boolean>(false);
 
   const [selectedChapter, setSelectedChapter] = useState<string>('');
   const [noteDepth, setNoteDepth] = useState<'detailed' | 'revision'>('detailed');
@@ -502,7 +503,16 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
 
               {/* Subject Cards (Identical to AI Quizzes) */}
               <div className="space-y-3">
-                {mergedSubjects.map((subject) => {
+                {(() => {
+                  const isLaterSubjectActive = mergedSubjects.slice(5).some(
+                    s => s.id === expandedSubject || (selectedChapter && (s.topics || []).some(t => selectedChapter.toLowerCase() === t.toLowerCase()) || selectedSubject === s.title)
+                  );
+                  const shouldShowAll = showAllSubjects || isLaterSubjectActive || mergedSubjects.length <= 5;
+                  const visibleSubjects = shouldShowAll ? mergedSubjects : mergedSubjects.slice(0, 5);
+
+                  return (
+                    <>
+                      {visibleSubjects.map((subject) => {
                   const isExpanded = expandedSubject === subject.id;
                   const isSubjectSelected = selectedSubject === subject.title;
                   const hasActiveTopic = selectedChapter && (subject.topics || []).some(t => selectedChapter.toLowerCase() === t.toLowerCase());
@@ -632,7 +642,33 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
                     </div>
                   );
                 })}
-              </div>
+
+                {mergedSubjects.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerVibration(10);
+                      setShowAllSubjects(prev => !prev);
+                    }}
+                    className="w-full py-3.5 px-4 bg-zinc-50 hover:bg-zinc-100 active:scale-[0.99] border border-dashed border-zinc-300 hover:border-zinc-400 rounded-2xl text-xs font-black text-zinc-700 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs mt-1"
+                  >
+                    {shouldShowAll ? (
+                      <>
+                        <ChevronUp className="w-4 h-4 text-zinc-500" />
+                        <span>Show Less Subjects</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 text-purple-600" />
+                        <span>+ More Subjects ({mergedSubjects.length - 5} more)</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            );
+          })()}
+        </div>
 
               {/* Selected Topic Confirmation / Or Type Specific Custom Topic */}
               <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-xs space-y-2">

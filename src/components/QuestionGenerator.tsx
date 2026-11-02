@@ -230,6 +230,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [country, setCountry] = useState('United States');
   const [targetExam, setTargetExam] = useState('');
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
+  const [showAllSubjects, setShowAllSubjects] = useState<boolean>(false);
   const [syllabusResearchState, setSyllabusResearchState] = useState<'idle' | 'researching' | 'completed'>('idle');
   const [blueprintRevision, setBlueprintRevision] = useState(0);
 
@@ -484,23 +485,35 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       return `___CODE_BLOCK_${codeBlocks.length - 1}___`;
     });
 
-    // 2. Protect existing math expressions ($$...$$ and $...$) from having internal line breaks injected
+    // 2. Protect Markdown Tables (|...|\n|---|...) from receiving mid-table line break splits
+    const tableBlocks: string[] = [];
+    safe = safe.replace(/(?:^|\n)(\|.+?\|\n\|[-: |]+\|\n(?:\|.+?\|\n?)+)/g, (m) => {
+      tableBlocks.push(m);
+      return `\n___TABLE_BLOCK_${tableBlocks.length - 1}___\n`;
+    });
+
+    // 3. Protect existing math expressions ($$...$$ and $...$) from having internal line breaks injected
     const mathBlocks: string[] = [];
     safe = safe.replace(/(\$\$[\s\S]*?\$\$|\$[^\n$]+\$)/g, (m) => {
       mathBlocks.push(m);
       return `___MATH_BLOCK_${mathBlocks.length - 1}___`;
     });
 
-    // 3. Only split explicit question sub-parts (Part A, Part B, (a), (b), (i), (ii), etc.)
+    // 4. Only split explicit question sub-parts (Part A, Part B, (a), (b), (i), (ii), etc.)
     // MUST be preceded by sentence punctuation ([.;:]) and NEVER match function variables like f(x)
     safe = safe.replace(/([.;:])\s*(Part\s+[A-D]:|\([a-d]\)|\((?:i{1,3}|iv|v|vi{0,3}|ix)\))\s*/gi, '$1\n\n$2 ');
 
-    // 4. Restore protected math blocks
+    // 5. Restore protected math blocks
     for (let i = 0; i < mathBlocks.length; i++) {
       safe = safe.split(`___MATH_BLOCK_${i}___`).join(mathBlocks[i]);
     }
 
-    // 5. Restore protected code blocks
+    // 6. Restore protected table blocks
+    for (let i = 0; i < tableBlocks.length; i++) {
+      safe = safe.split(`___TABLE_BLOCK_${i}___`).join(tableBlocks[i]);
+    }
+
+    // 7. Restore protected code blocks
     for (let i = 0; i < codeBlocks.length; i++) {
       safe = safe.split(`___CODE_BLOCK_${i}___`).join(codeBlocks[i]);
     }
@@ -1653,7 +1666,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                               Subjective Practice Question
                             </span>
                           </div>
-                          <div className="font-extrabold text-sm text-zinc-900 leading-relaxed space-y-1 select-text">
+                          <div className="font-medium text-sm sm:text-base text-zinc-900 leading-relaxed space-y-2 select-text">
                             <GlobalMarkdown>
                               {healGlobalMarkdown(normalizeQuestionBreaks(qText))}
                             </GlobalMarkdown>
@@ -2002,7 +2015,16 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                   </div>
 
                   <div className="space-y-3">
-                    {mergedSubjects.map((subject) => {
+                    {(() => {
+                      const isLaterSubjectActive = mergedSubjects.slice(5).some(
+                        s => s.id === expandedSubject || (customTopic && (s.topics || []).some(t => customTopic.toLowerCase() === t.toLowerCase()) || customTopic === s.title)
+                      );
+                      const shouldShowAll = showAllSubjects || isLaterSubjectActive || mergedSubjects.length <= 5;
+                      const visibleSubjects = shouldShowAll ? mergedSubjects : mergedSubjects.slice(0, 5);
+
+                      return (
+                        <>
+                          {visibleSubjects.map((subject) => {
                       const isExpanded = expandedSubject === subject.id;
                       const hasActiveTopic = customTopic && (subject.topics || []).some(t => customTopic.toLowerCase() === t.toLowerCase());
 
@@ -2160,6 +2182,32 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                         </div>
                       );
                     })}
+
+                          {mergedSubjects.length > 5 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                triggerVibration(10);
+                                setShowAllSubjects(prev => !prev);
+                              }}
+                              className="w-full py-3.5 px-4 bg-zinc-50 hover:bg-zinc-100 active:scale-[0.99] border border-dashed border-zinc-300 hover:border-zinc-400 rounded-2xl text-xs font-black text-zinc-700 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs mt-1"
+                            >
+                              {shouldShowAll ? (
+                                <>
+                                  <ChevronUp className="w-4 h-4 text-zinc-500" />
+                                  <span>Show Less Subjects</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-4 h-4 text-purple-600" />
+                                  <span>+ More Subjects ({mergedSubjects.length - 5} more)</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

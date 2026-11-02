@@ -234,7 +234,7 @@ export function cleanMarkdownMath(content: string): string {
     const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
     const narrativeWords = words.filter(w => 
       ENGLISH_STOPWORDS.has(w.toLowerCase()) || 
-      /^(?:graph|reflection|symmetry|inverse|domain|range|function|point|curve|line|axis|slope|equal|equals|value|always|never|means|notice|remember|assume|cancel|factor|factors)$/i.test(w)
+      /^(?:graph|reflection|symmetry|inverse|domain|range|function|point|curve|line|axis|slope|equal|equals|value|always|never|means|notice|remember|assume|cancel|factor|factors|equilibrium|reaction|exothermic|endothermic|pressure|vessel|temperature|system|evaluate|calculate|determine|state|explain|describe|derive|increase|decrease|total|yield|forward|reverse|ammonia|chemical|engineer|analyzing)$/i.test(w)
     );
     if (narrativeWords.length >= 2) {
       return formatFormulaBoxContent(inner);
@@ -588,14 +588,18 @@ export function healGlobalMarkdown(content: string): string {
     return token;
   });
 
-  // 2.5. Explicit formula prefixes with greedy capture until pipe, semicolon, or newline:
-  // e.g. "Formula/Concept: v = u + at, \quad a = -g \approx -9.8 \text{ m/s}^2 |"
-  text = text.replace(/((?:Formula(?:\/Concept)?|Equation|Identity|Reaction):\s*)([^|\n]+)(\s*\||\s*$)/gi, (match, prefix, formula, suffix) => {
+  // 2.5. Explicit standalone formula prefixes (e.g. "Formula: v = u + at |", "Equation: E = mc^2")
+  text = text.replace(/(?:^|\n)((?:Formula(?:\/Concept)?|Equation|Identity):\s*)([^|\n]+)(\s*\||\s*$)/gi, (match, prefix, formula, suffix) => {
+    // Never wrap if it contains narrative English words
+    const words = formula.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
+    const narrativeWords = words.filter(w => !['sin','cos','tan','log','ln','lim','exp','min','max','dx','dy','dt','left','right'].includes(w.toLowerCase()));
+    if (narrativeWords.length >= 2) return match;
+
     if (/\\[a-zA-Z]+|[=+\-*/^_]/.test(formula)) {
       let trimmed = formula.trim().replace(/^\$+|\$+$/g, '').trim();
       const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
       mathPlaceholders.push(`$${trimmed}$`);
-      return `${prefix}${token}${suffix}`;
+      return `\n${prefix}${token}${suffix}`;
     }
     return match;
   });
@@ -760,11 +764,29 @@ export function healGlobalMarkdown(content: string): string {
   // 13. Restore all Math Blocks using function replacers to 100% preserve literal $$
   for (let i = 0; i < mathPlaceholders.length; i++) {
     let val = mathPlaceholders[i];
-    if (val.startsWith('$') && val.endsWith('$') && !val.startsWith('$$')) {
-      const inner = val.slice(1, -1).trim();
-      const isPureAcronym = /^[a-zA-Z0-9.\s\-_/()]+$/.test(inner) && !/[=+\-*/\\^_{}]/.test(inner) && !/\b(?:frac|sqrt|sin|cos|tan)\b/i.test(inner);
-      if (isPureAcronym) {
-        val = inner;
+    const isDouble = val.startsWith('$$') && val.endsWith('$$') && val.length > 4;
+    const isSingle = !isDouble && val.startsWith('$') && val.endsWith('$') && val.length > 2;
+
+    if (isDouble || isSingle) {
+      const inner = isDouble ? val.slice(2, -2).trim() : val.slice(1, -1).trim();
+      // If inner contains narrative English text without \text, unpack it with formatFormulaBoxContent so KaTeX does not jam words together
+      if (!inner.includes('\\text{')) {
+        const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
+        const narrativeWords = words.filter(w => 
+          ENGLISH_STOPWORDS.has(w.toLowerCase()) || 
+          /^(?:graph|reflection|symmetry|inverse|domain|range|function|point|curve|line|axis|slope|equal|equals|value|always|never|means|notice|remember|assume|cancel|factor|factors|equilibrium|reaction|exothermic|endothermic|pressure|vessel|temperature|system|evaluate|calculate|determine|state|explain|describe|derive|increase|decrease|total|yield|forward|reverse|ammonia|chemical|engineer|analyzing)$/i.test(w)
+        );
+        if (narrativeWords.length >= 2) {
+          val = formatFormulaBoxContent(inner);
+        }
+      }
+      
+      if (typeof val === 'string' && val.startsWith('$') && val.endsWith('$') && !val.startsWith('$$')) {
+        const checkInner = val.slice(1, -1).trim();
+        const isPureAcronym = /^[a-zA-Z0-9.\s\-_/()]+$/.test(checkInner) && !/[=+\-*/\\^_{}]/.test(checkInner) && !/\b(?:frac|sqrt|sin|cos|tan)\b/i.test(checkInner);
+        if (isPureAcronym) {
+          val = checkInner;
+        }
       }
     }
     text = text.split(`___MATH_BLOCK_${i}___`).join(val);

@@ -4884,12 +4884,14 @@ ${allChaptersDirectiveQ}
 CRITICAL ARCHITECTURE RULES:
 
 1. CRITICAL LATEX & MATHEMATICAL NOTATION MANDATE:
-   - Wrap ALL mathematical equations, expressions, variables, formulas, and functions in standard single dollar signs ($...$).
+   - Wrap ONLY mathematical equations, expressions, variables, formulas, and functions in standard single dollar signs ($...$).
    - ALWAYS format math as valid LaTeX: write $f(x) = \frac{2x - 3}{x + 4}$, $f^{-1}(x)$, $x^3$, $3x^2$, $e^x$, $\sqrt{x^2 + 1}$.
+   - CRITICAL PROSE WARNING: NEVER wrap natural English sentences, clauses, or instructions in dollar signs!
+   - NEVER write "$If the system is at equilibrium...$" or "$Evaluate the effect of...$". Dollar signs MUST ONLY enclose pure math/formulas (e.g. $K_p$, $T = 450\text{ K}$, $P = 200\text{ atm}$, $f(x)$).
    - NEVER leave function notation or inverse functions unwrapped (NEVER write plain 'f(x)' or 'f^{-1}(x)'; ALWAYS write '$f(x)$' and '$f^{-1}(x)$').
    - NEVER split an equation across newlines inside dollar signs. The opening '$' and closing '$' must be on the EXACT SAME line.
    - NEVER mix single and double dollar signs (NEVER write '$...$$' or '$$...$').
-   - Use clean LaTeX for all formulas ($F = ma$, $H_2O$, $V = IR$).
+   - Use clean LaTeX for all formulas ($F = ma$, $\text{H}_2\text{O}$, $V = IR$).
 
 2. REAL EXAM QUESTION VARIETY & INTRA-BATCH UNIQUENESS:
    - Every single question in the generated ${requestedCount} questions MUST be 100% unique and test a completely distinct concept, law, equation, mechanism, or scenario.
@@ -5010,7 +5012,11 @@ Entropy Variation Seed: ${randomEntropySeed}
 Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic, grade, and strictly matching ${difficulty} difficulty level.
 CRITICAL COUNT MANDATE: The output array MUST contain EXACTLY ${requestedCount} question objects. Never stop early or generate fewer than ${requestedCount}.
 CRITICAL ANTI-REPETITION MANDATE: Every question must be 100% distinct. Do NOT repeat any concept or previously tested question.
-MULTI-MODAL FORMATTING MANDATE: Where naturally and educationally relevant to the topic (e.g. laboratory experiments, mechanics setups, circuits, data analysis, schedules), include clean Markdown data tables, ASCII schematic diagrams (\`\`\`diagram), or coordinate graphs (\`\`\`graph). Do NOT force diagrams onto purely verbal/conceptual questions.
+CRITICAL MULTI-MODAL MANDATE (TABLES, GRAPHS & DIAGRAMS):
+Out of the ${requestedCount} generated questions, AT LEAST 2 questions MUST actively include an explicit visual or tabular problem artifact:
+- AT LEAST ONE question with a clean Markdown observation/data table (e.g. experimental trial runs, kinetics data, sensor measurements, or matrix).
+- AT LEAST ONE question with a labeled coordinate graph (\`\`\`graph ... \`\`\`), apparatus setup schematic (\`\`\`diagram ... \`\`\`), or computational simulation script (\`\`\`python ... \`\`\` for Math/CS/Physics).
+Ensure the visual element is central to solving the question and referenced in the sub-parts.
 For each question, provide:
 1. 'question': Authentic exam question (including data table, diagram block, or graph when appropriate).
 2. 'expectedAnswer': Comprehensive, non-empty step-by-step official model solution (MANDATORY).

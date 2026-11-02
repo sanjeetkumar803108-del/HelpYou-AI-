@@ -176,6 +176,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [expandedSubject, setExpandedSubject] = useState<string | null>(() => {
     return mergedSubjects[0]?.id || null;
   });
+  const [showAllSubjects, setShowAllSubjects] = useState<boolean>(false);
 
   const toggleSubject = (subjectId: string) => {
     triggerVibration(10);
@@ -962,7 +963,14 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
               </div>
 
               <div className="space-y-3">
-                {mergedSubjects.map((subject) => {
+                {(() => {
+                  const isLaterSubjectExpanded = mergedSubjects.slice(5).some(s => s.id === expandedSubject);
+                  const shouldShowAll = showAllSubjects || isLaterSubjectExpanded || mergedSubjects.length <= 5;
+                  const visibleSubjects = shouldShowAll ? mergedSubjects : mergedSubjects.slice(0, 5);
+
+                  return (
+                    <>
+                      {visibleSubjects.map((subject) => {
                   const isExpanded = expandedSubject === subject.id;
                   return (
                     <div 
@@ -1070,8 +1078,34 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                     </div>
                   );
                 })}
-              </div>
-            </div>
+
+                {mergedSubjects.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerVibration(10);
+                      setShowAllSubjects(prev => !prev);
+                    }}
+                    className="w-full py-3.5 px-4 bg-zinc-50 hover:bg-zinc-100 active:scale-[0.99] border border-dashed border-zinc-300 hover:border-zinc-400 rounded-2xl text-xs font-black text-zinc-700 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs mt-1"
+                  >
+                    {shouldShowAll ? (
+                      <>
+                        <ChevronUp className="w-4 h-4 text-zinc-500" />
+                        <span>Show Less Subjects</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 text-pink-600" />
+                        <span>+ More Subjects ({mergedSubjects.length - 5} more)</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </div>
 
           </div>
         )

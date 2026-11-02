@@ -136,6 +136,22 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
   });
 
   const [selectedChapter, setSelectedChapter] = useState<string>('');
+  const [noteDepth, setNoteDepth] = useState<'detailed' | 'revision'>('detailed');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadingStage, setLoadingStage] = useState<number>(1);
+  const [stageMessage, setStageMessage] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [notesData, setNotesData] = useState<AINotesData | null>(null);
+  const [historyItems, setHistoryItems] = useState<SavedNoteItem[]>(() => {
+    try {
+      const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
+      const local = safeGetItem(uid ? `user_notes_${uid}` : 'helpyou_ai_saved_notes');
+      return local ? JSON.parse(local) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [exportingPdf, setExportingPdf] = useState<boolean>(false);
 
   useEffect(() => {
     if (mergedSubjects.length > 0 && !selectedSubject) {

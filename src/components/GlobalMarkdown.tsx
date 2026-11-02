@@ -52,6 +52,10 @@ export function cleanMarkdownMath(content: string): string {
   // Normalize 3 or more dollar signs "$$$" or "$$$$" -> "$$"
   text = text.replace(/\${3,}/g, '$$');
 
+  // Fix mismatched inline delimiters: e.g. "$f(x) = \frac{2x - 3}{x + 4}$$" -> "$$f(x) = \frac{2x - 3}{x + 4}$$"
+  text = text.replace(/(?<!\$)\$([^\$\n]+?)\$\$(?!\$)/g, '$$$$$1$$$$');
+  text = text.replace(/(?<!\$)\$\$([^\$\n]+?)\$(?!\$)/g, '$$$$$1$$$$');
+
   // Fix stray single dollar inside display math statements before numbers/symbols:
   // e.g. "$$\frac{45}{68}\approx$ 0.6618$$" -> "$$\frac{45}{68}\approx 0.6618$$"
   text = text.replace(/(\$\$[^\$\n]+)\$\s*([0-9a-zA-Z._\-]+)\s*\$\$/g, '$1 $2$$');
@@ -583,6 +587,13 @@ export function healGlobalMarkdown(content: string): string {
   text = text.replace(new RegExp(`(${LATEX_SYMBOLS}\\b)`, 'g'), (match) => {
     const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
     mathPlaceholders.push(`$${match}$`);
+    return token;
+  });
+
+  // 8.5. Math functions with superscripts or inverse notation outside math: e.g. f^{-1}(x), g^{-1}(x), f'(x)
+  text = text.replace(/(?<![\w$\\])([a-zA-Z])\^(\{[^{}]+\}|-?[0-9]+)\s*(\([a-zA-Z0-9,._\s+-]+\))/g, (_match, base, exp, arg) => {
+    const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
+    mathPlaceholders.push(`$${base}^${exp}${arg}$`);
     return token;
   });
 

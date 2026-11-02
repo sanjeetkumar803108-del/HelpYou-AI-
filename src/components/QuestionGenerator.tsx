@@ -28,7 +28,7 @@ import {
 } from '../utils/pdfTableRenderer';
 import SafePdfViewer from './SafePdfViewer';
 import AdvancedLoader from './AdvancedLoader';
-import GlobalMarkdown from './GlobalMarkdown';
+import GlobalMarkdown, { healGlobalMarkdown } from './GlobalMarkdown';
 import { getApiUrl } from '../utils/api';
 
 interface QuestionGeneratorProps {
@@ -477,15 +477,32 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
   const normalizeQuestionBreaks = (text: string): string => {
     if (!text) return '';
-    // Protect code blocks and diagrams from receiving accidental mid-block break splits
+    // 1. Protect Code Blocks (```...```) and diagrams from receiving accidental mid-block break splits
     const codeBlocks: string[] = [];
     let safe = text.replace(/```[\s\S]*?```/g, (m) => {
       codeBlocks.push(m);
       return `___CODE_BLOCK_${codeBlocks.length - 1}___`;
     });
-    safe = safe.replace(/([^\n])\s*(Part\s+[A-D]:|\([a-d]\)|\([i|v|x]+\))\s*/gi, '$1\n\n$2 ');
+
+    // 2. Protect existing math expressions ($$...$$ and $...$) from having internal line breaks injected
+    const mathBlocks: string[] = [];
+    safe = safe.replace(/(\$\$[\s\S]*?\$\$|\$[^\n$]+\$)/g, (m) => {
+      mathBlocks.push(m);
+      return `___MATH_BLOCK_${mathBlocks.length - 1}___`;
+    });
+
+    // 3. Only split explicit question sub-parts (Part A, Part B, (a), (b), (i), (ii), etc.)
+    // MUST be preceded by sentence punctuation ([.;:]) and NEVER match function variables like f(x)
+    safe = safe.replace(/([.;:])\s*(Part\s+[A-D]:|\([a-d]\)|\((?:i{1,3}|iv|v|vi{0,3}|ix)\))\s*/gi, '$1\n\n$2 ');
+
+    // 4. Restore protected math blocks
+    for (let i = 0; i < mathBlocks.length; i++) {
+      safe = safe.split(`___MATH_BLOCK_${i}___`).join(mathBlocks[i]);
+    }
+
+    // 5. Restore protected code blocks
     for (let i = 0; i < codeBlocks.length; i++) {
-      safe = safe.replace(`___CODE_BLOCK_${i}___`, codeBlocks[i]);
+      safe = safe.split(`___CODE_BLOCK_${i}___`).join(codeBlocks[i]);
     }
     return safe;
   };
@@ -1638,7 +1655,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                           </div>
                           <div className="font-extrabold text-sm text-zinc-900 leading-relaxed space-y-1 select-text">
                             <GlobalMarkdown>
-                              {normalizeQuestionBreaks(qText)}
+                              {healGlobalMarkdown(normalizeQuestionBreaks(qText))}
                             </GlobalMarkdown>
                           </div>
                         </div>

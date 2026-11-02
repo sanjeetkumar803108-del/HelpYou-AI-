@@ -20,10 +20,9 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 
 interface PdfHistoryScreenProps {
   onBack: () => void;
-  onOpenImageToPdf?: () => void;
 }
 
-export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistoryScreenProps) {
+export default function PdfHistoryScreen({ onBack }: PdfHistoryScreenProps) {
   const [historyItems, setHistoryItems] = useState<PdfHistoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPdf, setSelectedPdf] = useState<PdfHistoryItem | null>(null);
@@ -336,17 +335,9 @@ export default function PdfHistoryScreen({ onBack, onOpenImageToPdf }: PdfHistor
             </div>
             <h3 className="font-extrabold text-zinc-900 text-lg mb-1">No PDF History Yet</h3>
             <p className="text-xs text-zinc-500 max-w-xs leading-relaxed mb-6">
-              Whenever you generate or export a PDF (Image to PDF, Smart Notes, or Study Content), it automatically gets saved here for easy access!
+              Whenever you generate or export a PDF (Smart Notes or Study Content), it automatically gets saved here for easy access!
             </p>
-            {onOpenImageToPdf && (
-              <button
-                onClick={() => { triggerVibration(15); onOpenImageToPdf(); }}
-                className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-5 py-3 rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Create Image to PDF</span>
-              </button>
-            )}
+            
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-12 text-zinc-400">

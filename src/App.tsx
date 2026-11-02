@@ -37,7 +37,6 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
   return lazy(() => retryImport(factory));
 }
 
-const ImageToPDF = lazyWithRetry(() => import('./components/ImageToPDF'));
 const PdfHistoryScreen = lazyWithRetry(() => import('./components/PdfHistoryScreen'));
 const MagicScanner = lazyWithRetry(() => import('./components/MagicScanner'));
 const EssayGrader = lazyWithRetry(() => import('./components/EssayGrader'));
@@ -1390,25 +1389,12 @@ export default function App() {
                 </ErrorBoundary>
               </div>
             )}
-            {mountedTools.has('image2pdf') && (
-              <div className={activeTool === 'image2pdf' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="Image to PDF" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
-                  <Suspense fallback={<FullPageSkeleton />}>
-                    <ImageToPDF 
-                      onBack={() => setActiveTool(null)} 
-                      onOpenHistory={() => setActiveTool('pdfhistory')} 
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
             {mountedTools.has('pdfhistory') && (
               <div className={activeTool === 'pdfhistory' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                <ErrorBoundary featureName="PDF History" onClose={() => setActiveTool('image2pdf')} onReset={() => setActiveTool('image2pdf')}>
+                <ErrorBoundary featureName="PDF History" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
                   <Suspense fallback={<FullPageSkeleton />}>
                     <PdfHistoryScreen 
-                      onBack={() => setActiveTool('image2pdf')} 
-                      onOpenImageToPdf={() => setActiveTool('image2pdf')}
+                      onBack={() => setActiveTool(null)} 
                     />
                   </Suspense>
                 </ErrorBoundary>

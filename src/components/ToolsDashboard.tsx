@@ -34,7 +34,6 @@ const FEATURE_COSTS: Record<string, number> = {
   'grammar': 1,
   'summariser': 1,
   'calculator': 0,
-  'image2pdf': 0,
   'pdfhistory': 0
 };
 
@@ -758,33 +757,6 @@ function ToolsDashboard({
                       <div>
                         <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Grammar & Flow</h4>
                         <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Proofreading AI</p>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Image to PDF */}
-                  {!archivedToolIds.includes('image2pdf') && (
-                    <motion.div 
-                      variants={itemVariants}
-                      whileHover={{ scale: 1.03, y: -4, boxShadow: "0 8px 20px -5px rgba(0,0,0,0.06)" }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleCardClick('image2pdf')}
-                      onTouchStart={(e) => handleStartPress('image2pdf', true, e)}
-                      onTouchMove={handleMovePress}
-                      onTouchEnd={handleEndTouch}
-                      onTouchCancel={handleCancelPress}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setContextMenuItem({ item: 'image2pdf', isTool: true });
-                      }}
-                      className="bg-[#EBF5FF] border border-blue-200/60 shadow-sm rounded-3xl p-5 flex flex-col justify-between aspect-[1.15/1] min-h-[115px] cursor-pointer transition-all select-none touch-pan-y"
-                    >
-                      <div className="w-10 h-10 bg-white/80 rounded-2xl flex items-center justify-center text-xl shadow-sm select-none">
-                        📄
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-sm text-zinc-800 leading-tight">Image to PDF</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">Photos to PDF</p>
                       </div>
                     </motion.div>
                   )}

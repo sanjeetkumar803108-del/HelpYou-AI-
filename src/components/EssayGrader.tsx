@@ -707,12 +707,17 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
           {/* DYNAMIC CASCADING DROPDOWNS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* DROPDOWN 1: CURRICULUM */}
-            <div className="relative">
+            <div className={`relative ${isCurriculumOpen ? 'z-30' : 'z-20'}`}>
               <label className="block text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Select Curriculum / Exam</label>
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => !loading && !scanning && setIsCurriculumOpen(!isCurriculumOpen)}
+                  onClick={() => {
+                    if (!loading && !scanning) {
+                      setIsCurriculumOpen(!isCurriculumOpen);
+                      setIsSubjectOpen(false);
+                    }
+                  }}
                   disabled={loading || scanning}
                   className="w-full bg-white border border-zinc-200 text-zinc-800 text-sm font-bold rounded-2xl py-3.5 px-4 flex items-center justify-between focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm cursor-pointer disabled:opacity-50 text-left font-sans"
                 >
@@ -744,9 +749,9 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
                                   onClick={() => {
                                     setCurriculum(curr);
                                     // Cascade update the subject
-                                    const available = SUBJECT_OPTIONS[curr] || [];
+                                    const available = getSubjectOptions(curr);
                                     if (available.length > 0) {
-                                      setSubject(available[0]);
+                                      setSubject((prev) => available.includes(prev) ? prev : available[0]);
                                     }
                                     setIsCurriculumOpen(false);
                                   }}
@@ -773,12 +778,17 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* DROPDOWN 2: SUBJECT / ESSAY TYPE */}
-            <div className="relative">
+            <div className={`relative ${isSubjectOpen ? 'z-30' : 'z-10'}`}>
               <label className="block text-xs font-black text-zinc-400 uppercase tracking-widest mb-2">Select Subject / Essay Type</label>
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => !loading && !scanning && setIsSubjectOpen(!isSubjectOpen)}
+                  onClick={() => {
+                    if (!loading && !scanning) {
+                      setIsSubjectOpen(!isSubjectOpen);
+                      setIsCurriculumOpen(false);
+                    }
+                  }}
                   disabled={loading || scanning}
                   className="w-full bg-white border border-zinc-200 text-zinc-800 text-sm font-bold rounded-2xl py-3.5 px-4 flex items-center justify-between focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm cursor-pointer disabled:opacity-50 text-left font-sans"
                 >
@@ -801,7 +811,7 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
                         className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-2xl shadow-xl z-50 overflow-hidden font-sans"
                       >
                         <ul className="py-1 max-h-60 overflow-y-auto">
-                          {(SUBJECT_OPTIONS[curriculum] || []).map((sub) => {
+                          {getSubjectOptions(curriculum).map((sub) => {
                             const isSelected = subject === sub;
                             return (
                               <li key={sub}>

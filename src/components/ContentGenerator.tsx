@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Loader2, Save, PenTool, Type, FileText, Feather, 
   Edit3, FileDown, Check, History, Trash2, Calendar, Share2, 
-  Sparkles, ExternalLink, Eye, Download, Flag, Copy, X
+  Sparkles, ExternalLink, Eye, Download, Flag, X
 } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import ReportAIModal from './ReportAIModal';
@@ -11,7 +11,7 @@ import { motion } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
-import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
+import { savePDFMobile, sharePDFMobile } from '../utils/mobileSaver';
 import { sanitizePdfText } from '../utils/pdfSanitizer';
 import SafePdfViewer from './SafePdfViewer';
 import { deductCoins, getCoins } from '../utils/coins';
@@ -312,7 +312,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   }, [previewPdfUri, showHistory, result]);
 
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -557,35 +556,6 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
       alert("Could not share PDF. Please try again.");
     } finally {
       setExporting(false);
-    }
-  };
-
-  const handleShareText = async () => {
-    if (!result) return;
-    triggerVibration(10);
-    const shareTitle = `${selectedType}: ${topic.substring(0, 40)}`;
-    const shareText = `📚 ${selectedType.toUpperCase()} - generated with HelpYou AI\n\nTopic: ${topic}\nTone: ${selectedTone} | Format: ${selectedType === 'Essay' ? selectedFormat : 'Standard'}\n\n${result}`;
-    await shareTextMobile(shareTitle, shareText);
-  };
-
-  const handleCopy = async () => {
-    if (!result) return;
-    triggerVibration(15);
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(result);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = result;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy text:', err);
     }
   };
 
@@ -979,26 +949,16 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               </div>
             )}
 
-            {/* Sleek Action Bar with Copy Text, View PDF, Share PDF, and Share Text */}
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-3 bg-white border border-zinc-200 rounded-2xl p-2.5 shadow-sm">
-              {/* [📋 Copy Text] */}
-              <button
-                onClick={handleCopy}
-                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-[11px] text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
-                title="Copy full text to clipboard"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-zinc-600" />}
-                <span className={copied ? 'text-emerald-600 font-black' : ''}>{copied ? 'Copied!' : 'Copy'}</span>
-              </button>
-
+            {/* Action Bar with View PDF and Share PDF */}
+            <div className="grid grid-cols-2 gap-2 mb-3 bg-white border border-zinc-200 rounded-2xl p-2.5 shadow-sm">
               {/* [📄 View PDF] */}
               <button
                 onClick={handleViewPDF}
                 disabled={exporting}
-                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-[11px] text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-xs text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
                 title="View formatted PDF"
               >
-                {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-600" /> : <Eye className="w-3.5 h-3.5 text-cyan-600" />}
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin text-cyan-600" /> : <Eye className="w-4 h-4 text-cyan-600" />}
                 <span>View PDF</span>
               </button>
 
@@ -1006,21 +966,11 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
               <button
                 onClick={handleSharePDF}
                 disabled={exporting}
-                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-xl font-black text-[11px] shadow-md transition-all cursor-pointer select-none border-none"
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-xl font-black text-xs shadow-md transition-all cursor-pointer select-none border-none"
                 title="Share PDF file natively"
               >
-                <Share2 className="w-3.5 h-3.5 text-white" />
+                <Share2 className="w-4 h-4 text-white" />
                 <span>Share PDF</span>
-              </button>
-
-              {/* [💬 Share Text] */}
-              <button
-                onClick={handleShareText}
-                className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-1 bg-zinc-50 hover:bg-zinc-100 active:scale-95 border border-zinc-200 rounded-xl font-bold text-[11px] text-zinc-800 shadow-xs transition-all cursor-pointer select-none"
-                title="Share formatted text"
-              >
-                <Share2 className="w-3.5 h-3.5 text-zinc-600" />
-                <span>Text</span>
               </button>
             </div>
 

@@ -587,18 +587,21 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
                           isExpanded ? 'bg-zinc-50/50' : 'hover:bg-zinc-50/40'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0 pr-2">
-                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-base shrink-0 shadow-sm ${subject.themeColor || 'bg-purple-100 text-purple-700'}`}>
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2 flex-1">
+                          <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-bold text-base shrink-0 shadow-sm ${subject.themeColor || 'bg-purple-100 text-purple-700'}`}>
                             {subject.icon || '📚'}
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="font-extrabold text-sm text-zinc-800 leading-snug truncate">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-extrabold text-xs sm:text-sm text-zinc-800 leading-snug break-words">
                               {subject.title}
                             </h4>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-lg">
+                            {(subject.topics || []).length} CH
+                          </span>
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4 text-zinc-400 shrink-0" />
                           ) : (
@@ -618,30 +621,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
                             className="border-t border-zinc-100"
                           >
                             <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
-                              {/* All Chapters option */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  triggerVibration(15);
-                                  setSelectedSubject(subject.title);
-                                  setSelectedChapter(`Comprehensive Review (${subject.title})`);
-                                }}
-                                className={`w-full py-2.5 px-3.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer shadow-xs ${
-                                  selectedSubject === subject.title && selectedChapter === `Comprehensive Review (${subject.title})`
-                                    ? 'bg-purple-50 border-purple-500 ring-1 ring-purple-500/20 text-purple-950 font-black shadow-xs'
-                                    : 'bg-white hover:bg-purple-50/50 border-zinc-200/70 text-zinc-700 hover:text-purple-700 font-bold'
-                                }`}
-                              >
-                                <span className="text-xs font-bold">📖 All Chapters ({subject.title})</span>
-                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                                  selectedSubject === subject.title && selectedChapter === `Comprehensive Review (${subject.title})`
-                                    ? 'bg-purple-600 text-white'
-                                    : 'text-purple-600 bg-purple-50'
-                                }`}>
-                                  {selectedSubject === subject.title && selectedChapter === `Comprehensive Review (${subject.title})` ? 'Selected ✓' : 'Select All'}
-                                </span>
-                              </button>
-
                               {/* Individual Chapters / Units */}
                               {(subject.topics || []).map((topicItem, idx) => {
                                 const isSelected = selectedSubject === subject.title && selectedChapter === topicItem;
@@ -654,33 +633,31 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
                                       setSelectedSubject(subject.title);
                                       setSelectedChapter(topicItem);
                                     }}
-                                    className={`w-full border active:scale-[0.995] py-2.5 px-3.5 rounded-2xl flex items-center justify-between text-left transition-all shadow-xs cursor-pointer ${
+                                    className={`w-full border active:scale-[0.995] py-2.5 px-3 rounded-2xl flex items-center justify-between text-left transition-all shadow-xs cursor-pointer ${
                                       isSelected
                                         ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-500/20'
                                         : 'bg-white border-zinc-200/70 hover:bg-purple-50/40 hover:border-purple-200'
                                     }`}
                                   >
-                                    <div className="flex items-center gap-2.5 flex-1 pr-2 min-w-0">
-                                      <span className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded-md shrink-0 border ${
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-md shrink-0 border ${
                                         isSelected
                                           ? 'text-white bg-purple-600 border-purple-600 font-bold'
                                           : 'text-purple-600 bg-purple-50 border-purple-100 font-semibold'
                                       }`}>
-                                        {(subject.singularNomenclature || (subject.nomenclature ? subject.nomenclature.replace(/s$/, '') : 'Chapter'))} {String(idx + 1).padStart(2, '0')}
+                                        CH {String(idx + 1).padStart(2, '0')}
                                       </span>
-                                      <span className={`text-xs leading-snug truncate ${
+                                      <span className={`text-xs leading-snug break-words flex-1 ${
                                         isSelected ? 'font-black text-purple-950' : 'font-bold text-zinc-800'
                                       }`}>
                                         {topicItem}
                                       </span>
                                     </div>
-                                    <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-lg shrink-0 flex items-center gap-1 ${
-                                      isSelected
-                                        ? 'bg-purple-600 text-white shadow-2xs'
-                                        : 'text-purple-600 bg-purple-50'
-                                    }`}>
-                                      {isSelected ? 'Selected ✓' : 'Select →'}
-                                    </span>
+                                    {isSelected && (
+                                      <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shrink-0 ml-1.5 shadow-2xs">
+                                        ✓
+                                      </span>
+                                    )}
                                   </button>
                                 );
                               })}

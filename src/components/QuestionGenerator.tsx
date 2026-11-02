@@ -2048,20 +2048,20 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                               isExpanded ? 'bg-zinc-50/50' : 'hover:bg-zinc-50/40'
                             }`}
                           >
-                            <div className="flex items-center gap-3 min-w-0 pr-2">
-                              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-base shrink-0 shadow-sm ${subject.themeColor || 'bg-purple-100 text-purple-700'}`}>
+                            <div className="flex items-center gap-2.5 min-w-0 pr-2 flex-1">
+                              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-bold text-base shrink-0 shadow-sm ${subject.themeColor || 'bg-purple-100 text-purple-700'}`}>
                                 {subject.icon || '📚'}
                               </div>
-                              <div className="min-w-0">
-                                <h4 className="font-extrabold text-sm text-zinc-800 leading-snug truncate">
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-extrabold text-xs sm:text-sm text-zinc-800 leading-snug break-words">
                                   {subject.title}
                                 </h4>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-lg">
-                                {(subject.topics || []).length} {subject.nomenclature || 'Chapters'}
+                                {(subject.topics || []).length} CH
                               </span>
                               {isExpanded ? (
                                 <ChevronUp className="w-4 h-4 text-zinc-400 shrink-0" />
@@ -2082,56 +2082,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                 className="border-t border-zinc-100"
                               >
                                 <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
-                                  {/* All Chapters / Comprehensive Full Syllabus Option */}
-                                  {(() => {
-                                    const cleanSubj = cleanSubjectTitle(subject.title);
-                                    const allTopicsList = (subject.topics || []).join(', ');
-                                    const allTargetStr = `${cleanSubj} - All ${subject.nomenclature || 'Chapters'} (Full Syllabus: ${allTopicsList})`;
-                                    const isAllSelected = customTopic === allTargetStr || (customTopic.includes(cleanSubj) && /all (chapters?|units?|domains?|topics?|full syllabus)/i.test(customTopic));
-
-                                    return (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          triggerVibration(15);
-                                          setCustomTopic(allTargetStr);
-                                        }}
-                                        className={`w-full py-3.5 px-4 rounded-2xl border-2 flex items-center justify-between text-left transition-all group/all shadow-xs cursor-pointer mb-1 active:scale-[0.995] ${
-                                          isAllSelected
-                                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 border-purple-600 text-white font-extrabold shadow-md'
-                                            : 'bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-indigo-50/90 border-indigo-200/90 hover:border-indigo-400 hover:from-indigo-100/80 hover:to-purple-100/80 text-indigo-950 font-bold'
-                                        }`}
-                                      >
-                                        <div className="flex items-center gap-2.5 flex-1 pr-2 min-w-0">
-                                          <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-xs shrink-0 flex items-center gap-1 ${
-                                            isAllSelected ? 'bg-white/20 text-white border border-white/30' : 'text-white bg-indigo-600'
-                                          }`}>
-                                            ⚡ Full Test
-                                          </span>
-                                          <div className="min-w-0">
-                                            <span className={`font-black text-xs block truncate ${
-                                              isAllSelected ? 'text-white' : 'text-indigo-950 group-hover/all:text-indigo-700'
-                                            }`}>
-                                              All {subject.nomenclature || 'Chapters'} ({cleanSubj})
-                                            </span>
-                                            <span className={`text-[10px] font-semibold block truncate ${
-                                              isAllSelected ? 'text-purple-100' : 'text-zinc-500'
-                                            }`}>
-                                              Covers all {(subject.topics || []).length} {(subject.nomenclature || 'Chapters').toLowerCase()} in this subject
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <span className={`text-[11px] font-black px-3 py-1 rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1 ${
-                                          isAllSelected
-                                            ? 'bg-white text-purple-700'
-                                            : 'text-white bg-indigo-600 group-hover/all:bg-indigo-700'
-                                        }`}>
-                                          {isAllSelected ? 'Selected ✓' : 'Practice All →'}
-                                        </span>
-                                      </button>
-                                    );
-                                  })()}
-
                                   {/* Individual Chapters / Units */}
                                   {(subject.topics || []).map((topicItem, idx) => {
                                     const cleanSubj = cleanSubjectTitle(subject.title);
@@ -2145,33 +2095,31 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                           triggerVibration(15);
                                           setCustomTopic(topicTargetStr);
                                         }}
-                                        className={`w-full border active:scale-[0.995] py-2.5 px-3.5 rounded-2xl flex items-center justify-between text-left transition-all shadow-xs cursor-pointer ${
+                                        className={`w-full border active:scale-[0.995] py-2.5 px-3 rounded-2xl flex items-center justify-between text-left transition-all shadow-xs cursor-pointer ${
                                           isSelected
                                             ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-500/20'
                                             : 'bg-white border-zinc-200/70 hover:bg-purple-50/40 hover:border-purple-200'
                                         }`}
                                       >
-                                        <div className="flex items-center gap-2.5 flex-1 pr-2 min-w-0">
-                                          <span className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded-md shrink-0 border ${
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                          <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-md shrink-0 border ${
                                             isSelected
                                               ? 'text-white bg-purple-600 border-purple-600'
                                               : 'text-purple-600 bg-purple-50 border-purple-100'
                                           }`}>
-                                            {(subject.singularNomenclature || (subject.nomenclature ? subject.nomenclature.replace(/s$/, '') : 'Chapter'))} {String(idx + 1).padStart(2, '0')}
+                                            CH {String(idx + 1).padStart(2, '0')}
                                           </span>
-                                          <span className={`text-xs leading-snug truncate ${
+                                          <span className={`text-xs leading-snug break-words flex-1 ${
                                             isSelected ? 'font-black text-purple-950' : 'font-bold text-zinc-800'
                                           }`}>
                                             {topicItem}
                                           </span>
                                         </div>
-                                        <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-lg shrink-0 flex items-center gap-1 ${
-                                          isSelected
-                                            ? 'bg-purple-600 text-white shadow-2xs'
-                                            : 'text-purple-600 bg-purple-50'
-                                        }`}>
-                                          {isSelected ? 'Selected ✓' : 'Select →'}
-                                        </span>
+                                        {isSelected && (
+                                          <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shrink-0 ml-1.5 shadow-2xs">
+                                            ✓
+                                          </span>
+                                        )}
                                       </button>
                                     );
                                   })}

@@ -2566,20 +2566,20 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                                     isExpanded ? 'bg-zinc-50/50' : 'hover:bg-zinc-50/40'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm ${subject.themeColor}`}>
+                                  <div className="flex items-center gap-2.5 min-w-0 pr-2 flex-1">
+                                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm shrink-0 ${subject.themeColor}`}>
                                       {subject.icon}
                                     </div>
-                                    <div>
-                                      <h4 className="font-extrabold text-sm text-zinc-800 leading-snug">
+                                    <div className="min-w-0 flex-1">
+                                      <h4 className="font-extrabold text-xs sm:text-sm text-zinc-800 leading-snug break-words">
                                         {cleanSubjectTitle(subject.title)}
                                       </h4>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 shrink-0">
                                     <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-lg">
-                                      {(subject.topics || []).length} {subject.nomenclature || 'Chapters'}
+                                      {(subject.topics || []).length} CH
                                     </span>
                                     {isExpanded ? (
                                       <ChevronUp className="w-4 h-4 text-zinc-400 shrink-0" />
@@ -2600,56 +2600,25 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                                       className="border-t border-zinc-100"
                                     >
                                       <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
-                                        {/* All Chapters / Comprehensive Full Syllabus Option */}
-                                        <button
-                                          onClick={() => {
-                                            triggerVibration(15);
-                                            const cleanSubj = cleanSubjectTitle(subject.title);
-                                            const allTopicsList = (subject.topics || []).join(', ');
-                                            handleTopicClick(cleanSubj, `All ${subject.nomenclature || 'Chapters'} (Full Syllabus: ${allTopicsList})`);
-                                          }}
-                                          disabled={loading}
-                                          className="w-full bg-gradient-to-r from-indigo-50/90 via-purple-50/70 to-indigo-50/90 border-2 border-indigo-200/90 hover:border-indigo-400 hover:from-indigo-100/80 hover:to-purple-100/80 active:scale-[0.995] py-3.5 px-4 rounded-2xl flex items-center justify-between text-left transition-all group/all shadow-xs cursor-pointer mb-1"
-                                        >
-                                          <div className="flex items-center gap-2.5 flex-1 pr-2">
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-white bg-indigo-600 px-2 py-0.5 rounded-md shadow-xs shrink-0 flex items-center gap-1">
-                                              ⚡ Full Test
-                                            </span>
-                                            <div className="min-w-0">
-                                              <span className="font-black text-xs text-indigo-950 group-hover/all:text-indigo-700 transition-colors block truncate">
-                                                All {subject.nomenclature || 'Chapters'} ({cleanSubjectTitle(subject.title)})
-                                              </span>
-                                              <span className="text-[10px] font-semibold text-zinc-500 block truncate">
-                                                Covers all {(subject.topics || []).length} {(subject.nomenclature || 'Chapters').toLowerCase()} in this subject
-                                              </span>
-                                            </div>
-                                          </div>
-                                          <span className="text-[11px] font-black text-white bg-indigo-600 group-hover/all:bg-indigo-700 px-3 py-1 rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1">
-                                            Practice All &rarr;
-                                          </span>
-                                        </button>
-
                                         {(subject.topics || []).map((topicItem, index) => (
                                           <button
                                             key={index}
+                                            type="button"
                                             onClick={() => {
                                               triggerVibration(15);
                                               handleTopicClick(cleanSubjectTitle(subject.title), topicItem);
                                             }}
                                             disabled={loading}
-                                            className="w-full bg-white border border-zinc-200/70 hover:bg-indigo-50/40 hover:border-indigo-200 active:scale-[0.995] py-3 px-3.5 rounded-2xl flex items-center justify-between text-left transition-all group/topic shadow-xs cursor-pointer"
+                                            className="w-full bg-white border border-zinc-200/70 hover:bg-indigo-50/40 hover:border-indigo-200 active:scale-[0.995] py-2.5 px-3 rounded-2xl flex items-center justify-between text-left transition-all group/topic shadow-xs cursor-pointer"
                                           >
-                                            <div className="flex items-center gap-2.5 flex-1 pr-2">
-                                              <span className="text-[10px] font-black font-mono text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md shrink-0">
-                                                {(subject.singularNomenclature || (subject.nomenclature ? subject.nomenclature.replace(/s$/, '') : 'Unit'))} {String(index + 1).padStart(2, '0')}
+                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                              <span className="text-[10px] font-black font-mono text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md shrink-0">
+                                                CH {String(index + 1).padStart(2, '0')}
                                               </span>
-                                              <span className="font-bold text-xs text-zinc-800 group-hover/topic:text-indigo-600 transition-colors leading-snug">
+                                              <span className="font-bold text-xs text-zinc-800 group-hover/topic:text-indigo-600 transition-colors leading-snug break-words flex-1">
                                                 {topicItem}
                                               </span>
                                             </div>
-                                            <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg opacity-80 group-hover/topic:opacity-100 group-hover/topic:bg-indigo-600 group-hover/topic:text-white transition-all shrink-0 flex items-center gap-1">
-                                              Practice &rarr;
-                                            </span>
                                           </button>
                                         ))}
                                       </div>

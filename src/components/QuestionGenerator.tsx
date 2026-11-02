@@ -2002,16 +2002,12 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                       <BookOpen className="w-3.5 h-3.5 text-purple-600" />
                       Your Exam Subjects & Chapters
                     </h3>
-                    {syllabusResearchState === 'researching' ? (
+                    {syllabusResearchState === 'researching' && (
                       <span className="text-[9px] font-bold text-purple-600 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
                         <Sparkles className="w-2.5 h-2.5 animate-spin text-purple-600" />
                         AI Verifying Syllabus...
                       </span>
-                    ) : targetExam ? (
-                      <span className="text-[9px] font-bold text-purple-700 bg-purple-50 border border-purple-100/60 px-2.5 py-0.5 rounded-lg truncate max-w-[150px]">
-                        {targetExam}
-                      </span>
-                    ) : null}
+                    )}
                   </div>
 
                   <div className="space-y-3">

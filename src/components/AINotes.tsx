@@ -152,9 +152,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
   });
   const [syncingCloud, setSyncingCloud] = useState<boolean>(false);
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
-  const viewMode = 'slides';
-  const [slideIndex, setSlideIndex] = useState<number>(0);
-  const touchStartX = useRef<number | null>(null);
 
   // Cross-Device Cloud Sync: Fetch user's saved notes from Cloud Firestore
   const fetchCloudNotes = async (targetUid?: string) => {
@@ -220,7 +217,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
     setSelectedSubject(item.subject);
     setSelectedChapter(item.chapter);
     setShowHistoryModal(false);
-    setSlideIndex(0);
   };
 
   const handleDeleteNote = async (id: string, e?: React.MouseEvent) => {
@@ -318,7 +314,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
 
       const data: AINotesData = await response.json();
       setNotesData(data);
-      setSlideIndex(0);
       setLoading(false);
       triggerVibration(30);
 
@@ -612,11 +607,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
                   <BookOpen className="w-3.5 h-3.5 text-purple-600" />
                   Official Exam Subjects & Chapters
                 </h3>
-                {targetExam && (
-                  <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100/60 px-2.5 py-0.5 rounded-lg truncate max-w-[160px]">
-                    {targetExam}
-                  </span>
-                )}
               </div>
 
               {/* Subject Cards (Identical to AI Quizzes) */}

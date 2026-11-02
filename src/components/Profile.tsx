@@ -1850,7 +1850,15 @@ export default function Profile({
                   </div>
                 ) : selectedCountryName && selectedCountryName !== 'Others' && selectedCountryName !== 'Other' ? (
                   /* CLEAN READ-ONLY COUNTRY CARD WITH REAL COUNTRY NAME */
-                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                  <div 
+                    onClick={() => {
+                      if (isOwnerTester) {
+                        triggerVibration(15);
+                        setShowOwnerAcademicSetup(true);
+                      }
+                    }}
+                    className={`w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none ${isOwnerTester ? 'cursor-pointer hover:border-purple-300 hover:bg-purple-50/40 transition-all' : ''}`}
+                  >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
                         🌍
@@ -1925,6 +1933,11 @@ export default function Profile({
                     <button
                       type="button"
                       onClick={() => {
+                        if (isOwnerTester) {
+                          triggerVibration(15);
+                          setShowOwnerAcademicSetup(true);
+                          return;
+                        }
                         setTempExam(targetExam);
                         setIsEditingExam(true);
                       }}
@@ -1937,7 +1950,15 @@ export default function Profile({
 
                 {targetExam ? (
                   /* CLEAN READ-ONLY EXAM CARD */
-                  <div className="w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                  <div 
+                    onClick={() => {
+                      if (isOwnerTester) {
+                        triggerVibration(15);
+                        setShowOwnerAcademicSetup(true);
+                      }
+                    }}
+                    className={`w-full bg-zinc-50/90 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none ${isOwnerTester ? 'cursor-pointer hover:border-purple-300 hover:bg-purple-50/40 transition-all' : ''}`}
+                  >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
                         🎯
@@ -1987,6 +2008,11 @@ export default function Profile({
                 ) : (
                   <div 
                     onClick={() => {
+                      if (isOwnerTester) {
+                        triggerVibration(15);
+                        setShowOwnerAcademicSetup(true);
+                        return;
+                      }
                       setTempExam(targetExam);
                       setIsEditingExam(true);
                     }}

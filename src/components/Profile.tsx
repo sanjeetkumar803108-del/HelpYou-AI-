@@ -1592,8 +1592,21 @@ export default function Profile({
                   </div>
 
                   {gradeLevel ? (
-                    <div className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none">
+                    <div 
+                      onClick={() => {
+                        if (isOwnerTester) {
+                          triggerVibration(15);
+                          setShowOwnerAcademicSetup(true);
+                        }
+                      }}
+                      className={`w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-800 shadow-xs select-none ${isOwnerTester ? 'cursor-pointer hover:border-purple-300 hover:bg-purple-50/40 transition-all' : ''}`}
+                    >
                       <span className="truncate pr-1.5 text-zinc-900 font-bold">{gradeLevel}</span>
+                      {isOwnerTester && (
+                        <span className="text-[9px] font-black text-purple-600 bg-purple-100/80 px-1.5 py-0.5 rounded-md shrink-0">
+                          Edit
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <>

@@ -33,6 +33,7 @@ import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem, safeJsonParse } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy } from '../utils/communityCache';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
 
@@ -235,6 +236,9 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [showConfig, setShowConfig] = useState(false);
   const [configCount, setConfigCount] = useState<number>(10);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
+  const [customSubTopicInput, setCustomSubTopicInput] = useState<{ [chapterKey: string]: string }>({});
+  const [showCustomInputForChapter, setShowCustomInputForChapter] = useState<string | null>(null);
 
   const flashcardSteps = [
     "Analyzing topic & cognitive anchors...",
@@ -549,6 +553,27 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     let generatedCards: Flashcard[] = [];
     let lastErrorMsg = '';
 
+    // Check Global Community Cache first (Instant 0ms / 0 API Cost)
+    const hierarchy = parseTopicHierarchy(topicToUse, profile.subject || profile.stream);
+    const targetExamStr = profile.exam || profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+    const cachedHit = await getCachedCurriculumContent<Flashcard[]>({
+      country: profile.country,
+      exam: targetExamStr,
+      grade: profile.gradeLevel,
+      subject: hierarchy.subject,
+      chapter: hierarchy.chapter,
+      subTopic: hierarchy.subTopic,
+      feature: 'flashcards'
+    });
+
+    if (cachedHit && Array.isArray(cachedHit.content) && cachedHit.content.length > 0) {
+      setFlashcards(cachedHit.content);
+      deductCoins(2, "AI Flashcards");
+      setLoading(false);
+      triggerVibration([30, 50, 30]);
+      return;
+    }
+
     // =========================================================================
     // LAYER 1: Ultra-Fast Primary Endpoint (/api/generate-flashcards) (35s timeout)
     // =========================================================================
@@ -674,6 +699,16 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
       setLoadingProgress(100);
       deductCoins(2, "AI Flashcards");
       setFlashcards(generatedCards);
+      // Save newly generated flashcard deck to Global Community Cache
+      saveCachedCurriculumContent({
+        country: profile.country,
+        exam: targetExamStr,
+        grade: profile.gradeLevel,
+        subject: hierarchy.subject,
+        chapter: hierarchy.chapter,
+        subTopic: hierarchy.subTopic,
+        feature: 'flashcards'
+      }, generatedCards, { count: generatedCards.length });
       setLoading(false);
       if (curriculumMeta?.isCurriculum) {
         saveCachedCurriculumDeck(curriculumMeta.subjectTitle, curriculumMeta.topicName, generatedCards);
@@ -1100,33 +1135,158 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                             className="border-t border-zinc-100"
                           >
                             <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
+                              {/* Individual Chapters / Units with 2-Tier Sub-Topics Drawer */}
                               {(subject.topics || []).map((topicItem, index) => {
-                                const isCached = !!getCachedCurriculumDeck(cleanSubjectTitle(subject.title), topicItem);
+                                const cleanSubj = cleanSubjectTitle(subject.title);
+                                const chapterKey = `${cleanSubj}__${topicItem}`;
+                                const isChapterOpen = expandedChapter === chapterKey;
+                                const subTopicsList = (subject.chapterSubTopics && subject.chapterSubTopics[topicItem]) || [];
+                                const isCached = !!getCachedCurriculumDeck(cleanSubj, topicItem);
+
                                 return (
-                                <button
-                                  key={index}
-                                  type="button"
-                                  onClick={() => {
-                                    handleTopicClick(cleanSubjectTitle(subject.title), topicItem);
-                                  }}
-                                  disabled={loading}
-                                  className="w-full bg-white border border-zinc-200/70 hover:bg-pink-50/40 hover:border-pink-200 active:scale-[0.995] py-2.5 px-3 rounded-2xl flex items-center justify-between text-left transition-all group/topic shadow-xs cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <span className="text-[10px] font-black font-mono text-pink-600 bg-pink-50 border border-pink-100 px-2 py-0.5 rounded-md shrink-0">
-                                      CH {String(index + 1).padStart(2, '0')}
-                                    </span>
-                                    <span className="font-bold text-xs text-zinc-800 group-hover/topic:text-pink-600 transition-colors leading-snug break-words flex-1">
-                                      {topicItem}
-                                    </span>
+                                  <div key={index} className="rounded-2xl border border-zinc-200/80 bg-white overflow-hidden shadow-xs transition-all">
+                                    {/* Chapter Header */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        triggerVibration(10);
+                                        setExpandedChapter(isChapterOpen ? null : chapterKey);
+                                      }}
+                                      className={`w-full py-2.5 px-3 flex items-center justify-between text-left transition-all cursor-pointer ${
+                                        isChapterOpen ? 'bg-pink-50/40 border-b border-pink-100' : 'hover:bg-zinc-50'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="text-[10px] font-black font-mono text-pink-600 bg-pink-50 border border-pink-100 px-2 py-0.5 rounded-md shrink-0">
+                                          CH {String(index + 1).padStart(2, '0')}
+                                        </span>
+                                        <span className="font-bold text-xs text-zinc-800 leading-snug break-words flex-1">
+                                          {topicItem}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                        {isCached && (
+                                          <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/70 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0 shadow-2xs">
+                                            <Check className="w-2.5 h-2.5" />
+                                            <span>Saved</span>
+                                          </span>
+                                        )}
+                                        <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded-md">
+                                          {subTopicsList.length} Units
+                                        </span>
+                                        {isChapterOpen ? (
+                                          <ChevronUp className="w-3.5 h-3.5 text-pink-600" />
+                                        ) : (
+                                          <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                                        )}
+                                      </div>
+                                    </button>
+
+                                    {/* Chapter Sub-topics Drawer */}
+                                    <AnimatePresence initial={false}>
+                                      {isChapterOpen && (
+                                        <motion.div
+                                          initial={{ height: 0, opacity: 0 }}
+                                          animate={{ height: 'auto', opacity: 1 }}
+                                          exit={{ height: 0, opacity: 0 }}
+                                          transition={{ duration: 0.2, ease: "easeInOut" }}
+                                          className="p-2.5 bg-zinc-50/50 space-y-1.5"
+                                        >
+                                          {/* Quick Option: Full Chapter Deck */}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              triggerVibration(15);
+                                              handleTopicClick(cleanSubj, topicItem);
+                                            }}
+                                            disabled={loading}
+                                            className="w-full bg-gradient-to-r from-pink-50/80 to-purple-50/80 border border-pink-200/90 hover:border-pink-400 active:scale-[0.99] py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer shadow-xs"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs">🎯</span>
+                                              <span className="text-xs font-black text-pink-700">Practice Full Chapter Deck</span>
+                                            </div>
+                                            <span className="text-[10px] font-extrabold text-pink-600 bg-white px-2 py-0.5 rounded-md border border-pink-100 shadow-2xs">
+                                              All Cards
+                                            </span>
+                                          </button>
+
+                                          {/* Sub-Topics Pills */}
+                                          <div className="grid grid-cols-1 gap-1.5 pt-1">
+                                            {subTopicsList.map((sub, sIdx) => (
+                                              <button
+                                                key={sIdx}
+                                                type="button"
+                                                onClick={() => {
+                                                  triggerVibration(15);
+                                                  handleTopicClick(cleanSubj, `${topicItem} - ${sub}`);
+                                                }}
+                                                disabled={loading}
+                                                className="w-full bg-white hover:bg-pink-50/40 border border-zinc-200/70 hover:border-pink-200 active:scale-[0.995] py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all group/sub cursor-pointer shadow-2xs"
+                                              >
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-pink-500 shrink-0 group-hover/sub:scale-125 transition-transform" />
+                                                  <span className="text-xs font-medium text-zinc-700 group-hover/sub:text-pink-600 transition-colors truncate">
+                                                    {sub}
+                                                  </span>
+                                                </div>
+                                                <span className="text-[10px] font-bold text-pink-600 bg-pink-50/80 px-2 py-0.5 rounded-md shrink-0">
+                                                  Deck
+                                                </span>
+                                              </button>
+                                            ))}
+                                          </div>
+
+                                          {/* Custom Micro-Topic Input (User's Favorite Feature) */}
+                                          <div className="pt-1">
+                                            {showCustomInputForChapter === chapterKey ? (
+                                              <div className="flex items-center gap-1.5">
+                                                <input
+                                                  type="text"
+                                                  placeholder={`e.g. Specific formula or concept...`}
+                                                  value={customSubTopicInput[chapterKey] || ''}
+                                                  onChange={(e) => setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: e.target.value }))}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                      const val = (customSubTopicInput[chapterKey] || '').trim();
+                                                      if (val) {
+                                                        triggerVibration(15);
+                                                        handleTopicClick(cleanSubj, `${topicItem} - ${val}`);
+                                                      }
+                                                    }
+                                                  }}
+                                                  className="flex-1 text-xs px-3 py-2 border border-pink-300 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 text-zinc-800"
+                                                  autoFocus
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    const val = (customSubTopicInput[chapterKey] || '').trim();
+                                                    if (val) {
+                                                      triggerVibration(15);
+                                                      handleTopicClick(cleanSubj, `${topicItem} - ${val}`);
+                                                    }
+                                                  }}
+                                                  className="px-3 py-2 bg-pink-600 text-white font-bold text-xs rounded-xl hover:bg-pink-700 transition-all shrink-0 cursor-pointer"
+                                                >
+                                                  Create
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                onClick={() => setShowCustomInputForChapter(chapterKey)}
+                                                className="w-full border border-dashed border-pink-200 hover:border-pink-400 bg-pink-50/20 hover:bg-pink-50/50 py-1.5 px-3 rounded-xl text-center text-xs font-bold text-pink-600 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                              >
+                                                <span>✏️</span>
+                                                <span>+ Type specific topic in this chapter...</span>
+                                              </button>
+                                            )}
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
                                   </div>
-                                  {isCached && (
-                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/70 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0 shadow-2xs">
-                                      <Check className="w-2.5 h-2.5" />
-                                      <span>Saved</span>
-                                    </span>
-                                  )}
-                                </button>
                                 );
                               })}
                             </div>

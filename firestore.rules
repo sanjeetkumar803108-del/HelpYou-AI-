@@ -88,5 +88,21 @@ service cloud.firestore {
         (resource != null && resource.data.userId == request.auth.uid)
       );
     }
+
+    // 10. Global Community Learning & Curriculum Cache
+    // Allows all students to read cached curriculum content for instant 0ms responses.
+    // Authenticated students can contribute newly generated questions, notes, and flashcards.
+    match /global_curriculum_cache/{cacheId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // 11. Global Curriculum Blueprints (Deep Researched Syllabi)
+    match /curriculum_blueprints/{blueprintId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+    }
   }
 }

@@ -7,6 +7,7 @@ export interface SubjectBlueprint {
   markingScheme: string;
   questionTypes: string[];
   coreUnits: string[];
+  subTopics?: Record<string, string[]>;
   nomenclature?: string;
   examTone: string;
   officialSource?: string;

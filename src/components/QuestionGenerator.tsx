@@ -15,6 +15,7 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy } from '../utils/communityCache';
 import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
@@ -228,6 +229,9 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [gradeLevel, setGradeLevel] = useState('11th Grade (Junior)');
   const [stream, setStream] = useState('STEM / Engineering');
   const [country, setCountry] = useState('United States');
+  const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
+  const [customSubTopicInput, setCustomSubTopicInput] = useState<{ [chapterKey: string]: string }>({});
+  const [showCustomInputForChapter, setShowCustomInputForChapter] = useState<string | null>(null);
   const [targetExam, setTargetExam] = useState('');
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
   const [showAllSubjects, setShowAllSubjects] = useState<boolean>(false);
@@ -768,6 +772,29 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     try {
       const profile = getUserProfileData();
       const avoidList = getAvoidQuestionsList(customTopic);
+
+      // Check Community Learning Cache (0ms instant response & 0 API cost)
+      const hierarchy = parseTopicHierarchy(customTopic, profile.subject || profile.stream);
+      const targetExamStr = profile.exam || profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+      const cachedHit = await getCachedCurriculumContent({
+        country: profile.country || country,
+        exam: targetExamStr,
+        grade: profile.gradeLevel || gradeLevel,
+        subject: hierarchy.subject,
+        chapter: hierarchy.chapter,
+        subTopic: hierarchy.subTopic,
+        feature: 'subjective_questions'
+      });
+
+      if (cachedHit && Array.isArray(cachedHit.content) && cachedHit.content.length > 0) {
+        setLoadingProgress(100);
+        deductCoins(2, "AI Subjective Questions");
+        setQuestions(cachedHit.content);
+        setLoading(false);
+        saveToHistory(cachedHit.content).catch(e => console.error("History save failed:", e));
+        return;
+      }
+
       const response = await fetch(getApiUrl('/api/generate-questions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -810,6 +837,18 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         } catch (_) {}
 
         setQuestions(data.questions);
+
+        // Save newly generated questions into Global Community Cache for future learners
+        saveCachedCurriculumContent({
+          country: profile.country || country,
+          exam: targetExamStr,
+          grade: profile.gradeLevel || gradeLevel,
+          subject: hierarchy.subject,
+          chapter: hierarchy.chapter,
+          subTopic: hierarchy.subTopic,
+          feature: 'subjective_questions'
+        }, data.questions, { count: data.questions.length });
+
         setLoading(false);
         // Automatically save the set to history in background
         saveToHistory(data.questions).catch(e => console.error("History save failed:", e));
@@ -2078,45 +2117,173 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                 className="border-t border-zinc-100"
                               >
                                 <div className="p-3 bg-zinc-50/20 grid grid-cols-1 gap-2">
-                                  {/* Individual Chapters / Units */}
+                                  {/* Individual Chapters / Units with 2-Tier Sub-Topics Drawer */}
                                   {(subject.topics || []).map((topicItem, idx) => {
                                     const cleanSubj = cleanSubjectTitle(subject.title);
+                                    const chapterKey = `${cleanSubj}__${topicItem}`;
+                                    const isChapterOpen = expandedChapter === chapterKey;
+                                    const subTopicsList = (subject.chapterSubTopics && subject.chapterSubTopics[topicItem]) || [];
                                     const topicTargetStr = `${cleanSubj} - ${topicItem}`;
-                                    const isSelected = customTopic === topicItem || customTopic === topicTargetStr;
+                                    const isSelected = customTopic === topicItem || customTopic === topicTargetStr || (customTopic || '').startsWith(`${topicTargetStr} - `);
+
                                     return (
-                                      <button
-                                        key={idx}
-                                        type="button"
-                                        onClick={() => {
-                                          triggerVibration(15);
-                                          setCustomTopic(topicTargetStr);
-                                        }}
-                                        className={`w-full border active:scale-[0.995] py-2.5 px-3 rounded-2xl flex items-center justify-between text-left transition-all shadow-xs cursor-pointer ${
-                                          isSelected
-                                            ? 'bg-purple-50 border-purple-500 shadow-xs ring-1 ring-purple-500/20'
-                                            : 'bg-white border-zinc-200/70 hover:bg-purple-50/40 hover:border-purple-200'
-                                        }`}
-                                      >
-                                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                                          <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-md shrink-0 border ${
-                                            isSelected
-                                              ? 'text-white bg-purple-600 border-purple-600'
-                                              : 'text-purple-600 bg-purple-50 border-purple-100'
-                                          }`}>
-                                            CH {String(idx + 1).padStart(2, '0')}
-                                          </span>
-                                          <span className={`text-xs leading-snug break-words flex-1 ${
-                                            isSelected ? 'font-black text-purple-950' : 'font-bold text-zinc-800'
-                                          }`}>
-                                            {topicItem}
-                                          </span>
-                                        </div>
-                                        {isSelected && (
-                                          <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shrink-0 ml-1.5 shadow-2xs">
-                                            ✓
-                                          </span>
-                                        )}
-                                      </button>
+                                      <div key={idx} className="rounded-2xl border border-zinc-200/80 bg-white overflow-hidden shadow-xs transition-all">
+                                        {/* Chapter Header */}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            triggerVibration(10);
+                                            setExpandedChapter(isChapterOpen ? null : chapterKey);
+                                          }}
+                                          className={`w-full py-2.5 px-3 flex items-center justify-between text-left transition-all cursor-pointer ${
+                                            isChapterOpen ? 'bg-purple-50/40 border-b border-purple-100' : 'hover:bg-zinc-50'
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-md shrink-0 border ${
+                                              isSelected
+                                                ? 'text-white bg-purple-600 border-purple-600'
+                                                : 'text-purple-600 bg-purple-50 border-purple-100'
+                                            }`}>
+                                              CH {String(idx + 1).padStart(2, '0')}
+                                            </span>
+                                            <span className={`text-xs leading-snug break-words flex-1 ${
+                                              isSelected ? 'font-black text-purple-950' : 'font-bold text-zinc-800'
+                                            }`}>
+                                              {topicItem}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                                            <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded-md">
+                                              {subTopicsList.length} Units
+                                            </span>
+                                            {isChapterOpen ? (
+                                              <ChevronUp className="w-3.5 h-3.5 text-purple-600" />
+                                            ) : (
+                                              <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                                            )}
+                                          </div>
+                                        </button>
+
+                                        {/* Chapter Sub-topics Drawer */}
+                                        <AnimatePresence initial={false}>
+                                          {isChapterOpen && (
+                                            <motion.div
+                                              initial={{ height: 0, opacity: 0 }}
+                                              animate={{ height: 'auto', opacity: 1 }}
+                                              exit={{ height: 0, opacity: 0 }}
+                                              transition={{ duration: 0.2, ease: "easeInOut" }}
+                                              className="p-2.5 bg-zinc-50/50 space-y-1.5"
+                                            >
+                                              {/* Quick Option: Full Chapter Questions */}
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  triggerVibration(15);
+                                                  setCustomTopic(topicTargetStr);
+                                                }}
+                                                className={`w-full py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer shadow-xs border ${
+                                                  customTopic === topicTargetStr
+                                                    ? 'bg-purple-600 text-white border-purple-600'
+                                                    : 'bg-gradient-to-r from-purple-50/80 to-indigo-50/80 border-purple-200/90 hover:border-purple-400'
+                                                }`}
+                                              >
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs">🎯</span>
+                                                  <span className={`text-xs font-black ${customTopic === topicTargetStr ? 'text-white' : 'text-purple-700'}`}>
+                                                    Practice Entire Chapter
+                                                  </span>
+                                                </div>
+                                                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${
+                                                  customTopic === topicTargetStr ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-purple-600 border-purple-100 shadow-2xs'
+                                                }`}>
+                                                  All Questions
+                                                </span>
+                                              </button>
+
+                                              {/* Sub-Topics Pills */}
+                                              <div className="grid grid-cols-1 gap-1.5 pt-1">
+                                                {subTopicsList.map((sub, sIdx) => {
+                                                  const subTarget = `${topicTargetStr} - ${sub}`;
+                                                  const isSubSelected = customTopic === subTarget;
+                                                  return (
+                                                    <button
+                                                      key={sIdx}
+                                                      type="button"
+                                                      onClick={() => {
+                                                        triggerVibration(15);
+                                                        setCustomTopic(subTarget);
+                                                      }}
+                                                      className={`w-full py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer shadow-2xs border ${
+                                                        isSubSelected
+                                                          ? 'bg-purple-50 border-purple-500 ring-1 ring-purple-500/20'
+                                                          : 'bg-white border-zinc-200/70 hover:bg-purple-50/40 hover:border-purple-200'
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                                                        <span className={`text-xs truncate ${isSubSelected ? 'font-bold text-purple-900' : 'font-medium text-zinc-700'}`}>
+                                                          {sub}
+                                                        </span>
+                                                      </div>
+                                                      <span className="text-[10px] font-bold text-purple-600 bg-purple-50/80 px-2 py-0.5 rounded-md shrink-0">
+                                                        Select
+                                                      </span>
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+
+                                              {/* Custom Micro-Topic Input (User's Favorite Feature) */}
+                                              <div className="pt-1">
+                                                {showCustomInputForChapter === chapterKey ? (
+                                                  <div className="flex items-center gap-1.5">
+                                                    <input
+                                                      type="text"
+                                                      placeholder={`e.g. Specific formula or concept...`}
+                                                      value={customSubTopicInput[chapterKey] || ''}
+                                                      onChange={(e) => setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: e.target.value }))}
+                                                      onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                          const val = (customSubTopicInput[chapterKey] || '').trim();
+                                                          if (val) {
+                                                            triggerVibration(15);
+                                                            setCustomTopic(`${topicTargetStr} - ${val}`);
+                                                          }
+                                                        }
+                                                      }}
+                                                      className="flex-1 text-xs px-3 py-2 border border-purple-300 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 text-zinc-800"
+                                                      autoFocus
+                                                    />
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        const val = (customSubTopicInput[chapterKey] || '').trim();
+                                                        if (val) {
+                                                          triggerVibration(15);
+                                                          setCustomTopic(`${topicTargetStr} - ${val}`);
+                                                        }
+                                                      }}
+                                                      className="px-3 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl hover:bg-purple-700 transition-all shrink-0 cursor-pointer"
+                                                    >
+                                                      Apply
+                                                    </button>
+                                                  </div>
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setShowCustomInputForChapter(chapterKey)}
+                                                    className="w-full border border-dashed border-purple-200 hover:border-purple-400 bg-purple-50/20 hover:bg-purple-50/50 py-1.5 px-3 rounded-xl text-center text-xs font-bold text-purple-600 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                                  >
+                                                    <span>✏️</span>
+                                                    <span>+ Type specific topic in this chapter...</span>
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
+                                      </div>
                                     );
                                   })}
                                 </div>

@@ -9,6 +9,7 @@ export interface CurriculumSubject {
   themeColor: string;
   icon: string;
   topics: string[];
+  chapterSubTopics?: Record<string, string[]>;
   nomenclature?: string;
   singularNomenclature?: string;
   isCore: boolean;
@@ -549,6 +550,102 @@ export function getCuratedUnitsForSubject(subjectName: string): { icon: string; 
 }
 
 /**
+ * Curated authentic high-yield exam sub-topics for standard curriculum chapters.
+ * Ensures that 100% of students see immediate 4-6 rich sub-topics even before AI research completes.
+ */
+export const CURATED_CHAPTER_SUBTOPICS: Record<string, string[]> = {
+  // Physics
+  'kinematics': ['Motion in a Straight Line & Graphs', 'Equations of Motion (Calculus)', 'Vectors & Relative Velocity', 'Projectile Motion', 'Uniform Circular Motion'],
+  'motion': ['Newton\'s Laws & Inertial Frames', 'Momentum Conservation & Impulse', 'Friction: Static & Kinetic', 'Dynamics of Circular Motion & Banking'],
+  'work': ['Work Done by Constant & Variable Force', 'Work-Energy Theorem & Kinetic Energy', 'Potential Energy & Conservative Forces', 'Power & Elastic/Inelastic Collisions'],
+  'rotation': ['Center of Mass & Rigid Body Systems', 'Moment of Inertia & Parallel/Perpendicular Axes', 'Torque & Angular Momentum Conservation', 'Rolling Motion Without Slipping'],
+  'gravitation': ['Kepler\'s Laws of Planetary Motion', 'Universal Gravitation & Field Intensity', 'Gravitational Potential Energy & Escape Velocity', 'Earth Satellites & Orbital Mechanics'],
+  'thermodynamics': ['Zeroth & First Law of Thermodynamics', 'Isothermal & Adiabatic Gas Processes', 'Second Law & Carnot Engine Efficiency', 'Kinetic Theory of Gases & Mean Free Path'],
+  'oscillations': ['Simple Harmonic Motion & Phase Equations', 'Energy in SHM: Kinetic & Potential', 'Simple Pendulum & Spring-Mass Oscillations', 'Damped & Forced Oscillations (Resonance)'],
+  'waves': ['Transverse & Longitudinal Wave Equations', 'Principle of Superposition & Standing Waves', 'Beats & Sound Intensity in Organ Pipes', 'Doppler Effect in Sound'],
+  'electrostatics': ['Coulomb\'s Law & Electric Field Intensity', 'Gauss\'s Law & Continuous Charge Applications', 'Electric Potential & Equipotential Surfaces', 'Capacitors, Series/Parallel & Dielectric Polarization'],
+  'current': ['Ohm\'s Law, Drift Velocity & Resistance', 'Kirchhoff\'s Current & Voltage Laws', 'Wheatstone Bridge & Meter Bridge Analysis', 'Electric Power & Internal Resistance of Cells'],
+  'magnetism': ['Biot-Savart Law & Magnetic Field on Axis', 'Ampere\'s Circuital Law & Solenoid/Toroid', 'Lorentz Force & Magnetic Dipole Moment', 'Moving Coil Galvanometer & Conversion'],
+  'induction': ['Faraday\'s & Lenz\'s Laws of Induction', 'Self & Mutual Inductance Principles', 'LCR Series Resonance & Power Factor', 'AC Generator & Step-Up/Step-Down Transformers'],
+  'optics': ['Refraction at Spherical Surfaces & Lenses', 'Total Internal Reflection & Prism Dispersion', 'Optical Instruments: Microscope & Telescope', 'Wavefront, Huygens Principle & Interference', 'Young\'s Double Slit Experiment & Diffraction'],
+  'modern': ['Photoelectric Effect & Einstein\'s Equation', 'Bohr\'s Model of Hydrogen Atom & Spectra', 'Nuclear Binding Energy, Fission & Fusion', 'Semiconductor Diodes, Rectifiers & Logic Gates'],
+
+  // Chemistry
+  'atomic': ['Bohr Model & Hydrogen Line Spectrum', 'de Broglie Wavelength & Heisenberg Uncertainty', 'Quantum Numbers & Orbital Shapes', 'Aufbau Principle, Pauli & Hund\'s Rules'],
+  'bonding': ['Ionic vs Covalent Bonds (Fajan\'s Rule)', 'VSEPR Theory & Molecular Geometry', 'Hybridization (sp, sp2, sp3, dsp2)', 'Molecular Orbital Theory & Bond Order', 'Hydrogen Bonding & Dipole Moments'],
+  'equilibrium': ['Law of Chemical Equilibrium & Kp vs Kc', 'Le Chatelier\'s Principle & Equilibrium Shifts', 'Ionic Product of Water & pH Calculations', 'Buffer Solutions, Hydrolysis & Solubility Product'],
+  'redox': ['Oxidation Numbers & Redox Balancing', 'Galvanic Cells & Standard Electrode Potentials', 'Nernst Equation & Gibbs Free Energy', 'Electrolysis & Faraday\'s Laws of Electrolysis'],
+  'kinetics': ['Rate of Reaction & Rate Law Expressions', 'Integrated Rate Equations (0th & 1st Order)', 'Half-Life Period & Collision Theory', 'Arrhenius Equation & Activation Energy'],
+  'solutions': ['Raoult\'s Law for Volatile & Non-volatile Solutes', 'Colligative Properties & Elevation/Depression', 'Osmotic Pressure & Reverse Osmosis', 'Van\'t Hoff Factor & Abnormal Molar Mass'],
+  'coordination': ['Werner\'s Coordination Theory', 'IUPAC Nomenclature & Isomerism in Complexes', 'Valence Bond Theory & Crystal Field Theory (CFT)', 'Color, Magnetic Properties & Synergic Bonding'],
+  'organic': ['IUPAC Nomenclature & Structural Isomerism', 'Inductive, Resonance & Hyperconjugation Effects', 'Electrophilic Addition in Alkenes (Markovnikov)', 'Aromaticity & Electrophilic Substitution (Benzene)', 'Nucleophilic Substitution: SN1 vs SN2 Mechanisms'],
+  'carbonyl': ['Nucleophilic Addition to Aldehydes & Ketones', 'Aldol Condensation & Cross-Aldol Reactions', 'Cannizzaro Reaction & Haloform Test', 'Carboxylic Acid Acidity & Esterification'],
+  'biomolecules': ['Carbohydrates: Monosaccharides & Glycosidic Link', 'Proteins: Amino Acids & Peptide Bond Structure', 'Nucleic Acids: DNA Double Helix & RNA Types', 'Enzymes, Vitamins & Denaturation of Proteins'],
+
+  // Biology
+  'living': ['Characteristics of Living Organisms & Taxa', 'Five Kingdom Classification & Monera/Protista', 'Fungi: Phycomycetes, Ascomycetes & Basidiomycetes', 'Viruses, Viroids, Prions & Lichens'],
+  'cell': ['Prokaryotic vs Eukaryotic Organelles', 'Cell Membrane: Fluid Mosaic Model', 'Endomembrane System: ER, Golgi & Lysosomes', 'Mitochondria & Chloroplast Ultrastructure', 'Mitosis & Meiosis: Phases & Crossing Over'],
+  'photosynthesis': ['Light Reactions & Electron Transport Chain', 'Photophosphorylation: Cyclic & Non-cyclic', 'Calvin Cycle (C3 Pathway) & C4 Pathway', 'Photorespiration & Factors Affecting Photosynthesis'],
+  'respiration': ['Glycolysis (EMP Pathway) & Link Reaction', 'Krebs Cycle (Citric Acid Cycle)', 'Electron Transport System (ETS) & Oxidative Phosphorylation', 'Fermentation & Respiratory Quotient (RQ)'],
+  'circulation': ['Blood Components, ABO Groups & Rh Factor', 'Human Heart Structure & Cardiac Conduction', 'Cardiac Cycle, Stroke Volume & ECG Waves', 'Double Circulation & Regulation of Cardiac Activity'],
+  'genetics': ['Mendel\'s Laws & Monohybrid/Dihybrid Crosses', 'Incomplete Dominance, Codominance & Multiple Alleles', 'Chromosomal Theory of Inheritance & Linkage', 'Sex-Linked Inheritance & Pedigree Analysis', 'DNA Replication: Enzymes & Leading/Lagging Strands', 'Transcription, Genetic Code & Translation (Lac Operon)'],
+  'evolution': ['Origin of Life & Miller-Urey Experiment', 'Evidence for Evolution: Homology & Analogy', 'Darwin\'s Theory of Natural Selection', 'Hardy-Weinberg Equilibrium & Genetic Drift'],
+  'biotechnology': ['Restriction Enzymes & DNA Ligase Tools', 'Cloning Vectors (pBR322) & Recombinant DNA', 'Polymerase Chain Reaction (PCR) & Gel Electrophoresis', 'Applications: Bt Cotton, Insulin & Gene Therapy'],
+  'ecology': ['Organisms & Environmental Abiotic Factors', 'Population Growth Models: Exponential & Logistic', 'Ecosystem Structure: Food Chains & Energy Pyramids', 'Nutrient Cycles & Biodiversity Conservation Strategies'],
+
+  // Mathematics
+  'limits': ['Intuitive & Epsilon-Delta Limit Concepts', 'Standard Trigonometric & Exponential Limits', 'L\'Hopital\'s Rule for Indeterminate Forms', 'Continuity on Intervals & Discontinuity Types'],
+  'derivatives': ['First Principles Differentiation & Standard Formulas', 'Chain Rule, Product Rule & Implicit Differentiation', 'Logarithmic & Parametric Differentiation', 'Tangents, Normals & Mean Value Theorems (Rolle\'s/LMVT)', 'Monotonicity, Maxima & Minima Optimization'],
+  'integrals': ['Indefinite Integration: Substitution & Partial Fractions', 'Integration by Parts (ILATE Rule)', 'Definite Integrals & Fundamental Theorem of Calculus', 'Properties of Definite Integrals (King\'s Property)', 'Area Under Curves & Area Between Two Curves'],
+  'differential': ['Order & Degree of Differential Equations', 'Variable Separable Method & Homogeneous Equations', 'Linear Differential Equations (Integrating Factor)', 'Applications in Population Growth & Decay Models'],
+  'matrices': ['Matrix Operations & Symmetric/Skew-Symmetric', 'Determinant Properties & Minors/Cofactors', 'Adjoint & Inverse of Square Matrices', 'System of Linear Equations (Cramer\'s Rule & Matrix Inversion)'],
+  'vectors': ['Scalar & Vector Components in 3D', 'Dot (Scalar) Product & Orthogonality Conditions', 'Cross (Vector) Product & Area of Parallelograms', 'Scalar Triple Product & Coplanarity of Vectors'],
+  '3d': ['Direction Cosines & Direction Ratios', 'Equation of a Line in Space (Vector & Cartesian)', 'Shortest Distance Between Two Skew Lines', 'Equation of a Plane & Angle Between Two Planes'],
+  'probability': ['Conditional Probability & Multiplication Theorem', 'Law of Total Probability & Bayes\' Theorem', 'Random Variables & Probability Distributions', 'Binomial Distribution & Expected Value/Variance']
+};
+
+/**
+ * Intelligently retrieves or synthesizes authentic sub-topics for any given chapter.
+ */
+export function getSubTopicsForChapter(
+  subjectTitle: string,
+  chapterTitle: string,
+  blueprintSubTopics?: Record<string, string[]>
+): string[] {
+  // 1. Direct match in researched blueprint
+  if (blueprintSubTopics && typeof blueprintSubTopics === 'object') {
+    if (Array.isArray(blueprintSubTopics[chapterTitle]) && blueprintSubTopics[chapterTitle].length > 0) {
+      return blueprintSubTopics[chapterTitle].slice(0, 6);
+    }
+    const cleanChap = chapterTitle.toLowerCase().trim();
+    const foundKey = Object.keys(blueprintSubTopics).find(k => {
+      const kClean = k.toLowerCase().trim();
+      return kClean === cleanChap || kClean.includes(cleanChap) || cleanChap.includes(kClean);
+    });
+    if (foundKey && Array.isArray(blueprintSubTopics[foundKey]) && blueprintSubTopics[foundKey].length > 0) {
+      return blueprintSubTopics[foundKey].slice(0, 6);
+    }
+  }
+
+  // 2. Keyword match against CURATED_CHAPTER_SUBTOPICS
+  const searchStr = `${subjectTitle} ${chapterTitle}`.toLowerCase();
+  for (const [key, subTopics] of Object.entries(CURATED_CHAPTER_SUBTOPICS)) {
+    if (searchStr.includes(key)) {
+      return subTopics.slice(0, 6);
+    }
+  }
+
+  // 3. Fallback: High-yield pedagogical structure tailored to the chapter title
+  const cleanTitle = chapterTitle.replace(/^CH\s*\d+\s*[:\-–]?\s*/i, '').trim();
+  return [
+    `Foundations & Core Principles of ${cleanTitle}`,
+    `Theoretical Laws, Formulas & Derivations`,
+    `Analytical Problem Solving & Graphical Analysis`,
+    `High-Yield Examination Traps & Applications`
+  ];
+}
+
+/**
  * Resolves the authentic educational term used for subdivisions (Chapters vs Units vs Domains vs Topics)
  * based on the user's exam board, level, and country.
  */
@@ -720,6 +817,12 @@ export function getScalableRelevantQuizzes(grade: string, track: string, country
       const subNomenclature = bpMatch?.nomenclature || nomenclature.plural;
       const subSingular = (bpMatch?.nomenclature ? bpMatch.nomenclature.replace(/s$/, '') : nomenclature.singular);
 
+      // Populate authentic, exam-aligned sub-topics for every single chapter in this subject
+      const chapterSubTopics: Record<string, string[]> = {};
+      topics.forEach(chap => {
+        chapterSubTopics[chap] = getSubTopicsForChapter(cleanTitle, chap, bpMatch?.subTopics);
+      });
+
       return {
         id: `user_subj_${idx}_${cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
         key: `user_subj_${idx}_${cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
@@ -728,6 +831,7 @@ export function getScalableRelevantQuizzes(grade: string, track: string, country
         themeColor: curated.themeColor,
         icon: curated.icon,
         topics,
+        chapterSubTopics,
         nomenclature: subNomenclature,
         singularNomenclature: subSingular,
         isCore: true,

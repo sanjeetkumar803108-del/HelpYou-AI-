@@ -3255,6 +3255,7 @@ For EACH subject in ${JSON.stringify(cleanSubjects)}, extract and curate:
 7. "nomenclature": The exact authentic subdivision term in plural: "Chapters" | "Units" | "Domains" | "Topics".
 8. "examTone": Concise, actionable description of real exam difficulty and question style (e.g. "Strictly NCERT textbook line-by-line concept verification with direct numerical calculation and diagram-based analysis").
 9. "officialSource": Official board or agency name (e.g. "NTA / NMC Official Guidelines", "CollegeBoard Official Framework", "CBSE Curriculum Guidelines").
+10. "subTopics": An object where EVERY key is an exact chapter name from "coreUnits", and the value is an array of 4 to 6 authentic, core exam sub-topics / micro-concepts for that chapter.
 
 OUTPUT REQUIREMENT:
 Output ONLY a single valid JSON object. No explanation text or markdown outside JSON.
@@ -3273,6 +3274,10 @@ Format:
       "questionTypes": ["MCQ Single Correct", "Assertion-Reason", "Match The Columns"],
       "nomenclature": "Chapters",
       "coreUnits": ["Real Chapter 1", "Real Chapter 2", "Real Chapter 3", "Real Chapter 4", "Real Chapter 5", "Real Chapter 6"],
+      "subTopics": {
+        "Real Chapter 1": ["Sub-topic 1.1", "Sub-topic 1.2", "Sub-topic 1.3", "Sub-topic 1.4"],
+        "Real Chapter 2": ["Sub-topic 2.1", "Sub-topic 2.2", "Sub-topic 2.3", "Sub-topic 2.4"]
+      },
       "examTone": "NCERT conceptual and numerical",
       "officialSource": "Official Examination Authority"
     }

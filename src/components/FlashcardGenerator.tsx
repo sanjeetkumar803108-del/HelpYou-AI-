@@ -1015,7 +1015,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
       </div>
 
           </div>
-        )
       ) : (
         <motion.div 
           initial={{ opacity: 0, y: 15 }}

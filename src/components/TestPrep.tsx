@@ -151,11 +151,14 @@ export default function TestPrep({ onBack, isVip, onOpenVip, onNavigateToTab }: 
         </div>
 
         {/* Informative Tip */}
-        <div className="mt-8 bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 flex items-center gap-3">
-          <span className="text-xl">💡</span>
-          <p className="text-xs text-zinc-500 font-semibold leading-relaxed">
-            Pro Tip: Both tools can analyze custom textbook chapters or hand-written homework pages to create the perfect prep materials!
-          </p>
+        <div className="mt-8 bg-gradient-to-r from-amber-500/5 via-purple-500/5 to-indigo-500/5 border border-zinc-200/80 rounded-2xl p-4 flex items-start gap-3.5 shadow-2xs">
+          <span className="text-xl select-none shrink-0 mt-0.5">💡</span>
+          <div className="flex-1 min-w-0">
+            <span className="font-black text-xs text-zinc-900 block mb-0.5">Pro Tip:</span>
+            <p className="text-xs text-zinc-600 font-medium leading-relaxed">
+              Combine <strong className="text-zinc-900 font-bold">AI Quizzes</strong> for exam-level practice testing with <strong className="text-zinc-900 font-bold">AI Flashcards</strong> for active recall to lock concepts permanently into memory!
+            </p>
+          </div>
         </div>
       </div>
     </div>

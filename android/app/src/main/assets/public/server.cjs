@@ -7657,29 +7657,44 @@ ${examDirective}` : "",
       "",
       "CRITICAL PEDAGOGICAL MANDATE:",
       isHint ? `STRICT ANTI-SPOILER MANDATE: DO NOT reveal the correct option (A, B, C, or D) or the direct final answer!
-Structure your response in rich, clean Markdown with these exact sections:
+Structure your response strictly in point-wise, clean Markdown with these exact sections:
 ### \u{1F3AF} What This Question Is Asking
-Break down the problem in simple, encouraging terms. Clarify the core scenario, what variables are given, and what is to be determined.
+- **Problem Objective:** Break down the question in clear, encouraging bullet points. State what variables or values are given, and what specifically needs to be determined.
+
 ### \u{1F511} Core Concepts & Essential Formulas
-Explain the governing laws, physical/chemical mechanisms, or mathematical formulas ($...$) relevant to this curriculum level.
+- **Governing Law / Concept:** State the fundamental definition or mechanism tested.
+- **Key Formula:** State the primary formula required, wrapped cleanly in LaTeX ($...$).
+
 ### \u{1F4A1} Guided Progressive Hints
-- **Hint 1 (Starting Point):** A gentle conceptual clue to get started.
-- **Hint 2 (Critical Connection):** Connect the key mechanism to the terms in the choices.
-- **Hint 3 (Elimination Clue):** What common trap or distractor should they eliminate?` : `DELIVER AN EXHAUSTIVE, MASTER-TIER STEP-BY-STEP SOLUTION.
-Structure your response in rich, clean Markdown with these exact sections:
-### \u{1F3AF} Correct Answer & Executive Summary
-State the official correct option clearly followed by a concise 1-2 sentence executive verdict.
-### \u{1F4DD} In-Depth Step-by-Step Derivation & Mechanism
-Provide a thorough step-by-step mathematical derivation, formula substitution, or conceptual explanation calibrated to ${effectiveExam}.
-### \u274C Why the Other Options Are Incorrect
-Break down each wrong option and explain specifically why it fails or what common misconception it represents.
-### \u{1F4A1} High-Yield Exam Tip & Memory Anchor
-Provide an exam-tested tip, shortcut, or mnemonic for this exact topic.`,
+- **Hint 1 (Starting Point):** A gentle conceptual clue on how to begin the first step.
+- **Hint 2 (Critical Connection):** Connect the key mechanism or formula to the terms in the choices.
+- **Hint 3 (Elimination Clue):** What common trap, distractor, or arithmetic blunder should they avoid?` : `DELIVER AN EXHAUSTIVE, POINT-WISE STEP-BY-STEP SOLUTION.
+Structure your response strictly in numbered and bulleted point-wise Markdown with these exact sections:
+### \u{1F3AF} Correct Answer & Quick Summary
+- **Correct Option:** State the official correct option clearly (e.g. **Option B (60)**).
+- **Core Summary:** Concise 1-2 sentence executive verdict explaining why this choice is correct.
+
+### \u{1F4DD} Step-by-Step Derivation & Solution
+Organize your derivation strictly as numbered, point-wise steps:
+- **Step 1 (Identify Given Data & Core Principle):** State what is given, what is to be found, and the governing formula (e.g. $N = p_1^{a_1} cdot p_2^{a_2} dots$).
+- **Step 2 (Prime Factorization / Algebraic Substitution):** Show complete working steps with every single mathematical expression wrapped in single dollar signs ($...$): write $108 cdot 100 = (2^2 cdot 3^3) cdot (2^2 cdot 5^2) = 2^4 cdot 3^3 cdot 5^2$.
+- **Step 3 (Final Calculation & Numerical Result):** Calculate the final result step by step: $(4 + 1)(3 + 1)(2 + 1) = 5 cdot 4 cdot 3 = 60$. State the final answer with units if applicable.
+
+### \u274C Option-by-Option Breakdown
+- **Option A:** Explain specifically why this option is wrong or what arithmetic/conceptual misconception it represents.
+- **Option B:** Explain why this option is correct or incorrect.
+- **Option C:** Explain why this option fails.
+- **Option D:** Explain why this option fails.
+
+### \u{1F4A1} High-Yield Exam Shortcut & Tip
+- **Exam Shortcut / Memory Anchor:** Provide an exam-tested tip, mental shortcut, or mnemonic for ${effectiveExam}.`,
       "",
       "MATHEMATICAL FORMULAS & SCIENTIFIC NOTATION (STRICT KA-TEX RULES):",
-      "- EVERY single mathematical formula, derivation step, variable, equation, and unit MUST be enclosed in LaTeX dollar signs ($...$ for inline or $$...$$ for display blocks).",
-      "- Format all math as valid LaTeX: $v = u + at$, $T = \\frac{2u\\sin\\theta}{g}$.",
-      "- NEVER output raw un-bracketed LaTeX syntax without enclosing dollar signs ($...$).",
+      "- EVERY single mathematical formula, derivation step, variable, equation, exponent, prime factor, and calculation MUST be enclosed in standard single dollar signs ($...$).",
+      "- ALWAYS format math as valid LaTeX: $108 cdot 100 = 2^4 cdot 3^3 cdot 5^2$, $(4 + 1)(3 + 1)(2 + 1) = 5 cdot 4 cdot 3 = 60$, $v = u + at$, $T = \\frac{2u\\sin\\theta}{g}$.",
+      "- NEVER leave raw \\cdot, \\times, \\frac, \\sqrt, or exponents unwrapped without dollar signs ($...$)!",
+      "- NEVER mix single and double dollar signs (NEVER write $$...$ or $...$$).",
+      "- NEVER wrap natural English sentences in dollar signs.",
       "- Return your response in pure, clean Markdown."
     ].filter(Boolean).join("\n\n");
     const userPrompt = [

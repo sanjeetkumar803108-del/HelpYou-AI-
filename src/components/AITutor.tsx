@@ -28,7 +28,7 @@ import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
 import { compressImageToFile } from '../utils/imageCompressor';
 import { getApiUrl } from '../utils/api';
-import { ReportAiButton } from './ReportAiModal';
+import { ReportAiButton } from './ReportAIModal';
 
 interface ChatMessage {
   role: 'user' | 'model';

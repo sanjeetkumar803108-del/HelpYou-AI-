@@ -2100,8 +2100,7 @@ export default function Profile({
               const peakDay = highestItem?.day || 'Sun';
 
               return (
-                <div className="space-y-3 pt-1">
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 pt-1">
                     {/* Card 1: Today's Focus Time */}
                     <div className="bg-[#F8FAFC] border border-zinc-200/70 rounded-2xl p-4 flex flex-col justify-between">
                       <div className="flex items-center justify-between mb-2">
@@ -2138,16 +2137,6 @@ export default function Profile({
                       </div>
                     </div>
                   </div>
-
-                  {/* Program / Analytics Footer */}
-                  <div className="flex items-center justify-between pt-1 px-1 text-xs">
-                    <div className="flex items-center gap-1.5 text-purple-600 font-bold">
-                      <GraduationCap className="w-4 h-4 text-purple-600 stroke-[2.2]" />
-                      <span>{targetExam ? `${targetExam} • ` : ''}{safeGetItem('academic_track_title') || safeGetItem('academic_stream') || 'HelpYou AI Prep'}</span>
-                    </div>
-                    <span className="text-zinc-400 font-bold text-[11px]">Study Analytics</span>
-                  </div>
-                </div>
               );
             })()}
           </div>

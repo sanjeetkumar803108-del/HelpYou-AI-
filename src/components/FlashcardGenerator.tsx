@@ -1154,7 +1154,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                                 const chapterKey = `${cleanSubj}__${topicItem}`;
                                 const isChapterOpen = expandedChapter === chapterKey;
                                 const subTopicsList = (subject.chapterSubTopics && subject.chapterSubTopics[topicItem]) || [];
-                                const isCached = !!getCachedCurriculumDeck(cleanSubj, topicItem);
 
                                 return (
                                   <div key={index} className="rounded-2xl border border-zinc-200/80 bg-white overflow-hidden shadow-xs transition-all">
@@ -1178,12 +1177,6 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                        {isCached && (
-                                          <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/70 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0 shadow-2xs">
-                                            <Check className="w-2.5 h-2.5" />
-                                            <span>Saved</span>
-                                          </span>
-                                        )}
                                         <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded-md">
                                           {subTopicsList.length} Units
                                         </span>

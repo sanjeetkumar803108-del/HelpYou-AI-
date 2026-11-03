@@ -109,8 +109,10 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   private handleSoftReset = () => {
     try { triggerVibration(15); } catch (_) {}
-    if (isChunkLoadError(this.state.error)) {
-      console.log('[CrashProof Boundary] Stale chunk manual reload requested...');
+    const err = this.state.error;
+    const isFatalModuleError = isChunkLoadError(err) || (err instanceof ReferenceError) || (err instanceof TypeError);
+    if (isFatalModuleError) {
+      console.log('[CrashProof Boundary] Module or stale chunk error detected. Performing clean reload...');
       window.location.reload();
       return;
     }

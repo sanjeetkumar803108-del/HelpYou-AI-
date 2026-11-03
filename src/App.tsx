@@ -1246,6 +1246,16 @@ export default function App() {
     }
   }, []);
 
+  const handleToolErrorClose = useCallback((toolKey: string) => {
+    setActiveTool(null);
+    setMountedTools(prev => {
+      if (!prev.has(toolKey)) return prev;
+      const next = new Set(prev);
+      next.delete(toolKey);
+      return next;
+    });
+  }, []);
+
   return (
     <>
       <ToastProvider />
@@ -1384,7 +1394,7 @@ export default function App() {
                 )}
                 {mountedTools.has('testprep') && (
                   <div className={activeTool === 'testprep' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                    <ErrorBoundary featureName="Test Prep" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                    <ErrorBoundary featureName="Test Prep" onClose={() => handleToolErrorClose('testprep')} onReset={() => handleToolErrorClose('testprep')}>
                       <Suspense fallback={<FullPageSkeleton />}>
                         <TestPrep
                           onBack={() => setActiveTool(null)}
@@ -1458,7 +1468,7 @@ export default function App() {
                 )}
                 {mountedTools.has('questiongenerator') && (
                   <div className={activeTool === 'questiongenerator' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                    <ErrorBoundary featureName="Question Generator" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                    <ErrorBoundary featureName="Question Generator" onClose={() => handleToolErrorClose('questiongenerator')} onReset={() => handleToolErrorClose('questiongenerator')}>
                       <Suspense fallback={<FullPageSkeleton />}>
                         <LockedFeature cost={2} featureName="AI Question Generator" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                           <QuestionGenerator
@@ -1474,7 +1484,7 @@ export default function App() {
                 )}
                 {mountedTools.has('ainotes') && (
                   <div className={activeTool === 'ainotes' ? "h-full flex flex-col absolute inset-0 z-10 bg-[#FAF9F6]" : "hidden"}>
-                    <ErrorBoundary featureName="AI Notes" onClose={() => setActiveTool(null)} onReset={() => setActiveTool(null)}>
+                    <ErrorBoundary featureName="AI Notes" onClose={() => handleToolErrorClose('ainotes')} onReset={() => handleToolErrorClose('ainotes')}>
                       <Suspense fallback={<FullPageSkeleton />}>
                         <LockedFeature cost={2} featureName="AI Notes" onBack={() => setActiveTool(null)} onEarnCoins={() => setActiveTool('coinpage')}>
                           <AINotes

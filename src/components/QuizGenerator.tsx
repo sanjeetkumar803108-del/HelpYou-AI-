@@ -3772,35 +3772,33 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                   {askAILoadingMode === activeQuestionAIMode[currentIndex] ? (
                     <div className="py-7 flex flex-col items-center justify-center text-center space-y-3">
                       <div className="relative">
-                        <div className={`w-11 h-11 rounded-full border-3 ${
+                        <div className={`w-12 h-12 rounded-full border-3 ${
                           activeQuestionAIMode[currentIndex] === 'hint'
                             ? 'border-amber-200 border-t-amber-600'
                             : 'border-indigo-200 border-t-indigo-600'
                         } animate-spin`} />
-                        <Sparkles className={`w-5 h-5 absolute inset-0 m-auto animate-pulse ${
+                        <Sparkles className={`w-6 h-6 absolute inset-0 m-auto animate-pulse ${
                           activeQuestionAIMode[currentIndex] === 'hint' ? 'text-amber-500' : 'text-indigo-500'
                         }`} />
                       </div>
                       <div>
-                        <h5 className="text-xs font-black text-zinc-800">
+                        <h5 className="text-xs font-black text-zinc-900 tracking-tight">
                           {activeQuestionAIMode[currentIndex] === 'hint'
-                            ? `Formulating guided hint for Question ${currentIndex + 1}...`
-                            : `Computing step-by-step solution for Question ${currentIndex + 1}...`}
+                            ? `⚡ Formulating Live Hint for Question ${currentIndex + 1}...`
+                            : `⚡ Crafting Live Step-by-Step Solution for Question ${currentIndex + 1}...`}
                         </h5>
-                        <p className="text-[10px] text-zinc-400 font-bold mt-0.5">
-                          Generating crystal-clear explanations with formulas
+                        <p className="text-[10px] text-zinc-500 font-bold mt-1">
+                          Analyzing concept, formulas, and option traps in real-time
                         </p>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="text-xs md:text-sm text-zinc-800 leading-relaxed font-medium bg-white/90 rounded-2xl p-4 border border-zinc-150 shadow-xs overflow-x-auto">
+                      <div className="text-xs md:text-sm text-zinc-800 leading-relaxed font-medium bg-white/95 rounded-2xl p-4.5 border border-zinc-150 shadow-xs overflow-x-auto">
                         <GlobalMarkdown className="text-xs md:text-sm text-zinc-800 leading-relaxed space-y-3 font-medium">
-                          {formatQuizMath(
-                            askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
-                            askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
-                            (quiz[currentIndex]?.explanation ? `### 📝 Solution & Concept Breakdown\n${quiz[currentIndex]?.explanation}` : 'Explanation is being prepared. Please check the solution below.')
-                          )}
+                          {askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                           askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                           (quiz[currentIndex]?.explanation ? `### 📝 Solution & Concept Breakdown\n${quiz[currentIndex]?.explanation}` : 'Generating live AI response...')}
                         </GlobalMarkdown>
                       </div>
 
@@ -3810,16 +3808,28 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                           onClick={() => {
                             triggerVibration(10);
                             const text = askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
-                              askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] || '';
+                              askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                              quiz[currentIndex]?.explanation || '';
                             if (text) {
                               navigator.clipboard?.writeText(text);
+                              setCopiedAiHelp(true);
                               showToast('Copied AI explanation!');
+                              setTimeout(() => setCopiedAiHelp(false), 2000);
                             }
                           }}
                           className="text-[10.5px] font-bold text-zinc-500 hover:text-indigo-600 flex items-center gap-1 cursor-pointer transition-colors"
                         >
-                          <Copy className="w-3 h-3" />
-                          <span>Copy Answer</span>
+                          {copiedAiHelp ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                              <span className="text-emerald-700 font-extrabold">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy Answer</span>
+                            </>
+                          )}
                         </button>
 
                         <button

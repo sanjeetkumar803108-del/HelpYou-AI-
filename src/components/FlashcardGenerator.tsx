@@ -33,7 +33,7 @@ import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem, safeJsonParse } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached } from '../utils/communityCache';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
 
@@ -49,18 +49,13 @@ const getCurriculumCacheKey = (subjectTitle: string, topicName: string): string 
   return `cached_ch_flashcards_${uid}_${cleanSubject}_${cleanTopic}`;
 };
 
-const getCachedCurriculumDeck = (subjectTitle: string, topicName: string): Flashcard[] | null => {
-  const key = getCurriculumCacheKey(subjectTitle, topicName);
-  const data = safeGetItem(key);
-  if (!data) return null;
-  const parsed = safeJsonParse<Flashcard[]>(data, []);
-  return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+const getCachedCurriculumDeck = (_subjectTitle: string, _topicName: string): Flashcard[] | null => {
+  // Database caching completely removed: always generate fresh live flashcards
+  return null;
 };
 
-const saveCachedCurriculumDeck = (subjectTitle: string, topicName: string, cards: Flashcard[]): void => {
-  if (!Array.isArray(cards) || cards.length === 0) return;
-  const key = getCurriculumCacheKey(subjectTitle, topicName);
-  safeSetItem(key, JSON.stringify(cards));
+const saveCachedCurriculumDeck = (_subjectTitle: string, _topicName: string, _cards: Flashcard[]): void => {
+  // Caching removed: no-op
 };
 
 const parseFlashcardsFromText = (text: string): Flashcard[] => {
@@ -240,6 +235,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [customSubTopicInput, setCustomSubTopicInput] = useState<{ [chapterKey: string]: string }>({});
   const [showCustomInputForChapter, setShowCustomInputForChapter] = useState<string | null>(null);
   const [customInputError, setCustomInputError] = useState<{ [chapterKey: string]: string }>({});
+  const [isVerifyingSubTopic, setIsVerifyingSubTopic] = useState<{ [chapterKey: string]: boolean }>({});
 
   const flashcardSteps = [
     "Analyzing topic & cognitive anchors...",

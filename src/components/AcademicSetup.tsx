@@ -1127,51 +1127,51 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-zinc-950/85 backdrop-blur-md flex items-center justify-center p-5 select-none"
+            className="fixed inset-0 z-[10000] bg-zinc-950/90 backdrop-blur-md flex items-center justify-center p-3.5 sm:p-5 select-none overflow-y-auto"
           >
             <motion.div
               initial={{ scale: 0.92, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
-              className="bg-white rounded-[2rem] p-6 max-w-sm w-full shadow-2xl border border-purple-500/20 relative overflow-hidden"
+              className="bg-white rounded-3xl p-4 sm:p-5 max-w-sm w-full shadow-2xl border border-purple-500/20 relative overflow-hidden my-auto flex flex-col justify-between max-h-[94vh]"
             >
               {/* Background ambient gradient glow */}
               <div className="absolute -top-12 -right-12 w-36 h-36 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-12 -left-12 w-36 h-36 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
 
               {/* Central Pulsing Radar Orb */}
-              <div className="flex flex-col items-center text-center mb-6 relative">
-                <div className="relative mb-4">
-                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 p-0.5 shadow-xl shadow-purple-500/25 flex items-center justify-center animate-pulse">
-                    <div className="w-full h-full bg-white rounded-[1.4rem] flex items-center justify-center">
+              <div className="flex flex-col items-center text-center mb-3 sm:mb-3.5 relative shrink-0">
+                <div className="relative mb-2.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 p-0.5 shadow-lg shadow-purple-500/25 flex items-center justify-center animate-pulse">
+                    <div className="w-full h-full bg-white rounded-[0.9rem] flex items-center justify-center">
                       {researchStage === 5 ? (
-                        <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
+                        <Check className="w-6 h-6 text-emerald-600 stroke-[3]" />
                       ) : (
-                        <Sparkles className="w-8 h-8 text-purple-600 animate-spin" style={{ animationDuration: '4s' }} />
+                        <Sparkles className="w-6 h-6 text-purple-600 animate-spin" style={{ animationDuration: '4s' }} />
                       )}
                     </div>
                   </div>
                   {researchStage < 5 && (
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shadow-md">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-black shadow-md">
+                      <Loader2 className="w-3 h-3 animate-spin" />
                     </div>
                   )}
                 </div>
 
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-2 text-[10px] font-extrabold uppercase tracking-wider">
-                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-1.5 text-[9px] font-extrabold uppercase tracking-wider">
+                  <ShieldCheck className="w-3 h-3 text-purple-600" />
                   Official Exam Intelligence Engine
                 </div>
-                <h3 className="text-xl font-black text-zinc-950 tracking-tight">
+                <h3 className="text-lg font-black text-zinc-950 tracking-tight leading-tight">
                   Calibrating Academic DNA
                 </h3>
-                <p className="text-[11px] text-zinc-500 font-semibold mt-1 max-w-[260px] leading-relaxed">
+                <p className="text-[11px] text-zinc-500 font-semibold mt-0.5 max-w-[270px] leading-snug line-clamp-2">
                   Deep web research on official guidelines for <span className="font-extrabold text-zinc-900">{targetExam}</span>
                 </p>
               </div>
 
               {/* 5 Progress Stages Checklist */}
-              <div className="space-y-2 mb-5">
+              <div className="space-y-1.5 mb-3 sm:mb-3.5 flex-1 min-h-0">
                 {[
                   { num: 1, label: `Connect to ${targetExam || 'Exam'} Registry`, desc: 'Official testing authority handshake' },
                   { num: 2, label: 'Curate Official Syllabus & Units', desc: 'Isolating chapters for each subject' },
@@ -1185,7 +1185,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                   return (
                     <div 
                       key={st.num}
-                      className={`p-2.5 rounded-xl border transition-all flex items-center gap-3 ${
+                      className={`px-3 py-2 rounded-xl border transition-all flex items-center gap-2.5 ${
                         isDone 
                           ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
                           : isCurrent
@@ -1210,7 +1210,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                       </div>
 
                       <div className="min-w-0 flex-1 text-left">
-                        <p className={`text-xs font-black truncate ${
+                        <p className={`text-[11px] font-extrabold truncate ${
                           isDone ? 'text-emerald-900' : isCurrent ? 'text-purple-900' : 'text-zinc-600'
                         }`}>
                           {st.label}
@@ -1224,11 +1224,18 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                 })}
               </div>
 
-              {/* Dynamic Status Ticker */}
-              <div className="p-3 bg-zinc-950 text-white rounded-xl text-center">
-                <p className="text-[11px] font-bold text-zinc-200 flex items-center justify-center gap-2">
-                  {researchStage < 5 && <Loader2 className="w-3 h-3 animate-spin text-purple-400" />}
-                  {researchMessage}
+              {/* Dynamic Status Ticker (Guaranteed 100% Legible & Visible) */}
+              <div className="px-3.5 py-2.5 bg-zinc-950 text-white rounded-xl text-center shadow-lg border border-zinc-800/80 shrink-0 flex items-center justify-center gap-2 min-h-[42px]">
+                {researchStage < 5 ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400 shrink-0" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 stroke-[3]" />
+                )}
+                <p 
+                  className="text-xs font-bold text-white tracking-wide truncate max-w-[280px]"
+                  title={researchMessage}
+                >
+                  {researchMessage || 'Calibrating Academic DNA...'}
                 </p>
               </div>
             </motion.div>

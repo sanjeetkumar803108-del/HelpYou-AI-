@@ -240,7 +240,6 @@ app.use((req, res, next) => {
   console.log(`[${(/* @__PURE__ */ new Date()).toISOString()}] ${req.method} ${req.url}`);
   next();
 });
-var summaryCache = /* @__PURE__ */ new Map();
 function sanitizeLaTeXInJSON(raw) {
   if (!raw) return raw;
   let inString = false;
@@ -1644,13 +1643,6 @@ ${examDirective}
     }
     const fileHash = req.file ? crypto.createHash("sha256").update(req.file.buffer).digest("hex") : crypto.createHash("sha256").update(Buffer.from(textInput)).digest("hex");
     const cacheKey = `${fileHash}_${action}_${format}_${gradeLevel || "std"}_${stream || ""}`;
-    if (summaryCache.has(cacheKey)) {
-      const cached = summaryCache.get(cacheKey);
-      if (action === "flashcards-json") {
-        return res.json({ flashcards: cached });
-      }
-      return res.json({ text: cached });
-    }
     const aiClient = getAI();
     let extractedText = "";
     let useRawFile = false;
@@ -1925,10 +1917,8 @@ ${extractedText}` };
       if (!cards || cards.length === 0) {
         cards = [{ question: "Key Concept from Document", answer: outputText.slice(0, 200) }];
       }
-      summaryCache.set(cacheKey, cards);
       return res.json({ flashcards: cards });
     }
-    summaryCache.set(cacheKey, outputText);
     res.json({ text: outputText });
   } catch (error) {
     console.error("Summarize error:", error);
@@ -2736,9 +2726,6 @@ app.post("/api/generate-pdf-flashcards", upload.single("pdf"), async (req, res) 
     const requestedCount = Math.min(Math.max(parseInt(count) || 15, 5), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const cacheKey = crypto.createHash("sha256").update(req.file.buffer).digest("hex") + `_pdf_flashcards_${requestedCount}`;
-    if (summaryCache.has(cacheKey)) {
-      return res.json({ flashcards: summaryCache.get(cacheKey) });
-    }
     const systemInstruction = `${gradeDirective}
 
 Act as an Elite Cognitive Scientist and Active Recall Specialist.
@@ -2799,7 +2786,6 @@ Format:
     if (!Array.isArray(cards) || cards.length === 0) {
       return res.status(500).json({ error: "Failed to parse flashcards from PDF content." });
     }
-    summaryCache.set(cacheKey, cards);
     return res.json({ flashcards: cards });
   } catch (error) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
@@ -3073,14 +3059,6 @@ app.post("/api/youtube-summary", async (req, res) => {
       console.error("Failed to fetch oembed details", err);
     }
     const fileHash = crypto.createHash("sha256").update(url).digest("hex");
-    if (summaryCache.has(fileHash) && !followUp) {
-      return res.json({
-        text: summaryCache.get(fileHash),
-        title: title || "YouTube Video",
-        authorName: authorName || "",
-        videoId
-      });
-    }
     if (followUp) {
       const systemInstruction2 = `You are an expert study coach. The student is asking a follow-up question or requesting an interactive study enhancement based on a previous YouTube video summary.
 Your task is to fulfill the request in a highly informative, educational, and engaging way.
@@ -3166,7 +3144,6 @@ At the very end of your notes, always include 3 helpful interactive study sugges
       }
     });
     const outputText = response.text || "No summary generated.";
-    summaryCache.set(fileHash, outputText);
     res.json({
       text: outputText,
       title: title || "YouTube Video",
@@ -3184,6 +3161,434 @@ At the very end of your notes, always include 3 helpful interactive study sugges
     res.status(500).json({ error: error.message || "Failed to generate summary" });
   }
 });
+var PRE_VERIFIED_EXAMS = [
+  {
+    aliases: ["neet", "neet ug", "neet 2025", "neet 2026", "neet exam", "neet ug national eligibility", "national eligibility cum entrance test"],
+    officialExamName: "NEET UG (National Eligibility cum Entrance Test)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & Senior Secondary", isCollege: false },
+      { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Entrance Prep", isCollege: false },
+      { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time Preparation / Gap Year", isCollege: false },
+      { id: "Class 10", label: "Class 10", desc: "Pre-Foundation & Early Prep", isCollege: false }
+    ],
+    subjects: [
+      { id: "Physics", title: "Physics", subtitle: "Mechanics, Electrodynamics, Modern Physics, Optics", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Organic & Inorganic Chemistry", icon: "\u{1F9EA}" },
+      { id: "Biology", title: "Biology", subtitle: "Botany & Zoology, Human Physiology, Genetics", icon: "\u{1F9EC}" }
+    ]
+  },
+  {
+    aliases: ["jee", "jee main", "jee mains", "iit jee", "jee main 2025", "jee main 2026", "iit jee main", "joint entrance examination"],
+    officialExamName: "JEE Main (Joint Entrance Examination)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & JEE Aspirant", isCollege: false },
+      { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Entrance Prep", isCollege: false },
+      { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Full-Time Dedicated JEE Preparation", isCollege: false },
+      { id: "Class 10", label: "Class 10", desc: "Pre-Foundation & Early Prep", isCollege: false }
+    ],
+    subjects: [
+      { id: "Physics", title: "Physics", subtitle: "Mechanics, Thermodynamics, Electromagnetism, Modern Physics", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Inorganic, and Organic Chemistry", icon: "\u{1F9EA}" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Calculus, Algebra, Coordinate Geometry, Vectors", icon: "\u{1F4D0}" }
+    ]
+  },
+  {
+    aliases: ["jee adv", "jee advanced", "iit jee advanced"],
+    officialExamName: "JEE Advanced (Joint Entrance Examination Advanced)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & JEE Advanced Prep", isCollege: false },
+      { id: "Class 11", label: "Class 11", desc: "11th Grade Foundation", isCollege: false },
+      { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time JEE Advanced Aspirant", isCollege: false }
+    ],
+    subjects: [
+      { id: "Physics", title: "Physics", subtitle: "Advanced Mechanics, Waves, Electrodynamics & Modern Physics", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Advanced Physical, Organic Synthesis & Coordination", icon: "\u{1F9EA}" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Advanced Calculus, Complex Numbers, Vectors & 3D", icon: "\u{1F4D0}" }
+    ]
+  },
+  {
+    aliases: ["cbse 12", "cbse 12th", "cbse class 12", "cbse board 12", "class 12 cbse", "cbse boards"],
+    officialExamName: "CBSE Class 12 Board Examination",
+    country: "India",
+    hasElectives: true,
+    grades: [
+      { id: "Class 12", label: "Class 12", desc: "12th Senior Secondary Board Year", isCollege: false },
+      { id: "Class 11", label: "Class 11", desc: "11th Senior Secondary Foundation", isCollege: false }
+    ],
+    subjects: [
+      { id: "Physics", title: "Physics", subtitle: "Electrostatics, Optics, Magnetism & Modern Physics", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Solutions, Electrochemistry, Organic & Coordination", icon: "\u{1F9EA}" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Calculus, Relations & Functions, Vectors & 3D", icon: "\u{1F4D0}" },
+      { id: "Biology", title: "Biology", subtitle: "Reproduction, Genetics, Evolution & Biotechnology", icon: "\u{1F9EC}" },
+      { id: "Computer Science", title: "Computer Science", subtitle: "Python, Computational Thinking, SQL & Networks", icon: "\u{1F4BB}" },
+      { id: "English Core", title: "English Core", subtitle: "Reading Comprehension, Creative Writing & Literature", icon: "\u{1F4DA}" },
+      { id: "Economics", title: "Economics", subtitle: "Macroeconomics & Indian Economic Development", icon: "\u{1F4CA}" },
+      { id: "Accountancy", title: "Accountancy", subtitle: "Partnership, Companies & Financial Analysis", icon: "\u{1F4D1}" },
+      { id: "Business Studies", title: "Business Studies", subtitle: "Principles of Management & Business Finance", icon: "\u{1F4C8}" },
+      { id: "History", title: "History", subtitle: "Themes in Indian History I, II & III", icon: "\u{1F3DB}\uFE0F" },
+      { id: "Political Science", title: "Political Science", subtitle: "Contemporary World Politics & Politics in India", icon: "\u2696\uFE0F" }
+    ]
+  },
+  {
+    aliases: ["cbse 10", "cbse 10th", "cbse class 10", "class 10 cbse", "cbse board 10", "cbse"],
+    officialExamName: "CBSE Class 10 Board Examination",
+    country: "India",
+    hasElectives: true,
+    grades: [
+      { id: "Class 10", label: "Class 10", desc: "10th Secondary Board Exam Year", isCollege: false },
+      { id: "Class 9", label: "Class 9", desc: "9th Pre-Board Secondary Foundation", isCollege: false }
+    ],
+    subjects: [
+      { id: "Mathematics", title: "Mathematics", subtitle: "Real Numbers, Polynomials, Trigonometry & Geometry", icon: "\u{1F4D0}" },
+      { id: "Science", title: "Science", subtitle: "Chemical Reactions, Life Processes, Light & Electricity", icon: "\u{1F52C}" },
+      { id: "Social Science", title: "Social Science", subtitle: "History, Geography, Political Science & Economics", icon: "\u{1F30D}" },
+      { id: "English Language & Literature", title: "English Language & Literature", subtitle: "Reading, Writing & Literature Textbooks", icon: "\u{1F4DA}" },
+      { id: "Hindi", title: "Hindi Course", subtitle: "Sparsh, Sanchayan & Vyakaran", icon: "\u{1F4D6}" },
+      { id: "Information Technology", title: "Information Technology", subtitle: "Digital Literacy, Cyber Safety & Basics of AI", icon: "\u{1F4BB}" }
+    ]
+  },
+  {
+    aliases: ["icse", "icse class 10", "icse 10th", "icse board"],
+    officialExamName: "ICSE Class 10 (Indian Certificate of Secondary Education)",
+    country: "India",
+    hasElectives: true,
+    grades: [
+      { id: "Class 10", label: "Class 10", desc: "ICSE Class 10 Board Year", isCollege: false },
+      { id: "Class 9", label: "Class 9", desc: "Class 9 Foundation Prep", isCollege: false }
+    ],
+    subjects: [
+      { id: "English", title: "English Language & Literature", subtitle: "Grammar, Essay & Drama Analysis", icon: "\u{1F4DA}" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Commercial Math, Algebra, Geometry & Mensuration", icon: "\u{1F4D0}" },
+      { id: "Physics", title: "Physics", subtitle: "Force, Work, Light, Sound & Electricity", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Periodic Properties, Chemical Bonding & Acids", icon: "\u{1F9EA}" },
+      { id: "Biology", title: "Biology", subtitle: "Basic Biology, Plant & Human Physiology", icon: "\u{1F9EC}" },
+      { id: "History & Civics", title: "History & Civics", subtitle: "Union Legislature, Indian National Movement", icon: "\u{1F3DB}\uFE0F" },
+      { id: "Geography", title: "Geography", subtitle: "Topography, Climate, Soil & Natural Vegetation", icon: "\u{1F5FA}\uFE0F" },
+      { id: "Computer Applications", title: "Computer Applications", subtitle: "Java OOP Concepts & Programming", icon: "\u{1F4BB}" }
+    ]
+  },
+  {
+    aliases: ["isc", "isc class 12", "isc 12th", "isc board"],
+    officialExamName: "ISC Class 12 (Indian School Certificate)",
+    country: "India",
+    hasElectives: true,
+    grades: [
+      { id: "Class 12", label: "Class 12", desc: "ISC Class 12 Board Year", isCollege: false },
+      { id: "Class 11", label: "Class 11", desc: "ISC Class 11 Foundation", isCollege: false }
+    ],
+    subjects: [
+      { id: "Physics", title: "Physics", subtitle: "Electrostatics, Magnetism, Optics & Modern Physics", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Inorganic and Organic Chemistry", icon: "\u{1F9EA}" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Calculus, Vectors, Probability & Linear Programming", icon: "\u{1F4D0}" },
+      { id: "Biology", title: "Biology", subtitle: "Reproduction, Genetics, Ecology & Physiology", icon: "\u{1F9EC}" },
+      { id: "Computer Science", title: "Computer Science", subtitle: "Java Data Structures, Boolean Algebra & Algorithms", icon: "\u{1F4BB}" },
+      { id: "English Literature", title: "English Literature", subtitle: "Shakespeare Drama, Prose & Poetry", icon: "\u{1F4DA}" },
+      { id: "Economics", title: "Economics", subtitle: "Microeconomic Theory & National Income Accounting", icon: "\u{1F4CA}" },
+      { id: "Commerce", title: "Commerce", subtitle: "Business Environment, Financing & Marketing", icon: "\u{1F4C8}" }
+    ]
+  },
+  {
+    aliases: ["upsc", "upsc cse", "civil services", "ias", "ips", "ias exam"],
+    officialExamName: "UPSC Civil Services Examination (CSE)",
+    country: "India",
+    hasElectives: true,
+    grades: [
+      { id: "Full-Time Aspirant", label: "Full-Time Aspirant", desc: "Dedicated CSE Preparation", isCollege: true },
+      { id: "College Final Year", label: "College Final Year", desc: "Undergraduate Aspirant", isCollege: true },
+      { id: "Working Professional", label: "Working Professional", desc: "Part-Time Dedicated Study", isCollege: true }
+    ],
+    subjects: [
+      { id: "General Studies I", title: "General Studies I", subtitle: "Indian Heritage, History, Geography & Society", icon: "\u{1F3DB}\uFE0F" },
+      { id: "General Studies II", title: "General Studies II (CSAT & Polity)", subtitle: "Constitution, Governance, Polity & Reasoning", icon: "\u2696\uFE0F" },
+      { id: "General Studies III", title: "General Studies III", subtitle: "Economy, Agriculture, Science & Security", icon: "\u{1F4CA}" },
+      { id: "General Studies IV", title: "General Studies IV (Ethics)", subtitle: "Ethics, Integrity & Aptitude Case Studies", icon: "\u{1F9E0}" },
+      { id: "Essay", title: "Essay Paper", subtitle: "Philosophical, Societal & Contemporary Essays", icon: "\u270D\uFE0F" },
+      { id: "Current Affairs", title: "Current Affairs & Editorial Analysis", subtitle: "The Hindu/Express Analysis & Monthly Reviews", icon: "\u{1F4F0}" }
+    ]
+  },
+  {
+    aliases: ["cuet", "cuet ug", "cuet 2025", "cuet exam"],
+    officialExamName: "CUET UG (Common University Entrance Test)",
+    country: "India",
+    hasElectives: true,
+    grades: [
+      { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & CUET Aspirant", isCollege: false },
+      { id: "Dropper / Gap Year", label: "Dropper / Gap Year", desc: "Full-Time CUET Prep", isCollege: false }
+    ],
+    subjects: [
+      { id: "General Test", title: "General Test (Section III)", subtitle: "GK, Current Affairs, Mental Ability & Numerical Logic", icon: "\u{1F9E0}" },
+      { id: "English Language", title: "English (Section IA)", subtitle: "Reading Comprehension, Vocabulary & Verbal Ability", icon: "\u{1F4DA}" },
+      { id: "Physics", title: "Physics (Domain)", subtitle: "NCERT Class 12 Core Syllabus", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry (Domain)", subtitle: "Physical, Inorganic and Organic Class 12 Syllabus", icon: "\u{1F9EA}" },
+      { id: "Mathematics", title: "Mathematics (Domain)", subtitle: "Class 12 Core & Applied Math Topics", icon: "\u{1F4D0}" },
+      { id: "Biology", title: "Biology (Domain)", subtitle: "Reproduction, Genetics, Biotechnology & Ecology", icon: "\u{1F9EC}" },
+      { id: "Economics", title: "Economics (Domain)", subtitle: "Microeconomics, Macroeconomics & Indian Economy", icon: "\u{1F4CA}" },
+      { id: "Accountancy", title: "Accountancy (Domain)", subtitle: "Accounting for NPO, Partnership & Companies", icon: "\u{1F4D1}" },
+      { id: "Business Studies", title: "Business Studies (Domain)", subtitle: "Management Principles, Planning & Marketing", icon: "\u{1F4C8}" }
+    ]
+  },
+  {
+    aliases: ["sat", "digital sat", "psat"],
+    officialExamName: "SAT (Digital Scholastic Assessment Test)",
+    country: "United States",
+    hasElectives: false,
+    grades: [
+      { id: "11th Grade (Junior)", label: "11th Grade", desc: "Prime SAT Testing Year", isCollege: false },
+      { id: "12th Grade (Senior)", label: "12th Grade", desc: "Final Fall SAT Attempts", isCollege: false },
+      { id: "10th Grade (Sophomore)", label: "10th Grade", desc: "Early PSAT / SAT Prep", isCollege: false },
+      { id: "9th Grade (Freshman)", label: "9th Grade", desc: "High School Foundation", isCollege: false }
+    ],
+    subjects: [
+      { id: "Reading and Writing", title: "Reading and Writing", subtitle: "Craft and Structure, Information and Ideas, Expression of Ideas", icon: "\u{1F4D6}" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Algebra, Advanced Math, Problem-Solving & Geometry/Trigonometry", icon: "\u{1F4D0}" }
+    ]
+  },
+  {
+    aliases: ["act", "act exam"],
+    officialExamName: "ACT (American College Testing)",
+    country: "United States",
+    hasElectives: false,
+    grades: [
+      { id: "11th Grade (Junior)", label: "11th Grade", desc: "Prime ACT Testing Year", isCollege: false },
+      { id: "12th Grade (Senior)", label: "12th Grade", desc: "Final ACT Attempts", isCollege: false },
+      { id: "10th Grade (Sophomore)", label: "10th Grade", desc: "PreACT Foundation", isCollege: false }
+    ],
+    subjects: [
+      { id: "English", title: "English", subtitle: "Usage, Mechanics & Rhetorical Skills", icon: "\u270D\uFE0F" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Pre-Algebra, Elementary Algebra, Intermediate Algebra, Coordinate Geometry", icon: "\u{1F4D0}" },
+      { id: "Reading", title: "Reading", subtitle: "Prose Fiction, Social Studies, Humanities & Natural Sciences", icon: "\u{1F4D6}" },
+      { id: "Science", title: "Science", subtitle: "Data Representation, Research Summaries & Conflicting Viewpoints", icon: "\u{1F52C}" }
+    ]
+  },
+  {
+    aliases: ["ap", "ap exams", "advanced placement"],
+    officialExamName: "Advanced Placement (AP) Exams",
+    country: "United States",
+    hasElectives: true,
+    grades: [
+      { id: "11th Grade (Junior)", label: "11th Grade", desc: "Prime AP Course Year", isCollege: false },
+      { id: "12th Grade (Senior)", label: "12th Grade", desc: "Senior AP Courses & College Credit", isCollege: false },
+      { id: "10th Grade (Sophomore)", label: "10th Grade", desc: "Introductory AP Courses", isCollege: false }
+    ],
+    subjects: [
+      { id: "AP_Calculus_AB", title: "AP Calculus AB", subtitle: "Limits, Derivatives & Integrals", icon: "\u{1F4D0}" },
+      { id: "AP_Calculus_BC", title: "AP Calculus BC", subtitle: "Series, Parametric, Polar & Advanced Integration", icon: "\u{1F4D0}" },
+      { id: "AP_Physics_1", title: "AP Physics 1: Algebra-Based", subtitle: "Kinematics, Dynamics, Energy & Momentum", icon: "\u26A1" },
+      { id: "AP_Physics_C_Mechanics", title: "AP Physics C: Mechanics", subtitle: "Calculus-based Newtonian Mechanics", icon: "\u26A1" },
+      { id: "AP_Chemistry", title: "AP Chemistry", subtitle: "Thermodynamics, Kinetics & Equilibrium", icon: "\u{1F9EA}" },
+      { id: "AP_Biology", title: "AP Biology", subtitle: "Ecology, Genetics & Cellular Energetics", icon: "\u{1F9EC}" },
+      { id: "AP_Computer_Science_A", title: "AP Computer Science A", subtitle: "Java Programming & OOP Fundamentals", icon: "\u{1F4BB}" },
+      { id: "AP_Macroeconomics", title: "AP Macroeconomics", subtitle: "National Income, Monetary & Fiscal Policy", icon: "\u{1F4CA}" },
+      { id: "AP_Microeconomics", title: "AP Microeconomics", subtitle: "Supply, Demand, Elasticity & Market Structures", icon: "\u{1F4C8}" },
+      { id: "AP_English_Language", title: "AP English Language and Composition", subtitle: "Rhetorical Analysis & Argumentative Synthesis", icon: "\u{1F4DA}" },
+      { id: "AP_US_History", title: "AP United States History", subtitle: "Historical Analysis & Document-Based Questioning", icon: "\u{1F3DB}\uFE0F" },
+      { id: "AP_Psychology", title: "AP Psychology", subtitle: "Cognition, Biological Bases & Behavior", icon: "\u{1F9E0}" }
+    ]
+  },
+  {
+    aliases: ["gcse", "igcse", "cambridge igcse"],
+    officialExamName: "GCSE / IGCSE (General Certificate of Secondary Education)",
+    country: "United Kingdom",
+    hasElectives: true,
+    grades: [
+      { id: "Year 11", label: "Year 11", desc: "Final GCSE Examination Year", isCollege: false },
+      { id: "Year 10", label: "Year 10", desc: "GCSE Year 1 Preparation", isCollege: false },
+      { id: "Year 9", label: "Year 9", desc: "Pre-GCSE Foundation Year", isCollege: false }
+    ],
+    subjects: [
+      { id: "Mathematics", title: "Mathematics (Higher / Foundation)", subtitle: "Number, Algebra, Ratio, Geometry & Probability", icon: "\u{1F4D0}" },
+      { id: "English Language", title: "English Language", subtitle: "Fiction and Non-Fiction Analysis & Creative Writing", icon: "\u{1F4DA}" },
+      { id: "English Literature", title: "English Literature", subtitle: "Shakespeare, 19th Century Novel & Modern Poetry", icon: "\u{1F4D6}" },
+      { id: "Combined Science", title: "Combined Science (Trilogy / Synergy)", subtitle: "Core Biology, Chemistry & Physics", icon: "\u{1F52C}" },
+      { id: "Biology", title: "Biology (Triple Award)", subtitle: "Cell Biology, Bioenergetics, Genetics & Ecology", icon: "\u{1F9EC}" },
+      { id: "Chemistry", title: "Chemistry (Triple Award)", subtitle: "Atomic Structure, Bonding, Quantitative Chemistry & Organic", icon: "\u{1F9EA}" },
+      { id: "Physics", title: "Physics (Triple Award)", subtitle: "Forces, Energy, Waves, Electricity & Magnetism", icon: "\u26A1" },
+      { id: "History", title: "History", subtitle: "Thematic Study, Period Study & Depth Studies", icon: "\u{1F3DB}\uFE0F" },
+      { id: "Geography", title: "Geography", subtitle: "Physical & Human Environments, Fieldwork", icon: "\u{1F30D}" },
+      { id: "Computer Science", title: "Computer Science", subtitle: "Computational Thinking, Algorithms & Python/VB", icon: "\u{1F4BB}" }
+    ]
+  },
+  {
+    aliases: ["a levels", "a-levels", "a level", "cambridge a level"],
+    officialExamName: "GCE Advanced Level (A-Levels)",
+    country: "United Kingdom",
+    hasElectives: true,
+    grades: [
+      { id: "Year 13 (Upper Sixth)", label: "Year 13 (Upper Sixth)", desc: "A2 Final Examination Year", isCollege: false },
+      { id: "Year 12 (Lower Sixth)", label: "Year 12 (Lower Sixth)", desc: "AS Level Year 1", isCollege: false },
+      { id: "Resit / Gap Year", label: "Resit / Gap Year", desc: "Retake and Upgrade Preparation", isCollege: false }
+    ],
+    subjects: [
+      { id: "Mathematics", title: "Mathematics", subtitle: "Pure Mathematics, Mechanics & Statistics", icon: "\u{1F4D0}" },
+      { id: "Further Mathematics", title: "Further Mathematics", subtitle: "Complex Numbers, Matrices & Advanced Mechanics", icon: "\u{1F4D0}" },
+      { id: "Physics", title: "Physics", subtitle: "Particles, Quantum Phenomena, Fields & Nuclear Physics", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Inorganic and Organic Chemistry", icon: "\u{1F9EA}" },
+      { id: "Biology", title: "Biology", subtitle: "Biological Molecules, Cells, Genetics & Ecosystems", icon: "\u{1F9EC}" },
+      { id: "Economics", title: "Economics", subtitle: "Markets & Market Failure, The National & International Economy", icon: "\u{1F4CA}" },
+      { id: "Computer Science", title: "Computer Science", subtitle: "Programming, Data Structures, Boolean Algebra & Algorithms", icon: "\u{1F4BB}" },
+      { id: "Psychology", title: "Psychology", subtitle: "Social Influence, Memory, Attachment & Psychopathology", icon: "\u{1F9E0}" },
+      { id: "English Literature", title: "English Literature", subtitle: "Poetry, Drama, Prose & Comparative Studies", icon: "\u{1F4DA}" }
+    ]
+  },
+  {
+    aliases: ["ib", "ib diploma", "international baccalaureate"],
+    officialExamName: "International Baccalaureate (IB) Diploma Programme",
+    country: "Global",
+    hasElectives: true,
+    grades: [
+      { id: "IB Year 2 (Grade 12)", label: "IB Year 2 (Grade 12)", desc: "Final Diploma Exam Year & IA Submission", isCollege: false },
+      { id: "IB Year 1 (Grade 11)", label: "IB Year 1 (Grade 11)", desc: "Diploma Programme Year 1", isCollege: false },
+      { id: "Pre-IB (Grade 10)", label: "Pre-IB (Grade 10)", desc: "MYP / Pre-IB Foundation Year", isCollege: false }
+    ],
+    subjects: [
+      { id: "Math_AA_HL_SL", title: "Mathematics: Analysis and Approaches (AA)", subtitle: "Calculus, Algebra, Functions & Proof", icon: "\u{1F4D0}" },
+      { id: "Math_AI_HL_SL", title: "Mathematics: Applications and Interpretation (AI)", subtitle: "Statistics, Modeling, Matrices & Geometry", icon: "\u{1F4CA}" },
+      { id: "Physics_HL_SL", title: "Physics (HL / SL)", subtitle: "Space, Time, Motion, Thermal & Quantum Physics", icon: "\u26A1" },
+      { id: "Chemistry_HL_SL", title: "Chemistry (HL / SL)", subtitle: "Structure, Reactivity, Energetics & Organic Mechanisms", icon: "\u{1F9EA}" },
+      { id: "Biology_HL_SL", title: "Biology (HL / SL)", subtitle: "Molecular Biology, Genetics, Ecology & Evolution", icon: "\u{1F9EC}" },
+      { id: "Economics_HL_SL", title: "Economics (HL / SL)", subtitle: "Microeconomics, Macroeconomics & The Global Economy", icon: "\u{1F4C8}" },
+      { id: "English_A_Lang_Lit", title: "English A: Language and Literature", subtitle: "Literary & Non-Literary Textual Analysis", icon: "\u{1F4DA}" },
+      { id: "Computer_Science_HL_SL", title: "Computer Science (HL / SL)", subtitle: "System Fundamentals, Java OOP & Abstract Data Structures", icon: "\u{1F4BB}" },
+      { id: "History_HL_SL", title: "History (HL / SL)", subtitle: "Authoritarian States, The Cold War & World History Topics", icon: "\u{1F3DB}\uFE0F" }
+    ]
+  },
+  {
+    aliases: ["mcat", "mcat exam"],
+    officialExamName: "MCAT (Medical College Admission Test)",
+    country: "United States",
+    hasElectives: false,
+    grades: [
+      { id: "College Junior / Year 3", label: "College Junior / Year 3", desc: "Pre-Med Testing Stage", isCollege: true },
+      { id: "College Senior / Year 4", label: "College Senior / Year 4", desc: "Application Cycle Testing", isCollege: true },
+      { id: "Post-Baccalaureate / Gap Year", label: "Post-Baccalaureate / Gap Year", desc: "Dedicated Full-Time Preparation", isCollege: true }
+    ],
+    subjects: [
+      { id: "Chem_Phys", title: "Chemical and Physical Foundations", subtitle: "General Chemistry, Physics, Organic & Biochemistry", icon: "\u26A1" },
+      { id: "CARS", title: "Critical Analysis and Reasoning Skills (CARS)", subtitle: "Humanities & Social Sciences Passage Analysis", icon: "\u{1F4D6}" },
+      { id: "Bio_Biochem", title: "Biological and Biochemical Foundations", subtitle: "Molecular Biology, Physiology & Microbiology", icon: "\u{1F9EC}" },
+      { id: "Psych_Soc", title: "Psychological, Social, and Biological Foundations", subtitle: "Psychology, Sociology & Behavioral Principles", icon: "\u{1F9E0}" }
+    ]
+  },
+  {
+    aliases: ["nda", "nda exam", "national defence academy"],
+    officialExamName: "NDA (National Defence Academy Examination)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Class 12", label: "Class 12", desc: "12th Appearing Defence Aspirant", isCollege: false },
+      { id: "Class 11", label: "Class 11", desc: "Early NDA Foundation", isCollege: false },
+      { id: "Post-12th Aspirant", label: "Post-12th Aspirant", desc: "Full-Time NDA / SSB Preparation", isCollege: false }
+    ],
+    subjects: [
+      { id: "Mathematics", title: "Mathematics", subtitle: "Algebra, Trigonometry, Calculus, Vectors & Statistics", icon: "\u{1F4D0}" },
+      { id: "General Ability Test", title: "General Ability Test (GAT)", subtitle: "English Grammar, Physics, Chemistry, History & Current Affairs", icon: "\u{1F6E1}\uFE0F" }
+    ]
+  },
+  {
+    aliases: ["gate", "gate exam", "gate cse"],
+    officialExamName: "GATE (Graduate Aptitude Test in Engineering)",
+    country: "India",
+    hasElectives: true,
+    grades: [
+      { id: "B.Tech / B.E. Final Year", label: "B.Tech / B.E. Final Year", desc: "Graduation Year Aspirant", isCollege: true },
+      { id: "B.Tech 3rd Year", label: "B.Tech 3rd Year", desc: "Early GATE Attempt", isCollege: true },
+      { id: "College Graduate", label: "College Graduate", desc: "Full-Time GATE Aspirant / M.Tech / PSU Prep", isCollege: true }
+    ],
+    subjects: [
+      { id: "Computer Science & IT", title: "Computer Science & Information Technology", subtitle: "Data Structures, Algorithms, OS, DBMS & TOC", icon: "\u{1F4BB}" },
+      { id: "Engineering Mathematics", title: "Engineering Mathematics & Aptitude", subtitle: "Discrete Math, Linear Algebra, Calculus & General Aptitude", icon: "\u{1F4D0}" },
+      { id: "Mechanical Engineering", title: "Mechanical Engineering", subtitle: "Thermodynamics, Fluid Mechanics & Manufacturing", icon: "\u2699\uFE0F" },
+      { id: "Electrical Engineering", title: "Electrical Engineering", subtitle: "Circuit Analysis, Control Systems & Power Systems", icon: "\u26A1" },
+      { id: "Electronics & Communication", title: "Electronics & Communication", subtitle: "Signals, Systems, Analog & Digital Circuits", icon: "\u{1F4E1}" },
+      { id: "Civil Engineering", title: "Civil Engineering", subtitle: "Structural Analysis, Geotechnical & Environmental Engg", icon: "\u{1F3D7}\uFE0F" }
+    ]
+  },
+  {
+    aliases: ["cat", "cat exam", "iim cat"],
+    officialExamName: "CAT (Common Admission Test for MBA)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Final Year Undergrad", label: "Final Year Undergrad", desc: "College Pre-MBA Aspirant", isCollege: true },
+      { id: "Working Professional", label: "Working Professional", desc: "1-3 Years Work Experience CAT Aspirant", isCollege: true },
+      { id: "Dedicated Gap Year", label: "Dedicated Gap Year", desc: "Full-Time MBA Prep", isCollege: true }
+    ],
+    subjects: [
+      { id: "VARC", title: "Verbal Ability & Reading Comprehension (VARC)", subtitle: "RC Passages, Parajumbles, Summary & Sentence Completion", icon: "\u{1F4DA}" },
+      { id: "DILR", title: "Data Interpretation & Logical Reasoning (DILR)", subtitle: "Caselets, Tables, Graphs, Puzzles & Seating Arrangements", icon: "\u{1F4CA}" },
+      { id: "QA", title: "Quantitative Ability (QA)", subtitle: "Arithmetic, Algebra, Geometry, Modern Math & Number Systems", icon: "\u{1F4D0}" }
+    ]
+  }
+];
+function findPreVerifiedExam(inputExam, userCountry) {
+  if (!inputExam || typeof inputExam !== "string") return null;
+  const clean = inputExam.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  for (const entry of PRE_VERIFIED_EXAMS) {
+    for (const alias of entry.aliases) {
+      const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
+      if (clean === cleanAlias || clean.startsWith(cleanAlias) || cleanAlias.startsWith(clean)) {
+        return entry;
+      }
+      if (clean.includes(cleanAlias)) {
+        return entry;
+      }
+    }
+  }
+  if (words.includes("neet")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("NEET UG")) || null;
+  }
+  if (words.includes("jee")) {
+    if (words.includes("advanced") || words.includes("adv")) {
+      return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("JEE Advanced")) || null;
+    }
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("JEE Main")) || null;
+  }
+  if (words.includes("cbse")) {
+    if (words.includes("10") || words.includes("10th") || words.includes("x")) {
+      return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("CBSE Class 10")) || null;
+    }
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("CBSE Class 12")) || null;
+  }
+  if (words.includes("icse")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("ICSE Class 10")) || null;
+  }
+  if (words.includes("isc")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("ISC Class 12")) || null;
+  }
+  if (words.includes("upsc") || words.includes("ias")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("UPSC")) || null;
+  }
+  if (words.includes("cuet")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("CUET")) || null;
+  }
+  if (words.includes("sat")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("SAT")) || null;
+  }
+  if (words.includes("act")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("ACT")) || null;
+  }
+  if (words.includes("mcat")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("MCAT")) || null;
+  }
+  if (words.includes("nda")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("NDA")) || null;
+  }
+  if (words.includes("gate")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("GATE")) || null;
+  }
+  if (words.includes("cat")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("CAT")) || null;
+  }
+  return null;
+}
 app.post("/api/verify-and-research-exam", async (req, res) => {
   try {
     const { country, examName } = req.body;
@@ -3195,151 +3600,76 @@ app.post("/api/verify-and-research-exam", async (req, res) => {
     }
     const trimmedExam = examName.trim();
     const userCountry = sanitizeCountry(country, "Global");
+    const preVerified = findPreVerifiedExam(trimmedExam, userCountry);
+    if (preVerified) {
+      console.log(`[verify-and-research-exam] Fast-path hit for "${trimmedExam}" -> "${preVerified.officialExamName}" (${preVerified.country})`);
+      return res.json({
+        isValid: true,
+        officialExamName: preVerified.officialExamName,
+        detectedCountry: preVerified.country,
+        hasElectives: preVerified.hasElectives,
+        grades: preVerified.grades,
+        subjects: preVerified.subjects
+      });
+    }
     const promptText = `
 User Selected Country / Region: "${userCountry}"
 User Entered Exam Name: "${trimmedExam}"
 
 TASK:
-You are an authoritative global educational curriculum verification engine. Your task is to verify if "${trimmedExam}" is a valid, recognized academic examination AND whether it is appropriate and compatible for a student in "${userCountry}".
+You are an authoritative global educational curriculum verification engine. Your task is to verify if "${trimmedExam}" is a real, recognized academic examination AND research its official subjects and preparation grades.
 
-1. STRICT COUNTRY & EXAM COMPATIBILITY VERIFICATION (ENFORCE IN ORDER):
-
-   CHECK A: FAKE / NONSENSICAL EXAM CHECK:
-   - Check whether "${trimmedExam}" is a real, legitimate standardized examination or academic qualification.
+1. EXAMINATION VALIDITY CHECK:
+   - Check whether "${trimmedExam}" is a real, legitimate standardized examination, board test, entrance exam, or academic qualification anywhere in the world.
    - If it is random gibberish (e.g. "asdfgh", "test1234", "qwerty", "xyzabc"), a conversational sentence ("how to pass", "i want study", "what is physics"), or completely non-existent:
      Set "isValid": false,
      "errorMessage": "We could not find an official exam named '${trimmedExam}'. Please check the spelling or enter a recognized exam name."
 
-   CHECK B: COUNTRY / EDUCATIONAL REGION COMPATIBILITY:
-   - Carefully evaluate if "${trimmedExam}" is officially administered, recognized, or native to the user's selected country: "${userCountry}".
-   
-   - INTERNATIONAL QUALIFICATIONS (VALID FOR ANY COUNTRY):
-     The following are global/international standards and ARE ALWAYS VALID regardless of country:
-     * Advanced Placement (AP Exams)
-     * SAT, PSAT, ACT
-     * International Baccalaureate (IB Diploma / MYP)
-     * Cambridge International (Cambridge IGCSE, Cambridge O-Levels, Cambridge International A-Levels)
-     * International Graduate / Language Exams (IELTS, TOEFL, GRE, GMAT, MCAT, LSAT, USMLE)
+2. COUNTRY ADAPTATION & AUTO-DETECTION:
+   - Identify the authentic native country / educational jurisdiction for "${trimmedExam}".
+   - If the exam natively belongs to a specific country (e.g., NEET/JEE/CBSE/UPSC belongs to India; ATAR/HSC belongs to Australia; Gaokao belongs to China; GCSE/A-Levels belongs to United Kingdom; SAT/ACT/AP belongs to United States or Global):
+     * Set "isValid": true
+     * Set "detectedCountry": to that country (e.g. "India", "United States", "United Kingdom", "Australia", etc.)
+     * DO NOT reject a genuine exam just because the user selected a different country or defaulted to USA/Global! HelpYou AI auto-adapts to support students worldwide.
 
-   - STRICT REGIONAL / NATIONAL MISMATCH RULE:
-     If the user selected a specific country (e.g. "United States", "United Kingdom", "Canada", "Australia", or a specific country typed in Others)
-     AND "${trimmedExam}" is an official national / domestic exam belonging to a DIFFERENT country:
-     YOU MUST REJECT IT as a Country Mismatch ("isValid": false)!
-
-     Mismatch Examples:
-     * If User Selected "United States" (or "Canada", "United Kingdom", "Australia"):
-       - User enters Indian domestic exams like "NEET", "NEET UG", "JEE", "JEE Main", "JEE Advanced", "CBSE", "ICSE", "ISC", "UPSC", "CUET", "NDA", "MHT CET", "KCET", "WBJEE":
-         \u274C MISMATCH! These are national/state entrance and board exams in INDIA, NOT in ${userCountry}.
-         Set "isValid": false.
-         "errorMessage": "'${trimmedExam}' is an official examination conducted in India, not in ${userCountry}. If you are preparing for ${trimmedExam}, please go back to Step 1 and select 'Others' -> 'India', or enter a recognized exam in ${userCountry} (e.g., SAT, ACT, AP Exams)."
-       - User enters Chinese domestic exams like "Gaokao":
-         \u274C MISMATCH! "Gaokao is the National College Entrance Examination in China, not in ${userCountry}."
-     * If User Selected "United Kingdom":
-       - User enters Indian exams ("NEET", "JEE Main", "CBSE"):
-         \u274C MISMATCH! Set "isValid": false.
-         "errorMessage": "'${trimmedExam}' is an official examination conducted in India, not in the United Kingdom. Please select 'Others' -> 'India' in Step 1 or enter a recognized UK qualification (e.g., GCSE, A-Levels, BTEC)."
-     * If User Selected "Australia":
-       - User enters Indian exams ("NEET", "JEE Main", "CBSE"):
-         \u274C MISMATCH! Set "isValid": false.
-         "errorMessage": "'${trimmedExam}' is an official examination conducted in India, not in Australia. Please select 'Others' -> 'India' in Step 1 or enter a recognized Australian qualification (e.g., ATAR, HSC, VCE)."
-     * If User Selected "India" (under Others):
-       - User enters "NEET", "JEE Main", "JEE Advanced", "CBSE", "ICSE", "UPSC":
-         \u2705 VALID! Official Indian exams.
-       - User enters strictly Australian exam ("ATAR", "VCE", "HSC NSW"):
-         \u274C MISMATCH!
-     * If User Selected "Others" (with no specific country typed) or "Global":
-       - Any legitimate examination from any recognized country is accepted.
-
-   - If there is a country mismatch:
-     Set "isValid": false.
-     Return a polite, informative "errorMessage" specifically stating which country the exam actually belongs to and recommending 2-3 exams appropriate for "${userCountry}", or asking the user to update their country in Step 1.
-
-2. OFFICIAL SUBJECTS RESEARCH:
+3. OFFICIAL SUBJECTS RESEARCH:
    - If VALID ("isValid": true):
-     * Provide the standardized full title in "officialExamName" (e.g. "Advanced Placement (AP) Exams", "JEE Main (Joint Entrance Examination)", "NEET UG (National Eligibility cum Entrance Test)", "SAT (Scholastic Assessment Test)", "CBSE Class 12 Boards").
-     
-     * CRITICAL GRANULARITY RULE - NEVER BUNDLE OR COMBINE SEPARATE EXAMS:
-       - Every subject or course that has its OWN distinct examination paper or curriculum MUST be an individual separate item.
-       - STRICTLY FORBIDDEN: Do NOT group or bundle distinct exams together using slashes, ampersands, or parentheses.
-         \u274C NEVER output: "AP Calculus (AB / BC)" or "AP Calculus (AB & BC)"
-         \u2705 MUST output TWO separate items: "AP Calculus AB" AND "AP Calculus BC".
-         \u274C NEVER output: "AP Computer Science (A / Principles)"
-         \u2705 MUST output TWO separate items: "AP Computer Science A" AND "AP Computer Science Principles".
-         \u274C NEVER output: "AP Physics (1, 2, C)"
-         \u2705 MUST output SEPARATE items: "AP Physics 1: Algebra-Based", "AP Physics 2: Algebra-Based", "AP Physics C: Mechanics", "AP Physics C: Electricity and Magnetism".
-         \u274C NEVER output: "AP Economics (Macro / Micro)"
-         \u2705 MUST output TWO separate items: "AP Macroeconomics" AND "AP Microeconomics".
-         \u274C NEVER output: "AP English (Lang / Lit)"
-         \u2705 MUST output TWO separate items: "AP English Language and Composition" AND "AP English Literature and Composition".
-       - This same strict separation applies to ALL other examinations (e.g., A-Levels, GCSE, IB, CBSE, ICSE, Cambridge, State Boards): distinct subjects (e.g., Mathematics vs Further Mathematics; English Language vs English Literature) must be completely separate items!
+     * Provide the standardized full title in "officialExamName".
+     * Every subject with its OWN examination paper MUST be an individual separate item.
+     * List 3 to 12 authentic official subjects for this examination.
+     * For each subject:
+       - "id": Clean identifier string without spaces or slashes (e.g. "Physics", "Chemistry", "Mathematics", "Biology")
+       - "title": Clean official subject title
+       - "subtitle": Brief syllabus topic summary
+       - "icon": An appropriate emoji icon (e.g. "\u26A1", "\u{1F9EA}", "\u{1F4D0}", "\u{1F9EC}", "\u{1F4BB}", "\u{1F4DA}", "\u{1F3DB}\uFE0F", "\u{1F4CA}")
 
-     * Determine if the exam has a strictly fixed mandatory curriculum vs broad multi-stream electives:
-       - FIXED SYLLABUS EXAM (e.g. NEET UG which strictly only has Physics, Chemistry, Biology; JEE Main which strictly only has Physics, Chemistry, Mathematics; SAT which strictly only has Reading and Writing, Math; MCAT):
-         * List ONLY the 2 to 4 mandatory subjects/sections of that exam.
-         * Set "hasElectives": false.
-       - BROAD ELECTIVE EXAM / BOARD (e.g. AP Exams, CBSE 10/12, ICSE/ISC, GCSE, A-Levels, IB Diploma, CUET, State Boards):
-         * List 10 to 18 popular distinct official subjects across STEM, Humanities, Languages, and Social Sciences.
-         * Set "hasElectives": true.
-
-     * For each subject, provide:
-       - "id": Clean identifier string without spaces or slashes (e.g., "AP_Calculus_AB", "AP_Calculus_BC", "AP_Computer_Science_A", "AP_Computer_Science_Principles", "Physics", "Chemistry", "Mathematics", etc.)
-       - "title": Clean, full official subject title (e.g. "AP Calculus AB", "AP Calculus BC", "AP Computer Science A", "AP Computer Science Principles", "Physics", "Mathematics")
-       - "subtitle": Brief syllabus topic summary (e.g. "Differential & Integral Calculus, Limits, Modeling")
-       - "icon": An appropriate emoji icon (e.g. "\u26A1", "\u{1F9EA}", "\u{1F4D0}", "\u{1F9EC}", "\u{1F4BB}", "\u{1F4DA}", "\u{1F3DB}\uFE0F", "\u{1F4CA}", "\u{1F9E0}", "\u{1F4C8}")
-     * DO NOT include "Other Subjects" in this array (handled dynamically by client).
-
-3. OFFICIAL GRADES / PREPARATION CLASSES RESEARCH:
-   - For the verified exam "${trimmedExam}" in "${userCountry}", research the authentic classes, grades, or preparation stages that students belong to when studying for this exam:
-   - Guidelines by Exam Type:
-     * Indian Entrance Exams (e.g. NEET UG, JEE Main, JEE Advanced):
-       - Must include genuine classes used in India:
-         * "Class 12" (desc: "12th Board Appearing & Senior Secondary", isCollege: false)
-         * "Class 11" (desc: "11th Grade / 1st Year Entrance Prep", isCollege: false)
-         * "Dropper / Repeater" (desc: "Dedicated Full-Time Preparation / Gap Year", isCollege: false)
-         * "Class 10" (desc: "Pre-Foundation & Early Prep", isCollege: false)
-     * Indian School Board Exams (e.g. CBSE 10/12, ICSE, State Boards):
-       - If Class 10 exam: "Class 10" (Board Exam Year), "Class 9" (Pre-Board Foundation)
-       - If Class 12 exam: "Class 12" (Senior Secondary Board Year), "Class 11" (Senior Secondary Year 1)
-     * US High School Exams (e.g. SAT, ACT, PSAT, AP Exams):
-       - "11th Grade (Junior)" (desc: "Prime SAT/ACT & AP Exam Year", isCollege: false)
-       - "12th Grade (Senior)" (desc: "Final Attempts & College Apps", isCollege: false)
-       - "10th Grade (Sophomore)" (desc: "Early PSAT & AP Courses", isCollege: false)
-       - "9th Grade (Freshman)" (desc: "High School Foundation", isCollege: false)
-     * UK Examinations (e.g. GCSE, A-Levels):
-       - If GCSE: "Year 11" (GCSE Final Exam Year), "Year 10" (GCSE Year 1), "Year 9" (Pre-GCSE Foundation)
-       - If A-Levels: "Year 13 (Upper Sixth)" (A2 Final Exam Year), "Year 12 (Lower Sixth)" (AS Level Year 1), "Gap Year / Resit" (Retake Prep)
-     * International Baccalaureate (IB):
-       - "IB Year 2 (Grade 12)", "IB Year 1 (Grade 11)", "Pre-IB (Grade 9 / 10)"
-     * College / University / Post-Grad Exams (e.g. MCAT, LSAT, GRE, GMAT, UPSC, GATE, CAT):
-       - "College Final Year", "College Pre-Final Year", "College Graduate", "Full-Time Dedicated Aspirant" (all isCollege: true)
-   - Output 3 to 6 authentic preparation classes/grades tailored specifically to "${trimmedExam}".
+4. OFFICIAL GRADES / PREPARATION CLASSES RESEARCH:
+   - Research 3 to 5 authentic preparation classes, grades, or stages appropriate for "${trimmedExam}".
    - For each grade item:
      - "id": Clean identifier string (e.g., "Class 12", "11th Grade", "Dropper / Repeater", "Year 11")
-     - "label": Short display title (e.g., "Class 12", "11th Grade", "Dropper / Repeater", "Year 11")
-     - "desc": Informative subtitle (e.g., "12th Board Appearing & Senior Secondary")
-     - "isCollege": boolean (true if college or post-grad, false if secondary school level)
+     - "label": Short display title
+     - "desc": Informative subtitle
+     - "isCollege": boolean
 
 OUTPUT REQUIREMENT:
-Output ONLY a single valid JSON object. No explanation text outside JSON.
-Format when valid:
+Output ONLY a single valid JSON object.
+Format:
 {
   "isValid": true,
   "officialExamName": "Full Official Name",
+  "detectedCountry": "Native Country or Global",
   "hasElectives": false,
   "grades": [
-    { "id": "Class 12", "label": "Class 12", "desc": "12th Board Appearing & Senior Secondary", "isCollege": false },
-    { "id": "Class 11", "label": "Class 11", "desc": "11th Grade / 1st Year Entrance Prep", "isCollege": false },
-    { "id": "Dropper / Repeater", "label": "Dropper / Repeater", "desc": "Dedicated Full-Time Preparation / Gap Year", "isCollege": false }
+    { "id": "Class 12", "label": "Class 12", "desc": "12th Board Appearing & Senior Secondary", "isCollege": false }
   ],
   "subjects": [
-    { "id": "AP_Calculus_AB", "title": "AP Calculus AB", "subtitle": "Differential & Integral Calculus, Limits", "icon": "\u{1F4D0}" },
-    { "id": "AP_Calculus_BC", "title": "AP Calculus BC", "subtitle": "Advanced Integration, Series, Parametric & Polar", "icon": "\u{1F4D0}" }
+    { "id": "Physics", "title": "Physics", "subtitle": "Core curriculum topics", "icon": "\u26A1" }
   ]
 }
-OR if invalid or mismatched:
+OR if completely non-existent / fake / gibberish:
 {
   "isValid": false,
-  "errorMessage": "Helpful error message for user explaining the mismatch or issue."
+  "errorMessage": "Helpful error message for user explaining why it could not be found."
 }
 `;
     const response = await safeGenerateContent({
@@ -3348,7 +3678,7 @@ OR if invalid or mismatched:
       config: {
         systemInstruction: {
           parts: [{
-            text: "You are an elite academic curriculum research engine. You strictly verify standardized examinations globally, enforce strict country and educational jurisdiction compatibility, and extract exact official curriculum subjects and authentic student preparation classes/grades. Output ONLY valid JSON."
+            text: "You are an elite academic curriculum research engine. You verify standardized examinations globally, accommodate international and national curricula with auto-country detection, and extract exact official curriculum subjects and authentic student preparation classes. Output ONLY valid JSON."
           }]
         },
         tools: [{ googleSearch: {} }],
@@ -3369,46 +3699,80 @@ OR if invalid or mismatched:
         return res.json({
           isValid: true,
           officialExamName: parsed.officialExamName || trimmedExam,
+          detectedCountry: parsed.detectedCountry || userCountry,
           hasElectives: typeof parsed.hasElectives === "boolean" ? parsed.hasElectives : parsed.subjects.length >= 6,
           grades: Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades : void 0,
           subjects: parsed.subjects
         });
       }
       return res.json({
-        isValid: false,
-        errorMessage: `We could not verify "${trimmedExam}". Please check the spelling or enter a recognized exam name.`
+        isValid: true,
+        officialExamName: trimmedExam,
+        detectedCountry: userCountry !== "Global" ? userCountry : "India",
+        hasElectives: false,
+        grades: [
+          { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & Senior Secondary", isCollege: false },
+          { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Entrance Prep", isCollege: false },
+          { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time Preparation / Gap Year", isCollege: false }
+        ],
+        subjects: [
+          { id: "Physics", title: "Physics", subtitle: "Core syllabus and principles", icon: "\u26A1" },
+          { id: "Chemistry", title: "Chemistry", subtitle: "Chemical principles and reactions", icon: "\u{1F9EA}" },
+          { id: "Mathematics", title: "Mathematics", subtitle: "Analytical and problem-solving topics", icon: "\u{1F4D0}" }
+        ]
       });
     }
     if (!parsed.isValid) {
       return res.json({
         isValid: false,
-        errorMessage: parsed.errorMessage || `We could not verify "${trimmedExam}" for ${userCountry}. Please enter a recognized standardized exam name.`
+        errorMessage: parsed.errorMessage || `We could not verify "${trimmedExam}". Please enter a recognized standardized exam name.`
       });
     }
     const subjects = Array.isArray(parsed.subjects) && parsed.subjects.length > 0 ? parsed.subjects : [
-      { id: "General Prep", title: "General Preparation", subtitle: "Comprehensive study curriculum", icon: "\u{1F4DA}" }
+      { id: "Physics", title: "Physics", subtitle: "Core syllabus topics", icon: "\u26A1" },
+      { id: "Chemistry", title: "Chemistry", subtitle: "Core syllabus topics", icon: "\u{1F9EA}" },
+      { id: "Mathematics", title: "Mathematics", subtitle: "Core syllabus topics", icon: "\u{1F4D0}" }
     ];
     const grades = Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades : [
-      { id: "11th Grade (Junior)", label: "11th Grade", desc: "Junior High School", isCollege: false },
-      { id: "12th Grade (Senior)", label: "12th Grade", desc: "Senior High School", isCollege: false },
-      { id: "10th Grade (Sophomore)", label: "10th Grade", desc: "Sophomore High School", isCollege: false },
-      { id: "9th Grade (Freshman)", label: "9th Grade", desc: "Freshman High School", isCollege: false }
+      { id: "Class 12", label: "Class 12", desc: "12th Senior Secondary", isCollege: false },
+      { id: "Class 11", label: "Class 11", desc: "11th Senior Secondary", isCollege: false },
+      { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time Preparation", isCollege: false }
     ];
     return res.json({
       isValid: true,
       officialExamName: parsed.officialExamName || trimmedExam,
+      detectedCountry: parsed.detectedCountry || userCountry,
       hasElectives: typeof parsed.hasElectives === "boolean" ? parsed.hasElectives : subjects.length >= 6,
       grades,
       subjects
     });
   } catch (error) {
     console.error("[verify-and-research-exam] Error:", error);
+    if (req.body?.examName && typeof req.body.examName === "string" && req.body.examName.trim().length >= 2) {
+      const fallbackExam = req.body.examName.trim();
+      return res.json({
+        isValid: true,
+        officialExamName: fallbackExam,
+        detectedCountry: sanitizeCountry(req.body.country, "India"),
+        hasElectives: false,
+        grades: [
+          { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & Senior Secondary", isCollege: false },
+          { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Prep", isCollege: false },
+          { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time Preparation", isCollege: false }
+        ],
+        subjects: [
+          { id: "Physics", title: "Physics", subtitle: "Core syllabus and principles", icon: "\u26A1" },
+          { id: "Chemistry", title: "Chemistry", subtitle: "Chemical principles and reactions", icon: "\u{1F9EA}" },
+          { id: "Mathematics", title: "Mathematics", subtitle: "Analytical and problem-solving topics", icon: "\u{1F4D0}" },
+          { id: "Biology", title: "Biology", subtitle: "Biological sciences and theory", icon: "\u{1F9EC}" }
+        ]
+      });
+    }
     res.status(500).json({
       error: "Could not verify exam right now. Please try again."
     });
   }
 });
-var examBlueprintCache = /* @__PURE__ */ new Map();
 app.post("/api/deep-research-exam-blueprint", async (req, res) => {
   try {
     const { country, examName, grade, subjects } = req.body;
@@ -3420,10 +3784,6 @@ app.post("/api/deep-research-exam-blueprint", async (req, res) => {
     const normGrade = (grade || "Senior Secondary").trim();
     const cleanSubjects = subjects.map((s) => String(s).trim()).filter(Boolean);
     const cacheKey = `${normCountry.toLowerCase()}__${normExam.toLowerCase()}__${normGrade.toLowerCase()}__${cleanSubjects.slice().sort().join("+").toLowerCase()}`;
-    if (examBlueprintCache.has(cacheKey)) {
-      console.log(`[deep-research-exam-blueprint] Serving from memory cache: ${cacheKey}`);
-      return res.json(examBlueprintCache.get(cacheKey));
-    }
     const promptText = `
 User Selected Country: "${normCountry}"
 Target Examination: "${normExam}"
@@ -3649,7 +4009,6 @@ Format:
         };
       }
     });
-    examBlueprintCache.set(cacheKey, parsed);
     return res.json(parsed);
   } catch (error) {
     console.error("[deep-research-exam-blueprint] Error:", error);
@@ -3797,6 +4156,106 @@ Format when invalid:
     return res.status(500).json({
       isValid: false,
       errorMessage: err?.message || "Failed to verify subject due to network issue."
+    });
+  }
+});
+app.post("/api/verify-subtopic", async (req, res) => {
+  try {
+    const { subject, chapter, subTopic, examName, country } = req.body;
+    if (!subTopic || typeof subTopic !== "string" || !subTopic.trim()) {
+      return res.status(400).json({ isValid: false, errorMessage: "Please enter a topic or concept name." });
+    }
+    const normSubTopic = subTopic.trim();
+    const normSubject = (subject || "General Subject").trim();
+    const normChapter = (chapter || "General Chapter").trim();
+    const normExam = (examName || "Standardized Examination").trim();
+    const normCountry = sanitizeCountry(country, "Global");
+    if (normSubTopic.length < 3) {
+      return res.json({ isValid: false, errorMessage: "Topic name is too short. Please enter a full concept name." });
+    }
+    if (normSubTopic.length > 80) {
+      return res.json({ isValid: false, errorMessage: "Topic name is too long. Please enter a concise concept or formula." });
+    }
+    const words = normSubTopic.toLowerCase().split(/\s+/).filter(Boolean);
+    for (const w of words) {
+      const letters = w.replace(/[^a-z]/g, "");
+      if (letters.length >= 4) {
+        if (!/[aeiouy]/.test(letters)) {
+          return res.json({ isValid: false, errorMessage: `"${normSubTopic}" is not a recognized academic concept.` });
+        }
+        if (/[bcdfghjklmnpqrstvwxz]{5,}/i.test(letters)) {
+          return res.json({ isValid: false, errorMessage: `"${normSubTopic}" does not look like a valid academic term.` });
+        }
+      }
+    }
+    const promptText = `
+Subject: "${normSubject}"
+Chapter: "${normChapter}"
+Exam / Curriculum: "${normExam}" (${normCountry})
+Candidate Subtopic / Concept to Verify: "${normSubTopic}"
+
+TASK:
+You are an authoritative curriculum verification engine.
+Verify whether "${normSubTopic}" is an authentic, genuine academic subtopic, concept, theorem, formula, law, problem-solving method, or syllabus unit that belongs to or is studied under the chapter "${normChapter}" within the subject "${normSubject}".
+
+VERIFICATION RULES:
+1. INVALID:
+   - Gibberish, keyboard mashing, or unpronounceable letters (e.g. "hiuedsghcdbcihd", "asdfghjk", "qwertyuiop").
+   - Conversational chatter, greetings, or casual sentences (e.g. "hello please help", "i want easy questions", "test 123").
+   - Slang, insults, jokes, or non-educational terms.
+   - Completely unrelated concepts from other disciplines (e.g. asking for "French Revolution" under a "Physics - Kinematics" chapter).
+   If invalid, set "isValid": false and explain clearly in "errorMessage": e.g. "'${normSubTopic}' is not a recognized academic concept for ${normChapter}."
+
+2. VALID:
+   - Legitimate academic concepts, formulas, theories, problem types, laws, or topics directly related to "${normChapter}".
+   - Examples: "Word Pair Analogies", "Relative Velocity", "Integration by Parts", "Newton's Second Law", "DNA Replication Enzymes", "Photosynthesis Light Reaction".
+   If valid, set "isValid": true and provide "cleanTitle" formatted in clean Title Case (e.g. "Word Pair Analogies").
+
+OUTPUT FORMAT:
+Respond with ONLY a single valid JSON object:
+{
+  "isValid": true,
+  "cleanTitle": "Standardized Capitalized Subtopic Title",
+  "errorMessage": ""
+}
+or when invalid:
+{
+  "isValid": false,
+  "cleanTitle": "${normSubTopic}",
+  "errorMessage": "Clear student-friendly explanation of why it is not a valid academic subtopic for ${normChapter}"
+}
+`;
+    const response = await safeGenerateContent({
+      model: "gemini-flash-lite-latest",
+      contents: { parts: [{ text: promptText }] },
+      config: {
+        systemInstruction: {
+          parts: [{
+            text: "You are an elite academic curriculum verifier. You strictly check if candidate subtopics genuinely belong to a given chapter and subject. Output ONLY valid JSON."
+          }]
+        },
+        temperature: 0.1,
+        maxOutputTokens: 500
+      }
+    });
+    const rawText = response.text || "";
+    const parsed = safeParseJSON(rawText, "object");
+    if (!parsed) {
+      return res.status(500).json({
+        isValid: false,
+        errorMessage: "Could not verify subtopic. Please check your connection and try again."
+      });
+    }
+    return res.json({
+      isValid: Boolean(parsed.isValid),
+      cleanTitle: parsed.cleanTitle || normSubTopic,
+      errorMessage: parsed.errorMessage || `"${normSubTopic}" could not be verified as an academic topic for ${normChapter}.`
+    });
+  } catch (err) {
+    console.error("[verify-subtopic] Error:", err);
+    return res.status(500).json({
+      isValid: false,
+      errorMessage: err?.message || "Failed to verify subtopic due to a server error."
     });
   }
 });
@@ -4453,7 +4912,6 @@ Imagine this like a team of helpful friends working together! ${sentences.slice(
     res.json({ text: "## Key Summary\n\n- Overview generated from input.\n- Review core principles and relationships." });
   }
 });
-var aiNotesCache = /* @__PURE__ */ new Map();
 function generateFallbackNotes(subject, chapter, exam, isDetailed) {
   const cleanSubject = subject || "Academic Studies";
   const cleanChapter = chapter || "Core Syllabus";
@@ -4576,11 +5034,6 @@ app.post("/api/generate-ai-notes", async (req, res) => {
     const isDetailed = depth === "detailed";
     const examBlueprint2 = req.body.examBlueprint;
     const examDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, subject);
-    const cacheKey = `${subject.toLowerCase()}__${chapter.toLowerCase()}__${targetExam2.toLowerCase()}__${depth}`;
-    if (aiNotesCache.has(cacheKey)) {
-      console.log(`[generate-ai-notes] Serving from memory cache: ${cacheKey}`);
-      return res.json(aiNotesCache.get(cacheKey));
-    }
     const systemInstruction = `You are a Legendary National Exam Topper, Master Textbook Author, and Elite Handwritten Study Notes Architect.
 Your mission is to produce authentic, publication-grade HANDWRITTEN TOPPER STUDY NOTES for the chapter "${chapter}" in "${subject}".
 ${examDirective ? `
@@ -4703,7 +5156,6 @@ Ensure that for Full Detailed Notes, NO concept, formula, or sub-topic is omitte
       console.warn("[generate-ai-notes] Generating authentic curriculum fallback notes for:", chapter);
       notesData = generateFallbackNotes(subject, chapter, targetExam2, isDetailed);
     }
-    aiNotesCache.set(cacheKey, notesData);
     return res.json(notesData);
   } catch (error) {
     console.error("[generate-ai-notes] Error:", error);

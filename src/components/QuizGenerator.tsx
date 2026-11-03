@@ -42,7 +42,7 @@ import {
 
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached } from '../utils/communityCache';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 
 interface Question {
   question: string;
@@ -997,6 +997,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
   const [customSubTopicInput, setCustomSubTopicInput] = useState<{ [chapterKey: string]: string }>({});
   const [showCustomInputForChapter, setShowCustomInputForChapter] = useState<string | null>(null);
   const [customInputError, setCustomInputError] = useState<{ [chapterKey: string]: string }>({});
+  const [isVerifyingSubTopic, setIsVerifyingSubTopic] = useState<{ [chapterKey: string]: boolean }>({});
 
   // Proactively deep research syllabus units for user's chosen subjects & exam
   useEffect(() => {
@@ -2864,26 +2865,30 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                                                           subTopic: sub,
                                                           feature: 'quiz'
                                                         });
+                                                        const verifiedCustoms = getVerifiedChapterSubTopics(cleanSubjectTitle(subject.title), topicItem);
+                                                        const isUserAdded = verifiedCustoms.some(vc => vc.toLowerCase().trim() === sub.toLowerCase().trim());
 
                                                         return (
-                                                          <button
+                                                          <div
                                                             key={sIdx}
-                                                            type="button"
-                                                            onClick={() => {
-                                                              triggerVibration(15);
-                                                              handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${sub}`);
-                                                            }}
-                                                            disabled={loading}
-                                                            className="w-full bg-white hover:bg-indigo-50/40 border border-zinc-200/70 hover:border-indigo-200 active:scale-[0.995] py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all group/sub cursor-pointer shadow-2xs"
+                                                            className="w-full bg-white hover:bg-indigo-50/40 border border-zinc-200/70 hover:border-indigo-200 py-1.5 px-3 rounded-xl flex items-center justify-between text-left transition-all group/sub shadow-2xs gap-2"
                                                           >
-                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                            <button
+                                                              type="button"
+                                                              onClick={() => {
+                                                                triggerVibration(15);
+                                                                handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${sub}`);
+                                                              }}
+                                                              disabled={loading}
+                                                              className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer text-left"
+                                                            >
                                                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 group-hover/sub:scale-125 transition-transform ${
                                                                 isSaved ? 'bg-emerald-500' : 'bg-indigo-500'
                                                               }`} />
                                                               <span className="text-xs font-medium text-zinc-700 group-hover/sub:text-indigo-600 transition-colors truncate">
                                                                 {sub}
                                                               </span>
-                                                            </div>
+                                                            </button>
                                                             <div className="flex items-center gap-1.5 shrink-0">
                                                               {isSaved && (
                                                                 <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs">
@@ -2891,16 +2896,38 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                                                                   <span>Saved</span>
                                                                 </span>
                                                               )}
-                                                              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50/80 px-2 py-0.5 rounded-md shrink-0">
+                                                              <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                  triggerVibration(15);
+                                                                  handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${sub}`);
+                                                                }}
+                                                                disabled={loading}
+                                                                className="text-[10px] font-bold text-indigo-600 bg-indigo-50/80 hover:bg-indigo-100 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                                                              >
                                                                 Quiz
-                                                              </span>
+                                                              </button>
+                                                              {isUserAdded && (
+                                                                <button
+                                                                  type="button"
+                                                                  title="Remove subtopic"
+                                                                  onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    triggerVibration(20);
+                                                                    removeCustomChapterSubTopic(cleanSubjectTitle(subject.title), topicItem, sub);
+                                                                  }}
+                                                                  className="p-1 text-zinc-400 hover:text-rose-500 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                                                                >
+                                                                  <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                              )}
                                                             </div>
-                                                          </button>
+                                                          </div>
                                                         );
                                                       })}
                                                     </div>
 
-                                                    {/* Custom Micro-Topic Input (User's Favorite Feature) */}
+                                                    {/* Custom Micro-Topic Input (AI Verified) */}
                                                     <div className="pt-1">
                                                       {showCustomInputForChapter === chapterKey ? (
                                                         <div className="space-y-1.5">
@@ -2909,26 +2936,37 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                                                               type="text"
                                                               placeholder={`e.g. Specific formula or concept...`}
                                                               value={customSubTopicInput[chapterKey] || ''}
+                                                              disabled={isVerifyingSubTopic[chapterKey]}
                                                               onChange={(e) => {
                                                                 setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: e.target.value }));
                                                                 if (customInputError[chapterKey]) {
                                                                   setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                                 }
                                                               }}
-                                                              onKeyDown={(e) => {
+                                                              onKeyDown={async (e) => {
                                                                 if (e.key === 'Enter') {
                                                                   const val = (customSubTopicInput[chapterKey] || '').trim();
-                                                                  const check = isValidAcademicTopicInput(val, topicItem);
+                                                                  if (!val || isVerifyingSubTopic[chapterKey]) return;
+                                                                  setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: true }));
+                                                                  setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                                  const profile = getUserProfileData();
+                                                                  const targetExam = profile.targetExam || safeGetItem('academic_exam') || 'General';
+                                                                  const country = profile.country || safeGetItem('academic_country') || 'India';
+                                                                  const cleanSubj = cleanSubjectTitle(subject.title);
+                                                                  const check = await verifySubTopicWithAI(cleanSubj, topicItem, val, targetExam, country);
+                                                                  setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: false }));
                                                                   if (!check.isValid) {
                                                                     triggerVibration([30, 50, 30]);
-                                                                    setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid topic' }));
+                                                                    setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid academic concept.' }));
                                                                     return;
                                                                   }
+                                                                  const finalTitle = check.cleanTitle || val;
                                                                   setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                                  setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: '' }));
                                                                   triggerVibration(15);
-                                                                  registerVerifiedChapterSubTopic(cleanSubjectTitle(subject.title), topicItem, val);
+                                                                  registerVerifiedChapterSubTopic(cleanSubj, topicItem, finalTitle);
                                                                   triggerVibration(15);
-                                                                  handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${val}`);
+                                                                  handleTopicClick(cleanSubj, `${topicItem} - ${finalTitle}`);
                                                                 }
                                                               }}
                                                               className={`flex-1 text-xs px-3 py-2 border rounded-xl bg-white focus:outline-none focus:ring-1 text-zinc-800 ${
@@ -2940,23 +2978,41 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                                                             />
                                                             <button
                                                               type="button"
-                                                              onClick={() => {
+                                                              disabled={isVerifyingSubTopic[chapterKey]}
+                                                              onClick={async () => {
                                                                 const val = (customSubTopicInput[chapterKey] || '').trim();
-                                                                const check = isValidAcademicTopicInput(val, topicItem);
+                                                                if (!val || isVerifyingSubTopic[chapterKey]) return;
+                                                                setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: true }));
+                                                                setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                                const profile = getUserProfileData();
+                                                                const targetExam = profile.targetExam || safeGetItem('academic_exam') || 'General';
+                                                                const country = profile.country || safeGetItem('academic_country') || 'India';
+                                                                const cleanSubj = cleanSubjectTitle(subject.title);
+                                                                const check = await verifySubTopicWithAI(cleanSubj, topicItem, val, targetExam, country);
+                                                                setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: false }));
                                                                 if (!check.isValid) {
                                                                   triggerVibration([30, 50, 30]);
-                                                                  setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid topic' }));
+                                                                  setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid academic concept.' }));
                                                                   return;
                                                                 }
+                                                                const finalTitle = check.cleanTitle || val;
                                                                 setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                                setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: '' }));
                                                                 triggerVibration(15);
-                                                                registerVerifiedChapterSubTopic(cleanSubjectTitle(subject.title), topicItem, val);
-                                                                  triggerVibration(15);
-                                                                  handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${val}`);
+                                                                registerVerifiedChapterSubTopic(cleanSubj, topicItem, finalTitle);
+                                                                triggerVibration(15);
+                                                                handleTopicClick(cleanSubj, `${topicItem} - ${finalTitle}`);
                                                               }}
-                                                              className="px-3 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition-all shrink-0 cursor-pointer"
+                                                              className="px-3 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition-all shrink-0 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
                                                             >
-                                                              Start
+                                                              {isVerifyingSubTopic[chapterKey] ? (
+                                                                <>
+                                                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                  <span>Verifying...</span>
+                                                                </>
+                                                              ) : (
+                                                                <span>Start</span>
+                                                              )}
                                                             </button>
                                                           </div>
                                                           {customInputError[chapterKey] && (

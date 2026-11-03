@@ -1,14 +1,7 @@
-function isContaminatedSubjectiveContent(content: any): boolean {
-  if (!content) return false;
-  const str = typeof content === 'string' ? content : JSON.stringify(content);
-  return str.includes('Concept #') || 
-         str.includes('fundamental mechanisms and significance of') || 
-         str.includes('State any governing formulas (...)');
-}
-
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { safeGetItem, safeSetItem } from './storage';
+import { getApiUrl } from './api';
 
 export type FeatureType = 'quiz' | 'subjective_questions' | 'notes' | 'flashcards';
 
@@ -88,8 +81,7 @@ export function resolveActiveProfileParams(overrides?: Partial<CacheKeyParams>):
 }
 
 /**
- * Constructs the 6-layer bulletproof deterministic cache ID.
- * Format: {country}__{exam}__{grade}__{subject}__{chapter}__{subtopic}__{feature}
+ * Constructs deterministic slug string for logging or tracking.
  */
 export function buildDeterministicCacheKey(params: CacheKeyParams): string {
   const c = slugify(params.country, 'india');
@@ -123,6 +115,44 @@ const COMMON_NON_ACADEMIC_PATTERNS = [
 ];
 
 /**
+ * Detects whether a string is obvious keyboard mashing, unpronounceable sequence, or gibberish.
+ */
+export function isGibberishCandidate(text: string): boolean {
+  if (!text) return true;
+  const clean = text.toLowerCase().trim();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+
+  for (const w of words) {
+    const letters = w.replace(/[^a-z]/g, '');
+    if (letters.length >= 4) {
+      // Must contain at least one vowel (a, e, i, o, u, y)
+      if (!/[aeiouy]/.test(letters)) return true;
+
+      // 5 or more consonants in a row (e.g. "dsghcdbc")
+      if (/[bcdfghjklmnpqrstvwxz]{5,}/i.test(letters)) return true;
+
+      // 3 or more of the same letter in a row (e.g. "aaaa", "zzzz")
+      if (/([a-z])\1{2,}/i.test(letters)) return true;
+
+      // Repeated 2-3 char chunks (e.g. "abcabcabc", "hahaha", "asdfasdf")
+      if (/(.{2,3})\1{2,}/i.test(letters)) return true;
+    }
+  }
+
+  // Keyboard row mash check (4 or more consecutive keyboard keys)
+  const keyRows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+  for (const row of keyRows) {
+    for (let i = 0; i <= row.length - 4; i++) {
+      const sub = row.substring(i, i + 4);
+      if (clean.includes(sub)) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Validates whether user-entered custom sub-topic is a genuine academic concept
  * rather than random chatter, slang, or gibberish.
  */
@@ -149,6 +179,14 @@ export function isValidAcademicTopicInput(
     return { isValid: false, error: 'Please enter a valid academic concept (e.g., Projectile Motion, Free Fall).' };
   }
 
+  // Check against gibberish & keyboard mashing
+  if (isGibberishCandidate(trimmed)) {
+    return {
+      isValid: false,
+      error: `"${trimmed}" does not look like a valid academic concept for ${chapterName ? `"${chapterName}"` : 'this chapter'}. Please enter a real syllabus topic.`
+    };
+  }
+
   // Check against casual chatter & slang patterns
   for (const pattern of COMMON_NON_ACADEMIC_PATTERNS) {
     if (pattern.test(trimmed)) {
@@ -163,9 +201,64 @@ export function isValidAcademicTopicInput(
 }
 
 /**
- * In-memory fast cache map to avoid repeated network roundtrips during an active session.
+ * Asynchronously verifies with AI whether a user-input subtopic genuinely
+ * belongs to the specified subject and chapter before adding it or generating content.
  */
-const inMemoryCache = new Map<string, { content: any; timestamp: number }>();
+export async function verifySubTopicWithAI(
+  subject: string,
+  chapter: string,
+  subTopic: string,
+  examName?: string,
+  country?: string
+): Promise<{ isValid: boolean; cleanTitle?: string; error?: string }> {
+  const trimmed = (subTopic || '').trim();
+  
+  // 1. Instant client-side check
+  const localCheck = isValidAcademicTopicInput(trimmed, chapter);
+  if (!localCheck.isValid) {
+    return { isValid: false, error: localCheck.error };
+  }
+
+  // 2. Call backend AI verification endpoint
+  try {
+    const res = await fetch(getApiUrl('/api/verify-subtopic'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject,
+        chapter,
+        subTopic: trimmed,
+        examName,
+        country
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return { 
+        isValid: false, 
+        error: errData.errorMessage || errData.error || `Could not verify "${trimmed}". Please try again.` 
+      };
+    }
+
+    const data = await res.json();
+    if (!data.isValid) {
+      return {
+        isValid: false,
+        error: data.errorMessage || `"${trimmed}" is not a recognized academic concept for ${chapter}.`
+      };
+    }
+
+    return {
+      isValid: true,
+      cleanTitle: data.cleanTitle || trimmed
+    };
+  } catch (err: any) {
+    console.warn('[verifySubTopicWithAI] AI verification network notice:', err);
+    // If offline or network issue, fallback to strict client check
+    return localCheck;
+  }
+}
 
 /**
  * Parses any topic string (e.g. "Physics - Kinematics - Projectile Motion" or "Laws of Motion")
@@ -190,106 +283,72 @@ export function parseTopicHierarchy(rawTopic: string, fallbackSubject?: string):
 }
 
 /**
- * Checks and retrieves cached content from memory, localStorage, and Cloud Firestore.
- * Returns null if not cached yet (Cache Miss).
+ * DATABASE CACHING COMPLETELY PERMANENTLY REMOVED:
+ * Every feature now generates 100% fresh, live, personalized AI content every single time.
+ * Always returns null so no stale database or memory cache is ever served to the user.
  */
 export async function getCachedCurriculumContent<T = any>(
-  rawParams: CacheKeyParams
+  _rawParams: CacheKeyParams
 ): Promise<{ content: T; isCached: true; source: 'memory' | 'local' | 'cloud' } | null> {
-  try {
-    const params = resolveActiveProfileParams(rawParams);
-
-    // Guard: Never cache invalid, slang, or non-academic sub-topics
-    if (params.subTopic && params.subTopic !== 'All') {
-      const check = isValidAcademicTopicInput(params.subTopic, params.chapter);
-      if (!check.isValid) {
-        console.warn(`[communityCache] Skipping cache lookup for non-academic sub-topic: ${params.subTopic}`);
-        return null;
-      }
-    }
-
-    const key = buildDeterministicCacheKey(params);
-
-    // 1. Memory check (Instant ~0ms)
-    const memHit = inMemoryCache.get(key);
-    if (memHit && memHit.content) {
-      return { content: memHit.content, isCached: true, source: 'memory' };
-    }
-
-    // 2. LocalStorage check (Fast ~2ms)
-    const localRaw = safeGetItem(`comm_cache_${key}`);
-    if (localRaw) {
-      try {
-        const parsed = JSON.parse(localRaw);
-        if (parsed && parsed.content) {
-          inMemoryCache.set(key, { content: parsed.content, timestamp: Date.now() });
-          return { content: parsed.content, isCached: true, source: 'local' };
-        }
-      } catch (_) {
-        // Ignore JSON parse failure
-      }
-    }
-
-    // 3. Cloud Firestore Community Cache lookup (~50-100ms)
-    // Wrap with timeout to guarantee the app never hangs if offline or slow
-    const fetchDocPromise = getDoc(doc(db, 'global_curriculum_cache', key));
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
-
-    const snap = await Promise.race([fetchDocPromise, timeoutPromise]);
-    if (snap && 'exists' in snap && snap.exists()) {
-      const data = snap.data() as CachedDocument<T>;
-      if (data && data.content) {
-        // Hydrate local storage and memory
-        inMemoryCache.set(key, { content: data.content, timestamp: Date.now() });
-        safeSetItem(`comm_cache_${key}`, JSON.stringify({ content: data.content, timestamp: Date.now() }));
-        return { content: data.content, isCached: true, source: 'cloud' };
-      }
-    }
-
-    return null;
-  } catch (err) {
-    console.warn('[communityCache] Lookup silent fallback:', err);
-    return null;
-  }
+  // Always return null: No database caching. Fresh AI generation guaranteed.
+  return null;
 }
 
 /**
- * Saves freshly generated curriculum content to Cloud Firestore and local storage.
- * Completely isolates the questions/notes from any individual user score or answers.
- */
-/**
  * Synchronous local check to see if content is already cached.
+ * Always returns false since database caching is completely removed.
  */
-export function isCurriculumContentCached(rawParams: CacheKeyParams): boolean {
-  try {
-    const params = resolveActiveProfileParams(rawParams);
-    const key = buildDeterministicCacheKey(params);
-    if (inMemoryCache.has(key)) return true;
-    const localRaw = safeGetItem(`comm_cache_${key}`);
-    if (localRaw) {
-      const parsed = JSON.parse(localRaw);
-      return !!(parsed && parsed.content);
-    }
-  } catch (_) {}
+export function isCurriculumContentCached(_rawParams: CacheKeyParams): boolean {
   return false;
 }
 
 /**
  * Retrieves list of verified custom sub-topics for a given subject and chapter.
+ * Automatically sanitizes and prunes any stale or invalid entries.
  */
 export function getVerifiedChapterSubTopics(subject: string, chapter: string): string[] {
   try {
     const cleanSubj = slugify(subject);
     const cleanChap = slugify(chapter);
-    const raw = safeGetItem(`verified_subtopics_${cleanSubj}__${cleanChap}`);
+    const storageKey = `verified_subtopics_${cleanSubj}__${cleanChap}`;
+    const raw = safeGetItem(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter(t => typeof t === 'string' && isValidAcademicTopicInput(t, chapter).isValid);
+        const filtered = parsed.filter(t => typeof t === 'string' && isValidAcademicTopicInput(t, chapter).isValid);
+        // Automatically prune previously saved gibberish or invalid entries from local storage
+        if (filtered.length !== parsed.length) {
+          safeSetItem(storageKey, JSON.stringify(filtered));
+        }
+        return filtered;
       }
     }
   } catch (_) {}
   return [];
+}
+
+/**
+ * Removes a custom sub-topic from persistent storage and triggers UI refresh across all views.
+ */
+export function removeCustomChapterSubTopic(subject: string, chapter: string, subTopic: string): void {
+  if (!subject || !chapter || !subTopic) return;
+  const cleanSubj = slugify(subject);
+  const cleanChap = slugify(chapter);
+  const storageKey = `verified_subtopics_${cleanSubj}__${cleanChap}`;
+
+  try {
+    const current = getVerifiedChapterSubTopics(subject, chapter);
+    const updated = current.filter(t => t.toLowerCase().trim() !== subTopic.toLowerCase().trim());
+    safeSetItem(storageKey, JSON.stringify(updated));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('helpyou-curriculum-updated', {
+        detail: { subject, chapter, removedSubTopic: subTopic }
+      }));
+    }
+  } catch (err) {
+    console.warn('[removeCustomChapterSubTopic] Error removing subtopic:', err);
+  }
 }
 
 /**
@@ -313,7 +372,7 @@ export function registerVerifiedChapterSubTopic(subject: string, chapter: string
       const updated = [...current, trimmed];
       safeSetItem(storageKey, JSON.stringify(updated));
 
-      // Asynchronously sync to Cloud Firestore for global community curriculum enrichment
+      // Asynchronously sync subtopic definition to Cloud Firestore
       const firestoreKey = `${cleanSubj}__${cleanChap}`;
       setDoc(doc(db, 'global_curriculum_subtopics', firestoreKey), {
         subject,
@@ -336,64 +395,33 @@ export function registerVerifiedChapterSubTopic(subject: string, chapter: string
   }
 }
 
+/**
+ * DATABASE CACHE SAVING COMPLETELY REMOVED:
+ * No AI responses or generated content are saved to database or local cache.
+ * Every user request generates pure, live, fresh AI content.
+ */
 export async function saveCachedCurriculumContent<T = any>(
   rawParams: CacheKeyParams,
-  content: T,
-  extraMetadata?: Record<string, any>
+  _content: T,
+  _extraMetadata?: Record<string, any>
 ): Promise<boolean> {
-  if (!content) return false;
+  // If user entered a custom subtopic, register it into chapter units list
+  if (rawParams.subTopic && rawParams.subTopic !== 'All') {
+    registerVerifiedChapterSubTopic(rawParams.subject, rawParams.chapter || 'All', rawParams.subTopic);
+  }
+  return true;
+}
 
+// Purge any stale legacy cache items from localStorage on initial script execution
+if (typeof window !== 'undefined') {
   try {
-    const params = resolveActiveProfileParams(rawParams);
-
-    // Guard: Never cache invalid, slang, or non-academic sub-topics
-    if (params.subTopic && params.subTopic !== 'All') {
-      const check = isValidAcademicTopicInput(params.subTopic, params.chapter);
-      if (!check.isValid) {
-        console.warn(`[communityCache] Skipping cache write for non-academic sub-topic: ${params.subTopic}`);
-        return false;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('comm_cache_')) {
+        keysToRemove.push(k);
       }
     }
-
-    const key = buildDeterministicCacheKey(params);
-
-    // Save to in-memory cache immediately
-    inMemoryCache.set(key, { content, timestamp: Date.now() });
-
-    // Save to local storage for instant offline access
-    safeSetItem(`comm_cache_${key}`, JSON.stringify({ content, timestamp: Date.now() }));
-
-    // Prepare well-arranged cloud document with comprehensive metadata
-    const docData: CachedDocument<T> = {
-      cacheKey: key,
-      country: params.country || 'India',
-      exam: params.exam || 'NEET',
-      grade: params.grade || 'Class 11',
-      subject: params.subject,
-      chapter: params.chapter || 'All',
-      subTopic: params.subTopic || 'All',
-      feature: params.feature,
-      content,
-      createdAt: new Date().toISOString(),
-      accessCount: 1,
-      model: 'gemini-flash-lite',
-      metadata: extraMetadata || {}
-    };
-
-    // Asynchronously write to Cloud Firestore without blocking the UI
-    setDoc(doc(db, 'global_curriculum_cache', key), docData, { merge: true })
-      .catch((writeErr) => {
-        console.warn('[communityCache] Cloud Firestore background cache write skipped/deferred:', writeErr);
-      });
-
-    // Automatically register verified custom sub-topic into chapter units list
-    if (params.subTopic && params.subTopic !== 'All') {
-      registerVerifiedChapterSubTopic(params.subject, params.chapter, params.subTopic);
-    }
-
-    return true;
-  } catch (err) {
-    console.warn('[communityCache] Save silent error:', err);
-    return false;
-  }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch (_) {}
 }

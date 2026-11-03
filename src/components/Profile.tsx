@@ -1351,7 +1351,8 @@ export default function Profile({
             }}
             onCancel={() => setShowOwnerAcademicSetup(false)}
           />
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Main Profile Tab Screen */}

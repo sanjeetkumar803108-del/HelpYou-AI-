@@ -96,15 +96,22 @@ export function buildDeterministicCacheKey(params: CacheKeyParams): string {
 }
 
 const COMMON_NON_ACADEMIC_PATTERNS = [
-  /^(thik|theek|sahi|accha|acha)\s*(hai|h)?(\s*bhai|\s*bro|\s*yaar)?$/i,
-  /^(hello|hi|hey|bye|good\s*morning|good\s*night)(\s*bhai|\s*bro|\s*yaar|\s*sir)?$/i,
+  /^(thik|theek|sahi|accha|acha|mast|badhiya)\s*(hai|h|he)?(\s*bhai|\s*bro|\s*yaar|\s*sir)?$/i,
+  /\b(thik\s*hai|theek\s*hai|sahi\s*hai|accha\s*hai)\b/i,
+  /^(hello|hi|hey|bye|good\s*morning|good\s*night|good\s*evening)(\s*bhai|\s*bro|\s*yaar|\s*sir)?$/i,
   /^(ok|okay|k|okk|okey|yup|nope|yes|no)(\s*bhai|\s*bro|\s*yaar)?$/i,
   /^(test|testing|demo|check|trial|sample)(\s*\d+)?$/i,
   /^(asdf|qwerty|zxcv|abc|xyz|123|000|aaa|bbb|ccc)/i,
-  /^(kuch\s*bhi|faltu|bakwas|nonsense|random|timepass|nothing|none)$/i,
-  /^(kya\s*hal|kaise\s*ho|what('?s)?\s*up|how\s*are\s*you)$/i,
+  /^(kuch\s*bhi|faltu|bakwas|bakwaas|nonsense|random|timepass|nothing|none)$/i,
+  /\b(kuch\s*bhi|timepass|bakwaas|faltu)\b/i,
+  /^(kya\s*hal|kaise\s*ho|what('?s)?\s*up|how\s*are\s*you|kya\s*chal\s*raha)$/i,
   /^(lol|lmao|rofl|haha|hehe|xd|omg)$/i,
-  /^(bhai|bro|yaar|sir|madam|dost)$/i
+  /^(bhai|bro|yaar|sir|madam|dost)$/i,
+  /^(mujhe\s*nahi\s*pata|pata\s*nahi|nahi\s*pata|kuch\s*nahi|dont\s*know|i\s*dont\s*know|idk|naah|nope)$/i,
+  /^(padhai\s*nahi\s*karni|bore\s*ho\s*raha|bore|boring)$/i,
+  /^(chalo|bye|goodbye|tata|see\s*you)$/i,
+  /^(what\s*to\s*do|what\s*is\s*this|who\s*are\s*you|kya\s*hai\s*ye)$/i,
+  /^([a-z])\1{3,}$/i
 ];
 
 /**

@@ -1204,10 +1204,19 @@ Your detailed overview here...
 - Always populate the "suggestions" array with exactly 3 context-aware study follow-up ideas.
 - Do NOT use LaTeX inside the suggestions.
 
-THE "MASTER EDUCATOR" TEACHING PROTOCOL:
-1. EXTREME SIMPLIFICATION: Teach complex topics simply and clearly. Never assume prior knowledge.
-2. THE ANALOGY RULE: Use relatable, real-world analogies where helpful.
-3. HIGH EMPATHY: Be patient and deeply encouraging.`
+THE "MASTER EDUCATOR" TEACHING PROTOCOL & 3-PILLAR FORMATTING MANDATE:
+1. MANDATORY MARKDOWN TABLES FOR CHARTS & VALUES:
+   - WHENEVER presenting charts, steric numbers, molecular geometries/shapes, hybridization values, oxidation states, formulas, or comparative lists:
+     YOU MUST OUTPUT A CLEAN GITHUB FLAVORED MARKDOWN TABLE with '| Column 1 | Column 2 | ... |'.
+   - NEVER write dash-separated lists with arrows on a single line.
+2. DELIMITER BALANCE & VARIABLE INTEGRITY:
+   - Always enclose formula variables on both sides: "$V$ =", "$M$ =", "$C$ =", "$A$ =". NEVER write "V$ =" or "C$ =".
+   - For chemical species (H, F, Cl, Br, I), write them as clean plain text: "(H, F, Cl, Br, I)".
+3. MANDATORY PRE-OUTPUT SELF-AUDIT & RECHECK PROTOCOL:
+   - BEFORE outputting your final JSON response, mentally re-check your text:
+     \u2713 Ensure all math delimiters are balanced ($...$ or $...$).
+     \u2713 Ensure any tabular charts are converted to clean Markdown Tables.
+4. EXTREME SIMPLIFICATION & EMPATHY: Teach complex topics simply with everyday analogies.`
     };
     const response = await safeGenerateContent({
       gradeLevel,
@@ -5223,6 +5232,48 @@ CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - You MUST systematically distribute the ${requestedCount} questions evenly across all core chapters/topics of THIS subject.
 - ABSOLUTELY STRICT SUBJECT ISOLATION: ALL questions MUST be strictly and exclusively from THIS subject. DO NOT mix or introduce concepts from any other unrelated subject!
 ` : "";
+    const isCodingSubject = /python|coding|programming|computer science|informatics|data science|c\+\+|java\b|sql\b|software/i.test(`${topicText} ${stream || ""}`);
+    const multiModalSection = isCodingSubject ? `
+3. MANDATORY MULTI-MODAL & COMPUTATIONAL QUESTIONS (CODE & SCHEMATICS):
+   - At least 2 questions must actively integrate Python programming snippets (\`\`\`python ... \`\`\`), algorithmic execution flow, or system data structures.
+   - For outputs or data: Pair with clean Markdown tables or ASCII console outputs.
+` : `
+3. AUTHENTIC MULTI-MODAL QUESTIONS (TABLES, GRAPHS & SCHEMATICS):
+   Real examination board papers (CBSE, SSC, ICSE, NEET, State Boards, College Exams) integrate observation tables, coordinate graphs, and schematic setups for authentic analytical problem solving.
+   CRITICAL MANDATE:
+   - FOR DATA & EXPERIMENTAL OBSERVATIONS (Chemistry, Physics, Economics, History, Geography, Commerce, Biology, Statistics):
+     Provide clean, structured Markdown Tables.
+     CRITICAL TABLE FORMATTING RULE:
+     * Put a newline (\\n) after EVERY single table row.
+     * NEVER merge rows with double pipes (||) or collapse the table onto a single line!
+     * Format:
+       | Col 1 | Col 2 | Col 3 |
+       | :---: | :---: | :---: |
+       | Val 1 | Val 2 | Val 3 |
+       | Val 4 | Val 5 | Val 6 |
+   - FOR COORDINATE CURVES, KINEMATICS & FUNCTION PLOTS:
+     Provide a clean ASCII/Unicode coordinate curve inside a \`\`\`graph ... \`\`\` block.
+     Example:
+     \`\`\`graph
+      v (m/s)
+       ^
+     24| \\
+     12|   \\
+      0+-----+-----> t (s)
+       0     2     4
+     \`\`\`
+   - FOR APPARATUS SETUPS, CIRCUITS, OPTICAL RAYS & FLOWCHARTS:
+     Provide a clean ASCII/Unicode diagram inside a \`\`\`diagram ... \`\`\` block.
+     Example:
+     \`\`\`diagram
+     +---[ Resistor R1 = 4\u03A9 ]---+
+     |                          |
+     (E = 12V)                  [ Resistor R2 = 6\u03A9 ]
+     |                          |
+     +--------------------------+
+     \`\`\`
+   - CRITICAL PROHIBITION: DO NOT output any Python, matplotlib, numpy, or pandas code blocks! Students are practicing for academic/competitive examination questions, NOT writing Python scripts! Code blocks are strictly forbidden for non-programming subjects!
+`;
     const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
 Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-ended) practice questions along with official examiner marking rubrics and score allocations.
 ${examBlueprintDirective ? `
@@ -5251,54 +5302,7 @@ CRITICAL ARCHITECTURE RULES:
      * Standalone Long Analytical / Evaluative Questions (5\u20136 Marks).
      * Multi-part questions ((a) and (b)) only when naturally appropriate.
 
-3. MANDATORY MULTI-MODAL QUESTIONS (PYTHON CODE, TABLES, GRAPHS & DIAGRAMS):
-   Real examination board papers integrate executable simulation scripts, experimental data tables, coordinate graphs, and schematic setups for authentic analytical problem solving.
-   CRITICAL MANDATE: In every set of questions for STEM, Mathematics, Physics, Chemistry, Economics, or Computer Science:
-   At least 2 questions MUST actively integrate visual, tabular, or computational artifacts:
-   
-   * PYTHON-POWERED PLOTS & SIMULATIONS:
-     For questions testing mathematical functions, kinematics trajectories, thermodynamic cycles, chemical kinetics, or computational algorithms:
-     Provide clean, executable Python code (using \`matplotlib.pyplot\` and \`numpy\` or \`pandas\`) inside a \`\`\`python code block that models the system or computes the data points, paired immediately with the resulting coordinate plot inside \`\`\`graph, followed by analytical examination sub-parts!
-     Example:
-     \`\`\`python
-     import numpy as np
-     import matplotlib.pyplot as plt
-
-     t = np.linspace(0, 4, 100)
-     # Velocity-time model: v(t) = 24 - 6*t
-     v = 24 - 6 * t
-     \`\`\`
-     \`\`\`graph
-      v (m/s)
-       ^
-     24|      12|         0+-----+-----> t (s)
-       0     2     4
-     \`\`\`
-     Followed by: "(a) Using the provided Python script and velocity-time graph, determine the instantaneous acceleration. (b) Calculate the total displacement over the 4-second interval by integration."
-     
-   * EXPERIMENTAL & OBSERVATION DATA TABLES (WITH OPTIONAL PYTHON DATAFRAME):
-     For Chemistry, Biology, Physics, Statistics, or Commerce, provide an observation matrix or reaction trial table using clean Markdown tables, paired with the Python data structure:
-     \`\`\`python
-     import pandas as pd
-     trials = [1, 2, 3]
-     rate = [0.012, 0.024, 0.048]
-     \`\`\`
-     | Trial | Initial $[A]$ (M) | Initial Rate ($	ext{M}cdot	ext{s}^{-1}$) |
-     | :---: | :---: | :---: |
-     | 1 | 0.10 | $1.2 	imes 10^{-2}$ |
-     | 2 | 0.20 | $2.4 	imes 10^{-2}$ |
-     | 3 | 0.40 | $4.8 	imes 10^{-2}$ |
-     Followed by: "(a) Determine the reaction order with respect to $[A]$... (b) Calculate the rate constant $k$ with units."
-     
-   * SCHEMATIC & SETUP DIAGRAMS:
-     For Physics (circuits, pulleys, optical rays) or Biology (flowcharts, cycles), provide an ASCII schematic inside a \`\`\`diagram code block:
-     \`\`\`diagram
-     +---[ Resistor R1 = 4\u03A9 ]---+
-     |                          |
-     (E = 12V)                  [ Resistor R2 = 6\u03A9 ]
-     |                          |
-     +--------------------------+
-     \`\`\`
+${multiModalSection}
 
 4. GRADE & CURRICULUM CALIBRATION:
    - Target Grade: ${gradeLevel}. Match vocabulary and difficulty strictly to this grade level.
@@ -5357,6 +5361,17 @@ MANDATE: You MUST explore entirely DIFFERENT, fresh subtopics, alternative formu
     ];
     const dynamicAngle = pedagogicalAngles[Math.floor(Math.random() * pedagogicalAngles.length)];
     const randomEntropySeed = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const multiModalUserPrompt = isCodingSubject ? `
+CRITICAL MULTI-MODAL MANDATE (CODE, TABLES & ALGORITHMS):
+- At least 1 question should include a clean Python/CS script block (\`\`\`python ... \`\`\`).
+- Formulate analytical multi-part questions ((a), (b), (c)) testing the student's code trace and comprehension!
+` : `
+CRITICAL MULTI-MODAL MANDATE (TABLES, GRAPHS & SCHEMATICS):
+Out of the ${requestedCount} generated questions:
+- At least 1 question should include a structured Markdown observation/data table (| ... |) with newlines (\\n) between each row.
+- At least 1 question can include a coordinate function graph (\`\`\`graph ... \`\`\`) or schematic apparatus setup (\`\`\`diagram ... \`\`\`) when applicable.
+- STRICTLY PROHIBIT Python/NumPy/Pandas code blocks (students are taking an academic subject exam, not programming!).
+`;
     const userPrompt = `Topic: "${topicText}".
 Target Grade: ${gradeLevel}.
 ${userStreamDirective}
@@ -5366,11 +5381,7 @@ Entropy Variation Seed: ${randomEntropySeed}
 Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic, grade, and strictly matching ${difficulty} difficulty level.
 CRITICAL COUNT MANDATE: The output array MUST contain EXACTLY ${requestedCount} question objects. Never stop early or generate fewer than ${requestedCount}.
 CRITICAL ANTI-REPETITION MANDATE: Every question must be 100% distinct. Do NOT repeat any concept or previously tested question.
-CRITICAL MULTI-MODAL MANDATE (PYTHON CODE, TABLES, GRAPHS & DIAGRAMS):
-Out of the ${requestedCount} generated questions, AT LEAST 2 questions MUST actively include visual, tabular, or computational artifacts:
-- AT LEAST ONE question MUST include an executable Python simulation or visualization code block (\`\`\`python ... \`\`\`) using matplotlib/numpy accompanied by the resulting coordinate graph (\`\`\`graph ... \`\`\`) or analytical curve.
-- AT LEAST ONE question MUST include a structured Markdown observation/data table (| ... |) or experimental schematic diagram (\`\`\`diagram ... \`\`\`), optionally paired with a Python pandas/numpy script.
-Formulate analytical multi-part questions ((a), (b), (c)) testing the student's ability to interpret the graph, verify equations from the Python simulation, and deduce parameters!
+${multiModalUserPrompt}
 For each question, provide:
 1. 'question': Authentic exam question (including data table, diagram block, or graph when appropriate).
 2. 'expectedAnswer': Comprehensive, non-empty step-by-step official model solution (MANDATORY).

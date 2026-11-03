@@ -177,7 +177,9 @@ export function cleanMarkdownMath(content: string): string {
       if (numMatch) {
         const num = numMatch[1];
         const shape = shapeMatch ? shapeMatch[1].trim() : '';
-        table += `| ${num} | ${rawHyb}$ | ${shape} |\n`;
+        if (!rawHyb.startsWith('$')) rawHyb = '$' + rawHyb;
+        if (!rawHyb.endsWith('$')) rawHyb = rawHyb + '$';
+        table += `| ${num} | ${rawHyb} | ${shape} |\n`;
       }
     });
     return table;
@@ -207,7 +209,9 @@ export function cleanMarkdownMath(content: string): string {
     let trimmed = line.trim();
     if (!trimmed) return line;
 
-    if (trimmed.endsWith('|')) {
+    // Only strip trailing pipe if line is NOT part of a markdown table (tables start with | or have multiple |)
+    const isTableRow = trimmed.startsWith('|') || (trimmed.match(/\|/g) || []).length >= 2;
+    if (!isTableRow && trimmed.endsWith('|')) {
       trimmed = trimmed.replace(/\s*\|\s*$/, '').trim();
     }
 
@@ -569,67 +573,42 @@ const CodeBlock = memo(({ inline, className, children, ...props }: any) => {
   const isGraph = language === 'graph' || language === 'plot' || language === 'curve';
   const isDiagram = language === 'diagram' || language === 'schema' || language === 'circuit' || language === 'setup';
 
-  let badgeIcon = '💻';
-  let badgeTitle = 'Source Code';
-  let badgeSubtitle = language ? language.toUpperCase() : 'CODE';
   let borderColor = 'border-zinc-800';
-  let headerBg = 'bg-zinc-900/95';
   let textColor = 'text-zinc-200';
-  let dotColor = 'bg-blue-400';
 
   if (isPython) {
-    badgeIcon = '🐍';
-    badgeTitle = 'Python Visualization & Simulation Script';
-    badgeSubtitle = 'Matplotlib / NumPy';
-    borderColor = 'border-blue-500/40';
-    headerBg = 'bg-gradient-to-r from-blue-950 via-zinc-900 to-amber-950/40';
+    borderColor = 'border-blue-500/30';
     textColor = 'text-blue-100';
-    dotColor = 'bg-amber-400';
   } else if (isGraph) {
-    badgeIcon = '📊';
-    badgeTitle = 'Analytical Coordinate Graph & Curves';
-    badgeSubtitle = 'Function Plot';
-    borderColor = 'border-emerald-500/40';
-    headerBg = 'bg-gradient-to-r from-emerald-950 via-zinc-900 to-zinc-900';
+    borderColor = 'border-emerald-500/30';
     textColor = 'text-emerald-300';
-    dotColor = 'bg-emerald-400';
   } else if (isDiagram) {
-    badgeIcon = '📐';
-    badgeTitle = 'Apparatus Setup & System Schematic';
-    badgeSubtitle = 'Schematic Model';
-    borderColor = 'border-cyan-500/40';
-    headerBg = 'bg-gradient-to-r from-cyan-950 via-zinc-900 to-zinc-900';
+    borderColor = 'border-cyan-500/30';
     textColor = 'text-cyan-300';
-    dotColor = 'bg-cyan-400';
   }
 
   return (
     <div className={`my-3.5 rounded-2xl border ${borderColor} bg-zinc-950 text-zinc-100 shadow-md overflow-hidden text-left transition-all`}>
-      <div className={`${headerBg} px-3.5 py-2 border-b border-zinc-800 flex items-center justify-between text-[11px] font-mono tracking-tight text-zinc-300`}>
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0 animate-pulse`} />
-          <span className="font-sans font-bold flex items-center gap-1.5 truncate">
-            <span>{badgeIcon}</span>
-            <span className="text-zinc-100">{badgeTitle}</span>
-          </span>
-          <span className="hidden sm:inline-block text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-zinc-800/90 text-zinc-400 font-semibold">
-            {badgeSubtitle}
-          </span>
+      <div className="bg-zinc-900/95 px-3.5 py-2 border-b border-zinc-800/80 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
         </div>
 
         <button
           type="button"
           onClick={handleCopy}
           className="flex items-center gap-1 text-[10px] font-sans font-bold px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-all active:scale-95 cursor-pointer shrink-0 border border-zinc-700/60 shadow-xs"
-          title="Copy to clipboard"
+          title="Copy"
         >
           {copied ? (
             <span className="text-emerald-400 font-bold flex items-center gap-1">
-              <span>✓</span> Copied!
+              <span>✓</span> Copied
             </span>
           ) : (
             <span className="flex items-center gap-1">
-              <span>📋</span> Copy Code
+              <span>📋</span> Copy
             </span>
           )}
         </button>
@@ -711,6 +690,28 @@ const defaultComponents = {
 };
 
 /**
+ * Universal Markdown Table Healer:
+ * 1. Expands single-line collapsed tables where AI output rows separated by || (e.g. "Context ||:---:|:---:|| 1 | ... || 2 | ...")
+ * 2. Ensures the table is surrounded by empty lines so remark-gfm parses it as a styled block table.
+ */
+export function healMarkdownTables(text: string): string {
+  if (!text) return '';
+  let str = String(text);
+
+  // 1. Expand single-line collapsed tables where rows were output joined by ||
+  // In markdown tables, row 1 ends with | and row 2 starts with |, producing || or ||:---
+  if (/\|\|/.test(str) && (/:?-+:?/.test(str) || /\|[-: ]+\|/.test(str))) {
+    str = str.replace(/\|\|\s*/g, '|\n| ');
+  }
+
+  // 2. Ensure table has an empty line before and after so remark-gfm parses it cleanly as a block table
+  str = str.replace(/([^\n])\n([ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t]*:?-[^\n]+\|)/g, '$1\n\n$2');
+  str = str.replace(/([ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t]*:?-[^\n]+\|[ \t]*(?:\n[ \t]*\|[^\n]+\|[ \t]*)+)\n([^\n|])/g, '$1\n\n$2');
+
+  return str;
+}
+
+/**
  * Robust, universal healer for superscripts, subscripts, and math expressions
  * for ANY feature using GlobalMarkdown across the entire app.
  * Heals:
@@ -719,11 +720,24 @@ const defaultComponents = {
  * 3. Standalone LaTeX commands and operators (\frac, \sqrt, \sin, \cos, \theta, \pi, \int, \cdot)
  * 4. Superscripts (x^2, 10^5, e^{-x^2}, 30^\circ), subscripts (v_0, x_1)
  * 5. Chemical formulas (H2O, CO2, H2SO4)
- * 6. Preserves code blocks and valid math blocks 100% without corrupting $$ delimiters!
+ * 6. Preserves tables, code blocks, and valid math blocks 100% without corrupting delimiters!
  */
 export function healGlobalMarkdown(content: string): string {
   if (!content) return '';
-  let text = cleanMarkdownMath(String(content));
+
+  // Step 0: Pre-heal collapsed tables so rows joined with || become proper newline-separated rows
+  let text = healMarkdownTables(String(content));
+
+  // Step 0.5: Protect Markdown Tables so table column pipes (|) and math cells ($x_i$, $f_i$) are never mangled
+  const tablePlaceholders: string[] = [];
+  const TABLE_REGEX = /(?:^|\n)([ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t]*:?-[^\n]+\|[ \t]*(?:\n[ \t]*\|[^\n]+\|[ \t]*)+)/g;
+  text = text.replace(TABLE_REGEX, (_match, table) => {
+    const token = `___TABLE_BLOCK_${tablePlaceholders.length}___`;
+    tablePlaceholders.push(table.trim());
+    return `\n\n${token}\n\n`;
+  });
+
+  text = cleanMarkdownMath(text);
 
   // 1. Protect Code Blocks (```...```) and Inline Code (`...`)
   const codePlaceholders: string[] = [];
@@ -949,6 +963,12 @@ export function healGlobalMarkdown(content: string): string {
 
   // Safety guard against any orphaned placeholders
   text = text.replace(/_{2,3}MATH_BLOCK_\d+_{2,3}/g, '');
+
+  // 13.5. Restore all Table Blocks cleanly with bounding empty lines
+  for (let i = 0; i < tablePlaceholders.length; i++) {
+    const val = tablePlaceholders[i];
+    text = text.replace(`___TABLE_BLOCK_${i}___`, () => `\n\n${val}\n\n`);
+  }
 
   // 14. Restore all Code Blocks
   for (let i = 0; i < codePlaceholders.length; i++) {

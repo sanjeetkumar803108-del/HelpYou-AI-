@@ -29,7 +29,7 @@ import {
 } from '../utils/pdfTableRenderer';
 import SafePdfViewer from './SafePdfViewer';
 import AdvancedLoader from './AdvancedLoader';
-import GlobalMarkdown, { healGlobalMarkdown } from './GlobalMarkdown';
+import GlobalMarkdown, { healGlobalMarkdown, healMarkdownTables } from './GlobalMarkdown';
 import { getApiUrl } from '../utils/api';
 
 interface QuestionGeneratorProps {
@@ -484,18 +484,29 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
   const normalizeQuestionBreaks = (text: string): string => {
     if (!text) return '';
+
+    // Step 0: Pre-heal collapsed tables (e.g. rows separated by ||) into structured newline-separated rows
+    let safe = healMarkdownTables(text);
+
+    // Step 0.5: Filter out unwanted Python simulation scripts in non-coding academic subjects (e.g. ```python import pandas ... ```)
+    const isCoding = /python|coding|programming|computer|informatics/i.test(`${customTopic || ''} ${stream || ''} ${profile?.stream || ''} ${profile?.subject || ''}`);
+    if (!isCoding) {
+      safe = safe.replace(/```(?:python|py)\s*(?:import\s+(?:pandas|numpy|matplotlib|scipy)[\s\S]*?)```/gi, '');
+    }
+
     // 1. Protect Code Blocks (```...```) and diagrams from receiving accidental mid-block break splits
     const codeBlocks: string[] = [];
-    let safe = text.replace(/```[\s\S]*?```/g, (m) => {
+    safe = safe.replace(/```[\s\S]*?```/g, (m) => {
       codeBlocks.push(m);
       return `___CODE_BLOCK_${codeBlocks.length - 1}___`;
     });
 
-    // 2. Protect Markdown Tables (|...|\n|---|...) from receiving mid-table line break splits
+    // 2. Protect Markdown Tables (|...|\n|---|...) using robust multi-line table regex
     const tableBlocks: string[] = [];
-    safe = safe.replace(/(?:^|\n)(\|.+?\|\n\|[-: |]+\|\n(?:\|.+?\|\n?)+)/g, (m) => {
-      tableBlocks.push(m);
-      return `\n___TABLE_BLOCK_${tableBlocks.length - 1}___\n`;
+    const TABLE_REGEX = /(?:^|\n)([ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t]*:?-[^\n]+\|[ \t]*(?:\n[ \t]*\|[^\n]+\|[ \t]*)+)/g;
+    safe = safe.replace(TABLE_REGEX, (_match, table) => {
+      tableBlocks.push(table.trim());
+      return `\n\n___TABLE_BLOCK_${tableBlocks.length - 1}___\n\n`;
     });
 
     // 3. Protect existing math expressions ($$...$$ and $...$) from having internal line breaks injected
@@ -514,9 +525,9 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       safe = safe.split(`___MATH_BLOCK_${i}___`).join(mathBlocks[i]);
     }
 
-    // 6. Restore protected table blocks
+    // 6. Restore protected table blocks cleanly with empty lines
     for (let i = 0; i < tableBlocks.length; i++) {
-      safe = safe.split(`___TABLE_BLOCK_${i}___`).join(tableBlocks[i]);
+      safe = safe.split(`___TABLE_BLOCK_${i}___`).join(`\n\n${tableBlocks[i]}\n\n`);
     }
 
     // 7. Restore protected code blocks

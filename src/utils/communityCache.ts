@@ -1,3 +1,11 @@
+function isContaminatedSubjectiveContent(content: any): boolean {
+  if (!content) return false;
+  const str = typeof content === 'string' ? content : JSON.stringify(content);
+  return str.includes('Concept #') || 
+         str.includes('fundamental mechanisms and significance of') || 
+         str.includes('State any governing formulas (...)');
+}
+
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { safeGetItem, safeSetItem } from './storage';

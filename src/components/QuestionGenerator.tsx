@@ -799,12 +799,18 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       });
 
       if (cachedHit && Array.isArray(cachedHit.content) && cachedHit.content.length > 0) {
-        setLoadingProgress(100);
-        deductCoins(2, "AI Subjective Questions");
-        setQuestions(cachedHit.content);
-        setLoading(false);
-        saveToHistory(cachedHit.content).catch(e => console.error("History save failed:", e));
-        return;
+        const hasTemplate = cachedHit.content.some((q: any) => {
+          const t = (q.question || q.title || '').toLowerCase();
+          return t.includes('concept #') || t.includes('fundamental mechanisms and significance');
+        });
+        if (!hasTemplate && cachedHit.content.length >= questionCount) {
+          setLoadingProgress(100);
+          deductCoins(2, "AI Subjective Questions");
+          setQuestions(cachedHit.content.slice(0, questionCount));
+          setLoading(false);
+          saveToHistory(cachedHit.content.slice(0, questionCount)).catch(e => console.error("History save failed:", e));
+          return;
+        }
       }
 
       const response = await fetch(getApiUrl('/api/generate-questions'), {

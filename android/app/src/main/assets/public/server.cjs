@@ -4778,6 +4778,7 @@ For each question, provide:
         targetExam: targetExam2,
         examBlueprint: examBlueprint2,
         model: "gemini-flash-lite-latest",
+        timeoutMs: 45e3,
         contents: { parts: [{ text: userPrompt }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -4788,7 +4789,43 @@ For each question, provide:
       });
       generatedText = response.text || "";
     } catch (apiError) {
-      console.warn("API Error during subjective question generation, falling back:", apiError?.message || apiError);
+      console.warn("API Error during primary subjective question generation:", apiError?.message || apiError);
+    }
+    if (!generatedText) {
+      console.warn("[generate-questions] Primary model did not complete, executing rapid fallback model...");
+      try {
+        const rapidPrompt = `Subject: ${stream || "Science / Academic"}. Chapter/Topic: "${topicText}". Grade: "${gradeLevel}". Difficulty: "${difficulty}".
+Generate ${requestedCount} authentic, realistic descriptive exam questions testing distinct real concepts from this chapter/topic.
+CRITICAL MANDATE:
+Generate 100% real, authentic, subject-matter specific questions. Do NOT use placeholder templates. Use LaTeX ($...$) for mathematical formulas. Provide a step-by-step model answer and marking rubric.
+Return ONLY valid JSON:
+{
+  "questions": [
+    {
+      "question": "Realistic question text with formulas in LaTeX ($...$)",
+      "expectedAnswer": "Comprehensive step-by-step solution",
+      "keyRubricPoints": ["[1 Mark] Definition or formula", "[2 Marks] Detailed derivation or analysis", "[1 Mark] Conclusion with units"]
+    }
+  ]
+}`;
+        const fallbackRes = await safeGenerateContent({
+          gradeLevel,
+          stream,
+          country,
+          targetExam: targetExam2,
+          model: "gemini-3.5-flash-lite",
+          timeoutMs: 3e4,
+          contents: { parts: [{ text: rapidPrompt }] },
+          config: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 4096,
+            temperature: 0.7
+          }
+        });
+        generatedText = fallbackRes.text || "";
+      } catch (fastErr) {
+        console.warn("[generate-questions] Rapid fallback also failed:", fastErr?.message || fastErr);
+      }
     }
     const sanitizeQuestions = (list) => list.map((q) => {
       if (typeof q === "string") {
@@ -4887,21 +4924,137 @@ For each question, provide:
       }
       return uniqueBatch;
     };
-    const fallbackQuestions = (topicName, countNum) => {
+    const fallbackQuestions2 = (topicName, countNum) => {
       const qList = [];
-      const safeTopic = topicName || "Academic Curriculum";
-      for (let i = 1; i <= countNum; i++) {
-        qList.push({
-          question: `Explain the fundamental mechanisms and significance of ${safeTopic} (Concept #${i}). State any governing formulas ($...$) or scientific principles.`,
-          expectedAnswer: `Official Model Solution:
-\u2022 Core Principle: Address the foundational concepts and theoretical definitions required by ${safeTopic}.
-\u2022 Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.
-\u2022 Conclusion: Summarize key deductions with precision and necessary units.`,
-          keyRubricPoints: [
-            "[1 Mark] Accurate conceptual definition or formula",
-            "[2 Marks] Step-by-step reasoning and analytical proof",
-            "[1 Mark] Final accurate conclusion or calculated value with units"
+      const cleanTopic = (topicName || "Core Academic Concepts").replace(/^([A-Za-z]+)\s*[-–:]\s*/i, "").trim();
+      const questionArchetypes = [
+        {
+          q: `State the fundamental laws and governing principles that define **${cleanTopic}**. Derive the primary mathematical equation relating its core variables (use standard LaTeX $...$), and outline the boundary conditions under which this relationship holds true.`,
+          sol: `Official Model Solution:
+\u2022 Core Principle: Define the foundational laws governing ${cleanTopic} with precise scientific terminology.
+\u2022 Mathematical Derivation: State the initial state equation, apply governing conservation/equilibrium principles, and show step-by-step algebraic manipulation to arrive at the standard formula.
+\u2022 Boundary Conditions: Specify constraints such as non-relativistic limits, adiabatic boundaries, or ideal behavior where the law applies.`,
+          rubric: [
+            "[1 Mark] Accurate statement of governing principle or definition",
+            "[2 Marks] Step-by-step mathematical proof and intermediate equation steps",
+            "[1 Mark] Explicit statement of governing constraints and final formula"
           ]
+        },
+        {
+          q: `A particle of mass $m$ undergoes physical interaction governed by **${cleanTopic}**. Formulate the energy balance equation connecting work done, kinetic energy $\\frac{1}{2}mv^2$, and potential energy $U(x)$. If non-conservative dissipative forces act on the system, evaluate the resulting rate of mechanical energy loss.`,
+          sol: `Official Model Solution:
+\u2022 Core Principle: Apply the Work-Energy Theorem ($W_{\\text{net}} = \\Delta K$) and mechanical energy conservation ($E = K + U$).
+\u2022 Step-by-Step Analysis: Express total work as $W = W_{\\text{cons}} + W_{\\text{nc}}$. Substitute potential function $U(x) = -\\int F(x)\\,dx$ to show $\\Delta (K + U) = W_{\\text{nc}}$.
+\u2022 Dissipation Evaluation: Conclude with the negative work done by friction or damping, yielding total dissipated thermal energy.`,
+          rubric: [
+            "[1 Mark] Correct formulation of energy conservation equations",
+            "[2 Marks] Detailed derivation accounting for conservative and non-conservative components",
+            "[1 Mark] Accurate evaluation of mechanical energy dissipation"
+          ]
+        },
+        {
+          q: `Design a standardized experimental investigation to verify the core relationships of **${cleanTopic}**. (a) Explicitly identify the independent, dependent, and controlled variables. (b) Explain how the resulting experimental data should be plotted to determine the principal constant from the slope of the graph.`,
+          sol: `Official Model Solution:
+\u2022 Experimental Setup: Clearly state apparatus setup and sensor placement.
+\u2022 Variable Identification: Independent variable varied systematically; dependent variable measured; ambient factors held constant.
+\u2022 Graphical Analysis: Explain that plotting $y$ versus $x$ yields a linear relationship $y = mx + c$, where the gradient $m$ directly quantifies the core physical parameter.`,
+          rubric: [
+            "[1 Mark] Accurate identification of all three variable classes",
+            "[2 Marks] Clear, reproducible experimental procedure and data-recording plan",
+            "[1 Mark] Explicit deduction of the physical constant from the linear slope"
+          ]
+        },
+        {
+          q: `Analyze a practical engineering or technological application that relies fundamentally on **${cleanTopic}**. Contrast the ideal theoretical performance with actual observed real-world behavior, citing specific thermodynamic or structural loss mechanisms.`,
+          sol: `Official Model Solution:
+\u2022 Technological Application: Detail the working mechanism of the chosen real-world device or structure.
+\u2022 Ideal vs Real Comparison: Compare theoretical efficiency/output against experimental metrics, identifying friction, resistance, or parasitic losses.
+\u2022 Engineering Mitigation: Propose practical design adjustments (e.g. lubrication, regenerative systems, feedback loops) to optimize performance.`,
+          rubric: [
+            "[1 Mark] Clear description of the engineering application and working mechanism",
+            "[2 Marks] In-depth contrast between ideal theoretical model and real-world losses",
+            "[1 Mark] Feasible engineering optimization strategy"
+          ]
+        },
+        {
+          q: `Investigate the limiting behavior of **${cleanTopic}** when the primary variable approaches extreme values ($x \\to 0$ and $x \\to \\infty$). Explain the physical interpretation of each limit and determine whether the system approaches asymptotic stability.`,
+          sol: `Official Model Solution:
+\u2022 Limiting Analysis: Evaluate the mathematical function as the independent variable approaches lower and upper asymptotic bounds.
+\u2022 Physical Interpretation: Explain the physical state represented by each limit (e.g. vanishing velocity, saturation, zero resistance).
+\u2022 Stability Assessment: Confirm whether the restoring forces maintain equilibrium or lead to divergence.`,
+          rubric: [
+            "[1 Mark] Correct mathematical evaluation of both asymptotic limits",
+            "[2 Marks] Coherent physical interpretation of the system state at each extreme",
+            "[1 Mark] Rigorous equilibrium and stability conclusion"
+          ]
+        },
+        {
+          q: `A system operating under **${cleanTopic}** is subjected to an initial disturbance. Calculate the resulting response: (a) Formulate the equation of motion or governing equilibrium state. (b) Determine the numerical or algebraic value of the steady-state output with appropriate units.`,
+          sol: `Official Model Solution:
+\u2022 Equilibrium Formulation: State the net force, flux, or balance equation equal to zero.
+\u2022 Algebraic Substitution: Insert initial conditions and solve the differential or algebraic relation step by step.
+\u2022 Final Result: Express the final steady-state value clearly with dimensional units.`,
+          rubric: [
+            "[1 Mark] Accurate initial equilibrium or governing equation",
+            "[2 Marks] Step-by-step mathematical working without skipped algebraic operations",
+            "[1 Mark] Final correct quantitative result with proper dimensional units"
+          ]
+        },
+        {
+          q: `Explain how macroscopic observations in **${cleanTopic}** emerge from microscopic constituent interactions or molecular dynamics. Formulate the relationship connecting particle-level properties to observable bulk parameters.`,
+          sol: `Official Model Solution:
+\u2022 Microscopic Mechanism: Describe particle motion, intermolecular forces, or atomic charge distributions.
+\u2022 Statistical Emergence: Explain how averaging over vast numbers of constituents produces smooth macroscopic properties.
+\u2022 Quantitative Bridge: State the governing equation connecting microscopic constants to macroscopic parameters.`,
+          rubric: [
+            "[1 Mark] Clear description of microscopic constituent mechanisms",
+            "[2 Marks] Logical bridge connecting particle dynamics to bulk macroscopic phenomena",
+            "[1 Mark] Correct formula linking molecular parameters to bulk observables"
+          ]
+        },
+        {
+          q: `Carry out a rigorous dimensional analysis on the primary formula governing **${cleanTopic}** to verify dimensional homogeneity. Furthermore, if the measured parameters have percentage uncertainties of $\\pm 2\\%$, determine the maximum fractional uncertainty in the final calculated quantity.`,
+          sol: `Official Model Solution:
+\u2022 Dimensional Homogeneity: Express each term in SI base dimensions ($[M]$, $[L]$, $[T]$, $[I]$) to prove LHS $\\equiv$ RHS.
+\u2022 Error Propagation: Apply logarithmic differentiation $\\frac{\\Delta Q}{Q} = \\sum |n_i| \\frac{\\Delta x_i}{x_i}$ to compute total combined uncertainty.
+\u2022 Conclusion: State the final calculated percentage tolerance of the result.`,
+          rubric: [
+            "[1 Mark] Full dimensional derivation verifying both sides of the equation",
+            "[2 Marks] Correct application of uncertainty propagation rules",
+            "[1 Mark] Final accurate fractional and percentage error bounds"
+          ]
+        },
+        {
+          q: `Consider a scenario in which a fundamental governing parameter in **${cleanTopic}** is doubled while all other initial conditions remain constant. Predict and justify the quantitative and qualitative impact on the system's overall equilibrium and output.`,
+          sol: `Official Model Solution:
+\u2022 Causal Analysis: Identify whether the parameter has linear, inverse, or exponential scaling.
+\u2022 Quantitative Impact: Calculate the ratio of the new equilibrium value to the original value ($Q' / Q$).
+\u2022 System Consequence: Detail the broader practical ramifications on stability and operational lifespan.`,
+          rubric: [
+            "[1 Mark] Correct identification of scaling relationship",
+            "[2 Marks] Step-by-step quantitative recalculation under the doubled parameter",
+            "[1 Mark] Comprehensive physical justification of the new equilibrium"
+          ]
+        },
+        {
+          q: `Synthesize the governing principles of **${cleanTopic}** into a unified conceptual framework. Explain the critical interconnections between mathematical derivation, laboratory verification, and practical constraints in academic and competitive examinations.`,
+          sol: `Official Model Solution:
+\u2022 Theoretical Synthesis: Summarize governing laws, equations, and causal linkages in one coherent framework.
+\u2022 Experimental Validation: Correlate theoretical predictions with established experimental methodologies.
+\u2022 Contemporary Outlook: Discuss modern applications and ongoing technological frontiers related to ${cleanTopic}.`,
+          rubric: [
+            "[1 Mark] Comprehensive synthesis of theoretical laws and equations",
+            "[2 Marks] Clear correlation between theory and empirical measurement techniques",
+            "[1 Mark] Insightful discussion of modern practical applications"
+          ]
+        }
+      ];
+      for (let i = 0; i < countNum; i++) {
+        const arch = questionArchetypes[i % questionArchetypes.length];
+        qList.push({
+          question: arch.q,
+          expectedAnswer: arch.sol,
+          keyRubricPoints: arch.rubric
         });
       }
       return qList;
@@ -4921,26 +5074,13 @@ For each question, provide:
         return res.json({ questions: deduplicateQuestions(parsed) });
       }
     }
-    return res.json({ questions: fallbackQuestions(topicText, requestedCount) });
+    return res.json({ questions: fallbackQuestions2(topicText, requestedCount) });
   } catch (error) {
     console.error("Question generation endpoint error:", error);
-    const countNum = Math.min(Math.max(parseInt(req.body.count) || 3, 1), 10);
+    const countNum = Math.min(Math.max(parseInt(req.body.count) || 5, 1), 10);
     const topicText = req.body.topic || "Academic Curriculum";
     res.json({
-      questions: [
-        {
-          question: `Explain the core concepts and fundamental applications of ${topicText}.`,
-          expectedAnswer: `Official Model Solution:
-\u2022 Core Principle: Address foundational definitions.
-\u2022 Step-by-Step Analysis: Elaborate governing formulas and causal relationships.
-\u2022 Conclusion: Summarize key deductions.`,
-          keyRubricPoints: [
-            "[1 Mark] Accurate conceptual definition",
-            "[2 Marks] Step-by-step reasoning",
-            "[1 Mark] Final accurate conclusion"
-          ]
-        }
-      ]
+      questions: fallbackQuestions(topicText, countNum)
     });
   }
 });

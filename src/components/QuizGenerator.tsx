@@ -41,7 +41,7 @@ import {
 
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy } from '../utils/communityCache';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput } from '../utils/communityCache';
 
 interface Question {
   question: string;
@@ -1021,6 +1021,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
   const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
   const [customSubTopicInput, setCustomSubTopicInput] = useState<{ [chapterKey: string]: string }>({});
   const [showCustomInputForChapter, setShowCustomInputForChapter] = useState<string | null>(null);
+  const [customInputError, setCustomInputError] = useState<{ [chapterKey: string]: string }>({});
 
   // Proactively deep research syllabus units for user's chosen subjects & exam
   useEffect(() => {
@@ -1576,6 +1577,18 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
     const activeTopic = selectedTopic.trim();
     if (!activeTopic) return;
 
+    // Validate custom subtopic if present
+    const hierarchy = parseTopicHierarchy(activeTopic);
+    if (hierarchy.subTopic && hierarchy.subTopic !== 'All') {
+      const check = isValidAcademicTopicInput(hierarchy.subTopic, hierarchy.chapter);
+      if (!check.isValid) {
+        setError(check.error || 'Please enter a valid academic concept or topic name.');
+        triggerVibration([30, 50, 30]);
+        return;
+      }
+    }
+
+    setError(null);
     setTopic(activeTopic);
     setTopicToGenerate(activeTopic);
     setPendingFile(null);
@@ -2811,37 +2824,64 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                                                     {/* Custom Micro-Topic Input (User's Favorite Feature) */}
                                                     <div className="pt-1">
                                                       {showCustomInputForChapter === chapterKey ? (
-                                                        <div className="flex items-center gap-1.5">
-                                                          <input
-                                                            type="text"
-                                                            placeholder={`e.g. Specific formula or concept...`}
-                                                            value={customSubTopicInput[chapterKey] || ''}
-                                                            onChange={(e) => setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: e.target.value }))}
-                                                            onKeyDown={(e) => {
-                                                              if (e.key === 'Enter') {
-                                                                const val = (customSubTopicInput[chapterKey] || '').trim();
-                                                                if (val) {
+                                                        <div className="space-y-1.5">
+                                                          <div className="flex items-center gap-1.5">
+                                                            <input
+                                                              type="text"
+                                                              placeholder={`e.g. Specific formula or concept...`}
+                                                              value={customSubTopicInput[chapterKey] || ''}
+                                                              onChange={(e) => {
+                                                                setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: e.target.value }));
+                                                                if (customInputError[chapterKey]) {
+                                                                  setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                                }
+                                                              }}
+                                                              onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                  const val = (customSubTopicInput[chapterKey] || '').trim();
+                                                                  const check = isValidAcademicTopicInput(val, topicItem);
+                                                                  if (!check.isValid) {
+                                                                    triggerVibration([30, 50, 30]);
+                                                                    setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid topic' }));
+                                                                    return;
+                                                                  }
+                                                                  setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                                   triggerVibration(15);
                                                                   handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${val}`);
                                                                 }
-                                                              }
-                                                            }}
-                                                            className="flex-1 text-xs px-3 py-2 border border-indigo-300 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 text-zinc-800"
-                                                            autoFocus
-                                                          />
-                                                          <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                              const val = (customSubTopicInput[chapterKey] || '').trim();
-                                                              if (val) {
+                                                              }}
+                                                              className={`flex-1 text-xs px-3 py-2 border rounded-xl bg-white focus:outline-none focus:ring-1 text-zinc-800 ${
+                                                                customInputError[chapterKey] 
+                                                                  ? 'border-rose-400 focus:ring-rose-500' 
+                                                                  : 'border-indigo-300 focus:ring-indigo-500'
+                                                              }`}
+                                                              autoFocus
+                                                            />
+                                                            <button
+                                                              type="button"
+                                                              onClick={() => {
+                                                                const val = (customSubTopicInput[chapterKey] || '').trim();
+                                                                const check = isValidAcademicTopicInput(val, topicItem);
+                                                                if (!check.isValid) {
+                                                                  triggerVibration([30, 50, 30]);
+                                                                  setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid topic' }));
+                                                                  return;
+                                                                }
+                                                                setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                                 triggerVibration(15);
                                                                 handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${val}`);
-                                                              }
-                                                            }}
-                                                            className="px-3 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition-all shrink-0 cursor-pointer"
-                                                          >
-                                                            Start
-                                                          </button>
+                                                              }}
+                                                              className="px-3 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition-all shrink-0 cursor-pointer"
+                                                            >
+                                                              Start
+                                                            </button>
+                                                          </div>
+                                                          {customInputError[chapterKey] && (
+                                                            <p className="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200/80 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 animate-fadeIn">
+                                                              <span>⚠️</span>
+                                                              <span>{customInputError[chapterKey]}</span>
+                                                            </p>
+                                                          )}
                                                         </div>
                                                       ) : (
                                                         <button
@@ -3506,9 +3546,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                             Q{currentIndex + 1}
                           </span>
                         </div>
-                        <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">
-                          {activeQuestionAIMode[currentIndex] === 'hint' ? 'Guided Conceptual Clues (Answer Hidden)' : 'Complete Working & Option Analysis'}
-                        </span>
+
                       </div>
                     </div>
 

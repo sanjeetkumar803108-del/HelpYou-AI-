@@ -95,6 +95,58 @@ export function buildDeterministicCacheKey(params: CacheKeyParams): string {
   return `${c}__${e}__${g}__${s}__${ch}__${st}__${f}`;
 }
 
+const COMMON_NON_ACADEMIC_PATTERNS = [
+  /^(thik|theek|sahi|accha|acha)\s*(hai|h)?(\s*bhai|\s*bro|\s*yaar)?$/i,
+  /^(hello|hi|hey|bye|good\s*morning|good\s*night)(\s*bhai|\s*bro|\s*yaar|\s*sir)?$/i,
+  /^(ok|okay|k|okk|okey|yup|nope|yes|no)(\s*bhai|\s*bro|\s*yaar)?$/i,
+  /^(test|testing|demo|check|trial|sample)(\s*\d+)?$/i,
+  /^(asdf|qwerty|zxcv|abc|xyz|123|000|aaa|bbb|ccc)/i,
+  /^(kuch\s*bhi|faltu|bakwas|nonsense|random|timepass|nothing|none)$/i,
+  /^(kya\s*hal|kaise\s*ho|what('?s)?\s*up|how\s*are\s*you)$/i,
+  /^(lol|lmao|rofl|haha|hehe|xd|omg)$/i,
+  /^(bhai|bro|yaar|sir|madam|dost)$/i
+];
+
+/**
+ * Validates whether user-entered custom sub-topic is a genuine academic concept
+ * rather than random chatter, slang, or gibberish.
+ */
+export function isValidAcademicTopicInput(
+  input: string | undefined, 
+  chapterName?: string
+): { isValid: boolean; error?: string } {
+  if (!input || typeof input !== 'string') {
+    return { isValid: false, error: 'Please enter a topic name.' };
+  }
+
+  const trimmed = input.trim();
+
+  if (trimmed.length < 3) {
+    return { isValid: false, error: 'Topic name is too short. Please enter a full concept name.' };
+  }
+
+  if (trimmed.length > 70) {
+    return { isValid: false, error: 'Topic name is too long. Please enter a concise concept or formula.' };
+  }
+
+  // Pure digits or non-alphanumeric punctuation
+  if (/^[\d\s\-_.,!?:;@#$%^&*()+=/\\|<>~`"'{}\[\]]+$/.test(trimmed)) {
+    return { isValid: false, error: 'Please enter a valid academic concept (e.g., Projectile Motion, Free Fall).' };
+  }
+
+  // Check against casual chatter & slang patterns
+  for (const pattern of COMMON_NON_ACADEMIC_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return { 
+        isValid: false, 
+        error: `"${trimmed}" is not a valid academic topic. Please enter a real concept for ${chapterName ? `"${chapterName}"` : 'this chapter'} (e.g. Relative Velocity, Graphs).` 
+      };
+    }
+  }
+
+  return { isValid: true };
+}
+
 /**
  * In-memory fast cache map to avoid repeated network roundtrips during an active session.
  */
@@ -131,6 +183,16 @@ export async function getCachedCurriculumContent<T = any>(
 ): Promise<{ content: T; isCached: true; source: 'memory' | 'local' | 'cloud' } | null> {
   try {
     const params = resolveActiveProfileParams(rawParams);
+
+    // Guard: Never cache invalid, slang, or non-academic sub-topics
+    if (params.subTopic && params.subTopic !== 'All') {
+      const check = isValidAcademicTopicInput(params.subTopic, params.chapter);
+      if (!check.isValid) {
+        console.warn(`[communityCache] Skipping cache write for non-academic sub-topic: ${params.subTopic}`);
+        return false;
+      }
+    }
+
     const key = buildDeterministicCacheKey(params);
 
     // 1. Memory check (Instant ~0ms)
@@ -189,6 +251,16 @@ export async function saveCachedCurriculumContent<T = any>(
 
   try {
     const params = resolveActiveProfileParams(rawParams);
+
+    // Guard: Never cache invalid, slang, or non-academic sub-topics
+    if (params.subTopic && params.subTopic !== 'All') {
+      const check = isValidAcademicTopicInput(params.subTopic, params.chapter);
+      if (!check.isValid) {
+        console.warn(`[communityCache] Skipping cache write for non-academic sub-topic: ${params.subTopic}`);
+        return false;
+      }
+    }
+
     const key = buildDeterministicCacheKey(params);
 
     // Save to in-memory cache immediately

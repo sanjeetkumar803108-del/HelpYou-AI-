@@ -649,7 +649,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               <div className="mb-3 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
                 <p className="text-[11px] text-amber-900 font-bold leading-snug">
-                  <span className="font-black text-amber-950">One-Time Setting:</span> Country cannot be changed later. Please select carefully.
+                  One-time setting. Cannot change later.
                 </p>
               </div>
 
@@ -792,7 +792,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                 <div className="py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
                   <p className="text-[11px] text-amber-900 font-bold leading-snug">
-                    <span className="font-black text-amber-950">One-Time Setting:</span> Target exam cannot be changed later. Please type accurately in English.
+                    One-time setting. Cannot change later.
                   </p>
                 </div>
 
@@ -803,11 +803,8 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                 }`}>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[10px] font-black uppercase tracking-wider text-purple-700 block">
-                      Target Exam Name (In English)
+                      Target Exam Name
                     </label>
-                    <span className="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md flex items-center gap-1">
-                      <Lock className="w-2.5 h-2.5 text-amber-600" /> One-Time Edit
-                    </span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <Target className="w-5 h-5 text-purple-600 shrink-0" />
@@ -901,7 +898,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               <div className="mb-3 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
                 <p className="text-[11px] text-amber-900 font-bold leading-snug">
-                  <span className="font-black text-amber-950">One-Time Setting:</span> Grade level cannot be changed later. Please select carefully.
+                  One-time setting. Cannot change later.
                 </p>
               </div>
 
@@ -1102,11 +1099,11 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
             </motion.button>
           )}
         </div>
-        <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
-          {step === 4
-            ? "💡 You can update your subjects anytime inside your Profile menu"
-            : "🔒 Calibrating your personalized academic curriculum"}
-        </p>
+        {step === 4 && (
+          <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
+            💡 You can update your subjects anytime inside your Profile menu
+          </p>
+        )}
       </div>
 
       {/* 5-Stage Live Deep Research & Academic DNA Calibration Overlay */}

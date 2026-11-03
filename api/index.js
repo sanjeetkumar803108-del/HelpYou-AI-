@@ -786,7 +786,7 @@ ${text}`.trim() },
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const aiClient = getAI();
-        const timeoutMs = params.timeoutMs && typeof params.timeoutMs === "number" ? params.timeoutMs : 12e3;
+        const timeoutMs = params.timeoutMs && typeof params.timeoutMs === "number" ? params.timeoutMs : 25e3;
         let response;
         if (isAudioModel || isSpecialtyModel) {
           const generatePromise = aiClient.models.generateContent(currentParams);

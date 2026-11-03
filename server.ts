@@ -959,7 +959,7 @@ ${examDirective ? `\n${examDirective}` : ''}`;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const aiClient = getAI();
-        const timeoutMs = (params.timeoutMs && typeof params.timeoutMs === 'number') ? params.timeoutMs : 12000;
+        const timeoutMs = (params.timeoutMs && typeof params.timeoutMs === 'number') ? params.timeoutMs : 25000;
 
         let response: any;
         if (isAudioModel || isSpecialtyModel) {
@@ -1772,7 +1772,7 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
           try {
             const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
             // Parse full PDF without arbitrary 100-page limit
-            const pdfData = await pdf(req.file.buffer);
+            const pdfData = await pdf(req.file.buffer, { max: 40 });
 
             extractedText = pdfData.text || "";
             // If extracted text is too short, verify if it's a valid binary PDF for inlineData OCR
@@ -1819,16 +1819,16 @@ app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
     }
 
     // Intelligent Comprehensive Distillation for LONG PDFs and large documents (> 80,000 chars)
-    if (extractedText && extractedText.length > 80000) {
+    if (extractedText && extractedText.length > 35000) {
       console.log(`[summarize] Long PDF detected (${extractedText.length} chars). Applying multi-section chapter distillation for comprehensive coverage...`);
-      const introSlice = extractedText.slice(0, 30000);
-      const conclusionSlice = extractedText.slice(-20000);
+      const introSlice = extractedText.slice(0, 15000);
+      const conclusionSlice = extractedText.slice(-10000);
       
-      const middleText = extractedText.slice(30000, -20000);
+      const middleText = extractedText.slice(15000, -10000);
       let middleSamples = "";
-      if (middleText.length > 40000) {
-        const chunkSize = 8000;
-        const totalChunks = 5;
+      if (middleText.length > 10000) {
+        const chunkSize = 3500;
+        const totalChunks = 3;
         const step = Math.floor((middleText.length - chunkSize) / totalChunks);
         for (let i = 0; i < totalChunks; i++) {
           const start = i * step;

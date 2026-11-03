@@ -594,7 +594,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       <div className="absolute bottom-[10%] right-[-10%] w-80 h-80 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Top Progress Header */}
-      <div className="w-full px-6 pt-8 pb-4 flex items-center justify-between shrink-0 z-10">
+      <div className="w-full px-6 pt-7 pb-2.5 flex items-center justify-between shrink-0 z-10 max-w-sm mx-auto">
         <div className="flex items-center gap-1.5">
           <GraduationCap className="w-5 h-5 text-purple-600 animate-pulse" />
           <span className="text-xs font-black uppercase tracking-wider text-purple-600">Personalize Tutor</span>
@@ -619,6 +619,18 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         </div>
       </div>
 
+      {/* 4-Step Visual Progress Bar */}
+      <div className="w-full px-6 pb-2 shrink-0 z-10 flex items-center gap-1.5 max-w-sm mx-auto">
+        {[1, 2, 3, 4].map((s) => (
+          <div
+            key={s}
+            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+              s <= step ? 'bg-purple-600' : 'bg-zinc-200'
+            }`}
+          />
+        ))}
+      </div>
+
       {/* Content Area with Slide Animation */}
       <div className="flex-1 px-6 flex flex-col justify-center max-w-sm mx-auto w-full min-h-0 z-10">
         <AnimatePresence mode="wait">
@@ -632,21 +644,17 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               transition={{ duration: 0.25 }}
               className="flex-1 flex flex-col justify-center min-h-0 py-2"
             >
-              <div className="text-left mb-6 shrink-0">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
-                  <Globe className="w-3.5 h-3.5 text-purple-600" />
-                  Step 1 • Country
-                </div>
+              <div className="text-left mb-3 shrink-0">
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
                   Select your country
                 </h1>
                 <p className="text-xs text-zinc-500 font-semibold mt-1">
-                  Matches your curriculum and educational system
+                  For your curriculum & syllabus
                 </p>
               </div>
 
               {/* COMPACT ONE-TIME COUNTRY SELECTION WARNING */}
-              <div className="mb-3 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
+              <div className="mb-3 py-1.5 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
                 <p className="text-[11px] text-amber-900 font-bold leading-snug">
                   One-time setting. Cannot change later.
@@ -708,7 +716,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                         >
                           <div className="bg-purple-50/70 border-2 border-purple-500/80 rounded-2xl p-3.5 shadow-sm">
                             <label className="text-[10px] font-black uppercase tracking-wider text-purple-700 block mb-1.5">
-                              Type Your Country Name
+                              Country Name
                             </label>
                             <div className="flex items-center gap-2">
                               <Globe className="w-4 h-4 text-purple-600 shrink-0" />
@@ -729,7 +737,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                                     }
                                   }
                                 }}
-                                placeholder="e.g. India, Germany, UAE, Pakistan, Nigeria..."
+                                placeholder="e.g. India, Germany, UAE..."
                                 className="w-full bg-transparent text-xs font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none"
                                 autoFocus
                               />
@@ -773,23 +781,19 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               transition={{ duration: 0.25 }}
               className="flex-1 flex flex-col justify-center min-h-0 py-2"
             >
-              <div className="text-left mb-6 shrink-0">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                  Step 2 • Target Exam
-                </div>
+              <div className="text-left mb-3 shrink-0">
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
                   Which exam are you preparing for?
                 </h1>
                 <p className="text-xs text-zinc-500 font-semibold mt-1">
-                  Type your target exam name below (AI will verify & fetch official subjects)
+                  AI will automatically curate your syllabus
                 </p>
               </div>
 
               {/* Clean Exam Type Box - NO LIST */}
-              <div className="space-y-3.5">
+              <div className="space-y-3">
                 {/* COMPACT ONE-TIME EXAM WARNING */}
-                <div className="py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs">
+                <div className="py-1.5 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
                   <p className="text-[11px] text-amber-900 font-bold leading-snug">
                     One-time setting. Cannot change later.
@@ -847,26 +851,17 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="p-3.5 rounded-2xl bg-red-50/90 border border-red-200 text-red-700 text-xs flex items-start gap-2.5 shadow-xs"
+                    className="p-3 rounded-2xl bg-red-50/90 border border-red-200 text-red-700 text-xs flex items-start gap-2.5 shadow-xs"
                   >
                     <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-black text-red-800">Exam Verification Notice</p>
-                      <p className="text-[11px] text-red-600 font-medium mt-0.5 leading-relaxed">
-                        {examError}
+                      <p className="font-black text-red-800 text-[11px]">Exam Not Found</p>
+                      <p className="text-[10px] text-red-600 font-medium mt-0.5 leading-snug">
+                        Could not verify this exam. Please check spelling or internet.
                       </p>
                     </div>
                   </motion.div>
                 )}
-
-                <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0 mt-0.5">
-                    <BookOpen className="w-3.5 h-3.5" />
-                  </div>
-                  <p className="text-[11px] text-zinc-500 font-medium leading-relaxed">
-                    AI will verify this exam and research its official syllabus papers to curate your exact subject selection.
-                  </p>
-                </div>
               </div>
             </motion.div>
           )}
@@ -881,21 +876,17 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               transition={{ duration: 0.25 }}
               className="flex-1 flex flex-col justify-center min-h-0 py-2"
             >
-              <div className="text-left mb-6 shrink-0">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
-                  <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
-                  Step 3 • Grade / Class Level
-                </div>
+              <div className="text-left mb-3 shrink-0">
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
                   What grade or class are you in?
                 </h1>
                 <p className="text-xs text-zinc-500 font-semibold mt-1">
-                  {targetExam ? `Curated classes & levels for ${targetExam}` : 'Customized for your academic level'}
+                  {targetExam ? `Classes for ${targetExam}` : 'Select your class level'}
                 </p>
               </div>
 
               {/* COMPACT ONE-TIME GRADE SELECTION WARNING */}
-              <div className="mb-3 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
+              <div className="mb-3 py-1.5 px-3 rounded-xl bg-amber-50 border border-amber-300/80 text-amber-950 flex items-center gap-2.5 shadow-2xs shrink-0">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 stroke-[2.5]" />
                 <p className="text-[11px] text-amber-900 font-bold leading-snug">
                   One-time setting. Cannot change later.
@@ -952,16 +943,12 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               transition={{ duration: 0.25 }}
               className="flex-1 flex flex-col justify-center min-h-0 py-2"
             >
-              <div className="text-left mb-6 shrink-0">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-3 text-[11px] font-extrabold">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                  Step 4 • Exam Syllabus
-                </div>
+              <div className="text-left mb-3 shrink-0">
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
                   {targetExam ? `Subjects for ${targetExam}` : 'Select your subjects'}
                 </h1>
                 <div className="flex items-center justify-between text-xs text-zinc-500 font-semibold mt-1">
-                  <span>Select all subjects you are preparing for:</span>
+                  <span>Choose your subjects:</span>
                   <span className="text-[11px] font-black text-purple-700 bg-purple-100/90 px-2.5 py-0.5 rounded-full border border-purple-200">
                     {selectedSubjectIds.length} Selected
                   </span>
@@ -1016,7 +1003,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                         >
                           <div className="bg-purple-50/70 border-2 border-purple-500/80 rounded-2xl p-3.5 shadow-sm">
                             <label className="text-[10px] font-black uppercase tracking-wider text-purple-700 block mb-1.5">
-                              Type Your Custom Subject Name(s)
+                              Custom Subject Name
                             </label>
                             <div className="flex items-center gap-2">
                               <BookOpen className="w-4 h-4 text-purple-600 shrink-0" />
@@ -1025,7 +1012,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                                 type="text"
                                 value={customSubject}
                                 onChange={(e) => setCustomSubject(e.target.value)}
-                                placeholder="e.g. Psychology, French, Art History, Law..."
+                                placeholder="e.g. Psychology, French, Law..."
                                 className="w-full bg-transparent text-xs font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none"
                                 autoFocus
                               />
@@ -1079,7 +1066,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               {isVerifyingExam ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                  <span>Verifying Exam with AI...</span>
+                  <span>Verifying Exam...</span>
                 </>
               ) : (
                 <>
@@ -1101,7 +1088,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         </div>
         {step === 4 && (
           <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
-            💡 You can update your subjects anytime inside your Profile menu
+            💡 Change subjects anytime in Profile
           </p>
         )}
       </div>

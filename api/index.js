@@ -1516,7 +1516,7 @@ ${examDirective}
         } else {
           try {
             const { default: pdf } = await import("pdf-parse/lib/pdf-parse.js");
-            const pdfData = await pdf(req.file.buffer);
+            const pdfData = await pdf(req.file.buffer, { max: 40 });
             extractedText = pdfData.text || "";
             if (extractedText.trim().length < 50) {
               if (bufferHeader.includes("%PDF")) {
@@ -1558,15 +1558,15 @@ ${examDirective}
     } else {
       extractedText = textInput;
     }
-    if (extractedText && extractedText.length > 8e4) {
+    if (extractedText && extractedText.length > 35e3) {
       console.log(`[summarize] Long PDF detected (${extractedText.length} chars). Applying multi-section chapter distillation for comprehensive coverage...`);
-      const introSlice = extractedText.slice(0, 3e4);
-      const conclusionSlice = extractedText.slice(-2e4);
-      const middleText = extractedText.slice(3e4, -2e4);
+      const introSlice = extractedText.slice(0, 15e3);
+      const conclusionSlice = extractedText.slice(-1e4);
+      const middleText = extractedText.slice(15e3, -1e4);
       let middleSamples = "";
-      if (middleText.length > 4e4) {
-        const chunkSize = 8e3;
-        const totalChunks = 5;
+      if (middleText.length > 1e4) {
+        const chunkSize = 3500;
+        const totalChunks = 3;
         const step = Math.floor((middleText.length - chunkSize) / totalChunks);
         for (let i = 0; i < totalChunks; i++) {
           const start = i * step;
@@ -4219,13 +4219,28 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
    - Use '$$...$$' on separate lines for standalone equations or multi-step derivations.
    This ensures crisp, beautiful KaTeX rendering for the student.
 4. Ensure there is a blank line before and after every heading and list block.`;
+    let textToProcess = trimmedText;
+    if (textToProcess.length > 35e3) {
+      console.log(`[summarize-text] Long text detected (${textToProcess.length} chars). Distilling to high-yield sections...`);
+      const intro = textToProcess.slice(0, 15e3);
+      const conclusion = textToProcess.slice(-1e4);
+      const middle = textToProcess.slice(15e3, -1e4);
+      let middleExcerpts = "";
+      if (middle.length > 1e4) {
+        const step = Math.floor(middle.length / 3);
+        middleExcerpts = "\n\n--- [MIDDLE SECTION EXCERPTS] ---\n" + middle.slice(0, 3500) + "\n\n..." + middle.slice(step, step + 3500) + "\n\n..." + middle.slice(step * 2, step * 2 + 3500);
+      } else {
+        middleExcerpts = middle;
+      }
+      textToProcess = `${intro}${middleExcerpts}
+
+--- [FINAL SECTIONS & SUMMARY] ---
+${conclusion}`;
+    }
     const textSumModels = [
       "gemini-flash-lite-latest",
-      "gemini-flash-lite-latest",
-      "gemini-flash-lite-latest",
-      "gemini-flash-lite-latest",
-      "gemini-3.5-flash",
-      "gemini-flash-lite-latest"
+      "gemini-3.1-flash-lite",
+      "gemini-3.5-flash-lite"
     ];
     let textSummaryResult = "";
     let textSumError = null;
@@ -4237,7 +4252,8 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
           country,
           profileContext,
           model,
-          contents: { parts: [{ text: trimmedText }] },
+          timeoutMs: 4e4,
+          contents: { parts: [{ text: textToProcess }] },
           config: { systemInstruction: { parts: [{ text: systemInstruction }] }, maxOutputTokens: 2500, temperature: 0.3 }
         });
         textSummaryResult = response.text || "";

@@ -15,6 +15,7 @@ import SafePdfViewer from './SafePdfViewer';
 import { getApiUrl } from '../utils/api';
 import { Capacitor } from '@capacitor/core';
 import { pickNativeFiles } from '../utils/mobilePicker';
+import { extractTextFromPdf } from '../utils/pdfExtractor';
 
 interface SummariserProps {
   onBack: () => void;
@@ -314,8 +315,8 @@ export default function Summariser({ onBack }: SummariserProps) {
       return;
     }
 
-    if (file.size > 30 * 1024 * 1024) {
-      setError("File is too large! Please select a document smaller than 30MB.");
+    if (file.size > 35 * 1024 * 1024) {
+      setError("File is too large! Please select a document smaller than 35MB.");
       triggerVibration(20);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
@@ -329,40 +330,99 @@ export default function Summariser({ onBack }: SummariserProps) {
       return;
     }
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setError(null);
     setResult(null);
     setSaved(false);
-    
-    const formData = new FormData();
-    appendProfileToFormData(formData);
-    formData.append('pdf', file);
-    formData.append('action', 'summarize');
-    formData.append('format', format);
-    
+
     try {
-      const response = await fetch(getApiUrl('/api/summarize'), {
-        method: 'POST',
-        body: formData
-      });
-      if (!response.ok) {
-        const errText = await response.text();
-        let errMsg = 'Failed to summarize file';
+      const fileNameLower = (file.name || '').toLowerCase();
+      const isPdf = fileNameLower.endsWith('.pdf') || (file.type && file.type.includes('pdf'));
+      let extractedText = '';
+
+      if (isPdf) {
         try {
-          const parsed = JSON.parse(errText);
-          errMsg = parsed.error || parsed.message || errMsg;
-        } catch (_) {
-          errMsg = errText.substring(0, 150) || errMsg;
+          // On-device high-speed PDF text extraction (processes 50 pages in ~1s)
+          // Completely avoids 4.5MB Vercel serverless request body limits & upload timeouts
+          const pdfRes = await extractTextFromPdf(file, 50);
+          if (pdfRes.text && pdfRes.text.trim().length >= 50) {
+            extractedText = pdfRes.text.trim();
+          }
+        } catch (pdfErr) {
+          console.warn("[Summariser] On-device PDF text extraction fallback:", pdfErr);
         }
-        throw new Error(errMsg);
       }
-      const sumContentType3 = response.headers.get("content-type") || "";
-      if (!sumContentType3.includes("application/json")) {
-        throw new Error("Server returned invalid response format");
+
+      let summaryDataText = '';
+
+      if (extractedText && extractedText.length >= 50) {
+        // Fast-path: On-device text extraction succeeded!
+        // Sends lightweight JSON payload (~50KB instead of 20MB raw PDF).
+        const response = await fetch(getApiUrl('/api/summarize-text'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(getProfilePayload({
+            text: extractedText,
+            format,
+          })),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          let errMsg = 'Failed to summarize document';
+          try {
+            const parsed = JSON.parse(errText);
+            errMsg = parsed.error || parsed.message || errMsg;
+          } catch (_) {
+            errMsg = errText.substring(0, 150) || errMsg;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        summaryDataText = data.text;
+      } else {
+        // Fallback: Scanned PDF or non-PDF binary upload
+        const formData = new FormData();
+        appendProfileToFormData(formData);
+        formData.append('pdf', file);
+        formData.append('action', 'summarize');
+        formData.append('format', format);
+
+        const response = await fetch(getApiUrl('/api/summarize'), {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          let errMsg = 'Failed to summarize file';
+          try {
+            const parsed = JSON.parse(errText);
+            errMsg = parsed.error || parsed.message || errMsg;
+          } catch (_) {
+            errMsg = errText.substring(0, 150) || errMsg;
+          }
+          throw new Error(errMsg);
+        }
+
+        const sumContentType3 = response.headers.get("content-type") || "";
+        if (!sumContentType3.includes("application/json")) {
+          throw new Error("Server returned invalid response format");
+        }
+        const data = await response.json();
+        summaryDataText = data.text;
       }
-      const data = await response.json();
-      
-      if (!data.text) {
+
+      if (!summaryDataText) {
         throw new Error("No summary generated from this document. Please check the file content.");
       }
 
@@ -370,17 +430,25 @@ export default function Summariser({ onBack }: SummariserProps) {
 
       // Deduct 1 coin now that the output has been successfully generated by the AI
       deductCoins(1, "File Summariser");
-      
-      setResult(data.text);
+
+      setResult(summaryDataText);
       setLoading(false);
       const docTitle = `File Summary (${format === 'tldr' ? 'TL;DR' : format === 'eli5' ? 'ELI5' : 'Bullets'}) - ${file.name}`;
       setCurrentActiveTitle(docTitle);
-      autoSaveSummaryToPocket(docTitle, data.text).catch(e => console.error("Auto-save failed", e));
+      autoSaveSummaryToPocket(docTitle, summaryDataText).catch(e => console.error("Auto-save failed", e));
     } catch (err: any) {
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        return;
+      }
       console.error("File summarization error:", err);
-      setError(err?.message || 'Oops! Something went wrong on our end. Please try again.');
+      let userFriendlyError = err?.message || 'Oops! Something went wrong on our end. Please try again.';
+      if (userFriendlyError === 'Failed to fetch' || userFriendlyError.includes('fetch')) {
+        userFriendlyError = 'Network or processing timed out while analyzing this large document. For multi-hundred-page textbooks, you can also paste the specific chapter or topic text directly for instant active recall.';
+      }
+      setError(userFriendlyError);
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };

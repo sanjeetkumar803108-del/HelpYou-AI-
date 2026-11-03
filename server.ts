@@ -4742,14 +4742,30 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
    This ensures crisp, beautiful KaTeX rendering for the student.
 4. Ensure there is a blank line before and after every heading and list block.`;
 
+    let textToProcess = trimmedText;
+    if (textToProcess.length > 35000) {
+      console.log(`[summarize-text] Long text detected (${textToProcess.length} chars). Distilling to high-yield sections...`);
+      const intro = textToProcess.slice(0, 15000);
+      const conclusion = textToProcess.slice(-10000);
+      const middle = textToProcess.slice(15000, -10000);
+      let middleExcerpts = "";
+      if (middle.length > 10000) {
+        const step = Math.floor(middle.length / 3);
+        middleExcerpts = "\n\n--- [MIDDLE SECTION EXCERPTS] ---\n" +
+          middle.slice(0, 3500) + "\n\n..." +
+          middle.slice(step, step + 3500) + "\n\n..." +
+          middle.slice(step * 2, step * 2 + 3500);
+      } else {
+        middleExcerpts = middle;
+      }
+      textToProcess = `${intro}${middleExcerpts}\n\n--- [FINAL SECTIONS & SUMMARY] ---\n${conclusion}`;
+    }
+
     // Model fallback chain for text summarize
     const textSumModels = [
       "gemini-flash-lite-latest",
-      "gemini-flash-lite-latest",
-      "gemini-flash-lite-latest",
-      "gemini-flash-lite-latest",
-      "gemini-3.5-flash",
-      "gemini-flash-lite-latest"
+      "gemini-3.1-flash-lite",
+      "gemini-3.5-flash-lite"
     ];
     let textSummaryResult = "";
     let textSumError: any = null;
@@ -4761,7 +4777,8 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
           country,
           profileContext,
           model,
-          contents: { parts: [{ text: trimmedText }] },
+          timeoutMs: 40000,
+          contents: { parts: [{ text: textToProcess }] },
           config: { systemInstruction: { parts: [{ text: systemInstruction }] }, maxOutputTokens: 2500, temperature: 0.3 }
         });
         textSummaryResult = response.text || "";

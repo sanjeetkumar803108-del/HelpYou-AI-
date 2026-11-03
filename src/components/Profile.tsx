@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   UserCircle, Settings, LogOut, X, Crown, Lock, Mail, Shield, 
   HelpCircle, Star, Bug, FileText, Trash2, ChevronRight, ChevronDown,
@@ -1340,8 +1341,8 @@ export default function Profile({
       </AnimatePresence>
 
       {/* Owner-Only 4-Step Academic Calibration Modal */}
-      {isOwnerTester && showOwnerAcademicSetup && (
-        <div className="fixed inset-0 z-[120]">
+      {isOwnerTester && showOwnerAcademicSetup && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-white">
           <AcademicSetup
             userId={auth.currentUser?.uid || user?.uid || ''}
             onComplete={() => {

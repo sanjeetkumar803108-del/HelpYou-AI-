@@ -44,7 +44,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "x-admin-secret", "x-webhook-secret"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "x-admin-secret", "x-webhook-secret", "x-user-id", "x-client-id", "x-device-id"],
+  exposedHeaders: ["X-Daily-Requests-Limit", "X-Daily-Requests-Used", "X-Daily-Requests-Remaining", "X-Daily-Reset-Date"]
 }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -57,6 +58,156 @@ var apiLimiter = rateLimit({
   validate: { xForwardedForHeader: false, default: false }
 });
 app.use("/api/", apiLimiter);
+var DAILY_LIMIT_MAX = 100;
+var DAILY_USAGE_FILE_PATH = process.env.VERCEL ? path.join("/tmp", "ai_daily_usage.json") : path.join(process.cwd(), "ai_daily_usage.json");
+var dailyUsageStore = /* @__PURE__ */ new Map();
+function loadDailyUsageStore() {
+  try {
+    if (fs.existsSync(DAILY_USAGE_FILE_PATH)) {
+      const raw = fs.readFileSync(DAILY_USAGE_FILE_PATH, "utf-8");
+      const data = JSON.parse(raw);
+      const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      for (const [key, record] of Object.entries(data)) {
+        if (record && record.date && Math.abs(new Date(record.date).getTime() - new Date(today).getTime()) <= 864e5 * 2) {
+          dailyUsageStore.set(key, record);
+        }
+      }
+      console.log(`[DailyLimit] Loaded ${dailyUsageStore.size} active quota records from disk.`);
+    }
+  } catch (err) {
+    console.error("[DailyLimit] Error reading daily usage file:", err);
+  }
+}
+loadDailyUsageStore();
+var saveDailyUsageTimeout = null;
+function scheduleSaveDailyUsage() {
+  if (saveDailyUsageTimeout) return;
+  saveDailyUsageTimeout = setTimeout(() => {
+    saveDailyUsageTimeout = null;
+    try {
+      const data = {};
+      const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      for (const [key, record] of dailyUsageStore.entries()) {
+        if (record && record.date && Math.abs(new Date(record.date).getTime() - new Date(today).getTime()) <= 864e5 * 2) {
+          data[key] = record;
+        }
+      }
+      fs.writeFileSync(DAILY_USAGE_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+    } catch (err) {
+      console.error("[DailyLimit] Error saving daily usage to disk:", err);
+    }
+  }, 1e3);
+}
+function resolveClientIdentifier(req) {
+  const headerId = req.headers["x-user-id"] || req.headers["x-client-id"] || req.headers["x-device-id"];
+  if (typeof headerId === "string" && headerId.trim()) {
+    return headerId.trim();
+  }
+  if (req.query && typeof req.query.userId === "string" && req.query.userId.trim()) {
+    return req.query.userId.trim();
+  }
+  if (req.body && typeof req.body === "object") {
+    const bodyId = req.body.userId || req.body.user_id || req.body.uid || req.body.deviceId;
+    if (typeof bodyId === "string" && bodyId.trim()) {
+      return bodyId.trim();
+    }
+  }
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    const firstIp = forwarded.split(",")[0].trim();
+    if (firstIp) return "ip_" + firstIp.replace(/^::ffff:/, "");
+  }
+  const remoteIp = req.ip || req.socket.remoteAddress || "unknown_client";
+  return "ip_" + String(remoteIp).replace(/^::ffff:/, "");
+}
+var AI_GENERATION_ROUTES = /* @__PURE__ */ new Set([
+  "/api/scan",
+  "/api/scan-images",
+  "/api/scan-essay",
+  "/api/chat",
+  "/api/generate-quiz",
+  "/api/generate-pdf-quiz",
+  "/api/generate-image-quiz",
+  "/api/quiz-ai-help",
+  "/api/generate-flashcards",
+  "/api/generate-pdf-flashcards",
+  "/api/generate-ai-notes",
+  "/api/generate-questions",
+  "/api/generate-ap-questions",
+  "/api/ap-trap-radar",
+  "/api/evaluate-answer",
+  "/api/ap-tutor-explain",
+  "/api/generate-content",
+  "/api/grammar-enhance",
+  "/api/generate-trivia",
+  "/api/daily-trivia",
+  "/api/summarize",
+  "/api/summarize-text",
+  "/api/youtube-summary",
+  "/api/tts",
+  "/api/grade-essay",
+  "/api/grade-frq",
+  "/api/verify-and-research-exam",
+  "/api/deep-research-exam-blueprint",
+  "/api/verify-and-research-subject"
+]);
+var dailyAiRateLimiter = (req, res, next) => {
+  if (req.method === "OPTIONS") {
+    return next();
+  }
+  const cleanPath = req.originalUrl.split("?")[0].replace(/\/+$/, "").toLowerCase();
+  if (!AI_GENERATION_ROUTES.has(cleanPath)) {
+    return next();
+  }
+  const clientId = resolveClientIdentifier(req);
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  let record = dailyUsageStore.get(clientId);
+  if (!record || record.date !== today) {
+    record = {
+      date: today,
+      count: 0,
+      lastUpdated: Date.now()
+    };
+    dailyUsageStore.set(clientId, record);
+  }
+  res.setHeader("X-Daily-Requests-Limit", DAILY_LIMIT_MAX.toString());
+  res.setHeader("X-Daily-Requests-Used", record.count.toString());
+  res.setHeader("X-Daily-Requests-Remaining", Math.max(0, DAILY_LIMIT_MAX - record.count).toString());
+  res.setHeader("X-Daily-Reset-Date", today);
+  if (record.count >= DAILY_LIMIT_MAX) {
+    console.warn(`[DailyLimit] Blocked request for ${clientId}: reached ${record.count}/${DAILY_LIMIT_MAX} requests today.`);
+    return res.status(429).json({
+      error: "You have reached your daily limit of 100 AI study requests. Your limit resets at midnight! Please take a break and continue tomorrow \u{1F31F}",
+      isRateLimit: true,
+      isDailyLimit: true,
+      limit: DAILY_LIMIT_MAX,
+      used: record.count,
+      remaining: 0,
+      resetsAt: "midnight (00:00:00 UTC)"
+    });
+  }
+  record.count += 1;
+  record.lastUpdated = Date.now();
+  scheduleSaveDailyUsage();
+  res.setHeader("X-Daily-Requests-Used", record.count.toString());
+  res.setHeader("X-Daily-Requests-Remaining", Math.max(0, DAILY_LIMIT_MAX - record.count).toString());
+  next();
+};
+app.use("/api/", dailyAiRateLimiter);
+app.get("/api/daily-usage", (req, res) => {
+  const clientId = resolveClientIdentifier(req);
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const record = dailyUsageStore.get(clientId);
+  const used = record && record.date === today ? record.count : 0;
+  res.json({
+    userId: clientId,
+    date: today,
+    limit: DAILY_LIMIT_MAX,
+    used,
+    remaining: Math.max(0, DAILY_LIMIT_MAX - used),
+    resetsAt: "midnight (00:00:00 UTC)"
+  });
+});
 app.all(["/api/health", "/health", "/api/status"], (req, res) => {
   res.json({
     status: "ok",

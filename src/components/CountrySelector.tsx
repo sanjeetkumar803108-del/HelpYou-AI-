@@ -9,6 +9,7 @@ interface CountryOption {
 }
 
 const COUNTRIES: CountryOption[] = [
+  { id: 'in', name: 'India', flag: '🇮🇳', regionSystem: 'IN' },
   { id: 'us', name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
   { id: 'uk', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
   { id: 'ca', name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },

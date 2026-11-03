@@ -6,6 +6,7 @@ import { safeSetItem, safeGetItem } from '../utils/storage';
 import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { getApiUrl } from '../utils/api';
+import { resolveRealCountry } from '../utils/profile';
 
 interface AcademicSetupProps {
   userId: string;
@@ -14,6 +15,7 @@ interface AcademicSetupProps {
 }
 
 export const COUNTRIES = [
+  { id: 'IN', name: 'India', flag: '🇮🇳', regionSystem: 'IN' },
   { id: 'USA', name: 'United States', flag: '🇺🇸', regionSystem: 'USA' },
   { id: 'UK', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
   { id: 'CA', name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
@@ -72,7 +74,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
   const [selectedCountryId, setSelectedCountryId] = useState<string>(() => {
     const savedCountry = safeGetItem(`academic_country_${userId}`) || safeGetItem('academic_country');
     const matched = COUNTRIES.find(c => c.name === savedCountry || c.id === savedCountry);
-    return matched ? matched.id : (savedCountry && savedCountry !== 'United States' ? 'Other' : 'USA');
+    return matched ? matched.id : (savedCountry && savedCountry !== 'India' && savedCountry !== 'United States' ? 'Other' : 'IN');
   });
   const [customCountry, setCustomCountry] = useState<string>(() => {
     const savedCustom = (userId ? safeGetItem(`academic_custom_country_${userId}`) : null) || safeGetItem('academic_custom_country');
@@ -270,9 +272,12 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       setIsVerifyingExam(true);
 
       const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
-      const finalCountry = selectedCountryId === 'Other' 
+      let finalCountry = selectedCountryId === 'Other' 
         ? ((customCountry || '').trim() || 'Global') 
         : countryObj.name;
+      
+      // Auto-resolve real country if exam name unambiguously identifies national curriculum (e.g. NEET/JEE/CBSE -> India)
+      finalCountry = resolveRealCountry(finalCountry, customCountry, trimmed);
 
       try {
         const res = await fetch(getApiUrl('/api/verify-and-research-exam'), {
@@ -282,7 +287,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         });
 
         if (!res.ok) {
-          throw new Error("Failed to reach exam verification server");
+          const errData = await res.json().catch(() => null);
+          const msg = errData?.errorMessage || errData?.error || "Could not verify this exam with official records. Please try again.";
+          throw new Error(msg);
         }
 
         const data = await res.json();
@@ -298,6 +305,28 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         // 2. Exam is VALID: Set standardized title and researched subjects
         if (data.officialExamName) {
           setTargetExam(data.officialExamName);
+        }
+
+        // Seamlessly auto-sync country if exam belongs to a specific nation
+        if (data.detectedCountry) {
+          const matchedCountry = COUNTRIES.find(
+            c => c.name.toLowerCase() === data.detectedCountry.toLowerCase() || 
+                 c.id.toLowerCase() === data.detectedCountry.toLowerCase()
+          );
+          if (matchedCountry) {
+            setSelectedCountryId(matchedCountry.id);
+            safeSetItem('academic_country', matchedCountry.name);
+            if (userId) safeSetItem(`academic_country_${userId}`, matchedCountry.name);
+          } else if (data.detectedCountry !== 'Global') {
+            setSelectedCountryId('Other');
+            setCustomCountry(data.detectedCountry);
+            safeSetItem('academic_country', data.detectedCountry);
+            safeSetItem('academic_custom_country', data.detectedCountry);
+            if (userId) {
+              safeSetItem(`academic_country_${userId}`, data.detectedCountry);
+              safeSetItem(`academic_custom_country_${userId}`, data.detectedCountry);
+            }
+          }
         }
 
         if (Array.isArray(data.subjects) && data.subjects.length > 0) {
@@ -346,9 +375,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       } catch (err: any) {
         console.warn("[AcademicSetup] AI exam verification network error:", err);
         setIsVerifyingExam(false);
-        setExamError(err?.message && !err.message.includes('Failed to reach')
-          ? err.message
-          : "Could not verify this exam with official records. Please check your internet connection or verify the exam name and try again.");
+        setExamError(err?.message || "Could not verify this exam with official records. Please check your internet connection or verify the exam name and try again.");
         triggerVibration(25);
       }
       return;
@@ -855,9 +882,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                   >
                     <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-black text-red-800 text-[11px]">Exam Not Found</p>
+                      <p className="font-black text-red-800 text-[11px]">Exam Verification Notice</p>
                       <p className="text-[10px] text-red-600 font-medium mt-0.5 leading-snug">
-                        Could not verify this exam. Please check spelling or internet.
+                        {examError}
                       </p>
                     </div>
                   </motion.div>

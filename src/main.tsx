@@ -36,6 +36,42 @@ window.addEventListener('vite:preloadError', (event) => {
   window.location.reload();
 });
 
+// Global API interceptor to attach persistent x-user-id / device ID for daily quota tracking
+if (typeof window !== 'undefined' && window.fetch) {
+  const originalFetch = window.fetch;
+  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    try {
+      const urlStr = typeof input === 'string' ? input : (input instanceof Request ? input.url : input.toString());
+      if (urlStr.includes('/api/')) {
+        init = init ? { ...init } : {};
+        let userId = localStorage.getItem('last_logged_in_user');
+        if (!userId || !userId.trim()) {
+          userId = localStorage.getItem('help_you_client_id');
+          if (!userId) {
+            userId = 'client_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+            localStorage.setItem('help_you_client_id', userId);
+          }
+        }
+
+        if (init.headers instanceof Headers) {
+          if (!init.headers.has('x-user-id')) {
+            init.headers.set('x-user-id', userId);
+          }
+        } else if (Array.isArray(init.headers)) {
+          init.headers.push(['x-user-id', userId]);
+        } else if (typeof init.headers === 'object' && init.headers !== null) {
+          (init.headers as Record<string, string>)['x-user-id'] = userId;
+        } else {
+          init.headers = { 'x-user-id': userId };
+        }
+      }
+    } catch {
+      // Fail silently and proceed with standard fetch
+    }
+    return originalFetch.call(this, input, init);
+  };
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

@@ -828,7 +828,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         const text = await response.text();
         let errMsg = "Failed to generate questions";
         try {
-          errMsg = JSON.parse(text).error || errMsg;
+          const parsed = JSON.parse(text);
+          errMsg = parsed.message || parsed.error || errMsg;
         } catch (_) {}
         throw new Error(errMsg);
       }

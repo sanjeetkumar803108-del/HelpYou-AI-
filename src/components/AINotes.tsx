@@ -351,7 +351,10 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       if (!response.ok) {
         const text = await response.text();
         let errMsg = "Failed to generate notes. Please try again.";
-        try { errMsg = JSON.parse(text).error || errMsg; } catch (_) {}
+        try { 
+          const parsed = JSON.parse(text);
+          errMsg = parsed.message || parsed.error || errMsg; 
+        } catch (_) {}
         throw new Error(errMsg);
       }
 

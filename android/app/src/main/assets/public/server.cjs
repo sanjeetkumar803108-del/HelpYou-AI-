@@ -551,6 +551,44 @@ CRITICAL ANTI-GENERIC MANDATE:
 Do NOT output a generic, one-size-fits-all answer. Your tone, depth, vocabulary, and explanation complexity MUST authentically and recognizably reflect this specific student's grade (${gradeLevel || "Selected Level"}) and curriculum (${cleanCountry || "Standard"}).
 =======================================================`;
 }
+var NON_ACADEMIC_CHATTER_PATTERNS = [
+  /^(thik|theek|sahi|accha|acha|mast|badhiya)s*(hai|h|he)?(s*bhai|s*bro|s*yaar|s*sir)?$/i,
+  /\b(thik\s*hai|theek\s*hai|sahi\s*hai|accha\s*hai)\b/i,
+  /^(hello|hi|hey|bye|good\s*morning|good\s*night|good\s*evening)(\s*bhai|\s*bro|\s*yaar|\s*sir)?$/i,
+  /^(ok|okay|k|okk|okey|yup|nope|yes|no)(\s*bhai|\s*bro|\s*yaar)?$/i,
+  /^(test|testing|demo|check|trial|sample)(\s*\d+)?$/i,
+  /^(asdf|qwerty|zxcv|abc|xyz|123|000|aaa|bbb|ccc)/i,
+  /^(kuch\s*bhi|faltu|bakwas|bakwaas|nonsense|random|timepass|nothing|none)$/i,
+  /\b(kuch\s*bhi|timepass|bakwaas|faltu)\b/i,
+  /^(kya\s*hal|kaise\s*ho|what('?s)?\s*up|how\s*are\s*you|kya\s*chal\s*raha)$/i,
+  /^(lol|lmao|rofl|haha|hehe|xd|omg)$/i,
+  /^(bhai|bro|yaar|sir|madam|dost)$/i,
+  /^(mujhe\s*nahi\s*pata|pata\s*nahi|nahi\s*pata|kuch\s*nahi|dont\s*know|i\s*dont\s*know|idk|naah|nope)$/i,
+  /^(padhai\s*nahi\s*karni|bore\s*ho\s*raha|bore|boring)$/i,
+  /^(chalo|bye|goodbye|tata|see\s*you)$/i,
+  /^(what\s*to\s*do|what\s*is\s*this|who\s*are\s*you|kya\s*hai\s*ye)$/i,
+  /^([a-z])\1{3,}$/i
+];
+function isOffTopicOrChatter(rawTopic) {
+  if (!rawTopic || typeof rawTopic !== "string") {
+    return { isInvalid: true, reason: "Topic is missing." };
+  }
+  const clean = rawTopic.trim();
+  const parts = clean.split(/\s*[-–—:]\s*/).map((p) => p.trim()).filter(Boolean);
+  const target = parts.length >= 3 ? parts.slice(2).join(" - ") : parts.length === 2 ? parts[1] : clean;
+  if (target.length < 3) {
+    return { isInvalid: true, reason: "Topic name is too short. Please enter a valid academic concept." };
+  }
+  if (/^[\d\s\-_.,!?:;@#$%^&*()+=/\\|<>~`"'{}\[\]]+$/.test(target)) {
+    return { isInvalid: true, reason: "Topic contains only numbers or symbols. Please enter a real curriculum concept." };
+  }
+  for (const pat of NON_ACADEMIC_CHATTER_PATTERNS) {
+    if (pat.test(target)) {
+      return { isInvalid: true, reason: `"${target}" is casual conversational chatter/slang, not a valid academic topic. Please enter a relevant topic from this chapter.` };
+    }
+  }
+  return { isInvalid: false };
+}
 function getExamBlueprintDirective(exam, blueprint, subject) {
   if (!exam && !blueprint) return "";
   let details = "";
@@ -2448,6 +2486,10 @@ app.post("/api/generate-flashcards", async (req, res) => {
     const count = req.body.count;
     if (!text || !text.trim()) {
       return res.status(400).json({ error: "Missing text or topic" });
+    }
+    const topicGuard = isOffTopicOrChatter(text);
+    if (topicGuard.isInvalid) {
+      return res.status(400).json({ error: "INVALID_TOPIC", message: topicGuard.reason });
     }
     const hasExplicitCount = count !== void 0 && count !== null && count !== "" && !isNaN(parseInt(count));
     const requestedCount = hasExplicitCount ? Math.min(Math.max(parseInt(count) || 10, 1), 30) : null;
@@ -4391,6 +4433,10 @@ app.post("/api/generate-ai-notes", async (req, res) => {
   try {
     const subject = (req.body.subject || "General Science").trim();
     const chapter = (req.body.chapter || req.body.topic || "Core Principles").trim();
+    const topicGuard = isOffTopicOrChatter(chapter);
+    if (topicGuard.isInvalid) {
+      return res.status(400).json({ error: "INVALID_TOPIC", message: topicGuard.reason });
+    }
     const targetExam2 = (req.body.targetExam || req.body.exam || "Standardized Examination").trim();
     const gradeLevel = (req.body.gradeLevel || req.body.grade || "12th Grade").trim();
     const country = (req.body.country || "Global").trim();
@@ -4535,6 +4581,12 @@ Ensure that for Full Detailed Notes, NO concept, formula, or sub-topic is omitte
 app.post("/api/generate-questions", async (req, res) => {
   try {
     const topic = req.body.topic || req.body.prompt || req.body.text || "";
+    if (topic && topic.trim()) {
+      const topicGuard = isOffTopicOrChatter(topic);
+      if (topicGuard.isInvalid) {
+        return res.status(400).json({ error: "INVALID_TOPIC", message: topicGuard.reason });
+      }
+    }
     const gradeLevel = req.body.gradeLevel || req.body.userGrade || "10th Grade / Secondary";
     const count = req.body.count;
     const stream = req.body.stream;
@@ -6520,6 +6572,10 @@ app.post("/api/generate-quiz", async (req, res) => {
     const { topic, gradeLevel, stream, country, count } = req.body;
     if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
+    }
+    const topicGuard = isOffTopicOrChatter(topic);
+    if (topicGuard.isInvalid) {
+      return res.status(400).json({ error: "INVALID_TOPIC", message: topicGuard.reason });
     }
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;

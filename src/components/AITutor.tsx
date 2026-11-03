@@ -4,6 +4,7 @@ import { safeGetItem, safeSetItem } from "../utils/storage";
 import { getUserHistory, saveUserHistory, getCurrentUserIdentifier } from "../utils/userHistory";
 import { triggerVibration, hapticNotification, hapticImpact } from "../utils/vibrate";
 import { detectAndLogMistake } from "../utils/mistakes";
+import { trackQuestProgress } from '../utils/gamification';
 import { getCoins, deductCoins, isProUser } from "../utils/coins";
 import { requestMicrophonePermission } from "../utils/nativePermissions";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
@@ -1705,6 +1706,7 @@ Please evaluate this answer strictly according to your system rubric.`;
 
       // Auto-detect and log student misconceptions or common traps
       detectAndLogMistake('Chat', textToShow, finalAIResponseText).catch(e => console.error("Mistake auto-capture failed:", e));
+      try { trackQuestProgress('tutor', 1); } catch (_) {}
 
       // Clear contextual doubt state now that it has been sent
       setContextualDoubt(null);

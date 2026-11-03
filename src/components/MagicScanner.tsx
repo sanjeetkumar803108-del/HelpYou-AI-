@@ -441,6 +441,7 @@ export default function MagicScanner({ isVip, isFocused: isFocusedProp = true, o
       
       // Auto-detect and log student misconceptions or common traps in scanner responses
       detectAndLogMistake('Scan', newMsg, data.text).catch(e => console.error("Scanner mistake capture failed:", e));
+      try { trackQuestProgress('scanner', 1); } catch (_) {}
 
       const updatedMessages = [...messages, { role: 'user' as const, text: newMsg }, { role: 'model' as const, text: data.text }];
       setMessages(updatedMessages);

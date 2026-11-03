@@ -3,6 +3,7 @@ import { Sparkles, ArrowLeft, Mic, BookOpen, Calculator as CalcIcon, X, ChevronD
 import { motion, AnimatePresence } from 'motion/react';
 import katex from 'katex';
 import { triggerVibration } from '../utils/vibrate';
+import { trackQuestProgress } from '../utils/gamification';
 import UnitCircleVisualizer from './UnitCircleVisualizer';
 import { exportFormulaSheetPDF } from '../utils/formulaPdfExporter';
 
@@ -705,6 +706,7 @@ export default function Calculator({ onBack, onNavigateToTab }: CalculatorProps)
 
       let localCalculatedResult = '';
       let isAlgebra = expression.includes('x') || expression.includes('y') || expression.includes('=');
+      try { trackQuestProgress('calculator', 1); } catch (_) {}
 
       if (!isAlgebra) {
         try {

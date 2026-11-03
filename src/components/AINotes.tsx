@@ -13,6 +13,7 @@ import { getScalableRelevantQuizzes } from '../utils/curriculumMap';
 import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached } from '../utils/communityCache';
 import { triggerVibration } from '../utils/vibrate';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
+import { trackQuestProgress } from '../utils/gamification';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getApiUrl } from '../utils/api';
 import GlobalMarkdown, { formatNotesMath, formatFormulaBoxContent } from './GlobalMarkdown';
@@ -340,6 +341,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
         setLoadingProgress(100);
         setNotesData(cachedHit.content);
         setLoading(false);
+        try { trackQuestProgress('notes', 1); } catch (_) {}
         triggerVibration(30);
         if (!isVip) {
           deductCoins(2, "AI Topper Handwritten Notes");
@@ -373,6 +375,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       const data: AINotesData = await response.json();
       setLoadingProgress(100);
       setNotesData(data);
+      try { trackQuestProgress('notes', 1); } catch (_) {}
 
       // Save newly generated notes into Global Community Cache
       saveCachedCurriculumContent({

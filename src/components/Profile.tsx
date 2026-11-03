@@ -2346,6 +2346,7 @@ export default function Profile({
                             if (!isVip) {
                               addCoins(quest.coinReward, `Completed ${quest.title}! 🎯`);
                             }
+                            showToast(`🎉 ${quest.title} Complete! +${quest.xpReward} XP & +${quest.coinReward} Coins. Mission restarted!`, 'success');
                           }}
                           className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-[10px] rounded-xl shadow-sm hover:from-purple-700 hover:to-indigo-700 transition-all active:scale-95 cursor-pointer border-none"
                         >

@@ -253,16 +253,59 @@ export function addStudyXP(
 }
 
 /**
- * Fetch all Weekly Quests with real user progress
+ * Fetch all Weekly Quests with repeatable user progress (auto-restarting once completed)
  */
 export function getWeeklyQuests(): Quest[] {
-  const scanCount = parseInt(safeGetItem('study_quest_scan_count') || '0', 10);
-  const calcCount = parseInt(safeGetItem('study_quest_calc_count') || '0', 10);
-  const noteCount = parseInt(safeGetItem('study_quest_note_count') || '0', 10);
+  const scanCount = parseInt(safeGetItem('study_quest_scan_count') || safeGetItem('study_quest_scanner_count') || '0', 10);
+  const calcCount = parseInt(safeGetItem('study_quest_calc_count') || safeGetItem('study_quest_calculator_count') || '0', 10);
+  const noteCount = parseInt(safeGetItem('study_quest_note_count') || safeGetItem('study_quest_notes_count') || '0', 10);
   const tutorCount = parseInt(safeGetItem('study_quest_tutor_count') || '0', 10);
-  const streakCount = parseInt(safeGetItem('study_punches') || '0', 10);
+
+  const rawStreak = parseInt(safeGetItem('study_punches') || '0', 10);
+  let streakBaseline = parseInt(safeGetItem('study_quest_streak_baseline') || '0', 10);
+  if (rawStreak < streakBaseline) {
+    streakBaseline = 0;
+    safeSetItem('study_quest_streak_baseline', '0');
+  }
 
   const claimedQuests = safeJsonParse<Record<string, boolean>>(safeGetItem('study_claimed_quests'), {});
+
+  // Auto-restart any mission that was previously stuck in 'Done' / claimed state
+  let claimedModified = false;
+  if (claimedQuests['quest_streak_3']) {
+    delete claimedQuests['quest_streak_3'];
+    streakBaseline = rawStreak;
+    safeSetItem('study_quest_streak_baseline', String(rawStreak));
+    claimedModified = true;
+  }
+  if (claimedQuests['quest_scan_3']) {
+    delete claimedQuests['quest_scan_3'];
+    safeSetItem('study_quest_scan_count', '0');
+    safeSetItem('study_quest_scanner_count', '0');
+    claimedModified = true;
+  }
+  if (claimedQuests['quest_calc_5']) {
+    delete claimedQuests['quest_calc_5'];
+    safeSetItem('study_quest_calc_count', '0');
+    safeSetItem('study_quest_calculator_count', '0');
+    claimedModified = true;
+  }
+  if (claimedQuests['quest_notes_2']) {
+    delete claimedQuests['quest_notes_2'];
+    safeSetItem('study_quest_note_count', '0');
+    safeSetItem('study_quest_notes_count', '0');
+    claimedModified = true;
+  }
+  if (claimedQuests['quest_tutor_3']) {
+    delete claimedQuests['quest_tutor_3'];
+    safeSetItem('study_quest_tutor_count', '0');
+    claimedModified = true;
+  }
+  if (claimedModified) {
+    safeSetItem('study_claimed_quests', JSON.stringify(claimedQuests));
+  }
+
+  const effectiveStreak = Math.max(0, rawStreak - streakBaseline);
 
   const quests: Quest[] = [
     {
@@ -276,7 +319,7 @@ export function getWeeklyQuests(): Quest[] {
       targetCount: 3,
       currentCount: Math.min(3, scanCount),
       isCompleted: scanCount >= 3,
-      isClaimed: !!claimedQuests['quest_scan_3']
+      isClaimed: false
     },
     {
       id: 'quest_calc_5',
@@ -289,7 +332,7 @@ export function getWeeklyQuests(): Quest[] {
       targetCount: 3,
       currentCount: Math.min(3, calcCount),
       isCompleted: calcCount >= 3,
-      isClaimed: !!claimedQuests['quest_calc_5']
+      isClaimed: false
     },
     {
       id: 'quest_notes_2',
@@ -302,7 +345,7 @@ export function getWeeklyQuests(): Quest[] {
       targetCount: 2,
       currentCount: Math.min(2, noteCount),
       isCompleted: noteCount >= 2,
-      isClaimed: !!claimedQuests['quest_notes_2']
+      isClaimed: false
     },
     {
       id: 'quest_tutor_3',
@@ -315,7 +358,7 @@ export function getWeeklyQuests(): Quest[] {
       targetCount: 3,
       currentCount: Math.min(3, tutorCount),
       isCompleted: tutorCount >= 3,
-      isClaimed: !!claimedQuests['quest_tutor_3']
+      isClaimed: false
     },
     {
       id: 'quest_streak_3',
@@ -326,9 +369,9 @@ export function getWeeklyQuests(): Quest[] {
       icon: '🔥',
       category: 'streak',
       targetCount: 3,
-      currentCount: Math.min(3, streakCount),
-      isCompleted: streakCount >= 3,
-      isClaimed: !!claimedQuests['quest_streak_3']
+      currentCount: Math.min(3, effectiveStreak),
+      isCompleted: effectiveStreak >= 3,
+      isClaimed: false
     }
   ];
 
@@ -339,25 +382,70 @@ export function getWeeklyQuests(): Quest[] {
  * Increment quest progress for an activity
  */
 export function trackQuestProgress(category: 'scanner' | 'calculator' | 'notes' | 'tutor', amount = 1) {
-  const key = `study_quest_${category}_count`;
-  const current = parseInt(safeGetItem(key) || '0', 10);
-  safeSetItem(key, String(current + amount));
+  let key = `study_quest_${category}_count`;
+  let altKey = '';
+  if (category === 'scanner') {
+    key = 'study_quest_scan_count';
+    altKey = 'study_quest_scanner_count';
+  } else if (category === 'calculator') {
+    key = 'study_quest_calc_count';
+    altKey = 'study_quest_calculator_count';
+  } else if (category === 'notes') {
+    key = 'study_quest_note_count';
+    altKey = 'study_quest_notes_count';
+  } else if (category === 'tutor') {
+    key = 'study_quest_tutor_count';
+  }
+
+  const current = parseInt(safeGetItem(key) || (altKey ? safeGetItem(altKey) : '') || '0', 10);
+  const updated = current + amount;
+  safeSetItem(key, String(updated));
+  if (altKey) safeSetItem(altKey, String(updated));
+
   window.dispatchEvent(new CustomEvent('study-quests-updated'));
 }
 
 /**
- * Claim quest reward
+ * Claim quest reward and immediately restart the completed mission
  */
 export function claimQuestReward(questId: string): boolean {
   const quests = getWeeklyQuests();
   const quest = quests.find(q => q.id === questId);
-  if (!quest || !quest.isCompleted || quest.isClaimed) return false;
+  if (!quest || !quest.isCompleted) return false;
 
-  const claimedQuests = safeJsonParse<Record<string, boolean>>(safeGetItem('study_claimed_quests'), {});
-  claimedQuests[questId] = true;
-  safeSetItem('study_claimed_quests', JSON.stringify(claimedQuests));
-
+  // 1. Award study XP
   addStudyXP(quest.xpReward, quest.title);
+
+  // 2. Immediately restart the completed mission for the next cycle
+  if (quest.category === 'scanner') {
+    const rawVal = parseInt(safeGetItem('study_quest_scan_count') || safeGetItem('study_quest_scanner_count') || '0', 10);
+    const nextVal = Math.max(0, rawVal - quest.targetCount);
+    safeSetItem('study_quest_scan_count', String(nextVal));
+    safeSetItem('study_quest_scanner_count', String(nextVal));
+  } else if (quest.category === 'calculator') {
+    const rawVal = parseInt(safeGetItem('study_quest_calc_count') || safeGetItem('study_quest_calculator_count') || '0', 10);
+    const nextVal = Math.max(0, rawVal - quest.targetCount);
+    safeSetItem('study_quest_calc_count', String(nextVal));
+    safeSetItem('study_quest_calculator_count', String(nextVal));
+  } else if (quest.category === 'notes') {
+    const rawVal = parseInt(safeGetItem('study_quest_note_count') || safeGetItem('study_quest_notes_count') || '0', 10);
+    const nextVal = Math.max(0, rawVal - quest.targetCount);
+    safeSetItem('study_quest_note_count', String(nextVal));
+    safeSetItem('study_quest_notes_count', String(nextVal));
+  } else if (quest.category === 'tutor') {
+    const rawVal = parseInt(safeGetItem('study_quest_tutor_count') || '0', 10);
+    const nextVal = Math.max(0, rawVal - quest.targetCount);
+    safeSetItem('study_quest_tutor_count', String(nextVal));
+  } else if (quest.category === 'streak') {
+    // For streak: advance baseline by 3 or to current streak so next 3 days are required
+    const rawStreak = parseInt(safeGetItem('study_punches') || '0', 10);
+    safeSetItem('study_quest_streak_baseline', String(rawStreak));
+  }
+
+  // Ensure claimedQuests does not permanently lock the quest as Done
+  const claimedQuests = safeJsonParse<Record<string, boolean>>(safeGetItem('study_claimed_quests'), {});
+  delete claimedQuests[questId];
+  safeSetItem('study_claimed_quests', JSON.stringify(claimedQuests));
 
   triggerVibration(20);
   try {

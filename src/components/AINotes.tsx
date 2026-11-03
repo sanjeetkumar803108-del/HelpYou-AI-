@@ -105,6 +105,14 @@ interface SavedNoteItem {
   data: AINotesData;
 }
 
+const NOTES_LOADING_STEPS = [
+  'Syllabus Calibration...',
+  'Concept Trees & Analogies...',
+  'Comparison Tables & Formulas...',
+  'Exam Traps & Crucial Cases...',
+  'Handwritten Notes Rendering...'
+];
+
 export default function AINotes({ onBack, isVip = false }: AINotesProps) {
   const profile = getUserProfileData();
   const targetExam = profile.targetExam || 'Official Examination';
@@ -142,8 +150,8 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
   const [customInputError, setCustomInputError] = useState<{ [chapterKey: string]: string }>({});
   const [noteDepth, setNoteDepth] = useState<'detailed' | 'revision'>('detailed');
   const [loading, setLoading] = useState<boolean>(false);
-  const [loadingStage, setLoadingStage] = useState<number>(1);
-  const [stageMessage, setStageMessage] = useState<string>('');
+  const [loadingProgress, setLoadingProgress] = useState<number>(0);
+  const [loadingStep, setLoadingStep] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [notesData, setNotesData] = useState<AINotesData | null>(null);
   const [historyItems, setHistoryItems] = useState<SavedNoteItem[]>(() => {
@@ -157,6 +165,39 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
   });
   const [syncingCloud, setSyncingCloud] = useState<boolean>(false);
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
+
+  // Smooth progress increment & sequential step cycling (1 by 1)
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (loading && !notesData) {
+      setLoadingProgress(0);
+      setLoadingStep(0);
+      interval = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (prev >= 96) {
+            return Math.min(Math.round((prev + 0.05) * 10) / 10, 97);
+          }
+          let inc = 1.0;
+          if (prev < 25) inc = 1.6;
+          else if (prev < 50) inc = 1.1;
+          else if (prev < 75) inc = 0.7;
+          else if (prev < 90) inc = 0.35;
+          else inc = 0.12;
+
+          const nextVal = Math.min(Math.round((prev + inc) * 10) / 10, 96);
+          const stepIndex = Math.min(
+            Math.floor((nextVal / 96) * NOTES_LOADING_STEPS.length),
+            NOTES_LOADING_STEPS.length - 1
+          );
+          setLoadingStep(stepIndex);
+          return nextVal;
+        });
+      }, 300);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [loading, notesData]);
 
   // Cross-Device Cloud Sync: Fetch user's saved notes from Cloud Firestore
   const fetchCloudNotes = async (targetUid?: string) => {
@@ -277,30 +318,9 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
 
     setError(null);
     setLoading(true);
-    setLoadingStage(1);
-    setStageMessage(`Connecting to official ${targetExam} syllabus registry...`);
+    setLoadingProgress(0);
+    setLoadingStep(0);
     triggerVibration(15);
-
-    // 5-Stage Live radar progression animation
-    const t1 = setTimeout(() => {
-      setLoadingStage(2);
-      setStageMessage(`Calibrating ${selectedSubject} chapters, definitions & core formulas...`);
-    }, 1200);
-
-    const t2 = setTimeout(() => {
-      setLoadingStage(3);
-      setStageMessage(`Designing visual concept map flowchart & real-world memory tricks...`);
-    }, 2500);
-
-    const t3 = setTimeout(() => {
-      setLoadingStage(4);
-      setStageMessage(`Extracting #1 crucial exam traps & practical numerical case study...`);
-    }, 4000);
-
-    const t4 = setTimeout(() => {
-      setLoadingStage(5);
-      setStageMessage(`Rendering handwritten lined notebook paper pages... ✓`);
-    }, 5500);
 
     try {
       // Check Global Community Cache first (Instant 0ms / 0 API cost)
@@ -317,10 +337,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       });
 
       if (cachedHit && cachedHit.content && Array.isArray(cachedHit.content.pages) && cachedHit.content.pages.length > 0) {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-        clearTimeout(t4);
+        setLoadingProgress(100);
         setNotesData(cachedHit.content);
         setLoading(false);
         triggerVibration(30);
@@ -343,11 +360,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
         }))
       });
 
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-
       if (!response.ok) {
         const text = await response.text();
         let errMsg = "Failed to generate notes. Please try again.";
@@ -359,6 +371,7 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       }
 
       const data: AINotesData = await response.json();
+      setLoadingProgress(100);
       setNotesData(data);
 
       // Save newly generated notes into Global Community Cache
@@ -429,11 +442,8 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       }
 
     } catch (err: any) {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
       setLoading(false);
+      setLoadingProgress(0);
       setError(err?.message || "Generation encountered an issue. Please try again.");
       triggerVibration(25);
     }
@@ -547,63 +557,55 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 print:p-0">
         
-        {/* Loading Radar Animation */}
+        {/* Clean & Simple Generating Animation */}
         {loading ? (
-          <div className="no-print my-auto flex flex-col items-center justify-center max-w-sm mx-auto text-center py-12">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="no-print my-auto flex-1 flex flex-col items-center justify-center py-12 px-4 text-center max-w-md mx-auto w-full"
+          >
+            {/* Glowing Icon */}
             <div className="relative mb-6">
-              <div className="w-20 h-20 rounded-full border-4 border-amber-200 border-t-amber-500 animate-spin flex items-center justify-center shadow-lg" />
-              <div className="absolute inset-0 flex items-center justify-center text-2xl animate-pulse">
-                📓
+              <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-2xl animate-pulse" />
+              <div className="relative w-20 h-20 bg-gradient-to-tr from-amber-500 via-orange-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-xl shadow-amber-500/20 text-white">
+                <BookOpen className="w-10 h-10 animate-pulse" />
               </div>
             </div>
 
-            <h3 className="font-black text-base text-zinc-900 mb-2">
-              Generating Toppers Handwritten Notes
+            {/* Title */}
+            <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">
+              Generating Topper Notes...
             </h3>
 
-            {/* Radar Stage Checklist */}
-            <div className="w-full space-y-2 mt-4 text-left">
-              {[
-                { num: 1, label: 'Official Syllabus Calibration', desc: `Aligning with ${targetExam} official criteria` },
-                { num: 2, label: 'Concept Tree & Analogies', desc: 'Synthesizing visual flowcharts & memory tricks' },
-                { num: 3, label: 'Comparison Tables & Formulas', desc: 'Curating contrast metrics & LaTeX equations' },
-                { num: 4, label: 'Exam Traps & Numerical Cases', desc: 'Pinpointing high-frequency examiner traps' },
-                { num: 5, label: 'Handwritten Paper Rendering', desc: 'Crafting ruled lined notebook format' }
-              ].map((st) => {
-                const isDone = loadingStage > st.num || (loadingStage === 5 && st.num === 5);
-                const isCurrent = loadingStage === st.num && loadingStage < 5;
-                return (
-                  <div 
-                    key={st.num}
-                    className={`p-2.5 rounded-xl border text-xs flex items-center gap-3 transition-all ${
-                      isDone 
-                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                        : isCurrent
-                        ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-500/10 text-amber-950 font-black'
-                        : 'bg-zinc-50 border-zinc-200 text-zinc-400 opacity-60'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                      isDone ? 'bg-emerald-600 text-white' : isCurrent ? 'bg-amber-500 text-white' : 'bg-zinc-200 text-zinc-500'
-                    }`}>
-                      {isDone ? <Check className="w-3 h-3 stroke-[3]" /> : isCurrent ? <Loader2 className="w-3 h-3 animate-spin" /> : st.num}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-black">{st.label}</p>
-                      <p className="text-[10px] text-zinc-500 truncate">{st.desc}</p>
-                    </div>
-                  </div>
-                );
-              })}
+            {/* Single dynamic short step line displayed one-by-one */}
+            <div className="h-6 mb-6 flex items-center justify-center overflow-hidden">
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={loadingStep}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-amber-600 font-black text-xs tracking-wider uppercase"
+                >
+                  {NOTES_LOADING_STEPS[loadingStep]}
+                </motion.p>
+              </AnimatePresence>
             </div>
 
-            <div className="p-3 bg-zinc-950 text-white rounded-xl text-center w-full mt-4">
-              <p className="text-[11px] font-bold text-zinc-200 flex items-center justify-center gap-2">
-                <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                {stageMessage}
-              </p>
+            {/* Clean Progress Bar */}
+            <div className="w-full bg-zinc-200/80 rounded-full h-3 mb-3 overflow-hidden border border-zinc-200 p-[2px]">
+              <div 
+                className="bg-gradient-to-r from-amber-500 via-orange-500 to-purple-600 h-full rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${loadingProgress}%` }}
+              />
             </div>
-          </div>
+            
+            {/* Percentage */}
+            <div className="text-xs font-black text-zinc-400 tracking-wider uppercase">
+              {Math.round(loadingProgress)}% Ready
+            </div>
+          </motion.div>
         ) : !notesData ? (
 
           /* STEP 1: CONFIGURATION & CHAPTER SELECTION SCREEN */

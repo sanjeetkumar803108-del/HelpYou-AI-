@@ -820,8 +820,10 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
             explanation: curQ.explanation,
             mode: targetMode,
             gradeLevel: profile.gradeLevel,
-            stream: profile.stream,
-            country: profile.country
+            stream: profile.stream || profile.subject,
+            country: profile.country,
+            targetExam: profile.targetExam || profile.exam || safeGetItem('academic_exam') || safeGetItem('target_exam') || 'NEET',
+            subject: cleanSubjectTitle(topic || profile.subject || 'Physics')
           })
         });
 
@@ -835,79 +837,40 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
         console.warn("Dedicated quiz-ai-help unavailable, trying universal AI route...", e);
       }
 
-      // Layer 2: Fallback to universal /api/chat endpoint (works 100% across remote and local servers)
+      // Layer 2: Fallback to universal /api/chat endpoint (wrapped safely in try/catch)
       if (!explanationText) {
-        const isHint = targetMode === 'hint';
-        const sysInstruction = `You are an elite SAT/AP/Olympiad Master Coach and Professor.
+        try {
+          const isHint = targetMode === 'hint';
+          const sysInstruction = `You are an elite SAT/AP/Olympiad Master Coach and Professor.
 A student is answering a multiple-choice question and clicked ${isHint ? '"Explain Question & Hint"' : '"Explain Step-by-Step Answer"'}.
+Provide an in-depth breakdown formatted in Markdown.`;
 
-CRITICAL PEDAGOGICAL MANDATE:
-1. ${isHint 
-     ? `DO NOT reveal the final correct option or direct answer!
-Structure your response in rich, clean Markdown with these exact sections:
-### 🎯 What This Question Is Asking
-Break down the problem in simple, encouraging terms. Explain what scenario is being described, what the question is asking you to solve or identify, and why this concept matters.
-### 🔑 Core Concepts & Key Mechanism
-Explain the foundational concept, biological pathway, chemical mechanism, historical context, or mathematical theorem involved.
-### 💡 Guided Progressive Hints
-- **Hint 1 (Starting Point):** A gentle conceptual clue to get started.
-- **Hint 2 (Critical Connection):** Connect the key mechanism to the terms in the choices.
-- **Hint 3 (Elimination Clue):** What common trap or confusion should they avoid? How can they eliminate wrong distractors?`
-     : `Deliver an exhaustive, comprehensive, master-tier explanation.
-Structure your response in rich, clean Markdown with these exact sections:
-### 🎯 Correct Answer & Comprehensive Summary
-State the official correct answer clearly, with an executive summary explaining why it is 100% correct.
-### 📝 In-Depth Step-by-Step Breakdown & Mechanism
-Provide a thorough, step-by-step conceptual walkthrough or mathematical derivation. Explain the underlying biological mechanism, chemical pathway, historical context, or mathematical working in complete detail.
-### ❌ Why the Other Options Are Incorrect
-Break down the wrong options and explain specifically why they fail or represent common exam misconceptions.
-### 💡 High-Yield Exam Tip & Pitfall
-Provide an exam-tested mnemonic, trap alert, or key takeaway specifically tailored to this exact subject and topic.`}
+          const userPrompt = `Question: ${curQ.question}
+Options: ${Array.isArray(curQ.options) ? curQ.options.join(', ') : curQ.options}
+Correct Option: ${curQ.correctAnswer || 'N/A'}
+${curQ.explanation ? `Context: ${curQ.explanation}` : ''}
+Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.' : 'Give complete step-by-step solution.'}`;
 
-2. MATHEMATICAL FORMULAS & SCIENTIFIC NOTATION (STRICT KA-TEX RULES):
-   - CRITICAL: EVERY single mathematical formula, derivation step, variable, equation, number with units, and chemical symbol MUST be fully enclosed in LaTeX dollar signs ($...$ for inline or $$...$$ for display blocks).
-   - NEVER output raw un-bracketed LaTeX syntax (such as \\frac, \\sqrt, \\cos, \\sin, \\text{}, \\cdot, \\theta, \\circ) without enclosing dollar signs ($...$).
-   - NEVER leave unmatched or dangling dollar signs (e.g. NEVER write 'gives: v_{0x}=...$' with an unclosed '$').
-   - When writing equations after colons or introductory text, ALWAYS wrap the entire equation in dollar signs: e.g. 'gives: $v_{0x} = v_0 \\cos(\\theta)$', NEVER 'gives: v_{0x}=...$'.
-   - When explaining options, wrap all math and units: e.g. '• A) $10\\text{ m/s}$: This represents $20\\sin(30^\\circ)$ which...'.
-   - Use standard subscripts and superscripts: e.g. $NADH$, $FADH_2$, $ATP$, $H_2O$, $x^2$, $10^{-5}$, $v_{0x}$, $v_{0y}$.
-   - Never write bare asterisks for multiplication (use $\\cdot$ or $\\times$).
-3. Thorough, encouraging, and master-level pedagogical depth.`;
+          const chatRes = await fetch(getApiUrl('/api/chat'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: userPrompt,
+              customSystemInstruction: sysInstruction,
+              isEvaluation: 'true', // returns text/plain cleanly
+              gradeLevel: profile.gradeLevel,
+              country: profile.country
+            })
+          });
 
-        const userPrompt = `Student Question:
-${curQ.question}
-
-Available Options:
-${curQ.options && curQ.options.length > 0 ? (Array.isArray(curQ.options) ? curQ.options.join('\n') : curQ.options) : 'N/A'}
-
-${curQ.correctAnswer ? `Official Correct Option: ${curQ.correctAnswer}\n` : ''}${curQ.explanation ? `Provided Context/Explanation: ${curQ.explanation}\n` : ''}
-Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive hints without spoiling the final choice' : 'full step-by-step solution, option-by-option analysis, and subject-specific exam tip'}.`;
-
-        const formData = new FormData();
-        formData.append('message', userPrompt);
-        formData.append('customSystemInstruction', sysInstruction);
-        formData.append('mode', 'General');
-        formData.append('gradeLevel', profile.gradeLevel);
-        if (profile.stream) formData.append('stream', profile.stream);
-        if (profile.country) formData.append('country', profile.country);
-
-        const chatRes = await fetch(getApiUrl('/api/chat'), {
-          method: 'POST',
-          body: formData
-        });
-
-        if (chatRes.ok) {
-          const chatData = await chatRes.json();
-          let rawText = chatData.text || '';
-          if (rawText.trim().startsWith('{')) {
-            try {
-              const parsed = JSON.parse(rawText);
-              rawText = parsed.markdown_content || parsed.explanation || parsed.content || rawText;
-            } catch (_) {}
+          if (chatRes.ok) {
+            const chatData = await chatRes.json();
+            if (chatData && chatData.text) {
+              explanationText = chatData.text;
+            }
           }
-          if (rawText) {
-            explanationText = rawText;
-          }
+        } catch (chatErr) {
+          console.warn("Universal chat fallback failed, activating smart offline fallback:", chatErr);
         }
       }
 
@@ -3700,7 +3663,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                           {formatQuizMath(
                             askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
                             askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
-                            'Explanation unavailable.'
+                            (quiz[currentIndex]?.explanation ? `### 📝 Solution & Concept Breakdown\n${quiz[currentIndex]?.explanation}` : 'Explanation is being prepared. Please check the solution below.')
                           )}
                         </GlobalMarkdown>
                       </div>

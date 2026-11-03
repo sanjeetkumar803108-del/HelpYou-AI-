@@ -6720,6 +6720,95 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
     });
   }
 });
+app.post("/api/quiz-ai-help", async (req, res) => {
+  try {
+    const {
+      question,
+      options,
+      correctAnswer,
+      explanation: originalExplanation,
+      mode,
+      gradeLevel,
+      stream,
+      country,
+      targetExam: targetExam2,
+      subject
+    } = req.body;
+    if (!question) {
+      return res.status(400).json({ error: "Missing question" });
+    }
+    const effectiveGrade = gradeLevel || "11th Grade";
+    const effectiveCountry = country || "India";
+    const effectiveStream = stream || subject || "Science";
+    const effectiveExam = targetExam2 || "Standardized Examination";
+    const isHint = mode === "hint";
+    const gradeDirective = getGradePedagogicalDirective(effectiveGrade, effectiveStream, effectiveCountry);
+    const examDirective = getExamBlueprintDirective(effectiveExam, void 0, effectiveStream);
+    const systemInstruction = [
+      gradeDirective,
+      examDirective ? `OFFICIAL EXAM CALIBRATION DIRECTIVE:
+${examDirective}` : "",
+      `You are an Elite Academic Coach and Master Professor for ${effectiveExam} (${effectiveCountry}), specialized in ${effectiveStream} for a student in ${effectiveGrade}.`,
+      `The student is solving a multiple-choice question and clicked ${isHint ? '"AI Question Hint & Clue"' : '"Step-by-Step Solution & Option Analysis"'}.`,
+      "",
+      "CRITICAL PEDAGOGICAL MANDATE:",
+      isHint ? `STRICT ANTI-SPOILER MANDATE: DO NOT reveal the correct option (A, B, C, or D) or the direct final answer!
+Structure your response in rich, clean Markdown with these exact sections:
+### \u{1F3AF} What This Question Is Asking
+Break down the problem in simple, encouraging terms. Clarify the core scenario, what variables are given, and what is to be determined.
+### \u{1F511} Core Concepts & Essential Formulas
+Explain the governing laws, physical/chemical mechanisms, or mathematical formulas ($...$) relevant to this curriculum level.
+### \u{1F4A1} Guided Progressive Hints
+- **Hint 1 (Starting Point):** A gentle conceptual clue to get started.
+- **Hint 2 (Critical Connection):** Connect the key mechanism to the terms in the choices.
+- **Hint 3 (Elimination Clue):** What common trap or distractor should they eliminate?` : `DELIVER AN EXHAUSTIVE, MASTER-TIER STEP-BY-STEP SOLUTION.
+Structure your response in rich, clean Markdown with these exact sections:
+### \u{1F3AF} Correct Answer & Executive Summary
+State the official correct option clearly followed by a concise 1-2 sentence executive verdict.
+### \u{1F4DD} In-Depth Step-by-Step Derivation & Mechanism
+Provide a thorough step-by-step mathematical derivation, formula substitution, or conceptual explanation calibrated to ${effectiveExam}.
+### \u274C Why the Other Options Are Incorrect
+Break down each wrong option and explain specifically why it fails or what common misconception it represents.
+### \u{1F4A1} High-Yield Exam Tip & Memory Anchor
+Provide an exam-tested tip, shortcut, or mnemonic for this exact topic.`,
+      "",
+      "MATHEMATICAL FORMULAS & SCIENTIFIC NOTATION (STRICT KA-TEX RULES):",
+      "- EVERY single mathematical formula, derivation step, variable, equation, and unit MUST be enclosed in LaTeX dollar signs ($...$ for inline or $$...$$ for display blocks).",
+      "- Format all math as valid LaTeX: $v = u + at$, $T = \\frac{2u\\sin\\theta}{g}$.",
+      "- NEVER output raw un-bracketed LaTeX syntax without enclosing dollar signs ($...$).",
+      "- Return your response in pure, clean Markdown."
+    ].filter(Boolean).join("\n\n");
+    const userPrompt = [
+      "Student Question:",
+      question,
+      "",
+      "Available Options:",
+      Array.isArray(options) ? options.join("\n") : options || "N/A",
+      "",
+      correctAnswer ? `Official Correct Option: ${correctAnswer}` : "",
+      originalExplanation ? `Context / Explanation: ${originalExplanation}` : "",
+      `Goal: Generate the ${isHint ? "progressive question breakdown and 3 guided hints without revealing the answer" : "complete step-by-step solution, option analysis, and exam tip"}.`
+    ].filter(Boolean).join("\n");
+    const aiRes = await safeGenerateContent({
+      gradeLevel: effectiveGrade,
+      stream: effectiveStream,
+      country: effectiveCountry,
+      model: "gemini-flash-lite-latest",
+      contents: { parts: [{ text: userPrompt }] },
+      config: {
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        responseMimeType: "text/plain",
+        temperature: 0.35,
+        maxOutputTokens: 3500
+      }
+    });
+    const explanation = aiRes.text || "";
+    return res.json({ explanation });
+  } catch (error) {
+    console.error("Error in /api/quiz-ai-help:", error);
+    return res.status(500).json({ error: "Failed to generate AI explanation" });
+  }
+});
 app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
   try {
     const { gradeLevel, stream, country, count } = req.body;

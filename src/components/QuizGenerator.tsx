@@ -3426,30 +3426,70 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                   const activeQuiz = selectedHistoryItem || (list.length > 0 ? list[list.length - 1] : null);
                   if (!activeQuiz) return null;
 
-                  // Parse durations
-                  const durations = activeQuiz.questionDurations || Array(activeQuiz.totalQuestions || 5).fill(12);
-                  const correct = activeQuiz.correctAnswers || Array(activeQuiz.totalQuestions || 5).fill(true);
-                  const questionChartData = durations.map((duration: number, idx: number) => {
-                    const isCorrect = correct[idx] !== undefined ? correct[idx] : true;
+                  // Parse durations with robust array length fallbacks
+                  const totalExpectedQ = activeQuiz.totalQuestions || (activeQuiz.questions && activeQuiz.questions.length) || 5;
+                  const rawDurations = (Array.isArray(activeQuiz.questionDurations) && activeQuiz.questionDurations.length > 0)
+                    ? activeQuiz.questionDurations
+                    : Array(totalExpectedQ).fill(activeQuiz.averageTimePerQuestion || 12);
+                  const rawCorrect = (Array.isArray(activeQuiz.correctAnswers) && activeQuiz.correctAnswers.length > 0)
+                    ? activeQuiz.correctAnswers
+                    : (activeQuiz.questions && Array.isArray(activeQuiz.questions))
+                      ? activeQuiz.questions.map((q: any) => q.isCorrect !== undefined ? q.isCorrect : (q.userAnswer === q.correctAnswer))
+                      : Array(rawDurations.length).fill(true);
+
+                  const questionChartData = rawDurations.map((duration: number, idx: number) => {
+                    const isCorrect = rawCorrect[idx] !== undefined ? rawCorrect[idx] : true;
                     return {
                       name: `Q${idx + 1}`,
-                      duration,
+                      duration: Math.max(1, Math.round(Number(duration) || 1)),
                       correct: isCorrect,
                       fill: isCorrect ? '#10B981' : '#F43F5E'
                     };
                   });
 
+                  const currentActiveKey = activeQuiz.id ? String(activeQuiz.id) : String(list.indexOf(activeQuiz));
+
                   return (
                     <div className="bg-white border border-zinc-200/80 rounded-[2rem] p-5 shadow-sm w-full">
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
-                        <div>
+                        <div className="min-w-0">
                           <h4 className="text-xs font-black text-zinc-800 flex items-center gap-1.5">
                             <Target className="w-4 h-4 text-purple-500" />
                             <span>Time Spent Per Question</span>
                           </h4>
-                          <p className="text-[10px] font-bold text-zinc-400 mt-0.5 line-clamp-1">
-                            Analysis of: {getQuizTitle(activeQuiz)}
-                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-bold text-zinc-400 shrink-0">Analysis of:</span>
+                            <div className="relative inline-flex items-center max-w-[210px] xs:max-w-[260px] sm:max-w-[300px]">
+                              <select
+                                value={currentActiveKey}
+                                onChange={(e) => {
+                                  triggerVibration(10);
+                                  const chosen = list.find((it: any, idx: number) => 
+                                    (it.id ? String(it.id) : String(idx)) === e.target.value
+                                  );
+                                  if (chosen) {
+                                    setSelectedHistoryItem(chosen);
+                                  }
+                                }}
+                                className="w-full text-[10px] font-extrabold text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100/70 border border-indigo-200/90 rounded-lg pl-2 pr-6 py-1 truncate appearance-none focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer shadow-2xs transition-colors"
+                                title="Select a quiz to analyze"
+                              >
+                                {[...list].reverse().map((item: any) => {
+                                  const origIdx = list.indexOf(item);
+                                  const valKey = item.id ? String(item.id) : String(origIdx);
+                                  const quizTitle = getQuizTitle(item);
+                                  const countQ = item.totalQuestions || (item.questions && item.questions.length) || (item.questionDurations && item.questionDurations.length) || 5;
+                                  const scoreText = item.score !== undefined ? ` • ${item.score}/${countQ}` : '';
+                                  return (
+                                    <option key={valKey} value={valKey} className="text-zinc-800 bg-white font-medium">
+                                      {quizTitle}{scoreText}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              <ChevronDown className="w-3 h-3 text-indigo-500 absolute right-1.5 pointer-events-none shrink-0" />
+                            </div>
+                          </div>
                         </div>
                         <div className="flex items-center gap-3 text-[9px] font-bold">
                           <span className="flex items-center gap-1 text-emerald-600">

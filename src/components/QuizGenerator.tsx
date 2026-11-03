@@ -41,7 +41,7 @@ import {
 
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput } from '../utils/communityCache';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached } from '../utils/communityCache';
 
 interface Question {
   question: string;
@@ -1013,6 +1013,17 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
       window.removeEventListener('storage', syncAcademicProfile);
       window.removeEventListener('academic_profile_updated', syncAcademicProfile);
       window.removeEventListener('focus', syncAcademicProfile);
+    };
+  }, []);
+
+  // Listen to verified community curriculum updates to re-render chapter units live
+  useEffect(() => {
+    const handleCurriculumUpdate = () => {
+      setBlueprintRevision(prev => prev + 1);
+    };
+    window.addEventListener('helpyou-curriculum-updated', handleCurriculumUpdate);
+    return () => {
+      window.removeEventListener('helpyou-curriculum-updated', handleCurriculumUpdate);
     };
   }, []);
 
@@ -2844,28 +2855,47 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
 
                                                     {/* Sub-Topics Pills */}
                                                     <div className="grid grid-cols-1 gap-1.5 pt-1">
-                                                      {subTopicsList.map((sub, sIdx) => (
-                                                        <button
-                                                          key={sIdx}
-                                                          type="button"
-                                                          onClick={() => {
-                                                            triggerVibration(15);
-                                                            handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${sub}`);
-                                                          }}
-                                                          disabled={loading}
-                                                          className="w-full bg-white hover:bg-indigo-50/40 border border-zinc-200/70 hover:border-indigo-200 active:scale-[0.995] py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all group/sub cursor-pointer shadow-2xs"
-                                                        >
-                                                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 group-hover/sub:scale-125 transition-transform" />
-                                                            <span className="text-xs font-medium text-zinc-700 group-hover/sub:text-indigo-600 transition-colors truncate">
-                                                              {sub}
-                                                            </span>
-                                                          </div>
-                                                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50/80 px-2 py-0.5 rounded-md shrink-0">
-                                                            Quiz
-                                                          </span>
-                                                        </button>
-                                                      ))}
+                                                      {subTopicsList.map((sub, sIdx) => {
+                                                        const isSaved = isCurriculumContentCached({
+                                                          subject: cleanSubjectTitle(subject.title),
+                                                          chapter: topicItem,
+                                                          subTopic: sub,
+                                                          feature: 'quiz'
+                                                        });
+
+                                                        return (
+                                                          <button
+                                                            key={sIdx}
+                                                            type="button"
+                                                            onClick={() => {
+                                                              triggerVibration(15);
+                                                              handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${sub}`);
+                                                            }}
+                                                            disabled={loading}
+                                                            className="w-full bg-white hover:bg-indigo-50/40 border border-zinc-200/70 hover:border-indigo-200 active:scale-[0.995] py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all group/sub cursor-pointer shadow-2xs"
+                                                          >
+                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 group-hover/sub:scale-125 transition-transform ${
+                                                                isSaved ? 'bg-emerald-500' : 'bg-indigo-500'
+                                                              }`} />
+                                                              <span className="text-xs font-medium text-zinc-700 group-hover/sub:text-indigo-600 transition-colors truncate">
+                                                                {sub}
+                                                              </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                              {isSaved && (
+                                                                <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs">
+                                                                  <Check className="w-2.5 h-2.5" />
+                                                                  <span>Saved</span>
+                                                                </span>
+                                                              )}
+                                                              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50/80 px-2 py-0.5 rounded-md shrink-0">
+                                                                Quiz
+                                                              </span>
+                                                            </div>
+                                                          </button>
+                                                        );
+                                                      })}
                                                     </div>
 
                                                     {/* Custom Micro-Topic Input (User's Favorite Feature) */}
@@ -2894,6 +2924,8 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                                                                   }
                                                                   setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                                   triggerVibration(15);
+                                                                  registerVerifiedChapterSubTopic(cleanSubjectTitle(subject.title), topicItem, val);
+                                                                  triggerVibration(15);
                                                                   handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${val}`);
                                                                 }
                                                               }}
@@ -2916,7 +2948,9 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
                                                                 }
                                                                 setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                                 triggerVibration(15);
-                                                                handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${val}`);
+                                                                registerVerifiedChapterSubTopic(cleanSubjectTitle(subject.title), topicItem, val);
+                                                                  triggerVibration(15);
+                                                                  handleTopicClick(cleanSubjectTitle(subject.title), `${topicItem} - ${val}`);
                                                               }}
                                                               className="px-3 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition-all shrink-0 cursor-pointer"
                                                             >

@@ -33,7 +33,7 @@ import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem, safeJsonParse } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput } from '../utils/communityCache';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached } from '../utils/communityCache';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
 
@@ -1275,6 +1275,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                                                           return;
                                                         }
                                                         setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                        registerVerifiedChapterSubTopic(cleanSubj, topicItem, val);
                                                         triggerVibration(15);
                                                         handleTopicClick(cleanSubj, `${topicItem} - ${val}`);
                                                       }
@@ -1297,6 +1298,7 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
                                                         return;
                                                       }
                                                       setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                      registerVerifiedChapterSubTopic(cleanSubj, topicItem, val);
                                                       triggerVibration(15);
                                                       handleTopicClick(cleanSubj, `${topicItem} - ${val}`);
                                                     }}

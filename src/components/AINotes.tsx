@@ -10,7 +10,7 @@ import { collection, addDoc, getDocs, deleteDoc, doc, query, where, serverTimest
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getStoredExamBlueprint, SubjectBlueprint } from '../utils/academicBlueprint';
 import { getScalableRelevantQuizzes } from '../utils/curriculumMap';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput } from '../utils/communityCache';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached } from '../utils/communityCache';
 import { triggerVibration } from '../utils/vibrate';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
 import { safeGetItem, safeSetItem } from '../utils/storage';

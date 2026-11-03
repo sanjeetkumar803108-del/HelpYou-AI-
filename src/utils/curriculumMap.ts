@@ -612,37 +612,55 @@ export function getSubTopicsForChapter(
   chapterTitle: string,
   blueprintSubTopics?: Record<string, string[]>
 ): string[] {
+  let initialTopics: string[] = [];
+
   // 1. Direct match in researched blueprint
   if (blueprintSubTopics && typeof blueprintSubTopics === 'object') {
     if (Array.isArray(blueprintSubTopics[chapterTitle]) && blueprintSubTopics[chapterTitle].length > 0) {
-      return blueprintSubTopics[chapterTitle].slice(0, 6);
-    }
-    const cleanChap = chapterTitle.toLowerCase().trim();
-    const foundKey = Object.keys(blueprintSubTopics).find(k => {
-      const kClean = k.toLowerCase().trim();
-      return kClean === cleanChap || kClean.includes(cleanChap) || cleanChap.includes(kClean);
-    });
-    if (foundKey && Array.isArray(blueprintSubTopics[foundKey]) && blueprintSubTopics[foundKey].length > 0) {
-      return blueprintSubTopics[foundKey].slice(0, 6);
+      initialTopics = blueprintSubTopics[chapterTitle].slice(0, 6);
+    } else {
+      const cleanChap = chapterTitle.toLowerCase().trim();
+      const foundKey = Object.keys(blueprintSubTopics).find(k => {
+        const kClean = k.toLowerCase().trim();
+        return kClean === cleanChap || kClean.includes(cleanChap) || cleanChap.includes(kClean);
+      });
+      if (foundKey && Array.isArray(blueprintSubTopics[foundKey]) && blueprintSubTopics[foundKey].length > 0) {
+        initialTopics = blueprintSubTopics[foundKey].slice(0, 6);
+      }
     }
   }
 
   // 2. Keyword match against CURATED_CHAPTER_SUBTOPICS
-  const searchStr = `${subjectTitle} ${chapterTitle}`.toLowerCase();
-  for (const [key, subTopics] of Object.entries(CURATED_CHAPTER_SUBTOPICS)) {
-    if (searchStr.includes(key)) {
-      return subTopics.slice(0, 6);
+  if (initialTopics.length === 0) {
+    const searchStr = `${subjectTitle} ${chapterTitle}`.toLowerCase();
+    for (const [key, subTopics] of Object.entries(CURATED_CHAPTER_SUBTOPICS)) {
+      if (searchStr.includes(key)) {
+        initialTopics = subTopics.slice(0, 6);
+        break;
+      }
     }
   }
 
   // 3. Fallback: High-yield pedagogical structure tailored to the chapter title
-  const cleanTitle = chapterTitle.replace(/^CH\s*\d+\s*[:\-–]?\s*/i, '').trim();
-  return [
-    `Foundations & Core Principles of ${cleanTitle}`,
-    `Theoretical Laws, Formulas & Derivations`,
-    `Analytical Problem Solving & Graphical Analysis`,
-    `High-Yield Examination Traps & Applications`
-  ];
+  if (initialTopics.length === 0) {
+    const cleanTitle = chapterTitle.replace(/^CH\s*\d+\s*[:\-–]?\s*/i, '').trim();
+    initialTopics = [
+      `Foundations & Core Principles of ${cleanTitle}`,
+      `Theoretical Laws, Formulas & Derivations`,
+      `Analytical Problem Solving & Graphical Analysis`,
+      `High-Yield Examination Traps & Applications`
+    ];
+  }
+
+  // 4. Merge Community & User Verified Custom Topics for this Chapter
+  const verifiedList = getVerifiedChapterSubTopics(subjectTitle, chapterTitle);
+  if (verifiedList && verifiedList.length > 0) {
+    const existingLower = new Set(initialTopics.map(t => t.toLowerCase().trim()));
+    const additional = verifiedList.filter(v => !existingLower.has(v.toLowerCase().trim()));
+    return [...initialTopics, ...additional];
+  }
+
+  return initialTopics;
 }
 
 /**

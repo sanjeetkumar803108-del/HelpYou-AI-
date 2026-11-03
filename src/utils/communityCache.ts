@@ -195,8 +195,8 @@ export async function getCachedCurriculumContent<T = any>(
     if (params.subTopic && params.subTopic !== 'All') {
       const check = isValidAcademicTopicInput(params.subTopic, params.chapter);
       if (!check.isValid) {
-        console.warn(`[communityCache] Skipping cache write for non-academic sub-topic: ${params.subTopic}`);
-        return false;
+        console.warn(`[communityCache] Skipping cache lookup for non-academic sub-topic: ${params.subTopic}`);
+        return null;
       }
     }
 
@@ -249,6 +249,85 @@ export async function getCachedCurriculumContent<T = any>(
  * Saves freshly generated curriculum content to Cloud Firestore and local storage.
  * Completely isolates the questions/notes from any individual user score or answers.
  */
+/**
+ * Synchronous local check to see if content is already cached.
+ */
+export function isCurriculumContentCached(rawParams: CacheKeyParams): boolean {
+  try {
+    const params = resolveActiveProfileParams(rawParams);
+    const key = buildDeterministicCacheKey(params);
+    if (inMemoryCache.has(key)) return true;
+    const localRaw = safeGetItem(`comm_cache_${key}`);
+    if (localRaw) {
+      const parsed = JSON.parse(localRaw);
+      return !!(parsed && parsed.content);
+    }
+  } catch (_) {}
+  return false;
+}
+
+/**
+ * Retrieves list of verified custom sub-topics for a given subject and chapter.
+ */
+export function getVerifiedChapterSubTopics(subject: string, chapter: string): string[] {
+  try {
+    const cleanSubj = slugify(subject);
+    const cleanChap = slugify(chapter);
+    const raw = safeGetItem(`verified_subtopics_${cleanSubj}__${cleanChap}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(t => typeof t === 'string' && isValidAcademicTopicInput(t, chapter).isValid);
+      }
+    }
+  } catch (_) {}
+  return [];
+}
+
+/**
+ * Registers a verified custom sub-topic into persistent local storage and Cloud Firestore.
+ * Automatically notifies all open UI generators to update their unit lists in real time.
+ */
+export function registerVerifiedChapterSubTopic(subject: string, chapter: string, subTopic: string): void {
+  if (!subTopic || typeof subTopic !== 'string') return;
+  const trimmed = subTopic.trim();
+  const validity = isValidAcademicTopicInput(trimmed, chapter);
+  if (!validity.isValid) return;
+
+  const cleanSubj = slugify(subject);
+  const cleanChap = slugify(chapter);
+  const storageKey = `verified_subtopics_${cleanSubj}__${cleanChap}`;
+
+  try {
+    const current = getVerifiedChapterSubTopics(subject, chapter);
+    const alreadyExists = current.some(t => t.toLowerCase().trim() === trimmed.toLowerCase());
+    if (!alreadyExists) {
+      const updated = [...current, trimmed];
+      safeSetItem(storageKey, JSON.stringify(updated));
+
+      // Asynchronously sync to Cloud Firestore for global community curriculum enrichment
+      const firestoreKey = `${cleanSubj}__${cleanChap}`;
+      setDoc(doc(db, 'global_curriculum_subtopics', firestoreKey), {
+        subject,
+        chapter,
+        subTopics: updated,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch((err) => {
+        console.warn('[communityCache] Cloud subtopic sync notice:', err);
+      });
+
+      // Dispatch event to re-render all curriculum accordions across the app
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('helpyou-curriculum-updated', {
+          detail: { subject, chapter, subTopic: trimmed }
+        }));
+      }
+    }
+  } catch (err) {
+    console.warn('[communityCache] Error registering subtopic:', err);
+  }
+}
+
 export async function saveCachedCurriculumContent<T = any>(
   rawParams: CacheKeyParams,
   content: T,
@@ -298,6 +377,11 @@ export async function saveCachedCurriculumContent<T = any>(
       .catch((writeErr) => {
         console.warn('[communityCache] Cloud Firestore background cache write skipped/deferred:', writeErr);
       });
+
+    // Automatically register verified custom sub-topic into chapter units list
+    if (params.subTopic && params.subTopic !== 'All') {
+      registerVerifiedChapterSubTopic(params.subject, params.chapter, params.subTopic);
+    }
 
     return true;
   } catch (err) {

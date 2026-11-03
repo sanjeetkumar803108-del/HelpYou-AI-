@@ -98,6 +98,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 11. Global Community Curriculum Verified Sub-Topics
+    // Allows all students to read verified units added for chapters.
+    // Authenticated students can contribute newly verified sub-topics.
+    match /global_curriculum_subtopics/{subtopicId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
     // 11. Global Curriculum Blueprints (Deep Researched Syllabi)
     match /curriculum_blueprints/{blueprintId} {
       allow read: if true;

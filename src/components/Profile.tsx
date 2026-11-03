@@ -2438,11 +2438,12 @@ export default function Profile({
             </div>
           )}
 
-          {/* Quick Info Box */}
-          <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 flex items-start gap-3">
-            <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-            <p className="text-[10px] font-medium text-blue-700 leading-relaxed">
-              HelpYou AI customizes solutions, vocabulary, and tutor responses dynamically based on your selected Study Level (High School, College, or Advanced). Change your level anytime!
+          {/* Quick Info Box - Upgraded for Modern Curriculum & AI Features */}
+          <div className="bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-purple-50/70 rounded-2xl p-4 border border-purple-200/60 flex items-start gap-3 shadow-2xs">
+            <Sparkles className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] font-medium text-purple-950 leading-relaxed">
+              <strong className="font-black text-purple-900">Personalized AI Engine: </strong>
+              Your AI Tutor, Topper Notes, Quizzes & Flashcards are dynamically calibrated to your {targetExam ? <span className="font-extrabold text-purple-700">{targetExam}</span> : 'target exam'} and official syllabus.
             </p>
           </div>
         </div>

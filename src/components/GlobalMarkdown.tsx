@@ -504,6 +504,121 @@ export const prepareNotesMath = formatNotesMath;
 const remarkPluginsList = [remarkMath, remarkGfm];
 const rehypePluginsList: any[] = [rehypeRaw, [rehypeKatex, { strict: false, throwOnError: false }]];
 
+const CodeBlock = memo(({ inline, className, children, ...props }: any) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const rawContent = typeof children === 'string'
+    ? children
+    : Array.isArray(children)
+      ? children.map(c => typeof c === 'string' ? c : (c?.props?.children || '')).join('')
+      : String(children || '');
+
+  const isMultiLine = rawContent.includes('\n');
+  const match = /language-([a-zA-Z0-9_-]+)/.exec(className || '');
+  const language = match ? match[1].toLowerCase() : '';
+
+  if (inline || (!language && !isMultiLine && rawContent.length < 50)) {
+    return (
+      <code className="bg-zinc-100 text-purple-700 font-mono text-[11px] px-1.5 py-0.5 rounded-md border border-zinc-200/60 font-semibold break-words" {...props}>
+        {children}
+      </code>
+    );
+  }
+
+  const handleCopy = () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(rawContent.trim());
+      }
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate?.(15);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.warn('Copy to clipboard failed:', err);
+    }
+  };
+
+  const isPython = language === 'python' || language === 'py' || language === 'python3' || rawContent.includes('import matplotlib') || rawContent.includes('import numpy');
+  const isGraph = language === 'graph' || language === 'plot' || language === 'curve';
+  const isDiagram = language === 'diagram' || language === 'schema' || language === 'circuit' || language === 'setup';
+
+  let badgeIcon = '💻';
+  let badgeTitle = 'Source Code';
+  let badgeSubtitle = language ? language.toUpperCase() : 'CODE';
+  let borderColor = 'border-zinc-800';
+  let headerBg = 'bg-zinc-900/95';
+  let textColor = 'text-zinc-200';
+  let dotColor = 'bg-blue-400';
+
+  if (isPython) {
+    badgeIcon = '🐍';
+    badgeTitle = 'Python Visualization & Simulation Script';
+    badgeSubtitle = 'Matplotlib / NumPy';
+    borderColor = 'border-blue-500/40';
+    headerBg = 'bg-gradient-to-r from-blue-950 via-zinc-900 to-amber-950/40';
+    textColor = 'text-blue-100';
+    dotColor = 'bg-amber-400';
+  } else if (isGraph) {
+    badgeIcon = '📊';
+    badgeTitle = 'Analytical Coordinate Graph & Curves';
+    badgeSubtitle = 'Function Plot';
+    borderColor = 'border-emerald-500/40';
+    headerBg = 'bg-gradient-to-r from-emerald-950 via-zinc-900 to-zinc-900';
+    textColor = 'text-emerald-300';
+    dotColor = 'bg-emerald-400';
+  } else if (isDiagram) {
+    badgeIcon = '📐';
+    badgeTitle = 'Apparatus Setup & System Schematic';
+    badgeSubtitle = 'Schematic Model';
+    borderColor = 'border-cyan-500/40';
+    headerBg = 'bg-gradient-to-r from-cyan-950 via-zinc-900 to-zinc-900';
+    textColor = 'text-cyan-300';
+    dotColor = 'bg-cyan-400';
+  }
+
+  return (
+    <div className={`my-3.5 rounded-2xl border ${borderColor} bg-zinc-950 text-zinc-100 shadow-md overflow-hidden text-left transition-all`}>
+      <div className={`${headerBg} px-3.5 py-2 border-b border-zinc-800 flex items-center justify-between text-[11px] font-mono tracking-tight text-zinc-300`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0 animate-pulse`} />
+          <span className="font-sans font-bold flex items-center gap-1.5 truncate">
+            <span>{badgeIcon}</span>
+            <span className="text-zinc-100">{badgeTitle}</span>
+          </span>
+          <span className="hidden sm:inline-block text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-zinc-800/90 text-zinc-400 font-semibold">
+            {badgeSubtitle}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 text-[10px] font-sans font-bold px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-all active:scale-95 cursor-pointer shrink-0 border border-zinc-700/60 shadow-xs"
+          title="Copy to clipboard"
+        >
+          {copied ? (
+            <span className="text-emerald-400 font-bold flex items-center gap-1">
+              <span>✓</span> Copied!
+            </span>
+          ) : (
+            <span className="flex items-center gap-1">
+              <span>📋</span> Copy Code
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div className="p-3.5 overflow-x-auto text-xs sm:text-[13px] font-mono leading-relaxed select-text">
+        <pre className={`bg-transparent p-0 m-0 border-0 font-mono ${textColor} whitespace-pre`}>
+          <code>{rawContent.trim()}</code>
+        </pre>
+      </div>
+    </div>
+  );
+});
+
 const defaultComponents = {
   h1: ({ node, ...props }: any) => (
     <h1 className="text-base sm:text-lg font-bold text-zinc-900 mt-4 mb-2 tracking-tight leading-snug break-words" {...props} />
@@ -530,12 +645,23 @@ const defaultComponents = {
     <li className="leading-relaxed" {...props} />
   ),
   table: ({ node, ...props }: any) => (
-    <div className="overflow-x-auto my-3.5 rounded-2xl border border-zinc-200 shadow-2xs bg-white text-left">
-      <table className="w-full text-left border-collapse text-xs sm:text-[13px]" {...props} />
+    <div className="my-4 rounded-2xl border border-zinc-200/90 shadow-2xs bg-white overflow-hidden text-left">
+      <div className="bg-zinc-50/95 px-3.5 py-2 border-b border-zinc-200/90 flex items-center justify-between text-[11px] font-bold text-zinc-700">
+        <span className="flex items-center gap-1.5 text-zinc-800">
+          <span className="text-sm">📋</span>
+          <span>Experimental Data & Observation Table</span>
+        </span>
+        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+          Structured Dataset
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse text-xs sm:text-[13px]" {...props} />
+      </div>
     </div>
   ),
   thead: ({ node, ...props }: any) => (
-    <thead className="bg-zinc-50/95 border-b border-zinc-200 text-zinc-800 font-extrabold" {...props} />
+    <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-800 font-extrabold" {...props} />
   ),
   th: ({ node, ...props }: any) => (
     <th className="px-3.5 py-2.5 font-bold text-zinc-800 border-b border-zinc-200 whitespace-nowrap text-xs tracking-tight" {...props} />
@@ -544,35 +670,10 @@ const defaultComponents = {
     <td className="px-3.5 py-2.5 border-b border-zinc-100 text-zinc-700 text-xs font-medium" {...props} />
   ),
   tr: ({ node, ...props }: any) => (
-    <tr className="hover:bg-zinc-50/60 transition-colors" {...props} />
+    <tr className="even:bg-zinc-50/40 hover:bg-purple-50/30 transition-colors" {...props} />
   ),
-  pre: ({ node, ...props }: any) => (
-    <div className="my-3.5 rounded-2xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-sm overflow-hidden text-left">
-      <div className="bg-zinc-900/90 px-3.5 py-1.5 border-b border-zinc-800 flex items-center justify-between text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span>Figure / Diagram / Data Graph</span>
-        </span>
-      </div>
-      <div className="p-3.5 overflow-x-auto text-xs sm:text-[13px] font-mono leading-relaxed select-text">
-        <pre {...props} className="bg-transparent p-0 m-0 border-0 font-mono text-zinc-200" />
-      </div>
-    </div>
-  ),
-  code: ({ node, inline, className, children, ...props }: any) => {
-    if (inline) {
-      return (
-        <code className="bg-zinc-100 text-purple-700 font-mono text-[11px] px-1.5 py-0.5 rounded-md border border-zinc-200/60 font-semibold" {...props}>
-          {children}
-        </code>
-      );
-    }
-    return (
-      <code className="font-mono text-xs sm:text-[13px] leading-relaxed block text-zinc-200" {...props}>
-        {children}
-      </code>
-    );
-  },
+  pre: ({ children }: any) => <>{children}</>,
+  code: CodeBlock,
   stepbox: ({ node, ...props }: any) => (
     <div className="bg-white border border-zinc-200/80 shadow-2xs rounded-2xl p-4 my-3 font-sans text-zinc-800" {...props} />
   ),

@@ -5141,31 +5141,49 @@ CRITICAL ARCHITECTURE RULES:
      * Standalone Long Analytical / Evaluative Questions (5–6 Marks).
      * Multi-part questions ((a) and (b)) only when naturally appropriate.
 
-3. MANDATORY MULTI-MODAL QUESTIONS (TABLES, GRAPHS & DIAGRAMS):
-   Real examination board papers integrate experimental data tables, coordinate graphs, and schematic setups for authentic analytical problem solving.
+3. MANDATORY MULTI-MODAL QUESTIONS (PYTHON CODE, TABLES, GRAPHS & DIAGRAMS):
+   Real examination board papers integrate executable simulation scripts, experimental data tables, coordinate graphs, and schematic setups for authentic analytical problem solving.
    CRITICAL MANDATE: In every set of questions for STEM, Mathematics, Physics, Chemistry, Economics, or Computer Science:
-   At least 1 to 2 questions MUST actively include a structured visual element:
+   At least 2 questions MUST actively integrate visual, tabular, or computational artifacts:
    
-   * EXPERIMENTAL & OBSERVATION DATA TABLES: For Chemistry, Biology, Physics, Statistics, or Commerce, provide observation matrices, reaction trials, or frequency tables using clean Markdown tables:
-     | Trial | Initial $[A]$ (M) | Initial Rate ($\\text{M}\\cdot\\text{s}^{-1}$) |
-     | :---: | :---: | :---: |
-     | 1 | 0.10 | $2.5 \\times 10^{-3}$ |
-     | 2 | 0.20 | $5.0 \\times 10^{-3}$ |
-     Followed by: "(a) Determine the reaction order... (b) Calculate rate constant $k$ with units."
-     
-   * COORDINATE GRAPHS & PLOTS: For Math (curves, functions, coordinate geometry, transformations), Physics (velocity-time, force-displacement, thermodynamic $P-V$ cycles), or Economics (supply-demand), provide a clearly labeled coordinate plot in a \`\`\`graph code block:
-     \`\`\`graph
-      y = f(x)
-       ^
-     10|           P(3, 10)
-       |          /|
-      5|         / |
-       |        /  |
-      0+-------+---+------> x
-       0       2   3
+   * PYTHON-POWERED PLOTS & SIMULATIONS:
+     For questions testing mathematical functions, kinematics trajectories, thermodynamic cycles, chemical kinetics, or computational algorithms:
+     Provide clean, executable Python code (using \`matplotlib.pyplot\` and \`numpy\` or \`pandas\`) inside a \`\`\`python code block that models the system or computes the data points, paired immediately with the resulting coordinate plot inside \`\`\`graph, followed by analytical examination sub-parts!
+     Example:
+     \`\`\`python
+     import numpy as np
+     import matplotlib.pyplot as plt
+
+     t = np.linspace(0, 4, 100)
+     # Velocity-time model: v(t) = 24 - 6*t
+     v = 24 - 6 * t
      \`\`\`
+     \`\`\`graph
+      v (m/s)
+       ^
+     24| \
+     12|   \
+      0+-----+-----> t (s)
+       0     2     4
+     \`\`\`
+     Followed by: "(a) Using the provided Python script and velocity-time graph, determine the instantaneous acceleration. (b) Calculate the total displacement over the 4-second interval by integration."
      
-   * SCHEMATIC & SETUP DIAGRAMS: For Physics (pulleys, circuits, ray optics, inclined planes), Biology (flowcharts, food webs, pedigrees), provide an ASCII schematic inside a \`\`\`diagram code block:
+   * EXPERIMENTAL & OBSERVATION DATA TABLES (WITH OPTIONAL PYTHON DATAFRAME):
+     For Chemistry, Biology, Physics, Statistics, or Commerce, provide an observation matrix or reaction trial table using clean Markdown tables, paired with the Python data structure:
+     \`\`\`python
+     import pandas as pd
+     trials = [1, 2, 3]
+     rate = [0.012, 0.024, 0.048]
+     \`\`\`
+     | Trial | Initial $[A]$ (M) | Initial Rate ($\text{M}\cdot\text{s}^{-1}$) |
+     | :---: | :---: | :---: |
+     | 1 | 0.10 | $1.2 \times 10^{-2}$ |
+     | 2 | 0.20 | $2.4 \times 10^{-2}$ |
+     | 3 | 0.40 | $4.8 \times 10^{-2}$ |
+     Followed by: "(a) Determine the reaction order with respect to $[A]$... (b) Calculate the rate constant $k$ with units."
+     
+   * SCHEMATIC & SETUP DIAGRAMS:
+     For Physics (circuits, pulleys, optical rays) or Biology (flowcharts, cycles), provide an ASCII schematic inside a \`\`\`diagram code block:
      \`\`\`diagram
      +---[ Resistor R1 = 4Ω ]---+
      |                          |
@@ -5173,19 +5191,6 @@ CRITICAL ARCHITECTURE RULES:
      |                          |
      +--------------------------+
      \`\`\`
-     
-   * PYTHON SIMULATION & VISUALIZATION (FOR CS & MATH/SCIENCE):
-     When testing algorithmic logic, data visualization, or computational modeling in Mathematics, Computer Science, or Physics, provide clean, idiomatic Python code (using matplotlib/numpy/pandas logic or clean algorithmic code) inside a \`\`\`python code block that models the problem or plots the curve, and ask analytical questions based on it!
-     Example:
-     \`\`\`python
-     import matplotlib.pyplot as plt
-     import numpy as np
-
-     x = np.linspace(-5, 5, 100)
-     y = (2*x - 3) / (x + 4)
-     # Asymptotes at x = -4 and y = 2
-     \`\`\`
-     Followed by: "(a) Identify the vertical and horizontal asymptotes from the function definition. (b) Derive the inverse function $f^{-1}(x)$ and its domain."
 
 4. GRADE & CURRICULUM CALIBRATION:
    - Target Grade: ${gradeLevel}. Match vocabulary and difficulty strictly to this grade level.
@@ -5252,11 +5257,11 @@ Entropy Variation Seed: ${randomEntropySeed}
 Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic, grade, and strictly matching ${difficulty} difficulty level.
 CRITICAL COUNT MANDATE: The output array MUST contain EXACTLY ${requestedCount} question objects. Never stop early or generate fewer than ${requestedCount}.
 CRITICAL ANTI-REPETITION MANDATE: Every question must be 100% distinct. Do NOT repeat any concept or previously tested question.
-CRITICAL MULTI-MODAL MANDATE (TABLES, GRAPHS & DIAGRAMS):
-Out of the ${requestedCount} generated questions, AT LEAST 2 questions MUST actively include an explicit visual or tabular problem artifact:
-- AT LEAST ONE question with a clean Markdown observation/data table (e.g. experimental trial runs, kinetics data, sensor measurements, or matrix).
-- AT LEAST ONE question with a labeled coordinate graph (\`\`\`graph ... \`\`\`), apparatus setup schematic (\`\`\`diagram ... \`\`\`), or computational simulation script (\`\`\`python ... \`\`\` for Math/CS/Physics).
-Ensure the visual element is central to solving the question and referenced in the sub-parts.
+CRITICAL MULTI-MODAL MANDATE (PYTHON CODE, TABLES, GRAPHS & DIAGRAMS):
+Out of the ${requestedCount} generated questions, AT LEAST 2 questions MUST actively include visual, tabular, or computational artifacts:
+- AT LEAST ONE question MUST include an executable Python simulation or visualization code block (\`\`\`python ... \`\`\`) using matplotlib/numpy accompanied by the resulting coordinate graph (\`\`\`graph ... \`\`\`) or analytical curve.
+- AT LEAST ONE question MUST include a structured Markdown observation/data table (| ... |) or experimental schematic diagram (\`\`\`diagram ... \`\`\`), optionally paired with a Python pandas/numpy script.
+Formulate analytical multi-part questions ((a), (b), (c)) testing the student's ability to interpret the graph, verify equations from the Python simulation, and deduce parameters!
 For each question, provide:
 1. 'question': Authentic exam question (including data table, diagram block, or graph when appropriate).
 2. 'expectedAnswer': Comprehensive, non-empty step-by-step official model solution (MANDATORY).
@@ -5451,12 +5456,12 @@ Return ONLY valid JSON:
           ]
         },
         {
-          q: `Design a standardized experimental investigation to verify the core relationships of **${cleanTopic}**. (a) Explicitly identify the independent, dependent, and controlled variables. (b) Explain how the resulting experimental data should be plotted to determine the principal constant from the slope of the graph.`,
-          sol: `Official Model Solution:\n• Experimental Setup: Clearly state apparatus setup and sensor placement.\n• Variable Identification: Independent variable varied systematically; dependent variable measured; ambient factors held constant.\n• Graphical Analysis: Explain that plotting $y$ versus $x$ yields a linear relationship $y = mx + c$, where the gradient $m$ directly quantifies the core physical parameter.`,
+          q: `An automated sensor recorded experimental trial data for **${cleanTopic}**. The data acquisition is modeled by the following Python script and observation table:\n\n\`\`\`python\nimport numpy as np\nimport pandas as pd\n\nt = np.array([0.0, 1.0, 2.0, 3.0])\nx = np.array([0.0, 2.5, 10.0, 22.5]) # x(t) = 2.5 * t^2\ndf = pd.DataFrame({'Time t (s)': t, 'Displacement x (m)': x})\n\`\`\`\n\n| Trial | Time $t$ (s) | Measured $x$ (m) | Calculated Rate $v$ (\\text{m/s}) |\n| :---: | :---: | :---: | :---: |\n| 1 | 0.0 | 0.0 | 0.0 |\n| 2 | 1.0 | 2.5 | 5.0 |\n| 3 | 2.0 | 10.0 | 10.0 |\n| 4 | 3.0 | 22.5 | 15.0 |\n\n(a) Using the provided Python model and data table, determine whether the acceleration is uniform. (b) Formulate the governing differential relation and compute the net force on a $2\\text{ kg}$ test mass.`,
+          sol: `Official Model Solution:\n• Acceleration Analysis: The second derivative \\frac{d^2x}{dt^2} = 5.0\\text{ m/s}^2 is constant across all time intervals, confirming uniform acceleration.\n• Differential Formulation: $v(t) = \\frac{dx}{dt} = 5.0t\\text{ m/s}$. Acceleration $a = 5.0\\text{ m/s}^2$.\n• Force Calculation: By Newton's second law, $F_{\\text{net}} = ma = 2\\text{ kg} \\times 5.0\\text{ m/s}^2 = 10\\text{ N}$.`,
           rubric: [
-            "[1 Mark] Accurate identification of all three variable classes",
-            "[2 Marks] Clear, reproducible experimental procedure and data-recording plan",
-            "[1 Mark] Explicit deduction of the physical constant from the linear slope"
+            "[1 Mark] Verification of uniform acceleration from the table and Python quadratic model",
+            "[2 Marks] Step-by-step differential derivation of velocity and acceleration functions",
+            "[1 Mark] Accurate final force calculation ($10\\text{ N}$) with correct SI units"
           ]
         },
         {
@@ -5469,12 +5474,12 @@ Return ONLY valid JSON:
           ]
         },
         {
-          q: `Investigate the limiting behavior of **${cleanTopic}** when the primary variable approaches extreme values ($x \\to 0$ and $x \\to \\infty$). Explain the physical interpretation of each limit and determine whether the system approaches asymptotic stability.`,
-          sol: `Official Model Solution:\n• Limiting Analysis: Evaluate the mathematical function as the independent variable approaches lower and upper asymptotic bounds.\n• Physical Interpretation: Explain the physical state represented by each limit (e.g. vanishing velocity, saturation, zero resistance).\n• Stability Assessment: Confirm whether the restoring forces maintain equilibrium or lead to divergence.`,
+          q: `A mathematical model of **${cleanTopic}** is simulated using the following Python script, generating the potential energy curve shown below:\n\n\`\`\`python\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nx = np.linspace(0, 5, 100)\n# Potential energy function: U(x) = 2.0 * x**2\nU = 2.0 * (x**2)\nplt.plot(x, U, label='Potential Well U(x)')\n\`\`\`\n\n\`\`\`graph\n U(x) (J)\n  ^\n50|             .'\n  |           .'\n25|        .-'\n  |      .'\n 0+----+----+----+-----> x (m)\n  0    2    4    5\n\`\`\`\n\n(a) Using the Python script and graph, deduce the restoring force $F(x) = -\\frac{dU}{dx}$. (b) If the particle has total mechanical energy $E = 50\\text{ J}$, calculate the classical turning points and maximum kinetic energy.`,
+          sol: `Official Model Solution:\n• Restoring Force: Differentiating $U(x) = 2.0x^2$ gives $F(x) = -\\frac{dU}{dx} = -4.0x\\text{ N}$, which represents a linear harmonic restoring force.\n• Classical Turning Points: At turning points, kinetic energy $K = 0$, so $U(x) = E \\implies 2.0x^2 = 50 \\implies x = \\pm 5.0\\text{ m}$.\n• Maximum Kinetic Energy: $K_{\\text{max}} = E - U_{\\text{min}} = 50\\text{ J} - 0 = 50\\text{ J}$ occurring at the equilibrium origin $x = 0$.`,
           rubric: [
-            "[1 Mark] Correct mathematical evaluation of both asymptotic limits",
-            "[2 Marks] Coherent physical interpretation of the system state at each extreme",
-            "[1 Mark] Rigorous equilibrium and stability conclusion"
+            "[1 Mark] Correct derivative deduction of restoring force $F(x) = -4.0x\\text{ N}$",
+            "[2 Marks] Analytical calculation of classical turning points ($x = \\pm 5\\text{ m}$)",
+            "[1 Mark] Maximum kinetic energy ($50\\text{ J}$) and equilibrium position"
           ]
         },
         {

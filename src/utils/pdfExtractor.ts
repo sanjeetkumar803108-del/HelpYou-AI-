@@ -185,3 +185,4 @@ export async function extractTextFromPdf(file: File | Blob, maxPages = 50): Prom
     };
   }
 }
+

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ArrowLeft, HelpCircle, Loader2, Share2, 
-  Sparkles, BookOpen, GraduationCap, Clock, FileText, 
-  ChevronRight, Save, History, Trash2, Send, PenTool, CheckCircle2,
+  Sparkles, BookOpen, GraduationCap, FileText, 
+  ChevronRight, Save, Trash2, Send, PenTool, CheckCircle2,
   RefreshCw, ExternalLink, Camera, Plus, Image, X, Info, Award, Flag, ChevronDown, ChevronUp
 } from 'lucide-react';
 import ReportAIModal from './ReportAIModal';
@@ -123,12 +123,8 @@ const TOPIC_POOLS: Record<string, string[]> = {
 export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionGeneratorProps) {
   const handleHeaderBack = () => {
     triggerVibration(10);
-    if (showHistory) {
-      if (selectedHistoryItem) {
-        setSelectedHistoryItem(null);
-      } else {
-        setShowHistory(false);
-      }
+    if (previewPdfUri) {
+      setPreviewPdfUri(null);
     } else if (questions) {
       setQuestions(null);
     } else {
@@ -157,14 +153,9 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportSnippet, setReportSnippet] = useState('');
 
-  // History Tab & State
-  const [showHistory, setShowHistory] = useState(false);
+  // Saved history in background for question deduplication
   const [historyItems, setHistoryItems] = useState<SavedSet[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [selectedHistoryItem, setSelectedHistoryItem] = useState<SavedSet | null>(null);
-  const [detailViewMode, setDetailViewMode] = useState<'pdf' | 'questions'>('pdf');
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null);
-  const [historyPdfUri, setHistoryPdfUri] = useState<string | null>(null);
 
   const [isPro, setIsPro] = useState(() => isProUser());
   const sessionSeenQuestionsRef = useRef<string[]>([]);
@@ -188,14 +179,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         e.preventDefault();
         triggerVibration(10);
         setPreviewPdfUri(null);
-      } else if (selectedHistoryItem) {
-        e.preventDefault();
-        triggerVibration(10);
-        setSelectedHistoryItem(null);
-      } else if (showHistory) {
-        e.preventDefault();
-        triggerVibration(10);
-        setShowHistory(false);
       } else if (questions) {
         e.preventDefault();
         triggerVibration(10);
@@ -204,7 +187,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     };
     window.addEventListener('appBackButton', handleBackButton);
     return () => window.removeEventListener('appBackButton', handleBackButton);
-  }, [previewPdfUri, selectedHistoryItem, showHistory, questions]);
+  }, [previewPdfUri, questions]);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -578,9 +561,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     };
   }, [loading, questions]);
 
-  // Fetch History from Firestore or local storage
+  // Fetch History from Firestore or local storage for question deduplication
   const fetchHistory = async () => {
-    setLoadingHistory(true);
     const uid = auth.currentUser?.uid;
     if (uid) {
       try {
@@ -625,12 +607,9 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
       } catch (e) {
         console.error("Failed to load subjective question history from Firestore:", e);
         loadLocalHistory();
-      } finally {
-        setLoadingHistory(false);
       }
     } else {
       loadLocalHistory();
-      setLoadingHistory(false);
     }
   };
 
@@ -734,38 +713,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     }
     // Update state instantly so user sees the tag change
     setHistoryItems(prev => prev.map(item => item.id === id ? { ...item, isPdf: true } : item));
-    if (selectedHistoryItem?.id === id) {
-      setSelectedHistoryItem(prev => prev ? { ...prev, isPdf: true } : null);
-    }
-  };
-
-  const deleteHistoryItem = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    triggerVibration(15);
-    const uid = auth.currentUser?.uid;
-    if (uid && !id.startsWith('local_')) {
-      try {
-        await deleteDoc(doc(db, 'generated_questions', id));
-        setHistoryItems(prev => prev.filter(item => item.id !== id));
-        if (selectedHistoryItem?.id === id) {
-          setSelectedHistoryItem(null);
-        }
-      } catch (err) {
-        console.error("Failed to delete from Firestore:", err);
-      }
-    } else {
-      try {
-        const local = JSON.parse(safeGetItem('local_generated_questions') || '[]');
-        const updated = local.filter((item: any) => item.id !== id);
-        safeSetItem('local_generated_questions', JSON.stringify(updated));
-        setHistoryItems(prev => prev.filter(item => item.id !== id));
-        if (selectedHistoryItem?.id === id) {
-          setSelectedHistoryItem(null);
-        }
-      } catch (e) {
-        console.error("Failed to delete local item:", e);
-      }
-    }
   };
 
   const handleGenerate = async () => {
@@ -1371,9 +1318,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     const blobUrl = URL.createObjectURL(pdfBlob);
     
     // Automatically flag this item as a PDF in the feature's history
-    if (selectedHistoryItem) {
-      await markHistoryItemAsPdf(selectedHistoryItem.id);
-    } else if (currentSavedId) {
+    if (currentSavedId) {
       await markHistoryItemAsPdf(currentSavedId);
     }
 
@@ -1405,9 +1350,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     const dataUri = doc.output('datauristring');
 
     // Automatically flag this item as a PDF in the feature's history
-    if (selectedHistoryItem) {
-      await markHistoryItemAsPdf(selectedHistoryItem.id);
-    } else if (currentSavedId) {
+    if (currentSavedId) {
       await markHistoryItemAsPdf(currentSavedId);
     }
 
@@ -1417,61 +1360,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
 
     // Trigger mobile/native share panel
     await sharePDFMobile(pdfBlob, filename);
-  };
-
-  useEffect(() => {
-    if (selectedHistoryItem && detailViewMode === 'pdf') {
-      try {
-        const doc = generateQuestionsPDF(
-          selectedHistoryItem.questions,
-          selectedHistoryItem.topic,
-          selectedHistoryItem.gradeLevel,
-          selectedHistoryItem.stream
-        );
-        if (doc) {
-          setHistoryPdfUri(doc.output('datauristring'));
-        }
-      } catch (err) {
-        console.error("Failed to generate PDF for selected history item:", err);
-      }
-    } else {
-      setHistoryPdfUri(null);
-    }
-  }, [selectedHistoryItem, detailViewMode]);
-
-  const handleSelectHistoryItem = (item: SavedSet) => {
-    triggerVibration(15);
-    setQuestions(item.questions);
-    setCustomTopic(item.topic);
-    setGradeLevel(item.gradeLevel);
-    setStream(item.stream);
-    setCurrentSavedId(item.id);
-    setShowHistory(false);
-    setSelectedHistoryItem(null);
-
-    if (item.isPdf) {
-      try {
-        const doc = generateQuestionsPDF(item.questions, item.topic, item.gradeLevel, item.stream);
-        if (doc) {
-          const filename = `${item.topic.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_questions.pdf`;
-          const pdfBlob = doc.output('blob');
-          const blobUrl = URL.createObjectURL(pdfBlob);
-          setPreviewPdfUri(blobUrl);
-          setPreviewPdfName(filename);
-        }
-      } catch (err) {
-        console.error("Failed to pre-render history PDF:", err);
-      }
-    }
-  };
-
-  const handleToggleHistory = () => {
-    triggerVibration(10);
-    if (!showHistory) {
-      fetchHistory();
-    }
-    setShowHistory(!showHistory);
-    setSelectedHistoryItem(null);
   };
 
   if (previewPdfUri) {
@@ -1540,107 +1428,11 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
             </h2>
           </div>
         </div>
-        <button
-          onClick={handleToggleHistory}
-          className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all cursor-pointer shrink-0 active:scale-95 ${
-            showHistory 
-              ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/20' 
-              : 'bg-white text-zinc-700 border-zinc-200/60 hover:text-purple-600 shadow-sm'
-          }`}
-          title="History Log"
-          aria-label="History Log"
-        >
-          <History className="w-5 h-5" />
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-36 max-w-xl mx-auto w-full space-y-6">
         <AnimatePresence mode="wait">
-          
-          {/* HISTORY LOG SECTION */}
-          {showHistory ? (
-            <motion.div
-              key="history-panel"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              className="space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-lg text-zinc-900 tracking-tight flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-purple-600" /> Saved Question Sets
-                </h3>
-                <button 
-                  onClick={() => setShowHistory(false)}
-                  className="text-xs font-bold text-purple-600 hover:underline cursor-pointer"
-                >
-                  Close History
-                </button>
-              </div>
-
-              {/* LIST OF HISTORY ITEMS */}
-              <div className="space-y-3">
-                {loadingHistory ? (
-                  <AdvancedLoader type="skeleton" skeletonType="list" count={3} />
-                ) : !Array.isArray(historyItems) || historyItems.length === 0 ? (
-                  <div className="bg-white border border-zinc-200 rounded-3xl p-8 text-center text-zinc-500">
-                    <HelpCircle className="w-12 h-12 text-zinc-300 mx-auto mb-3" />
-                    <h4 className="font-extrabold text-sm text-zinc-800">No practice sets found</h4>
-                    <p className="text-xs text-zinc-450 mt-1 leading-relaxed">
-                      Once you generate subjective questions, they will be saved here automatically for offline review!
-                    </p>
-                  </div>
-                ) : (
-                  (historyItems || []).map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => handleSelectHistoryItem(item)}
-                      className="bg-white border border-zinc-200/80 hover:border-purple-300 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all shadow-sm group"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0 flex-1 text-left">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          item.isPdf 
-                            ? 'bg-red-50 text-red-600' 
-                            : 'bg-purple-50 text-purple-600'
-                        }`}>
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-extrabold text-sm text-zinc-900 truncate group-hover:text-purple-700">
-                            {item.topic}
-                          </h4>
-                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                            <p className="text-[10px] text-zinc-500 font-bold">
-                              {item.count} Questions • {item.createdAt.toLocaleDateString()}
-                            </p>
-                            {item.isPdf ? (
-                              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-red-100 text-red-700 border border-red-200 uppercase tracking-wide flex items-center gap-0.5">
-                                <span>📄</span> PDF
-                              </span>
-                            ) : (
-                              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-wide flex items-center gap-0.5">
-                                <span>📝</span> Standard
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => deleteHistoryItem(item.id, e)}
-                          className="w-8 h-8 rounded-full bg-zinc-50 hover:bg-red-50 text-zinc-400 hover:text-red-500 flex items-center justify-center transition-colors"
-                          title="Delete practice set"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <ChevronRight className="w-5 h-5 text-zinc-450 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </motion.div>
-          ) : loading ? (
+          {loading ? (
             
             // PREMIUM ADVANCED LOADER WITH GLOWING ORB & ENGAGING FEEDBACK
             <motion.div

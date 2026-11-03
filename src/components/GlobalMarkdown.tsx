@@ -158,8 +158,8 @@ export function cleanMarkdownMath(content: string): string {
   text = text.replace(/\\\\(text|frac|sqrt|quad|qquad|approx|rightarrow|leftarrow|Rightarrow|Leftarrow|cdot|times|pm|left|right|theta|pi|alpha|beta|gamma|delta|lambda|mu|sigma|omega|Delta|Omega|sin|cos|tan|log|ln|lim|sum|int|partial|boxed|mathbf|mathrm)\b/g, '\\$1');
 
   // 0. Auto-heal single variable trailing dollar (e.g. "V$ =" -> "$V$ =", "• C$ =" -> "• $C$ =")
-  text = text.replace(/(?<=^|[\s•\-\*])([A-Za-z])\$\s*([=:\-–])/g, '$$1$ $2');
-  text = text.replace(/(?<=^|[\s•\-\*])([A-Za-z])\$\s+(?=[A-Z0-9a-z])/g, '$$1$ ');
+  text = text.replace(/(?<=^|[\s•\-\*])([A-Za-z])\$\s*([=:\-–])/g, (_, g1, g2) => `$${g1}$ ${g2}`);
+  text = text.replace(/(?<=^|[\s•\-\*])([A-Za-z])\$\s+(?=[A-Z0-9a-z])/g, (_, g1) => `$${g1}$ `);
 
   // 0b. Auto-heal escaped chemical lists (e.g. "(\also\text{H},\text{F}...$)" -> "(H, F, Cl, Br, I)")
   text = text.replace(/\\also\\text\{([A-Za-z]+)\}/g, '$1');
@@ -167,13 +167,14 @@ export function cleanMarkdownMath(content: string): string {
   text = text.replace(/\(([A-Z][a-z]?(?:,\s*[A-Z][a-z]?)+)\$\)/g, '($1)');
 
   // 0c. Transform run-on chart/shape lists into standard Markdown Tables
-  text = text.replace(/(?:Hybridization\s*(?:Value\s*&\s*)?Shape\s*Chart|Shape\s*Chart):\s*-\s*(2\s*\\rightarrow[\s\S]+?Octahedral[^\n]*)/i, (_m, body) => {
+  text = text.replace(/(?:(?:Hybridization|Shape|Steric\s*Number|Geometry|Molecular\s*Geometry|Value\s*&\s*Shape)[\s\S]*?(?:Chart|Table|List)?):\s*-\s*([0-9]+\s*\\rightarrow[\s\S]+?(?:Octahedral|\(Octahedral\)|\([a-zA-Z\s]+\)))(?=\n\n|$|\n[A-Z])/i, (_m, body) => {
     const items = body.split(/\s*-\s*(?=[0-9])/).map(s => s.trim()).filter(Boolean);
     let table = '### 📊 Hybridization Value & Shape Chart\n\n| Steric Number | Hybridization | Molecular Geometry |\n| :---: | :---: | :---: |\n';
     items.forEach(item => {
       const numMatch = item.match(/^\s*([0-9]+)\s*\\rightarrow/);
       const shapeMatch = item.match(/\(([^)]+)\)/);
       let rawHyb = item.replace(/^\s*[0-9]+\s*\\rightarrow\s*/, '').replace(/\([^)]*\)/, '').replace(/\$/g, '').trim();
+      rawHyb = rawHyb.replace(/\\text\{([A-Za-z0-9]+)\}/g, '$1');
       if (numMatch) {
         const num = numMatch[1];
         const shape = shapeMatch ? shapeMatch[1].trim() : '';
@@ -239,6 +240,12 @@ export function cleanMarkdownMath(content: string): string {
         return trimmed + '$$';
       }
     }
+
+    // Auto-wrap standalone unwrapped formulas (e.g. "H = \frac{1}{2}[V + M - C + A]") in $$...$$
+    if (!trimmed.includes('$') && /^[A-Za-z0-9()\s=+*^_[\]/-]*\\(?:frac|sqrt|times|div|pm|approx|cdot|sum|int|lim|prod|alpha|beta|theta)\b/.test(trimmed)) {
+      return `$$${trimmed}$$`;
+    }
+
     return line;
   });
   text = fixedLines.join('\n');

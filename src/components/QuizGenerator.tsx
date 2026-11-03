@@ -760,6 +760,7 @@ export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   const [askAIMode, setAskAIMode] = useState<'choose' | 'hint' | 'step_by_step'>('choose');
   const [askAILoadingMode, setAskAILoadingMode] = useState<'hint' | 'step_by_step' | null>(null);
   const askAILoading = !!askAILoadingMode;
+  const [copiedAiHelp, setCopiedAiHelp] = useState(false);
   const askAICacheRef = useRef<Record<number, { hint?: string; step_by_step?: string }>>({});
   const [askAICache, setAskAICache] = useState<Record<number, { hint?: string; step_by_step?: string }>>({});
   // Track active AI Doubt Mode per question index so output renders directly under that question

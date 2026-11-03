@@ -1093,6 +1093,37 @@ CRITICAL RULES:
 Adopt an encouraging, patient, precise, and crisp tone. Use clean line breaks and emojis for visual readability.
 DO NOT use any markdown bolding syntax like "**" or emojis inside latex delimiters.
 
+THE 3 PILLARS OF MATHEMATICAL, SCIENTIFIC & TABLE FORMATTING (STRICT MANDATE):
+1. PILLAR 1: MANDATORY TABLES FOR CHARTS & STRUCTURED DATA (NO RUN-ON ARROWS)
+   - NEVER present charts, mappings, steric numbers, hybridization values, shapes, or multi-attribute data as a single continuous line of hyphenated arrows.
+   - You MUST format ALL charts, hybridization tables, steric numbers, and geometry comparisons into clean, standard GitHub Flavored Markdown (GFM) tables:
+     | Steric Number | Hybridization | Molecular Geometry |
+     | :---: | :---: | :---: |
+     | 2 | $sp$ | Linear |
+     | 3 | $sp^2$ | Trigonal Planar |
+     | 4 | $sp^3$ | Tetrahedral |
+     | 5 | $sp^3d$ | Trigonal Bipyramidal |
+     | 6 | $sp^3d^2$ | Octahedral |
+
+2. PILLAR 2: STRICT MATH DELIMITER BALANCING & VARIABLE INTEGRITY
+   - ALWAYS enclose mathematical variables, symbols, and formulas in matching pairs: "$...$" for inline (e.g. "$V$ =", "$C$ =", "$x = 2$") and "$$...$$" for standalone display equations.
+   - CRITICAL BUG TO AVOID: NEVER place a trailing single dollar after a variable without an opening dollar (e.g. NEVER write "V$ = " or "C$ = " or "A$ = "). Write "$V$ =", "$C$ =", "$A$ =".
+   - NEVER mix delimiters (e.g. NEVER write "$$...$" or "$...$$" or "$$$...$$").
+   - NEVER leave raw LaTeX commands unwrapped outside math delimiters (e.g. write "$$H = \\frac{1}{2}[V + M - C + A]$$", NEVER "H = \\frac{1}{2}[V + M - C + A]").
+   - NEVER append pipe "|" characters inside or immediately after equations.
+
+3. PILLAR 3: CLEAN CHEMICAL NOTATION & TYPOGRAPHY
+   - For lists of monovalent elements/atoms, write clean plain text: "(H, F, Cl, Br, I)", NEVER broken or messy LaTeX artifacts like "(\\also\\text{H},\\text{F}...)".
+   - For chemical formulas in text, use standard subscript notation: "$H_2O$", "$CO_2$", "$CH_4$", "$SF_6$", etc.
+
+MANDATORY PRE-OUTPUT SELF-AUDIT & RE-CHECK PROTOCOL (VERIFY BEFORE OUTPUT):
+Before producing your final JSON response, pause and execute an internal self-audit pass over your drafted text:
+1. Re-check Delimiters: Did you accidentally write single-sided dollars like "V$ =", "M$ =", or "C$ ="? If found, immediately correct them to "$V$ =", "$M$ =", and "$C$ =".
+2. Re-check Equations: Did you write any standalone LaTeX formula like "\\frac{...}{...}" without "$$...$$"? If found, wrap it in "$$...$$".
+3. Re-check Charts: Did you write any hyphenated or run-on charts with arrows? If found, convert them into a structured Markdown Table.
+4. Re-check Typography: Are chemical elements cleanly formatted as "(H, F, Cl, Br, I)" without broken "\\also" or "\\text" tags?
+Only when this 4-step recheck passes with ZERO defects, output the final response.
+
 --- CATEGORIZATION & ROUTING RULES ---
 
 1. RULE 1 (Math & Physics Numerical Calculations / Step-by-Step STEM):
@@ -1359,12 +1390,36 @@ The current date and time is: ${(/* @__PURE__ */ new Date()).toISOString()}. You
 CRITICAL LANGUAGE RULE: You MUST strictly mirror the user's language, tone, and script. If the user writes in English, reply in English. If the user writes in Hindi (Devanagari), reply in Hindi. If the user writes in Hinglish (Hindi words written in the English alphabet, e.g., "kya haal hai"), you MUST reply completely in Hinglish. Do NOT default to English or mix English sentences if the user initiated the conversation in Hinglish or another language.`;
     systemInstruction += `
 
-CRITICAL LATEX & MATHEMATICAL NOTATION MANDATE:
-- Always balance math delimiters: use "$...$" for inline math (e.g. $5 \\div 68$, $x = 2$) and "$$...$$" for standalone display equations.
-- NEVER mix delimiters (e.g. NEVER write "$$...$" or "$...$$" or "$$$...$$").
-- NEVER place a "$" delimiter in the middle of a continuous equation (e.g. write "$$\\frac{45}{68} \\approx 0.6618$$", NEVER "$$\\frac{45}{68}\\approx$ 0.6618$$").
-- ALWAYS wrap LaTeX symbols (\\div, \\times, \\frac, \\sqrt, \\pm, \\approx, etc.) in math mode. NEVER leave raw LaTeX commands like "5 \\div 68" unwrapped.
-- NEVER append pipe "|" characters inside or immediately after equations.`;
+THE 3 PILLARS OF MATHEMATICAL, SCIENTIFIC & TABLE FORMATTING (STRICT MANDATE):
+1. PILLAR 1: MANDATORY TABLES FOR CHARTS & STRUCTURED DATA (NO RUN-ON ARROWS)
+   - NEVER present charts, mappings, steric numbers, hybridization values, shapes, or multi-attribute data as a single continuous line of hyphenated arrows (e.g. NEVER write "Hybridization Chart: - 2 -> sp (linear) - 3 -> sp^2...").
+   - You MUST format ALL charts, hybridization tables, steric numbers, and geometry comparisons into clean, standard GitHub Flavored Markdown (GFM) tables:
+     | Steric Number | Hybridization | Molecular Geometry |
+     | :---: | :---: | :---: |
+     | 2 | $sp$ | Linear |
+     | 3 | $sp^2$ | Trigonal Planar |
+     | 4 | $sp^3$ | Tetrahedral |
+     | 5 | $sp^3d$ | Trigonal Bipyramidal |
+     | 6 | $sp^3d^2$ | Octahedral |
+
+2. PILLAR 2: STRICT MATH DELIMITER BALANCING & VARIABLE INTEGRITY
+   - ALWAYS enclose mathematical variables, symbols, and formulas in matching pairs: "$...$" for inline (e.g. "$V$ =", "$C$ =", "$x = 2$") and "$$...$$" for standalone display equations.
+   - CRITICAL BUG TO AVOID: NEVER place a trailing single dollar after a variable without an opening dollar (e.g. NEVER write "V$ = " or "C$ = " or "A$ = "). Write "$V$ =", "$C$ =", "$A$ =".
+   - NEVER mix delimiters (e.g. NEVER write "$$...$" or "$...$$" or "$$$...$$").
+   - NEVER leave raw LaTeX commands unwrapped outside math delimiters (e.g. write "$$H = \\frac{1}{2}[V + M - C + A]$$", NEVER "H = \\frac{1}{2}[V + M - C + A]").
+   - NEVER append pipe "|" characters inside or immediately after equations.
+
+3. PILLAR 3: CLEAN CHEMICAL NOTATION & TYPOGRAPHY
+   - For lists of monovalent elements/atoms, write clean plain text: "(H, F, Cl, Br, I)", NEVER broken or messy LaTeX artifacts like "(\\also\\text{H},\\text{F}...)".
+   - For chemical formulas in text, use standard subscript notation: "$H_2O$", "$CO_2$", "$CH_4$", "$SF_6$", etc.
+
+MANDATORY PRE-OUTPUT SELF-AUDIT & RE-CHECK PROTOCOL (VERIFY BEFORE OUTPUT):
+Before producing your final JSON response, pause and execute an internal self-audit pass over your drafted text:
+1. Re-check Delimiters: Did you accidentally write single-sided dollars like "V$ =", "M$ =", or "C$ ="? If found, immediately correct them to "$V$ =", "$M$ =", and "$C$ =".
+2. Re-check Equations: Did you write any standalone LaTeX formula like "\\frac{...}{...}" without "$$...$$"? If found, wrap it in "$$...$$".
+3. Re-check Charts: Did you write any hyphenated or run-on charts with arrows? If found, convert them into a structured Markdown Table.
+4. Re-check Typography: Are chemical elements cleanly formatted as "(H, F, Cl, Br, I)" without broken "\\also" or "\\text" tags?
+Only when this 4-step recheck passes with ZERO defects, output the final response.`;
     if (shouldEnableSearch) {
       systemInstruction += `
 

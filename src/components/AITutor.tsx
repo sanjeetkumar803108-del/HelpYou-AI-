@@ -2427,12 +2427,30 @@ Please evaluate this answer strictly according to your system rubric.`;
                         <Brain className="w-4 h-4 text-white animate-pulse" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-zinc-100 font-bold tracking-wide">AI is thinking</span>
-                      <span className="inline-flex items-center gap-1 ml-0.5">
-                        <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-dot-1" />
-                        <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-dot-2" />
-                        <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-dot-3" />
+                      {/* Unique 3D Vertical Rotating 3-Dot Orbit */}
+                      <span className="relative w-4 h-5 inline-flex items-center justify-center shrink-0 ml-0.5" title="AI is thinking...">
+                        {[0, 1, 2].map((i) => (
+                          <motion.span
+                            key={i}
+                            className="absolute w-1.5 h-1.5 rounded-full bg-gradient-to-r from-purple-400 to-indigo-300 shadow-[0_0_8px_rgba(192,132,252,0.85)] pointer-events-none"
+                            animate={{
+                              y: [-6, 0, 6, 0, -6],
+                              x: [0, 4, 0, -4, 0],
+                              rotateX: [0, 180, 360, 180, 0],
+                              scale: [0.75, 1.25, 0.85, 0.65, 0.75],
+                              opacity: [0.5, 1, 0.65, 0.35, 0.5],
+                              zIndex: [1, 10, 5, 0, 1]
+                            }}
+                            transition={{
+                              duration: 1.4,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                              delay: i * 0.46,
+                            }}
+                          />
+                        ))}
                       </span>
                     </div>
                   </div>

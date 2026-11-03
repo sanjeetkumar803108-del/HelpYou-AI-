@@ -1,4 +1,4 @@
-import { safeGetItem } from './storage';
+import { safeGetItem, safeSetItem } from './storage';
 import { auth } from '../lib/firebase';
 import { getStoredExamBlueprint, formatBlueprintForAIPrompt } from './academicBlueprint';
 

@@ -1,5 +1,6 @@
 import { safeGetItem } from './storage';
 import { getStoredExamBlueprint } from './academicBlueprint';
+import { getVerifiedChapterSubTopics } from './communityCache';
 
 export interface CurriculumSubject {
   id: string;

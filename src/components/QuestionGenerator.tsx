@@ -15,7 +15,7 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached } from '../utils/communityCache';
+import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
@@ -233,6 +233,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [customSubTopicInput, setCustomSubTopicInput] = useState<{ [chapterKey: string]: string }>({});
   const [showCustomInputForChapter, setShowCustomInputForChapter] = useState<string | null>(null);
   const [customInputError, setCustomInputError] = useState<{ [chapterKey: string]: string }>({});
+  const [isVerifyingSubTopic, setIsVerifyingSubTopic] = useState<{ [chapterKey: string]: boolean }>({});
   const [targetExam, setTargetExam] = useState('');
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
   const [showAllSubjects, setShowAllSubjects] = useState<boolean>(false);
@@ -2225,30 +2226,58 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                 {subTopicsList.map((sub, sIdx) => {
                                                   const subTarget = `${topicTargetStr} - ${sub}`;
                                                   const isSubSelected = customTopic === subTarget;
+                                                  const verifiedCustoms = getVerifiedChapterSubTopics(topicTargetStr, topicItem);
+                                                  const isUserAdded = verifiedCustoms.some(vc => vc.toLowerCase().trim() === sub.toLowerCase().trim());
+
                                                   return (
-                                                    <button
+                                                    <div
                                                       key={sIdx}
-                                                      type="button"
-                                                      onClick={() => {
-                                                        triggerVibration(15);
-                                                        setCustomTopic(subTarget);
-                                                      }}
-                                                      className={`w-full py-2 px-3 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer shadow-2xs border ${
+                                                      className={`w-full py-1.5 px-3 rounded-xl flex items-center justify-between text-left transition-all shadow-2xs border gap-2 ${
                                                         isSubSelected
                                                           ? 'bg-purple-50 border-purple-500 ring-1 ring-purple-500/20'
                                                           : 'bg-white border-zinc-200/70 hover:bg-purple-50/40 hover:border-purple-200'
                                                       }`}
                                                     >
-                                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          triggerVibration(15);
+                                                          setCustomTopic(subTarget);
+                                                        }}
+                                                        className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer text-left"
+                                                      >
                                                         <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
                                                         <span className={`text-xs truncate ${isSubSelected ? 'font-bold text-purple-900' : 'font-medium text-zinc-700'}`}>
                                                           {sub}
                                                         </span>
+                                                      </button>
+                                                      <div className="flex items-center gap-1.5 shrink-0">
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            triggerVibration(15);
+                                                            setCustomTopic(subTarget);
+                                                          }}
+                                                          className="text-[10px] font-bold text-purple-600 bg-purple-50/80 hover:bg-purple-100 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                                                        >
+                                                          Select
+                                                        </button>
+                                                        {isUserAdded && (
+                                                          <button
+                                                            type="button"
+                                                            title="Remove subtopic"
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              triggerVibration(20);
+                                                              removeCustomChapterSubTopic(topicTargetStr, topicItem, sub);
+                                                            }}
+                                                            className="p-1 text-zinc-400 hover:text-rose-500 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                                                          >
+                                                            <Trash2 className="w-3 h-3" />
+                                                          </button>
+                                                        )}
                                                       </div>
-                                                      <span className="text-[10px] font-bold text-purple-600 bg-purple-50/80 px-2 py-0.5 rounded-md shrink-0">
-                                                        Select
-                                                      </span>
-                                                    </button>
+                                                    </div>
                                                   );
                                                 })}
                                               </div>
@@ -2262,24 +2291,35 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                         type="text"
                                                         placeholder={`e.g. Specific formula or concept...`}
                                                         value={customSubTopicInput[chapterKey] || ''}
+                                                        disabled={isVerifyingSubTopic[chapterKey]}
                                                         onChange={(e) => {
                                                           setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: e.target.value }));
                                                           if (customInputError[chapterKey]) {
                                                             setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                           }
                                                         }}
-                                                        onKeyDown={(e) => {
+                                                        onKeyDown={async (e) => {
                                                           if (e.key === 'Enter') {
                                                             const val = (customSubTopicInput[chapterKey] || '').trim();
-                                                            const check = isValidAcademicTopicInput(val, topicItem);
+                                                            if (!val || isVerifyingSubTopic[chapterKey]) return;
+                                                            setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: true }));
+                                                            setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                            const profile = getUserProfileData();
+                                                            const targetExam = profile.targetExam || safeGetItem('academic_exam') || 'General';
+                                                            const country = profile.country || safeGetItem('academic_country') || 'India';
+                                                            const check = await verifySubTopicWithAI(topicTargetStr, topicItem, val, targetExam, country);
+                                                            setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: false }));
                                                             if (!check.isValid) {
                                                               triggerVibration([30, 50, 30]);
-                                                              setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid topic' }));
+                                                              setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid academic concept.' }));
                                                               return;
                                                             }
+                                                            const finalTitle = check.cleanTitle || val;
                                                             setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                            setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: '' }));
                                                             triggerVibration(15);
-                                                            setCustomTopic(`${topicTargetStr} - ${val}`);
+                                                            registerVerifiedChapterSubTopic(topicTargetStr, topicItem, finalTitle);
+                                                            setCustomTopic(`${topicTargetStr} - ${finalTitle}`);
                                                           }
                                                         }}
                                                         className={`flex-1 text-xs px-3 py-2 border rounded-xl bg-white focus:outline-none focus:ring-1 text-zinc-800 ${
@@ -2291,21 +2331,39 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                       />
                                                       <button
                                                         type="button"
-                                                        onClick={() => {
+                                                        disabled={isVerifyingSubTopic[chapterKey]}
+                                                        onClick={async () => {
                                                           const val = (customSubTopicInput[chapterKey] || '').trim();
-                                                          const check = isValidAcademicTopicInput(val, topicItem);
+                                                          if (!val || isVerifyingSubTopic[chapterKey]) return;
+                                                          setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: true }));
+                                                          setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                          const profile = getUserProfileData();
+                                                          const targetExam = profile.targetExam || safeGetItem('academic_exam') || 'General';
+                                                          const country = profile.country || safeGetItem('academic_country') || 'India';
+                                                          const check = await verifySubTopicWithAI(topicTargetStr, topicItem, val, targetExam, country);
+                                                          setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: false }));
                                                           if (!check.isValid) {
                                                             triggerVibration([30, 50, 30]);
-                                                            setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid topic' }));
+                                                            setCustomInputError(prev => ({ ...prev, [chapterKey]: check.error || 'Invalid academic concept.' }));
                                                             return;
                                                           }
+                                                          const finalTitle = check.cleanTitle || val;
                                                           setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
+                                                          setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: '' }));
                                                           triggerVibration(15);
-                                                          setCustomTopic(`${topicTargetStr} - ${val}`);
+                                                          registerVerifiedChapterSubTopic(topicTargetStr, topicItem, finalTitle);
+                                                          setCustomTopic(`${topicTargetStr} - ${finalTitle}`);
                                                         }}
-                                                        className="px-3 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl hover:bg-purple-700 transition-all shrink-0 cursor-pointer"
+                                                        className="px-3 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl hover:bg-purple-700 transition-all shrink-0 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
                                                       >
-                                                        Apply
+                                                        {isVerifyingSubTopic[chapterKey] ? (
+                                                          <>
+                                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            <span>Verifying...</span>
+                                                          </>
+                                                        ) : (
+                                                          <span>Apply</span>
+                                                        )}
                                                       </button>
                                                     </div>
                                                     {customInputError[chapterKey] && (

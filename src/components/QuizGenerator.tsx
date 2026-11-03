@@ -2329,9 +2329,7 @@ Goal: Generate a master-level ${isHint ? 'question breakdown and 3 progressive h
               aria-label="Question Palette"
             >
               <span>Q</span>
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-xs">
-                {currentIndex + 1}
-              </span>
+              
             </button>
           ) : (
             <button

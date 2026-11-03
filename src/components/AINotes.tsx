@@ -533,11 +533,10 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
               fetchCloudNotes();
               setShowHistoryModal(true);
             }}
-            className="px-3 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 border border-purple-200 flex items-center gap-1.5 transition-all cursor-pointer font-bold text-xs shadow-2xs"
-            title="My Saved Notes (Cross-Device Cloud Synced)"
+            className="w-8 h-8 rounded-full bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 border border-purple-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+            title={`My Saved Notes (${historyItems.length})`}
           >
-            <RotateCcw className={`w-3.5 h-3.5 ${syncingCloud ? 'animate-spin text-purple-600' : 'text-purple-600'}`} />
-            <span>Saved ({historyItems.length})</span>
+            <RotateCcw className={`w-4 h-4 ${syncingCloud ? 'animate-spin text-purple-600' : 'text-purple-600'}`} />
           </button>
 
           {notesData && (

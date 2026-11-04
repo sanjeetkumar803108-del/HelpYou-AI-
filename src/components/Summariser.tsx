@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { ArrowLeft, Loader2, Save, FileText, Upload, History, Trash2, Calendar, Share2, Download, Flag } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import ReportAIModal from './ReportAIModal';
+import FeatureAILoader from './FeatureAILoader';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
@@ -55,11 +56,11 @@ export default function Summariser({ onBack }: SummariserProps) {
   const [currentActiveTitle, setCurrentActiveTitle] = useState<string>('');
 
   const summarisingSteps = [
-    "Reading & analyzing source text...",
-    "Identifying core themes and key facts...",
-    "Synthesizing high-yield information...",
-    "Drafting your custom summary...",
-    "Polishing for maximum clarity..."
+    "Scanning Key Paragraphs & Facts...",
+    "Filtering Redundancies & Fluff...",
+    "Extracting High-Yield Core Concepts...",
+    "Formatting Concise Takeaways...",
+    "Delivering Executive Summary..."
   ];
 
   const [showHistory, setShowHistory] = useState(false);
@@ -607,45 +608,16 @@ export default function Summariser({ onBack }: SummariserProps) {
           )}
         </div>
       ) : loading && !result ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center max-w-md mx-auto"
-        >
-          <div className="relative mb-8">
-            <div className="absolute inset-0 bg-emerald-500/10 rounded-full blur-xl animate-pulse" />
-            <div className="relative w-20 h-20 bg-gradient-to-tr from-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center shadow-xl shadow-emerald-500/20">
-              <FileText className="w-10 h-10 text-white animate-pulse" />
-            </div>
-          </div>
-
-          <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Summarising...</h3>
-          <p className="text-emerald-600 font-bold text-sm tracking-wide uppercase mb-8 min-h-[20px]">
-            {summarisingSteps[loadingStep]}
-          </p>
-
-          <div className="w-full bg-zinc-200/60 rounded-full h-3 mb-4 overflow-hidden border border-zinc-200 p-[2px]">
-            <div 
-              className="bg-gradient-to-r from-emerald-600 to-teal-500 h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${loadingProgress}%` }}
-            />
-          </div>
-          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-12">
-            {loadingProgress}% Complete
-          </div>
-
-          <div className="w-full space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex gap-3">
-                <div className="w-2 h-2 rounded-full bg-zinc-200 mt-2 shrink-0 animate-pulse" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-zinc-100 rounded-full w-full animate-pulse" />
-                  <div className="h-4 bg-zinc-50 rounded-full w-[85%] animate-pulse" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+        <FeatureAILoader
+          title="Synthesizing Summary..."
+          steps={summarisingSteps}
+          currentStepIndex={loadingStep}
+          progress={loadingProgress}
+          icon={<FileText className="w-10 h-10" />}
+          gradientClass="from-emerald-500 via-teal-600 to-cyan-600"
+          glowColorClass="bg-emerald-500/20 shadow-emerald-500/20"
+          accentTextColor="text-emerald-600"
+        />
       ) : !result ? (
           <div className="flex-1 flex flex-col z-10 w-full max-w-md mx-auto">
             <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-md">

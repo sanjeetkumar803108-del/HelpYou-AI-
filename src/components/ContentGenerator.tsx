@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import ReportAIModal from './ReportAIModal';
+import FeatureAILoader from './FeatureAILoader';
 import { motion } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
@@ -282,11 +283,11 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
   const [loadingStep, setLoadingStep] = useState(0);
 
   const writingSteps = [
-    "Structuring your ideas...",
-    "Drafting the introduction...",
-    "Developing key arguments...",
-    "Fleshing out the details...",
-    "Polishing the final draft..."
+    "Outlining Structure & Arguments...",
+    "Crafting Expressive Paragraphs...",
+    "Enhancing Vocabulary & Tone...",
+    "Polishing Transitions & Flow...",
+    "Finalizing Clean Document..."
   ];
 
   const [showHistory, setShowHistory] = useState(false);
@@ -715,39 +716,16 @@ export default function ContentGenerator({ onBack }: ContentGeneratorProps) {
           )}
         </div>
       ) : loading && !result ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center max-w-md mx-auto mb-12"
-        >
-          <div className="relative mb-8">
-            <div className="absolute inset-0 bg-cyan-500/10 rounded-full blur-xl animate-pulse" />
-            <div className="relative w-20 h-20 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl flex items-center justify-center shadow-xl shadow-cyan-500/20">
-              <PenTool className="w-10 h-10 text-white animate-pulse" />
-            </div>
-          </div>
-
-          <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Drafting {selectedType}...</h3>
-          <p className="text-cyan-600 font-bold text-sm tracking-wide uppercase mb-8 min-h-[20px]">
-            {writingSteps[loadingStep]}
-          </p>
-
-          <div className="w-full bg-zinc-200/60 rounded-full h-3 mb-4 overflow-hidden border border-zinc-200 p-[2px]">
-            <div 
-              className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${loadingProgress}%` }}
-            />
-          </div>
-          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-12">
-            {loadingProgress}% Complete
-          </div>
-
-          <div className="w-full space-y-4">
-             <div className="h-4 bg-zinc-100 rounded-full w-full animate-pulse" />
-             <div className="h-4 bg-zinc-50 rounded-full w-[95%] animate-pulse" />
-             <div className="h-4 bg-zinc-100 rounded-full w-[80%] animate-pulse" />
-          </div>
-        </motion.div>
+        <FeatureAILoader
+          title={`Drafting ${selectedType || 'Content'}...`}
+          steps={writingSteps}
+          currentStepIndex={loadingStep}
+          progress={loadingProgress}
+          icon={<PenTool className="w-10 h-10" />}
+          gradientClass="from-cyan-500 via-teal-500 to-blue-600"
+          glowColorClass="bg-cyan-500/20 shadow-cyan-500/20"
+          accentTextColor="text-cyan-600"
+        />
       ) : !result ? (
           <div className="flex-1 flex flex-col w-full max-w-md mx-auto mb-12">
             <div className="bg-white border border-zinc-200 rounded-3xl p-4 sm:p-6 shadow-md">

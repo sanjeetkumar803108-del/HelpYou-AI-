@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import GlobalMarkdown from './GlobalMarkdown';
 import ReportAIModal from './ReportAIModal';
+import FeatureAILoader from './FeatureAILoader';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
@@ -126,11 +127,11 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
   };
 
   const enhancingSteps = [
-    "Analyzing sentence structure...",
-    "Checking for grammatical errors...",
-    "Refining vocabulary & word choice...",
-    "Improving natural flow & tone...",
-    "Finalizing your enhanced text..."
+    "Scanning Grammar & Punctuation...",
+    "Eliminating Awkward Phrasing...",
+    "Elevating Sentence Rhythm & Clarity...",
+    "Calibrating Academic Elegance...",
+    "Finalizing Polished Text..."
   ];
 
   useEffect(() => {
@@ -494,33 +495,16 @@ export default function GrammarEnhancer({ onBack }: GrammarEnhancerProps) {
           )}
         </div>
       ) : loading && !result ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center"
-        >
-          <div className="relative mb-8">
-            <div className="absolute inset-0 bg-purple-500/10 rounded-full blur-xl animate-pulse" />
-            <div className="relative w-20 h-20 bg-gradient-to-tr from-purple-500 to-indigo-600 rounded-3xl flex items-center justify-center shadow-xl shadow-purple-500/20 animate-bounce">
-              <Wand2 className="w-10 h-10 text-white animate-pulse" />
-            </div>
-          </div>
-
-          <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Enhancing Your Writing</h3>
-          <p className="text-purple-600 font-bold text-sm tracking-wide uppercase mb-6 min-h-[20px]">
-            {enhancingSteps[loadingStep]}
-          </p>
-
-          <div className="w-full max-w-md bg-zinc-200/60 rounded-full h-3 mb-4 overflow-hidden border border-zinc-200 p-[2px]">
-            <div 
-              className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${loadingProgress}%` }}
-            />
-          </div>
-          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-8">
-            {loadingProgress}% Refined
-          </div>
-        </motion.div>
+        <FeatureAILoader
+          title="Enhancing Grammar & Flow..."
+          steps={enhancingSteps}
+          currentStepIndex={loadingStep}
+          progress={loadingProgress}
+          icon={<Wand2 className="w-10 h-10" />}
+          gradientClass="from-violet-600 via-purple-500 to-rose-500"
+          glowColorClass="bg-violet-500/20 shadow-violet-500/20"
+          accentTextColor="text-violet-600"
+        />
       ) : !result ? (
         <div className="flex-1 flex flex-col">
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-zinc-200 mb-6 flex-1 flex flex-col">

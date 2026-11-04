@@ -36,6 +36,7 @@ import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curricul
 import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
+import FeatureAILoader from './FeatureAILoader';
 
 interface Flashcard {
   question: string;
@@ -238,11 +239,11 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
   const [isVerifyingSubTopic, setIsVerifyingSubTopic] = useState<{ [chapterKey: string]: boolean }>({});
 
   const flashcardSteps = [
-    "Analyzing topic & cognitive anchors...",
-    "Extracting high-yield concepts...",
-    "Formulating active recall questions...",
-    "Drafting 15-25 word concise answers...",
-    "Polishing your active revision deck..."
+    "Extracting Core Definitions...",
+    "Creating Active Recall Prompts...",
+    "Structuring Front & Back Cards...",
+    "Optimizing Spaced Repetition Tags...",
+    "Finalizing Revision Deck..."
   ];
 
   const [showHistory, setShowHistory] = useState(false);
@@ -884,33 +885,16 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           )}
         </div>
       ) : loading && flashcards.length === 0 ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex flex-col items-center justify-center py-10 px-4 text-center max-w-md mx-auto"
-        >
-          <div className="relative mb-6">
-            <div className="absolute inset-0 bg-pink-500/20 rounded-full blur-2xl animate-pulse" />
-            <div className="relative w-20 h-20 bg-gradient-to-tr from-pink-500 via-rose-500 to-amber-500 rounded-3xl flex items-center justify-center shadow-xl shadow-pink-500/20 text-white">
-              <Brain className="w-10 h-10 animate-pulse" />
-            </div>
-          </div>
-
-          <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-1.5">Calibrating Active Deck...</h3>
-          <p className="text-pink-600 font-black text-xs tracking-wider uppercase mb-6 min-h-[20px]">
-            {flashcardSteps[loadingStep]}
-          </p>
-
-          <div className="w-full bg-zinc-200/80 rounded-full h-3 mb-3 overflow-hidden border border-zinc-200 p-[2px]">
-            <div 
-              className="bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${loadingProgress}%` }}
-            />
-          </div>
-          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-2">
-            {loadingProgress}% Ready
-          </div>
-        </motion.div>
+        <FeatureAILoader
+          title="Generating Flashcards..."
+          steps={flashcardSteps}
+          currentStepIndex={loadingStep}
+          progress={loadingProgress}
+          icon={<Brain className="w-10 h-10" />}
+          gradientClass="from-pink-500 via-rose-500 to-amber-500"
+          glowColorClass="bg-pink-500/20 shadow-pink-500/20"
+          accentTextColor="text-pink-600"
+        />
       ) : flashcards.length === 0 ? (
         showConfig ? (
           <motion.div

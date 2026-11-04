@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PenTool, Loader2, ArrowLeft, Save, AlertCircle, Camera, History, Trash2, Calendar, X, Flag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReportAIModal from './ReportAIModal';
+import FeatureAILoader from './FeatureAILoader';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import GlobalMarkdown from './GlobalMarkdown';
@@ -305,11 +306,11 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
   ];
 
   const gradingSteps = [
-    "Reading your essay & analyzing structural markers...",
-    "Evaluating arguments against official College Board standards...",
-    "Scoring Thesis, Evidence, and Sophistication categories...",
-    "Generating point-by-point deduction analysis...",
-    "Polishing grammar & completing final verdict..."
+    "Reading Thesis & Core Arguments...",
+    "Auditing Grammar, Syntax & Flow...",
+    "Checking Evidence & Citation Strength...",
+    "Scoring Against Standard Rubrics...",
+    "Compiling Actionable Feedback..."
   ];
 
   useEffect(() => {
@@ -641,67 +642,16 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
           )}
         </div>
       ) : loading && !result ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center"
-        >
-          <div className="relative mb-8">
-            <div className="absolute inset-0 bg-indigo-500/10 rounded-full blur-xl animate-pulse" />
-            <div className="relative w-20 h-20 bg-gradient-to-tr from-indigo-500 to-blue-600 rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-500/20 animate-bounce">
-              <PenTool className="w-10 h-10 text-white animate-pulse" />
-            </div>
-          </div>
-
-          <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">Grading in Progress</h3>
-          <p className="text-indigo-600 font-bold text-sm tracking-wide uppercase mb-6 min-h-[20px]">
-            {gradingSteps[loadingStep]}
-          </p>
-
-          {/* Progress bar container */}
-          <div className="w-full max-w-md bg-zinc-200/60 rounded-full h-3 mb-4 overflow-hidden border border-zinc-200 p-[2px]">
-            <div 
-              className="bg-gradient-to-r from-indigo-600 to-blue-500 h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${loadingProgress}%` }}
-            />
-          </div>
-          <div className="text-xs font-black text-zinc-400 tracking-wider uppercase mb-8">
-            {loadingProgress}% Analyzed
-          </div>
-
-          {/* Granular Skeletons */}
-          <div className="w-full max-w-md space-y-4 mb-8">
-            <div className="flex items-center gap-4 bg-white/50 p-4 rounded-2xl border border-zinc-100 animate-pulse">
-               <div className="w-8 h-8 rounded-full bg-zinc-200 shrink-0" />
-               <div className="space-y-2 flex-1">
-                 <div className="h-3 bg-zinc-100 rounded-full w-full" />
-                 <div className="h-3 bg-zinc-50 rounded-full w-2/3" />
-               </div>
-            </div>
-            <div className="flex items-center gap-4 bg-white/30 p-4 rounded-2xl border border-zinc-100 animate-pulse scale-95 opacity-60">
-               <div className="w-8 h-8 rounded-full bg-zinc-100 shrink-0" />
-               <div className="space-y-2 flex-1">
-                 <div className="h-3 bg-zinc-50 rounded-full w-[90%]" />
-               </div>
-            </div>
-          </div>
-
-          {/* AP Study Tip Box */}
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="w-full max-w-md bg-white border border-zinc-200/80 rounded-3xl p-6 shadow-sm"
-          >
-            <div className="flex items-center gap-2 mb-2 text-amber-600 font-black text-xs uppercase tracking-widest justify-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-              <span>AI Pro Study Tip</span>
-            </div>
-            <p className="text-zinc-600 text-xs font-semibold leading-relaxed">
-              "{studyTip}"
-            </p>
-          </motion.div>
-        </motion.div>
+        <FeatureAILoader
+          title="Evaluating Your Essay..."
+          steps={gradingSteps}
+          currentStepIndex={loadingStep}
+          progress={loadingProgress}
+          icon={<PenTool className="w-10 h-10" />}
+          gradientClass="from-blue-600 via-indigo-600 to-violet-700"
+          glowColorClass="bg-blue-500/20 shadow-blue-500/20"
+          accentTextColor="text-blue-600"
+        />
       ) : !result ? (
         <div className="flex-1 flex flex-col">
           {/* DYNAMIC CASCADING DROPDOWNS */}

@@ -17,6 +17,7 @@ import { trackQuestProgress } from '../utils/gamification';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getApiUrl } from '../utils/api';
 import GlobalMarkdown, { formatNotesMath, formatFormulaBoxContent } from './GlobalMarkdown';
+import FeatureAILoader from './FeatureAILoader';
 
 interface AINotesProps {
   onBack: () => void;
@@ -562,53 +563,16 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
         
         {/* Clean & Simple Generating Animation */}
         {loading ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="no-print my-auto flex-1 flex flex-col items-center justify-center py-12 px-4 text-center max-w-md mx-auto w-full"
-          >
-            {/* Glowing Icon */}
-            <div className="relative mb-6">
-              <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-2xl animate-pulse" />
-              <div className="relative w-20 h-20 bg-gradient-to-tr from-amber-500 via-orange-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-xl shadow-amber-500/20 text-white">
-                <BookOpen className="w-10 h-10 animate-pulse" />
-              </div>
-            </div>
-
-            {/* Title */}
-            <h3 className="text-2xl font-black text-zinc-900 tracking-tight mb-2">
-              Generating Topper Notes...
-            </h3>
-
-            {/* Single dynamic short step line displayed one-by-one */}
-            <div className="h-6 mb-6 flex items-center justify-center overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={loadingStep}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.2 }}
-                  className="text-amber-600 font-black text-xs tracking-wider uppercase"
-                >
-                  {NOTES_LOADING_STEPS[loadingStep]}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-
-            {/* Clean Progress Bar */}
-            <div className="w-full bg-zinc-200/80 rounded-full h-3 mb-3 overflow-hidden border border-zinc-200 p-[2px]">
-              <div 
-                className="bg-gradient-to-r from-amber-500 via-orange-500 to-purple-600 h-full rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${loadingProgress}%` }}
-              />
-            </div>
-            
-            {/* Percentage */}
-            <div className="text-xs font-black text-zinc-400 tracking-wider uppercase">
-              {Math.round(loadingProgress)}% Ready
-            </div>
-          </motion.div>
+          <FeatureAILoader
+            title="Generating Topper Notes..."
+            steps={NOTES_LOADING_STEPS}
+            currentStepIndex={loadingStep}
+            progress={loadingProgress}
+            icon={<BookOpen className="w-10 h-10" />}
+            gradientClass="from-amber-500 via-orange-500 to-purple-600"
+            glowColorClass="bg-amber-500/20 shadow-amber-500/20"
+            accentTextColor="text-amber-600"
+          />
         ) : !notesData ? (
 
           /* STEP 1: CONFIGURATION & CHAPTER SELECTION SCREEN */

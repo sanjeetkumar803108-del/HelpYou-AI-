@@ -26,6 +26,7 @@ import { pickNativeFiles, takeNativePhoto } from '../utils/mobilePicker';
 import { showToast } from '../utils/toast';
 import { shareImageMobile } from '../utils/mobileSaver';
 import AdvancedLoader from './AdvancedLoader';
+import FeatureAILoader from './FeatureAILoader';
 import {
   ResponsiveContainer, 
   ComposedChart, 
@@ -1081,11 +1082,11 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
   const [loadingStep, setLoadingStep] = useState(0);
 
   const quizSteps = [
-    "Analyzing subject material...",
-    "Identifying high-yield exam topics...",
-    "Drafting complex multiple choice questions...",
-    "Formulating detailed explanations...",
-    "Finalizing your practice assessment..."
+    "Analyzing Target Exam Pattern...",
+    "Formulating High-Yield MCQs...",
+    "Calibrating Distractor Options...",
+    "Generating Step-by-Step Explanations...",
+    "Polishing Time Limits & Scoring..."
   ];
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -2291,25 +2292,16 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          <div className="max-w-md w-full mx-auto flex flex-col items-center space-y-6">
-            <AdvancedLoader type="orb" context="quiz" />
-
-            <div className="w-full bg-zinc-200/60 rounded-full h-3 overflow-hidden border border-zinc-200 p-[2px]">
-              <div 
-                className="bg-gradient-to-r from-purple-500 to-pink-500 h-full rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${loadingProgress}%` }}
-              />
-            </div>
-            
-            <div className="text-xs font-black text-zinc-400 tracking-wider uppercase">
-              {loadingProgress}% Complete
-            </div>
-
-            <div className="w-full pt-4">
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">AI Generation Pipeline</p>
-              <AdvancedLoader type="skeleton" skeletonType="list" count={1} />
-            </div>
-          </div>
+          <FeatureAILoader
+            title="Generating AI Quiz..."
+            steps={quizSteps}
+            currentStepIndex={loadingStep}
+            progress={loadingProgress}
+            icon={<HelpCircle className="w-10 h-10" />}
+            gradientClass="from-indigo-600 via-violet-600 to-purple-600"
+            glowColorClass="bg-indigo-500/20 shadow-indigo-500/20"
+            accentTextColor="text-indigo-600"
+          />
         </div>
       )}
       {/* HEADER */}

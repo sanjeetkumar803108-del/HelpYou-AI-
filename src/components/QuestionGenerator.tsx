@@ -29,6 +29,7 @@ import {
 } from '../utils/pdfTableRenderer';
 import SafePdfViewer from './SafePdfViewer';
 import AdvancedLoader from './AdvancedLoader';
+import FeatureAILoader from './FeatureAILoader';
 import GlobalMarkdown, { healGlobalMarkdown, healMarkdownTables } from './GlobalMarkdown';
 import { getApiUrl } from '../utils/api';
 
@@ -525,12 +526,11 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
   const loadingSteps = [
-    "Preparing questions...",
-    "Selecting relevant curriculum areas...",
-    "Calibrating open-ended difficulty level...",
-    "Drafting high-yield subjective practice prompts...",
-    "Compiling official step-by-step model solutions & marking rubrics...",
-    "Polishing question phrasing for maximum clarity..."
+    "Reviewing Syllabus Weightage...",
+    "Drafting Analytical Questions...",
+    "Structuring Sub-Parts & Marks...",
+    "Formulating Step-Marking Rubric...",
+    "Verifying Difficulty Balance..."
   ];
 
   useEffect(() => {
@@ -1435,31 +1435,16 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         <AnimatePresence mode="wait">
           {loading ? (
             
-            // PREMIUM ADVANCED LOADER WITH GLOWING ORB & ENGAGING FEEDBACK
-            <motion.div
-              key="loading-panel"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="bg-white border border-zinc-200/80 rounded-[2.5rem] p-8 text-center shadow-xl space-y-6 overflow-hidden relative"
-            >
-              <div className="absolute w-48 h-48 rounded-full bg-purple-500/5 blur-[80px] pointer-events-none top-0 left-1/2 -translate-x-1/2" />
-              
-              <AdvancedLoader type="orb" context="questions" />
-
-              {/* Progress Bar Container */}
-              <div className="w-full bg-zinc-100 h-2.5 rounded-full overflow-hidden border border-zinc-200/40">
-                <motion.div 
-                  className="bg-gradient-to-r from-purple-500 to-cyan-500 h-full"
-                  style={{ width: `${loadingProgress}%` }}
-                />
-              </div>
-
-              {/* Current Stage Indicator */}
-              <div className="text-[10px] uppercase font-black tracking-wider text-purple-600 dark:text-purple-400">
-                System Progress: {loadingProgress}% Completed
-              </div>
-            </motion.div>
+            <FeatureAILoader
+              title="Generating Practice Questions..."
+              steps={loadingSteps}
+              currentStepIndex={loadingStep}
+              progress={loadingProgress}
+              icon={<HelpCircle className="w-10 h-10" />}
+              gradientClass="from-purple-600 via-fuchsia-600 to-indigo-600"
+              glowColorClass="bg-purple-500/20 shadow-purple-500/20"
+              accentTextColor="text-purple-600"
+            />
 
           ) : questions ? (
             

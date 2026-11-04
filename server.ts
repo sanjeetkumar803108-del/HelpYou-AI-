@@ -48,7 +48,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-admin-secret', 'x-webhook-secret', 'x-revenuecat-secret', 'x-user-id', 'x-client-id', 'x-device-id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-admin-secret', 'x-webhook-secret', 'x-revenuecat-secret', 'x-user-id', 'x-client-id', 'x-device-id', 'x-user-is-pro'],
   exposedHeaders: ['X-Daily-Requests-Limit', 'X-Daily-Requests-Used', 'X-Daily-Requests-Remaining', 'X-Daily-Reset-Date']
 }));
 
@@ -80,10 +80,51 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 // =========================================================================
-// STRICT DAILY AI REQUEST LIMITER (100 AI Requests / Day / User or Client)
+// PREMIUM SUBSCRIPTION STORAGE & VERIFICATION
+// =========================================================================
+const SUBS_FILE_PATH = path.join(process.cwd(), "subscriptions.json");
+
+function getStoredSubscriptions(): Record<string, boolean> {
+  try {
+    if (fs.existsSync(SUBS_FILE_PATH)) {
+      return JSON.parse(fs.readFileSync(SUBS_FILE_PATH, "utf-8"));
+    }
+  } catch (error) {
+    console.error("Error reading subscriptions from file:", error);
+  }
+  return {};
+}
+
+function writeStoredSubscriptions(subs: Record<string, boolean>) {
+  try {
+    fs.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
+  } catch (error) {
+    console.error("Error saving subscriptions to file:", error);
+  }
+}
+
+function isClientPro(clientId: string, req: express.Request): boolean {
+  try {
+    const headerPro = req.headers['x-user-is-pro'];
+    if (headerPro === 'true' || headerPro === '1') return true;
+
+    const subs = getStoredSubscriptions();
+    if (clientId && subs[clientId]) return true;
+
+    const bodyEmail = req.body && typeof req.body === 'object' ? req.body.email : undefined;
+    if (bodyEmail && typeof bodyEmail === 'string' && subs[bodyEmail.toLowerCase().trim()]) return true;
+  } catch (e) {
+    console.warn('[Subscription Check] Error checking pro status:', e);
+  }
+  return false;
+}
+
+// =========================================================================
+// STRICT DAILY AI REQUEST LIMITER (150 AI Requests / Day for PRO, 100 for Regular)
 // Persisted to disk with in-memory caching and midnight auto-reset
 // =========================================================================
 
+const DAILY_LIMIT_PRO = 150;
 const DAILY_LIMIT_MAX = 100;
 const DAILY_USAGE_FILE_PATH = process.env.VERCEL
   ? path.join('/tmp', 'ai_daily_usage.json')
@@ -208,6 +249,8 @@ const dailyAiRateLimiter = (req: express.Request, res: express.Response, next: e
   }
 
   const clientId = resolveClientIdentifier(req);
+  const isPro = isClientPro(clientId, req);
+  const userDailyLimit = isPro ? DAILY_LIMIT_PRO : DAILY_LIMIT_MAX;
   const today = new Date().toISOString().slice(0, 10);
 
   let record = dailyUsageStore.get(clientId);
@@ -220,18 +263,31 @@ const dailyAiRateLimiter = (req: express.Request, res: express.Response, next: e
     dailyUsageStore.set(clientId, record);
   }
 
-  res.setHeader('X-Daily-Requests-Limit', DAILY_LIMIT_MAX.toString());
+  res.setHeader('X-Daily-Requests-Limit', userDailyLimit.toString());
   res.setHeader('X-Daily-Requests-Used', record.count.toString());
-  res.setHeader('X-Daily-Requests-Remaining', Math.max(0, DAILY_LIMIT_MAX - record.count).toString());
+  res.setHeader('X-Daily-Requests-Remaining', Math.max(0, userDailyLimit - record.count).toString());
   res.setHeader('X-Daily-Reset-Date', today);
+  res.setHeader('X-User-Is-Pro', isPro ? 'true' : 'false');
 
-  if (record.count >= DAILY_LIMIT_MAX) {
-    console.warn(`[DailyLimit] Blocked request for ${clientId}: reached ${record.count}/${DAILY_LIMIT_MAX} requests today.`);
+  if (record.count >= userDailyLimit) {
+    console.warn(`[DailyLimit] Blocked request for ${clientId} (isPro: ${isPro}): reached ${record.count}/${userDailyLimit} requests today.`);
+    if (isPro) {
+      return res.status(429).json({
+        error: "Our dedicated AI Study Engine is currently handling peak volume to ensure high curriculum accuracy. Your session will refresh automatically shortly. Please take a quick study break and continue in a little while! ☕🌟",
+        isRateLimit: true,
+        isHighLoad: true,
+        limit: userDailyLimit,
+        used: record.count,
+        remaining: 0,
+        resetsAt: "midnight (00:00:00 UTC)"
+      });
+    }
+
     return res.status(429).json({
       error: "You have reached your daily limit of 100 AI study requests. Your limit resets at midnight! Please take a break and continue tomorrow 🌟",
       isRateLimit: true,
       isDailyLimit: true,
-      limit: DAILY_LIMIT_MAX,
+      limit: userDailyLimit,
       used: record.count,
       remaining: 0,
       resetsAt: "midnight (00:00:00 UTC)"
@@ -243,7 +299,7 @@ const dailyAiRateLimiter = (req: express.Request, res: express.Response, next: e
   scheduleSaveDailyUsage();
 
   res.setHeader('X-Daily-Requests-Used', record.count.toString());
-  res.setHeader('X-Daily-Requests-Remaining', Math.max(0, DAILY_LIMIT_MAX - record.count).toString());
+  res.setHeader('X-Daily-Requests-Remaining', Math.max(0, userDailyLimit - record.count).toString());
 
   next();
 };
@@ -253,15 +309,18 @@ app.use('/api/', dailyAiRateLimiter);
 // Endpoint to inspect client's daily quota status
 app.get('/api/daily-usage', (req, res) => {
   const clientId = resolveClientIdentifier(req);
+  const isPro = isClientPro(clientId, req);
+  const userDailyLimit = isPro ? DAILY_LIMIT_PRO : DAILY_LIMIT_MAX;
   const today = new Date().toISOString().slice(0, 10);
   const record = dailyUsageStore.get(clientId);
   const used = (record && record.date === today) ? record.count : 0;
   res.json({
     userId: clientId,
+    isPro: isPro,
     date: today,
-    limit: DAILY_LIMIT_MAX,
+    limit: userDailyLimit,
     used: used,
-    remaining: Math.max(0, DAILY_LIMIT_MAX - used),
+    remaining: Math.max(0, userDailyLimit - used),
     resetsAt: "midnight (00:00:00 UTC)"
   });
 });
@@ -9403,28 +9462,6 @@ Return strictly a valid JSON object matching the requested schema with exactly $
   }
 });
 
-// Premium Subscriptions State Storage (File-backed database fallback)
-const SUBS_FILE_PATH = path.join(process.cwd(), "subscriptions.json");
-
-function getStoredSubscriptions(): Record<string, boolean> {
-  try {
-    if (fs.existsSync(SUBS_FILE_PATH)) {
-      return JSON.parse(fs.readFileSync(SUBS_FILE_PATH, "utf-8"));
-    }
-  } catch (error) {
-    console.error("Error reading subscriptions from file:", error);
-  }
-  return {};
-}
-
-function writeStoredSubscriptions(subs: Record<string, boolean>) {
-  try {
-    fs.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
-  } catch (error) {
-    console.error("Error saving subscriptions to file:", error);
-  }
-}
-
 // REST Endpoint to persist/verify VIP subscription status across accounts
 app.post("/api/set-subscription", (req, res) => {
   const { userId, isPro, email } = req.body;
@@ -10128,6 +10165,13 @@ app.post("/api/revenuecat-webhook", async (req, res) => {
 
     const isPro = ["INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION"].includes(eventType) ||
       (Array.isArray(entitlementIds) && entitlementIds.some((e: string) => /pro/i.test(e)) && eventType !== "EXPIRATION");
+
+    if (appUserId) {
+      const subs = getStoredSubscriptions();
+      subs[appUserId] = isPro;
+      writeStoredSubscriptions(subs);
+      console.log(`[RevenueCat Webhook] Synced subscription for ${appUserId}: isPro=${isPro}`);
+    }
 
     return res.json({
       received: true,

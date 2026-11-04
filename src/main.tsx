@@ -53,16 +53,24 @@ if (typeof window !== 'undefined' && window.fetch) {
           }
         }
 
+        const isPro = localStorage.getItem('study_is_vip') === 'true' || 
+          (Boolean(userId) && localStorage.getItem(`study_is_vip_${userId}`) === 'true');
+
         if (init.headers instanceof Headers) {
           if (!init.headers.has('x-user-id')) {
             init.headers.set('x-user-id', userId);
           }
+          if (isPro && !init.headers.has('x-user-is-pro')) {
+            init.headers.set('x-user-is-pro', 'true');
+          }
         } else if (Array.isArray(init.headers)) {
           init.headers.push(['x-user-id', userId]);
+          if (isPro) init.headers.push(['x-user-is-pro', 'true']);
         } else if (typeof init.headers === 'object' && init.headers !== null) {
           (init.headers as Record<string, string>)['x-user-id'] = userId;
+          if (isPro) (init.headers as Record<string, string>)['x-user-is-pro'] = 'true';
         } else {
-          init.headers = { 'x-user-id': userId };
+          init.headers = isPro ? { 'x-user-id': userId, 'x-user-is-pro': 'true' } : { 'x-user-id': userId };
         }
       }
     } catch {

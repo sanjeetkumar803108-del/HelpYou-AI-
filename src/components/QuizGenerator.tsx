@@ -1864,7 +1864,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
           throw new Error(errData.message || 'The entered topic is not a recognized academic concept for this chapter. Please enter a valid topic or pick from the recommended units.');
         }
         if (response.status === 429) {
-          throw new Error(errData.text || 'Gemini API quota exceeded. Please try again in 60 seconds.');
+          throw new Error(errData.error || errData.message || errData.text || 'Our AI study server is currently experiencing high load. Please try again in a few moments.');
         }
         throw new Error(errData.error || errData.message || 'Failed to generate quiz');
       }

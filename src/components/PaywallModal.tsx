@@ -164,7 +164,14 @@ export default function PaywallModal({ isOpen, onClose, featureName, onSubscribe
           
           // Check for active entitlement ('Pro_Access' or fallback variants)
           const activeEntitlements = customerInfo?.entitlements?.active || {};
-          const proEntitlement = activeEntitlements['Pro_Access'] || activeEntitlements['pro_access'] || activeEntitlements['pro'];
+          const proEntitlement = Boolean(
+            activeEntitlements['Pro_Access'] ||
+            activeEntitlements['pro_access'] ||
+            activeEntitlements['pro'] ||
+            activeEntitlements['Pro Access'] ||
+            Object.keys(activeEntitlements).some(k => /pro/i.test(k)) ||
+            Object.keys(activeEntitlements).length > 0
+          );
 
           if (proEntitlement) {
             // Determine whether it was a Monthly or Yearly plan based on pack.packageType

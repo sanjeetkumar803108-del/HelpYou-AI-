@@ -55,7 +55,15 @@ class BillingService {
 
         if (packageToPurchase) {
           const { customerInfo } = await Purchases.purchasePackage({ aPackage: packageToPurchase });
-          const success = !!(customerInfo?.entitlements?.active && (customerInfo.entitlements.active['Pro_Access'] || customerInfo.entitlements.active['pro_access'] || customerInfo.entitlements.active['pro']));
+          const active = customerInfo?.entitlements?.active || {};
+          const success = Boolean(
+            active['Pro_Access'] ||
+            active['pro_access'] ||
+            active['pro'] ||
+            active['Pro Access'] ||
+            Object.keys(active).some(k => /pro/i.test(k)) ||
+            Object.keys(active).length > 0
+          );
           this.finalizeProStatus(success);
           return success;
         }
@@ -130,11 +138,13 @@ class BillingService {
         }
 
         const { customerInfo } = await Purchases.restorePurchases();
-        const success = !!(customerInfo?.entitlements?.active && (
-          customerInfo.entitlements.active['Pro_Access'] || 
-          customerInfo.entitlements.active['pro_access'] || 
-          customerInfo.entitlements.active['pro']
-        ));
+        const active = customerInfo?.entitlements?.active || {};
+        const success = Boolean(active['Pro_Access'] || active['pro_access'] || active['pro'] || active['Pro Access'] || Object.keys(active).some(k => /pro/i.test(k)) || Object.keys(active).length > 0);
+
+
+
+
+
         this.finalizeProStatus(success);
         return success;
       }

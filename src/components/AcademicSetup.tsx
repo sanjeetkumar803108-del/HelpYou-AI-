@@ -1305,19 +1305,23 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                 })}
               </div>
 
-              {/* Dynamic Status Ticker (Guaranteed 100% Legible & Visible) */}
-              <div className="px-3.5 py-2.5 bg-zinc-950 text-white rounded-xl text-center shadow-lg border border-zinc-800/80 shrink-0 flex items-center justify-center gap-2 min-h-[42px]">
-                {researchStage < 5 ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400 shrink-0" />
-                ) : (
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 stroke-[3]" />
-                )}
-                <p 
-                  className="text-xs font-bold text-white tracking-wide truncate max-w-[280px]"
-                  title={researchMessage}
-                >
-                  {researchMessage || 'Calibrating Academic DNA...'}
-                </p>
+              {/* Dynamic Status Ticker (Guaranteed 100% Legible & Visible on All Mobile Screens) */}
+              <div className="w-full px-3.5 py-2.5 bg-zinc-950 text-white rounded-2xl shadow-xl border border-zinc-800 shrink-0 flex items-center gap-3 min-h-[48px]">
+                <div className="w-7 h-7 rounded-xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center shrink-0">
+                  {researchStage < 5 ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-400 shrink-0" />
+                  ) : (
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0 stroke-[3]" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p
+                    className="text-[11px] font-extrabold text-white tracking-wide leading-snug line-clamp-2 break-words"
+                    title={researchMessage}
+                  >
+                    {researchMessage || 'Calibrating Academic DNA...'}
+                  </p>
+                </div>
               </div>
             </motion.div>
           </motion.div>

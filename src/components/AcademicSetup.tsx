@@ -639,7 +639,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
     const stageTimer3 = setTimeout(() => {
       setResearchStage(4);
-      setResearchMessage(`Extracting authentic examination question patterns & style...`);
+      setResearchMessage(`Researching official examination schedule, start date & countdown...`);
     }, 3800);
 
     let researchedBlueprint: any = null;

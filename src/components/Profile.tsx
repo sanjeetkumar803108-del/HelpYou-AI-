@@ -833,6 +833,8 @@ export default function Profile({
               setTargetExam(examName);
               safeSetItem('target_exam', examName);
               safeSetItem(`academic_exam_${user.uid}`, examName);
+              const sched = getStoredExamSchedule(examName, userData.country || userData.academic_country || '', user.uid);
+              setExamSchedule(sched);
             }
           }
         }
@@ -2070,6 +2072,46 @@ export default function Profile({
               </div>
             </div>
           </div>
+
+          {/* Target Exam Schedule & Live Countdown Segment (Clean Minimalist Rectangular Box) */}
+          {targetExam && (
+            <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-purple-600" /> Exam Schedule
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-purple-50 text-purple-700 border border-purple-200">
+                  {examSchedule?.scheduleStatus || 'Official Timeline'}
+                </span>
+              </div>
+
+              {/* Minimal Rectangular Box */}
+              <div className="bg-zinc-50/80 border border-zinc-200/90 rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-zinc-400 block">
+                    Target Examination
+                  </span>
+                  <p className="text-sm font-black text-zinc-900 truncate">
+                    {targetExam}
+                  </p>
+                  <div className="flex items-center gap-1.5 pt-0.5 text-xs font-bold text-zinc-600">
+                    <Clock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                    <span>Starts: <strong className="text-zinc-900 font-extrabold">{examSchedule?.examStartDate || 'Official Schedule Announced'}</strong></span>
+                  </div>
+                </div>
+
+                {/* Compact Days Countdown Counter */}
+                <div className="bg-white border border-purple-200/90 rounded-2xl px-3.5 py-2 text-center shadow-xs shrink-0 min-w-[90px]">
+                  <span className="block text-2xl font-black text-purple-700 font-mono tracking-tight leading-none">
+                    {typeof examSchedule?.daysRemaining === 'number' && examSchedule.daysRemaining >= 0 ? examSchedule.daysRemaining : '--'}
+                  </span>
+                  <span className="text-[9px] uppercase font-black tracking-wider text-purple-600 block mt-1">
+                    Days Left
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Mastery Radar Chart */}
           <div className="bg-white rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm relative">

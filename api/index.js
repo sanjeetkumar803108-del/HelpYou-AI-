@@ -1600,6 +1600,7 @@ process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception thrown:", err);
 });
 var app = express();
+app.disable("x-powered-by");
 app.set("trust proxy", 1);
 var PORT = process.env.PORT || 3e3;
 app.use(cors({

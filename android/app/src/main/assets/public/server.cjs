@@ -1635,6 +1635,7 @@ process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception thrown:", err);
 });
 var app = (0, import_express.default)();
+app.disable("x-powered-by");
 app.set("trust proxy", 1);
 var PORT = process.env.PORT || 3e3;
 app.use((0, import_cors.default)({

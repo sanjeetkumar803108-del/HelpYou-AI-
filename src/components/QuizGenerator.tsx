@@ -2457,12 +2457,6 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                             </span>
                             <span>•</span>
                             <span className="text-zinc-600 font-extrabold">{questionCount} Questions</span>
-                            {item.averageTimePerQuestion && (
-                              <>
-                                <span>•</span>
-                                <span>{item.averageTimePerQuestion}s/q</span>
-                              </>
-                            )}
                           </div>
                         </div>
                       </div>

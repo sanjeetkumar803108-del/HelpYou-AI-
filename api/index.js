@@ -3258,18 +3258,29 @@ IF FORMAT IS "Explain Like I'm 5":
 ${promptText}` };
     let contentsPayload;
     if (useRawFile && req.file) {
-      const pdfPart = {
-        inlineData: {
-          mimeType: effectiveMime,
-          data: req.file.buffer.toString("base64")
-        }
-      };
-      contentsPayload = [{ parts: [pdfPart, textPart] }];
+      if (req.file.buffer.length > 14 * 1024 * 1024 && extractedText && extractedText.trim().length > 10) {
+        const documentContentPart = { text: `DOCUMENT CONTENT:
+${extractedText}` };
+        contentsPayload = [{ parts: [documentContentPart, textPart] }];
+      } else if (req.file.buffer.length > 18 * 1024 * 1024) {
+        return res.status(400).json({ error: "The uploaded scanned document exceeds direct AI vision processing limits (>18MB). Please upload a searchable PDF or select specific pages." });
+      } else {
+        const pdfPart = {
+          inlineData: {
+            mimeType: effectiveMime,
+            data: req.file.buffer.toString("base64")
+          }
+        };
+        contentsPayload = [{ parts: [pdfPart, textPart] }];
+      }
     } else if (extractedText && extractedText.trim().length > 10) {
       const documentContentPart = { text: `DOCUMENT CONTENT:
 ${extractedText}` };
       contentsPayload = [{ parts: [documentContentPart, textPart] }];
     } else if (req.file) {
+      if (req.file.buffer.length > 18 * 1024 * 1024) {
+        return res.status(400).json({ error: "Document payload exceeds maximum supported single-pass size. Please upload a searchable PDF." });
+      }
       const pdfPart = {
         inlineData: {
           mimeType: effectiveMime,
@@ -10485,6 +10496,19 @@ async function startServer() {
       console.warn("Vite dev server not loaded:", e);
     }
   }
+  app.use((err, req, res, next) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+    console.error("[Global Error Middleware] Caught unhandled error:", err?.message || err);
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ error: "File too large. Maximum supported document size is 35MB." });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    }
+    res.status(500).json({ error: err?.message || "Internal server error occurred" });
+  });
   const server = app.listen(Number(PORT) || 3e3, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

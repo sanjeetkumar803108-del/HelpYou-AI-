@@ -24,7 +24,7 @@ function loadPdfJs(): Promise<any> {
   if (window.pdfjsLib) {
     try {
       if (!window.pdfjsLib.GlobalWorkerOptions?.workerSrc) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js';
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
       }
     } catch (e) {}
     return Promise.resolve(window.pdfjsLib);
@@ -268,7 +268,8 @@ export default function SafePdfViewer({ pdfUrlOrBase64, pdfUrl, pdfBlob, pdfId, 
         // Step 3: Load document into PDF.js engine
         const loadingTask = pdfjs.getDocument({
           data: pdfData,
-          cMapUrl: './vendor/pdfjs/cmaps/',
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/cmaps/',
+          standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/standard_fonts/',
           cMapPacked: true,
         });
         const pdf = await loadingTask.promise;

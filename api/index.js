@@ -3019,8 +3019,25 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     }
   }
 });
-app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
+var handleSummarizePdfUpload = (req, res, next) => {
+  upload.single("pdf")(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "File too large. Maximum supported document size is 35MB." });
+        }
+        return res.status(400).json({ error: `File upload error: ${err.message}` });
+      }
+      console.warn("[summarize] Multer / busboy upload stream warning:", err?.message || err);
+      return res.status(400).json({ error: "File upload stream interrupted. Please retry uploading your document." });
+    }
+    next();
+  });
+};
+app.post("/api/summarize", handleSummarizePdfUpload, async (req, res) => {
   try {
+    req.setTimeout?.(18e4);
+    res.setTimeout?.(18e4);
     const action = req.body.action || "summarize";
     const textInput = req.body.text || "";
     const gradeLevel = req.body.gradeLevel || req.body.grade;

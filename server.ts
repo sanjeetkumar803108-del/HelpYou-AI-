@@ -1984,8 +1984,26 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
   }
 });
 
-app.post("/api/summarize", upload.single("pdf"), async (req, res) => {
+const handleSummarizePdfUpload = (req: any, res: any, next: any) => {
+  upload.single("pdf")(req, res, (err: any) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: "File too large. Maximum supported document size is 35MB." });
+        }
+        return res.status(400).json({ error: `File upload error: ${err.message}` });
+      }
+      console.warn("[summarize] Multer / busboy upload stream warning:", err?.message || err);
+      return res.status(400).json({ error: "File upload stream interrupted. Please retry uploading your document." });
+    }
+    next();
+  });
+};
+
+app.post("/api/summarize", handleSummarizePdfUpload, async (req, res) => {
   try {
+    req.setTimeout?.(180000);
+    res.setTimeout?.(180000);
     const action = req.body.action || 'summarize';
     const textInput = req.body.text || "";
     const gradeLevel = req.body.gradeLevel || req.body.grade;
@@ -2230,19 +2248,30 @@ IF FORMAT IS "Explain Like I'm 5":
     let contentsPayload: any[];
     if (useRawFile && req.file) {
       // Prioritize raw PDF for better OCR/extraction if text extraction failed or is weak
-      const pdfPart = {
-        inlineData: {
-          mimeType: effectiveMime,
-          data: req.file.buffer.toString("base64"),
-        },
-      };
-      contentsPayload = [{ parts: [pdfPart, textPart] }];
+      if (req.file.buffer.length > 14 * 1024 * 1024 && extractedText && extractedText.trim().length > 10) {
+        // Document buffer too large for Gemini base64 inlineData (20MB API threshold); fall back to extracted text safely
+        const documentContentPart = { text: `DOCUMENT CONTENT:\n${extractedText}` };
+        contentsPayload = [{ parts: [documentContentPart, textPart] }];
+      } else if (req.file.buffer.length > 18 * 1024 * 1024) {
+        return res.status(400).json({ error: "The uploaded scanned document exceeds direct AI vision processing limits (>18MB). Please upload a searchable PDF or select specific pages." });
+      } else {
+        const pdfPart = {
+          inlineData: {
+            mimeType: effectiveMime,
+            data: req.file.buffer.toString("base64"),
+          },
+        };
+        contentsPayload = [{ parts: [pdfPart, textPart] }];
+      }
     } else if (extractedText && extractedText.trim().length > 10) {
       // Use the extracted clean text for efficiency if available
       const documentContentPart = { text: `DOCUMENT CONTENT:\n${extractedText}` };
       contentsPayload = [{ parts: [documentContentPart, textPart] }];
     } else if (req.file) {
       // Absolute fallback: raw file
+      if (req.file.buffer.length > 18 * 1024 * 1024) {
+        return res.status(400).json({ error: "Document payload exceeds maximum supported single-pass size. Please upload a searchable PDF." });
+      }
       const pdfPart = {
         inlineData: {
           mimeType: effectiveMime,
@@ -10089,6 +10118,21 @@ async function startServer() {
       console.warn("Vite dev server not loaded:", e);
     }
   }
+
+  // Global Error Handler Middleware
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+    console.error('[Global Error Middleware] Caught unhandled error:', err?.message || err);
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: "File too large. Maximum supported document size is 35MB." });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    }
+    res.status(500).json({ error: err?.message || "Internal server error occurred" });
+  });
 
   const server = app.listen(Number(PORT) || 3000, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

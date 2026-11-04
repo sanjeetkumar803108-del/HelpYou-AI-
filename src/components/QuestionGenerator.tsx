@@ -1752,27 +1752,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                 )}
               </AnimatePresence>
 
-              {/* PDF Export Actions */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button
-                  onClick={() => handleExportPDF()}
-                  className="flex-1 bg-white border border-zinc-200 text-zinc-850 font-black text-xs py-3.5 rounded-2xl transition-all shadow-sm cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 hover:bg-zinc-50"
-                >
-                  <FileText className="w-4 h-4 text-purple-600" /> View PDF
-                </button>
-                <button
-                  onClick={() => handleSharePDF()}
-                  className="flex-1 bg-white border border-zinc-200 text-zinc-850 font-black text-xs py-3.5 rounded-2xl transition-all shadow-sm cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 hover:bg-zinc-50"
-                >
-                  <Share2 className="w-4 h-4 text-purple-600" /> Share PDF
-                </button>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 text-[10px] font-bold text-purple-800 bg-purple-50/80 border border-purple-200/70 py-2 px-3 rounded-xl shadow-2xs text-center">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                <span>Includes Answer Key</span>
-              </div>
-
               {/* Report AI Questions Button */}
               <div className="pt-2">
                 <button

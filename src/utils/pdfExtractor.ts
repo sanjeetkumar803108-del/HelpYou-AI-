@@ -8,14 +8,27 @@ declare global {
   }
 }
 
+const CDN_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
+const CDNJS_WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+const CDN_CMAP_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/cmaps/';
+const CDN_STANDARD_FONTS_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/standard_fonts/';
+
 let pdfjsLoadPromise: Promise<any> | null = null;
+
+function ensureWorkerConfigured(lib: any) {
+  if (!lib || !lib.GlobalWorkerOptions) return;
+  // If workerSrc is empty, uninitialized, or points to an unreliable relative path (e.g. './vendor/...'),
+  // immediately upgrade to the production-tested CDN worker to prevent fake-worker crash loops.
+  const currentSrc = lib.GlobalWorkerOptions.workerSrc;
+  if (!currentSrc || typeof currentSrc !== 'string' || currentSrc.startsWith('./')) {
+    lib.GlobalWorkerOptions.workerSrc = CDN_WORKER_URL;
+  }
+}
 
 function loadPdfJs(): Promise<any> {
   if (window.pdfjsLib) {
     try {
-      if (!window.pdfjsLib.GlobalWorkerOptions?.workerSrc) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js';
-      }
+      ensureWorkerConfigured(window.pdfjsLib);
     } catch (e) {}
     return Promise.resolve(window.pdfjsLib);
   }
@@ -35,7 +48,7 @@ function loadPdfJs(): Promise<any> {
       if (lib) {
         window.pdfjsLib = lib;
         try {
-          lib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.js';
+          ensureWorkerConfigured(lib);
         } catch (e) {}
         resolve(lib);
       } else {
@@ -66,7 +79,7 @@ function tryAbsoluteFallback(resolve: (value: any) => void, reject: (reason: any
     if (lib) {
       window.pdfjsLib = lib;
       try {
-        lib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+        ensureWorkerConfigured(lib);
       } catch (e) {}
       resolve(lib);
     } else {
@@ -94,7 +107,7 @@ function tryCdnFallback(resolve: (value: any) => void, reject: (reason: any) => 
     if (lib) {
       window.pdfjsLib = lib;
       try {
-        lib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js';
+        lib.GlobalWorkerOptions.workerSrc = CDN_WORKER_URL;
       } catch (e) {}
       resolve(lib);
     } else {
@@ -115,6 +128,48 @@ export interface ExtractedPdfResult {
   isScanned: boolean;
 }
 
+async function extractPagesFromDoc(pdfDoc: any, maxPages: number): Promise<{ text: string; pageCount: number }> {
+  const totalPages = pdfDoc.numPages || 1;
+  const pagesToRead = Math.min(totalPages, maxPages);
+
+  const pageTexts: string[] = [];
+  let totalLength = 0;
+
+  for (let pageNum = 1; pageNum <= pagesToRead; pageNum++) {
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      let lastY: number | null = null;
+      let pageStr = '';
+
+      for (const item of textContent.items as any[]) {
+        if (!item.str) continue;
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+          pageStr += '\n';
+        } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !pageStr.endsWith('\n')) {
+          pageStr += ' ';
+        }
+        pageStr += item.str;
+        lastY = item.transform[5];
+      }
+
+      const trimmed = pageStr.trim();
+      if (trimmed) {
+        pageTexts.push(`--- [PAGE ${pageNum}] ---\n${trimmed}`);
+        totalLength += trimmed.length;
+      }
+    } catch (pageErr) {
+      console.warn(`[pdfExtractor] Error reading page ${pageNum}:`, pageErr);
+    }
+  }
+
+  return {
+    text: pageTexts.join('\n\n').trim(),
+    pageCount: totalPages
+  };
+}
+
 /**
  * Extracts searchable text directly from a PDF File or Blob in the client browser / mobile webview.
  * @param file The PDF File or Blob
@@ -125,55 +180,51 @@ export async function extractTextFromPdf(file: File | Blob, maxPages = 50): Prom
     const pdfjs = await loadPdfJs();
     const arrayBuffer = await file.arrayBuffer();
     
-    const loadingTask = pdfjs.getDocument({
+    // Ensure worker is properly pointed
+    ensureWorkerConfigured(pdfjs);
+
+    const getDocParams = (workerUrl?: string) => ({
       data: arrayBuffer,
-      cMapUrl: './vendor/pdfjs/cmaps/',
+      cMapUrl: CDN_CMAP_URL,
       cMapPacked: true,
-      stopAtErrors: false
+      standardFontDataUrl: CDN_STANDARD_FONTS_URL,
+      stopAtErrors: false,
+      ...(workerUrl ? { worker: undefined } : {})
     });
 
-    const pdfDoc = await loadingTask.promise;
-    const totalPages = pdfDoc.numPages || 1;
-    const pagesToRead = Math.min(totalPages, maxPages);
+    let pdfDoc: any = null;
 
-    const pageTexts: string[] = [];
-    let totalLength = 0;
-
-    for (let pageNum = 1; pageNum <= pagesToRead; pageNum++) {
+    try {
+      const loadingTask = pdfjs.getDocument(getDocParams());
+      pdfDoc = await loadingTask.promise;
+    } catch (firstPassErr: any) {
+      console.warn('[pdfExtractor] Primary document loading issue, retrying with secondary CDN worker:', firstPassErr);
       try {
-        const page = await pdfDoc.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        
-        let lastY: number | null = null;
-        let pageStr = '';
-
-        for (const item of textContent.items as any[]) {
-          if (!item.str) continue;
-          if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
-            pageStr += '\n';
-          } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !pageStr.endsWith('\n')) {
-            pageStr += ' ';
-          }
-          pageStr += item.str;
-          lastY = item.transform[5];
+        if (pdfjs?.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = CDNJS_WORKER_URL;
         }
-
-        const trimmed = pageStr.trim();
-        if (trimmed) {
-          pageTexts.push(`--- [PAGE ${pageNum}] ---\n${trimmed}`);
-          totalLength += trimmed.length;
+        const retryTask = pdfjs.getDocument(getDocParams(CDNJS_WORKER_URL));
+        pdfDoc = await retryTask.promise;
+      } catch (retryErr: any) {
+        console.warn('[pdfExtractor] Secondary worker also failed, attempting third pass with fallback URL:', retryErr);
+        if (pdfjs?.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = CDN_WORKER_URL;
         }
-      } catch (pageErr) {
-        console.warn(`[pdfExtractor] Error reading page ${pageNum}:`, pageErr);
+        const thirdTask = pdfjs.getDocument(getDocParams(CDN_WORKER_URL));
+        pdfDoc = await thirdTask.promise;
       }
     }
 
-    const fullExtracted = pageTexts.join('\n\n').trim();
-    const isScanned = fullExtracted.length < 50;
+    if (!pdfDoc) {
+      throw new Error('PDF document could not be parsed on client.');
+    }
+
+    const { text, pageCount } = await extractPagesFromDoc(pdfDoc, maxPages);
+    const isScanned = text.length < 50;
 
     return {
-      text: fullExtracted,
-      pageCount: totalPages,
+      text,
+      pageCount,
       isScanned
     };
   } catch (err: any) {

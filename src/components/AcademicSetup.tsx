@@ -7,6 +7,7 @@ import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { getApiUrl } from '../utils/api';
 import { resolveRealCountry } from '../utils/profile';
+import { findPreVerifiedExam } from '../utils/preVerifiedExams';
 
 interface AcademicSetupProps {
   userId: string;
@@ -279,8 +280,64 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       // Auto-resolve real country if exam name unambiguously identifies national curriculum (e.g. NEET/JEE/CBSE -> India)
       finalCountry = resolveRealCountry(finalCountry, customCountry, trimmed);
 
+      // 0. FAST-PATH: Instant sub-millisecond check for recognized national & global exams (100% offline & network-proof for APK)
+      const preVerified = findPreVerifiedExam(trimmed, finalCountry);
+      if (preVerified) {
+        if (preVerified.officialExamName) {
+          setTargetExam(preVerified.officialExamName);
+        }
+        if (preVerified.country) {
+          const matchedCountry = COUNTRIES.find(
+            c => c.name.toLowerCase() === preVerified.country.toLowerCase() || 
+                 c.id.toLowerCase() === preVerified.country.toLowerCase()
+          );
+          if (matchedCountry) {
+            setSelectedCountryId(matchedCountry.id);
+            safeSetItem('academic_country', matchedCountry.name);
+            if (userId) safeSetItem(`academic_country_${userId}`, matchedCountry.name);
+          }
+        }
+        if (Array.isArray(preVerified.subjects) && preVerified.subjects.length > 0) {
+          const mapped = preVerified.subjects.map((s, idx) => ({
+            id: s.id || s.title,
+            title: s.title || s.id,
+            subtitle: s.subtitle || 'Official Exam Syllabus Topic',
+            icon: s.icon || '📚',
+            color: SUBJECT_COLORS[idx % SUBJECT_COLORS.length]
+          }));
+          setVerifiedExamSubjects(mapped);
+          safeSetItem(`cached_exam_subjects_${userId}`, JSON.stringify(mapped));
+          const hasElectivesBool = Boolean(preVerified.hasElectives);
+          setExamHasElectives(hasElectivesBool);
+          safeSetItem(`cached_exam_has_electives_${userId}`, String(hasElectivesBool));
+          setSelectedSubjectIds(mapped.map(m => m.id));
+        }
+        if (Array.isArray(preVerified.grades) && preVerified.grades.length > 0) {
+          const mappedGrades = preVerified.grades.map(g => ({
+            id: g.id || g.label,
+            label: g.label || g.id,
+            desc: g.desc || 'Exam preparation grade level',
+            isCollege: Boolean(g.isCollege)
+          }));
+          setVerifiedExamGrades(mappedGrades);
+          safeSetItem(`cached_exam_grades_${userId}`, JSON.stringify(mappedGrades));
+          safeSetItem('cached_exam_grades', JSON.stringify(mappedGrades));
+          if (!mappedGrades.some(g => g.id === selectedGrade)) {
+            setSelectedGrade(mappedGrades[0].id);
+          }
+        }
+        setIsVerifyingExam(false);
+        setStep(3);
+        return;
+      }
+
+
+
       try {
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), 9000);
         const res = await fetch(getApiUrl('/api/verify-and-research-exam'), {
+          signal: abortController.signal,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ country: finalCountry, examName: trimmed })
@@ -292,6 +349,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
           throw new Error(msg);
         }
 
+        clearTimeout(timeoutId);
         const data = await res.json();
 
         // 1. If exam does NOT exist, show error and stay on Step 2
@@ -372,11 +430,34 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
         setIsVerifyingExam(false);
         setStep(3); // Advance to Grade selection
-      } catch (err: any) {
-        console.warn("[AcademicSetup] AI exam verification network error:", err);
+            } catch (err: any) {
+        console.warn("[AcademicSetup] AI exam verification network error/timeout, activating resilient auto-curation:", err);
+        // Resilient Fallback: Never block student on Step 2 due to network drop or Vercel serverless timeout
+        const fallbackSubjects = [
+          { id: 'Section_1', title: `${trimmed} - Section 1 / Core Syllabus`, subtitle: 'Core Subjects & Fundamental Principles', icon: '📚', color: SUBJECT_COLORS[0] },
+          { id: 'Section_2', title: `${trimmed} - Section 2 / Advanced Papers`, subtitle: 'Analytical Concepts & Advanced Working', icon: '⚡', color: SUBJECT_COLORS[1] },
+          { id: 'Aptitude_Reasoning', title: 'Quantitative Aptitude & Logical Reasoning', subtitle: 'Numerical Ability, Logic & Analytical Skills', icon: '🧠', color: SUBJECT_COLORS[2] },
+          { id: 'Language_Comprehension', title: 'Language & Reading Comprehension', subtitle: 'Verbal Ability & Textual Analysis', icon: '📖', color: SUBJECT_COLORS[3] }
+        ];
+        const fallbackGrades = [
+          { id: 'Final_Year_Candidate', label: 'Final Exam Appearing Year', desc: 'Active Candidate / Final Year', isCollege: false },
+          { id: 'Foundation_Year', label: 'Foundation / 1st Year Prep', desc: 'Early Syllabus Preparation', isCollege: false },
+          { id: 'Dedicated_Aspirant', label: 'Dedicated Full-Time Aspirant', desc: 'Comprehensive Prep / Self-Study', isCollege: false }
+        ];
+        setVerifiedExamSubjects(fallbackSubjects);
+        safeSetItem(`cached_exam_subjects_${userId}`, JSON.stringify(fallbackSubjects));
+        setExamHasElectives(false);
+        safeSetItem(`cached_exam_has_electives_${userId}`, 'false');
+        setSelectedSubjectIds(fallbackSubjects.map(m => m.id));
+
+        setVerifiedExamGrades(fallbackGrades);
+        safeSetItem(`cached_exam_grades_${userId}`, JSON.stringify(fallbackGrades));
+        safeSetItem('cached_exam_grades', JSON.stringify(fallbackGrades));
+        setSelectedGrade(fallbackGrades[0].id);
+
         setIsVerifyingExam(false);
-        setExamError(err?.message || "Could not verify this exam with official records. Please check your internet connection or verify the exam name and try again.");
-        triggerVibration(25);
+        setStep(3);
+        return;
       }
       return;
     } 

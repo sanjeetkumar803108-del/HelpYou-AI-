@@ -3623,6 +3623,70 @@ var PRE_VERIFIED_EXAMS = [
       { id: "DILR", title: "Data Interpretation & Logical Reasoning (DILR)", subtitle: "Caselets, Tables, Graphs, Puzzles & Seating Arrangements", icon: "\u{1F4CA}" },
       { id: "QA", title: "Quantitative Ability (QA)", subtitle: "Arithmetic, Algebra, Geometry, Modern Math & Number Systems", icon: "\u{1F4D0}" }
     ]
+  },
+  {
+    aliases: ["ssc cgl", "ssc cgl exam", "ssc-cgl", "cgl", "staff selection commission cgl", "ssc cgl 2025", "ssc cgl 2026"],
+    officialExamName: "Staff Selection Commission Combined Graduate Level (SSC CGL)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Graduate_Final_Year", label: "Final Year Undergraduate", desc: "Appearing in final year of Graduation", isCollege: true },
+      { id: "Graduate_Full_Time", label: "Graduate Aspirant (Full-Time)", desc: "Dedicated full-time SSC CGL preparation", isCollege: true },
+      { id: "Working_Professional", label: "Working Professional", desc: "Preparing along with employment", isCollege: true }
+    ],
+    subjects: [
+      { id: "Quantitative_Aptitude", title: "Quantitative Aptitude (Math)", subtitle: "Arithmetic, Advanced Math, Algebra & Geometry", icon: "\u{1F4D0}" },
+      { id: "General_Intelligence_Reasoning", title: "General Intelligence & Reasoning", subtitle: "Analogies, Syllogisms, Coding-Decoding & Puzzles", icon: "\u{1F9E0}" },
+      { id: "English_Comprehension", title: "English Comprehension & Grammar", subtitle: "Vocabulary, Grammar, Error Spotting & Reading Comprehension", icon: "\u{1F4DA}" },
+      { id: "General_Awareness", title: "General Awareness (GK & GS)", subtitle: "History, Polity, Geography, Economy & Current Affairs", icon: "\u{1F3DB}\uFE0F" }
+    ]
+  },
+  {
+    aliases: ["ssc chsl", "ssc chsl exam", "ssc-chsl", "chsl", "ssc 10+2"],
+    officialExamName: "Staff Selection Commission Combined Higher Secondary Level (SSC CHSL)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Class_12", label: "Class 12 / 10+2 Passed", desc: "12th Appearing or Completed Aspirant", isCollege: false },
+      { id: "Full_Time_Aspirant", label: "Full-Time CHSL Aspirant", desc: "Dedicated Government Exam Preparation", isCollege: false }
+    ],
+    subjects: [
+      { id: "Quantitative_Aptitude", title: "Quantitative Aptitude", subtitle: "Basic Arithmetic & Number Systems", icon: "\u{1F4D0}" },
+      { id: "General_Intelligence", title: "General Intelligence & Reasoning", subtitle: "Verbal & Non-Verbal Reasoning", icon: "\u{1F9E0}" },
+      { id: "English_Language", title: "English Language", subtitle: "Grammar, Vocab & Comprehension", icon: "\u{1F4DA}" },
+      { id: "General_Awareness", title: "General Awareness", subtitle: "Current Affairs & Static GK", icon: "\u{1F3DB}\uFE0F" }
+    ]
+  },
+  {
+    aliases: ["banking", "bank po", "bank clerk", "ibps po", "sbi po", "ibps clerk", "sbi clerk", "bank exam", "rbi grade b"],
+    officialExamName: "Banking Recruitment Examinations (IBPS / SBI PO & Clerk)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Graduate_Aspirant", label: "Graduate Aspirant", desc: "Full-time Banking Preparation", isCollege: true },
+      { id: "Final_Year_Student", label: "Final Year Student", desc: "Pre-Banking College Preparation", isCollege: true }
+    ],
+    subjects: [
+      { id: "Quantitative_Aptitude", title: "Quantitative Aptitude", subtitle: "Data Interpretation, Arithmetic & Series", icon: "\u{1F4D0}" },
+      { id: "Reasoning_Ability", title: "Reasoning Ability", subtitle: "Puzzles, Seating Arrangements & Logic", icon: "\u{1F9E0}" },
+      { id: "English_Language", title: "English Language", subtitle: "Reading Comprehension, Cloze Test & Grammar", icon: "\u{1F4DA}" },
+      { id: "Banking_Awareness", title: "Banking & Financial Awareness", subtitle: "Economy, RBI Guidelines & Current Affairs", icon: "\u{1F3E6}" }
+    ]
+  },
+  {
+    aliases: ["rrb ntpc", "railway exam", "rrb", "ntpc", "rrb group d", "railway recruitment"],
+    officialExamName: "Railway Recruitment Board NTPC (RRB NTPC)",
+    country: "India",
+    hasElectives: false,
+    grades: [
+      { id: "Graduate_Level", label: "Graduate Level NTPC", desc: "Station Master, Goods Guard, etc.", isCollege: true },
+      { id: "Undergraduate_Level", label: "Undergraduate Level (10+2)", desc: "Junior Clerk, Trains Clerk, etc.", isCollege: false }
+    ],
+    subjects: [
+      { id: "Mathematics", title: "Mathematics", subtitle: "Number System, Decimals, Fractions, LCM & Ratio", icon: "\u{1F4D0}" },
+      { id: "General_Intelligence_Reasoning", title: "General Intelligence and Reasoning", subtitle: "Analogies, Syllogisms, Coding & Venn Diagrams", icon: "\u{1F9E0}" },
+      { id: "General_Awareness", title: "General Awareness", subtitle: "Current Events, General Science, History & Polity", icon: "\u{1F30D}" }
+    ]
   }
 ];
 function findPreVerifiedExam(inputExam, userCountry) {
@@ -3640,6 +3704,21 @@ function findPreVerifiedExam(inputExam, userCountry) {
         return entry;
       }
     }
+  }
+  if (words.includes("cgl")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("SSC CGL")) || null;
+  }
+  if (words.includes("chsl")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("SSC CHSL")) || null;
+  }
+  if (words.includes("ssc")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("SSC CGL")) || null;
+  }
+  if (words.includes("bank") || words.includes("ibps") || words.includes("sbi")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("Banking")) || null;
+  }
+  if (words.includes("rrb") || words.includes("railway") || words.includes("ntpc")) {
+    return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("Railway")) || null;
   }
   if (words.includes("neet")) {
     return PRE_VERIFIED_EXAMS.find((e) => e.officialExamName.includes("NEET UG")) || null;

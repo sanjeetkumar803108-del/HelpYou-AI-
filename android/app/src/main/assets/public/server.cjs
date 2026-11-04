@@ -4605,6 +4605,23 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 });
 function getIntelligentExamFallback(examName, country) {
   const lower = (examName || "").toLowerCase();
+  const cLower = (country || "").toLowerCase();
+  if (cLower.includes("korea") || lower.includes("csat") || lower.includes("suneung") || lower.includes("\uC218\uB2A5") || lower.includes("\uB300\uD559\uC218\uD559\uB2A5\uB825\uC2DC\uD5D8")) {
+    return {
+      subjects: [
+        { id: "Korean_Language", title: "Korean Language (\uAD6D\uC5B4)", subtitle: "Reading, Literature, Speech & Writing (\uD654\uBC95\uACFC \uC791\uBB38) or Language & Media (\uC5B8\uC5B4\uC640 \uB9E4\uCCB4)", icon: "\u{1F4D6}" },
+        { id: "Mathematics", title: "Mathematics (\uC218\uD559)", subtitle: "Common Math I/II + Calculus (\uBBF8\uC801\uBD84) / Probability & Stats (\uD655\uD1B5) / Geometry (\uAE30\uD558)", icon: "\u{1F4D0}" },
+        { id: "English", title: "English (\uC601\uC5B4)", subtitle: "Listening & Reading Comprehension (Criterion-Referenced)", icon: "\u{1F310}" },
+        { id: "Korean_History", title: "Korean History (\uD55C\uAD6D\uC0AC)", subtitle: "Mandatory National Korean History Evaluation", icon: "\u{1F3DB}\uFE0F" },
+        { id: "Inquiry_Studies", title: "Inquiry Studies (\uD0D0\uAD6C - Science & Social Studies)", subtitle: "Physics, Chemistry, Life Science, Earth Science / Ethics, History, Geography", icon: "\u{1F52C}" }
+      ],
+      grades: [
+        { id: "Grade_12_Senior", label: "High School Senior (Grade 12 / \uACE03)", desc: "Official CSAT / Suneung Candidate Year", isCollege: false },
+        { id: "Jaesusaeng_Repeater", label: "Jaesusaeng (Repeater / \uC7AC\uC218\uC0DD)", desc: "Dedicated Full-Time Suneung Preparation", isCollege: false },
+        { id: "Grade_11_Junior", label: "High School Junior (Grade 11 / \uACE02)", desc: "Pre-CSAT Core Foundation Year", isCollege: false }
+      ]
+    };
+  }
   if (lower.includes("psc") || lower.includes("civil") || lower.includes("public") || lower.includes("daroga") || lower.includes("si") || lower.includes("constable") || lower.includes("police") || lower.includes("ssc") || lower.includes("clerk") || lower.includes("recruitment") || lower.includes("defence") || lower.includes("army") || lower.includes("navy") || lower.includes("air force") || lower.includes("patwari") || lower.includes("lekhpal") || lower.includes("bpsc") || lower.includes("uppsc") || lower.includes("mppsc") || lower.includes("ras") || lower.includes("rpsc") || lower.includes("wbpsc") || lower.includes("jpsc")) {
     return {
       subjects: [
@@ -4711,18 +4728,19 @@ TASK:
 You are an authoritative global educational curriculum verification engine. Your task is to verify if "${trimmedExam}" is a real, recognized academic examination AND research its official subjects and preparation grades.
 MANDATE ON SOURCES: When conducting live research for "${trimmedExam}", consult strictly official examination authority portals, education ministry gazettes, and official board websites (.gov, .nic.in, .ac.in, .org, official testing agencies). Strictly ignore informal coaching blogs, commercial ads, or unverified 3rd-party aggregator websites.
 
-1. EXAMINATION VALIDITY CHECK:
-   - Check whether "${trimmedExam}" is a real, legitimate standardized examination, board test, entrance exam, or academic qualification anywhere in the world.
-   - If it is random gibberish (e.g. "asdfgh", "test1234", "qwerty", "xyzabc"), a conversational sentence ("how to pass", "i want study", "what is physics"), or completely non-existent:
-     Set "isValid": false,
-     "errorMessage": "We could not find an official exam named '${trimmedExam}'. Please check the spelling or enter a recognized exam name."
+1. COUNTRY AND JURISDICTION MATCH VALIDATION:
+   - The user has explicitly selected their study country as: "${userCountry}".
+   - Check if "${trimmedExam}" is an official examination conducted in "${userCountry}", OR if it is an internationally recognized qualification taken globally (such as SAT, ACT, AP Exams, IELTS, TOEFL, GRE, GMAT, Cambridge IGCSE, or International A Levels).
+   - IF "${trimmedExam}" is an official domestic examination belonging strictly to a DIFFERENT country (for example, the user selected "${userCountry}" but entered an exam exclusive to another country, such as NEET/JEE/UPSC/SSC which belong to India; or CSAT/Suneung which belongs to South Korea; or KCET/MHT CET which belong to Indian states):
+     * You MUST set "isValid": false
+     * Set "errorMessage": "'${trimmedExam}' is an official examination conducted in [Native Country of Exam], not in ${userCountry}. Please enter an examination conducted in ${userCountry} or change your country in Step 1."
+   - IF "${trimmedExam}" is random gibberish (e.g. "asdfgh", "test1234", "qwerty"), a conversational sentence, or completely non-existent:
+     * Set "isValid": false
+     * Set "errorMessage": "We could not find an official examination named '${trimmedExam}' for ${userCountry}. Please check the spelling or enter a recognized exam name."
 
-2. COUNTRY ADAPTATION & AUTO-DETECTION:
-   - Identify the authentic native country / educational jurisdiction for "${trimmedExam}".
-   - If the exam natively belongs to a specific country (e.g., NEET/JEE/CBSE/UPSC belongs to India; ATAR/HSC belongs to Australia; Gaokao belongs to China; GCSE/A-Levels belongs to United Kingdom; SAT/ACT/AP belongs to United States or Global):
-     * Set "isValid": true
-     * Set "detectedCountry": to that country (e.g. "India", "United States", "United Kingdom", "Australia", etc.)
-     * DO NOT reject a genuine exam just because the user selected a different country or defaulted to USA/Global! HelpYou AI auto-adapts to support students worldwide.
+2. OFFICIAL CURRICULUM EXTRACTION (When "isValid": true):
+   - Set "isValid": true
+   - Set "detectedCountry": "${userCountry}"
 
 3. OFFICIAL SUBJECTS RESEARCH:
    - If VALID ("isValid": true):

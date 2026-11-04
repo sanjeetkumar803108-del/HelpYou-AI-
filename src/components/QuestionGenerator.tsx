@@ -472,7 +472,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     let safe = healMarkdownTables(text);
 
     // Step 0.5: Filter out unwanted Python simulation scripts in non-coding academic subjects (e.g. ```python import pandas ... ```)
-    const isCoding = /python|coding|programming|computer|informatics/i.test(`${customTopic || ''} ${stream || ''} ${profile?.stream || ''} ${profile?.subject || ''}`);
+    const userProfile = getUserProfileData();
+    const isCoding = /python|coding|programming|computer|informatics/i.test(`${customTopic || ''} ${stream || ''} ${userProfile?.stream || ''} ${userProfile?.subject || ''}`);
     if (!isCoding) {
       safe = safe.replace(/```(?:python|py)\s*(?:import\s+(?:pandas|numpy|matplotlib|scipy)[\s\S]*?)```/gi, '');
     }

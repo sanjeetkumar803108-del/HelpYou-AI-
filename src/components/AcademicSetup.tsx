@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, GraduationCap, ArrowLeft, ArrowRight, Globe, Target, BookOpen, Sparkles, X, AlertCircle, Loader2, ShieldCheck, AlertTriangle, Lock } from 'lucide-react';
 import { triggerVibration } from '../utils/vibrate';

@@ -1,5 +1,6 @@
 import { ALLOWED_ORIGINS } from "./ALLOWED_ORIGINS";
 import { findCatalogExamBlueprint } from "./src/utils/examSyllabusCatalog";
+import { findPreVerifiedExam, PRE_VERIFIED_EXAMS, PreVerifiedExam } from "./src/utils/preVerifiedExams";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -3724,528 +3725,116 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 });
 
 
-interface PreVerifiedExam {
-  aliases: string[];
-  officialExamName: string;
-  country: string;
-  hasElectives: boolean;
-  grades: Array<{ id: string; label: string; desc: string; isCollege: boolean }>;
-  subjects: Array<{ id: string; title: string; subtitle: string; icon: string }>;
-}
+/**
+ * Domain-aware intelligent fallback generator for examinations that are not yet cached
+ * or when external live search times out, ensuring students NEVER get mismatched subjects.
+ */
+function getIntelligentExamFallback(examName: string, country: string) {
+  const lower = (examName || '').toLowerCase();
 
-const PRE_VERIFIED_EXAMS: PreVerifiedExam[] = [
-  {
-    aliases: ['neet', 'neet ug', 'neet 2025', 'neet 2026', 'neet exam', 'neet ug national eligibility', 'national eligibility cum entrance test'],
-    officialExamName: 'NEET UG (National Eligibility cum Entrance Test)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Class 12', label: 'Class 12', desc: '12th Board Appearing & Senior Secondary', isCollege: false },
-      { id: 'Class 11', label: 'Class 11', desc: '11th Grade / 1st Year Entrance Prep', isCollege: false },
-      { id: 'Dropper / Repeater', label: 'Dropper / Repeater', desc: 'Dedicated Full-Time Preparation / Gap Year', isCollege: false },
-      { id: 'Class 10', label: 'Class 10', desc: 'Pre-Foundation & Early Prep', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Physics', title: 'Physics', subtitle: 'Mechanics, Electrodynamics, Modern Physics, Optics', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Physical, Organic & Inorganic Chemistry', icon: '🧪' },
-      { id: 'Biology', title: 'Biology', subtitle: 'Botany & Zoology, Human Physiology, Genetics', icon: '🧬' }
-    ]
-  },
-  {
-    aliases: ['jee', 'jee main', 'jee mains', 'iit jee', 'jee main 2025', 'jee main 2026', 'iit jee main', 'joint entrance examination'],
-    officialExamName: 'JEE Main (Joint Entrance Examination)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Class 12', label: 'Class 12', desc: '12th Board Appearing & JEE Aspirant', isCollege: false },
-      { id: 'Class 11', label: 'Class 11', desc: '11th Grade / 1st Year Entrance Prep', isCollege: false },
-      { id: 'Dropper / Repeater', label: 'Dropper / Repeater', desc: 'Full-Time Dedicated JEE Preparation', isCollege: false },
-      { id: 'Class 10', label: 'Class 10', desc: 'Pre-Foundation & Early Prep', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Physics', title: 'Physics', subtitle: 'Mechanics, Thermodynamics, Electromagnetism, Modern Physics', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Physical, Inorganic, and Organic Chemistry', icon: '🧪' },
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Calculus, Algebra, Coordinate Geometry, Vectors', icon: '📐' }
-    ]
-  },
-  {
-    aliases: ['jee adv', 'jee advanced', 'iit jee advanced'],
-    officialExamName: 'JEE Advanced (Joint Entrance Examination Advanced)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Class 12', label: 'Class 12', desc: '12th Board Appearing & JEE Advanced Prep', isCollege: false },
-      { id: 'Class 11', label: 'Class 11', desc: '11th Grade Foundation', isCollege: false },
-      { id: 'Dropper / Repeater', label: 'Dropper / Repeater', desc: 'Dedicated Full-Time JEE Advanced Aspirant', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Physics', title: 'Physics', subtitle: 'Advanced Mechanics, Waves, Electrodynamics & Modern Physics', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Advanced Physical, Organic Synthesis & Coordination', icon: '🧪' },
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Advanced Calculus, Complex Numbers, Vectors & 3D', icon: '📐' }
-    ]
-  },
-  {
-    aliases: ['cbse 12', 'cbse 12th', 'cbse class 12', 'cbse board 12', 'class 12 cbse', 'cbse boards'],
-    officialExamName: 'CBSE Class 12 Board Examination',
-    country: 'India',
-    hasElectives: true,
-    grades: [
-      { id: 'Class 12', label: 'Class 12', desc: '12th Senior Secondary Board Year', isCollege: false },
-      { id: 'Class 11', label: 'Class 11', desc: '11th Senior Secondary Foundation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Physics', title: 'Physics', subtitle: 'Electrostatics, Optics, Magnetism & Modern Physics', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Solutions, Electrochemistry, Organic & Coordination', icon: '🧪' },
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Calculus, Relations & Functions, Vectors & 3D', icon: '📐' },
-      { id: 'Biology', title: 'Biology', subtitle: 'Reproduction, Genetics, Evolution & Biotechnology', icon: '🧬' },
-      { id: 'Computer Science', title: 'Computer Science', subtitle: 'Python, Computational Thinking, SQL & Networks', icon: '💻' },
-      { id: 'English Core', title: 'English Core', subtitle: 'Reading Comprehension, Creative Writing & Literature', icon: '📚' },
-      { id: 'Economics', title: 'Economics', subtitle: 'Macroeconomics & Indian Economic Development', icon: '📊' },
-      { id: 'Accountancy', title: 'Accountancy', subtitle: 'Partnership, Companies & Financial Analysis', icon: '📑' },
-      { id: 'Business Studies', title: 'Business Studies', subtitle: 'Principles of Management & Business Finance', icon: '📈' },
-      { id: 'History', title: 'History', subtitle: 'Themes in Indian History I, II & III', icon: '🏛️' },
-      { id: 'Political Science', title: 'Political Science', subtitle: 'Contemporary World Politics & Politics in India', icon: '⚖️' }
-    ]
-  },
-  {
-    aliases: ['cbse 10', 'cbse 10th', 'cbse class 10', 'class 10 cbse', 'cbse board 10', 'cbse'],
-    officialExamName: 'CBSE Class 10 Board Examination',
-    country: 'India',
-    hasElectives: true,
-    grades: [
-      { id: 'Class 10', label: 'Class 10', desc: '10th Secondary Board Exam Year', isCollege: false },
-      { id: 'Class 9', label: 'Class 9', desc: '9th Pre-Board Secondary Foundation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Real Numbers, Polynomials, Trigonometry & Geometry', icon: '📐' },
-      { id: 'Science', title: 'Science', subtitle: 'Chemical Reactions, Life Processes, Light & Electricity', icon: '🔬' },
-      { id: 'Social Science', title: 'Social Science', subtitle: 'History, Geography, Political Science & Economics', icon: '🌍' },
-      { id: 'English Language & Literature', title: 'English Language & Literature', subtitle: 'Reading, Writing & Literature Textbooks', icon: '📚' },
-      { id: 'Hindi', title: 'Hindi Course', subtitle: 'Sparsh, Sanchayan & Vyakaran', icon: '📖' },
-      { id: 'Information Technology', title: 'Information Technology', subtitle: 'Digital Literacy, Cyber Safety & Basics of AI', icon: '💻' }
-    ]
-  },
-  {
-    aliases: ['icse', 'icse class 10', 'icse 10th', 'icse board'],
-    officialExamName: 'ICSE Class 10 (Indian Certificate of Secondary Education)',
-    country: 'India',
-    hasElectives: true,
-    grades: [
-      { id: 'Class 10', label: 'Class 10', desc: 'ICSE Class 10 Board Year', isCollege: false },
-      { id: 'Class 9', label: 'Class 9', desc: 'Class 9 Foundation Prep', isCollege: false }
-    ],
-    subjects: [
-      { id: 'English', title: 'English Language & Literature', subtitle: 'Grammar, Essay & Drama Analysis', icon: '📚' },
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Commercial Math, Algebra, Geometry & Mensuration', icon: '📐' },
-      { id: 'Physics', title: 'Physics', subtitle: 'Force, Work, Light, Sound & Electricity', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Periodic Properties, Chemical Bonding & Acids', icon: '🧪' },
-      { id: 'Biology', title: 'Biology', subtitle: 'Basic Biology, Plant & Human Physiology', icon: '🧬' },
-      { id: 'History & Civics', title: 'History & Civics', subtitle: 'Union Legislature, Indian National Movement', icon: '🏛️' },
-      { id: 'Geography', title: 'Geography', subtitle: 'Topography, Climate, Soil & Natural Vegetation', icon: '🗺️' },
-      { id: 'Computer Applications', title: 'Computer Applications', subtitle: 'Java OOP Concepts & Programming', icon: '💻' }
-    ]
-  },
-  {
-    aliases: ['isc', 'isc class 12', 'isc 12th', 'isc board'],
-    officialExamName: 'ISC Class 12 (Indian School Certificate)',
-    country: 'India',
-    hasElectives: true,
-    grades: [
-      { id: 'Class 12', label: 'Class 12', desc: 'ISC Class 12 Board Year', isCollege: false },
-      { id: 'Class 11', label: 'Class 11', desc: 'ISC Class 11 Foundation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Physics', title: 'Physics', subtitle: 'Electrostatics, Magnetism, Optics & Modern Physics', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Physical, Inorganic and Organic Chemistry', icon: '🧪' },
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Calculus, Vectors, Probability & Linear Programming', icon: '📐' },
-      { id: 'Biology', title: 'Biology', subtitle: 'Reproduction, Genetics, Ecology & Physiology', icon: '🧬' },
-      { id: 'Computer Science', title: 'Computer Science', subtitle: 'Java Data Structures, Boolean Algebra & Algorithms', icon: '💻' },
-      { id: 'English Literature', title: 'English Literature', subtitle: 'Shakespeare Drama, Prose & Poetry', icon: '📚' },
-      { id: 'Economics', title: 'Economics', subtitle: 'Microeconomic Theory & National Income Accounting', icon: '📊' },
-      { id: 'Commerce', title: 'Commerce', subtitle: 'Business Environment, Financing & Marketing', icon: '📈' }
-    ]
-  },
-  {
-    aliases: ['upsc', 'upsc cse', 'civil services', 'ias', 'ips', 'ias exam'],
-    officialExamName: 'UPSC Civil Services Examination (CSE)',
-    country: 'India',
-    hasElectives: true,
-    grades: [
-      { id: 'Full-Time Aspirant', label: 'Full-Time Aspirant', desc: 'Dedicated CSE Preparation', isCollege: true },
-      { id: 'College Final Year', label: 'College Final Year', desc: 'Undergraduate Aspirant', isCollege: true },
-      { id: 'Working Professional', label: 'Working Professional', desc: 'Part-Time Dedicated Study', isCollege: true }
-    ],
-    subjects: [
-      { id: 'General Studies I', title: 'General Studies I', subtitle: 'Indian Heritage, History, Geography & Society', icon: '🏛️' },
-      { id: 'General Studies II', title: 'General Studies II (CSAT & Polity)', subtitle: 'Constitution, Governance, Polity & Reasoning', icon: '⚖️' },
-      { id: 'General Studies III', title: 'General Studies III', subtitle: 'Economy, Agriculture, Science & Security', icon: '📊' },
-      { id: 'General Studies IV', title: 'General Studies IV (Ethics)', subtitle: 'Ethics, Integrity & Aptitude Case Studies', icon: '🧠' },
-      { id: 'Essay', title: 'Essay Paper', subtitle: 'Philosophical, Societal & Contemporary Essays', icon: '✍️' },
-      { id: 'Current Affairs', title: 'Current Affairs & Editorial Analysis', subtitle: 'The Hindu/Express Analysis & Monthly Reviews', icon: '📰' }
-    ]
-  },
-  {
-    aliases: ['cuet', 'cuet ug', 'cuet 2025', 'cuet exam'],
-    officialExamName: 'CUET UG (Common University Entrance Test)',
-    country: 'India',
-    hasElectives: true,
-    grades: [
-      { id: 'Class 12', label: 'Class 12', desc: '12th Board Appearing & CUET Aspirant', isCollege: false },
-      { id: 'Dropper / Gap Year', label: 'Dropper / Gap Year', desc: 'Full-Time CUET Prep', isCollege: false }
-    ],
-    subjects: [
-      { id: 'General Test', title: 'General Test (Section III)', subtitle: 'GK, Current Affairs, Mental Ability & Numerical Logic', icon: '🧠' },
-      { id: 'English Language', title: 'English (Section IA)', subtitle: 'Reading Comprehension, Vocabulary & Verbal Ability', icon: '📚' },
-      { id: 'Physics', title: 'Physics (Domain)', subtitle: 'NCERT Class 12 Core Syllabus', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry (Domain)', subtitle: 'Physical, Inorganic and Organic Class 12 Syllabus', icon: '🧪' },
-      { id: 'Mathematics', title: 'Mathematics (Domain)', subtitle: 'Class 12 Core & Applied Math Topics', icon: '📐' },
-      { id: 'Biology', title: 'Biology (Domain)', subtitle: 'Reproduction, Genetics, Biotechnology & Ecology', icon: '🧬' },
-      { id: 'Economics', title: 'Economics (Domain)', subtitle: 'Microeconomics, Macroeconomics & Indian Economy', icon: '📊' },
-      { id: 'Accountancy', title: 'Accountancy (Domain)', subtitle: 'Accounting for NPO, Partnership & Companies', icon: '📑' },
-      { id: 'Business Studies', title: 'Business Studies (Domain)', subtitle: 'Management Principles, Planning & Marketing', icon: '📈' }
-    ]
-  },
-  {
-    aliases: ['sat', 'digital sat', 'psat'],
-    officialExamName: 'SAT (Digital Scholastic Assessment Test)',
-    country: 'United States',
-    hasElectives: false,
-    grades: [
-      { id: '11th Grade (Junior)', label: '11th Grade', desc: 'Prime SAT Testing Year', isCollege: false },
-      { id: '12th Grade (Senior)', label: '12th Grade', desc: 'Final Fall SAT Attempts', isCollege: false },
-      { id: '10th Grade (Sophomore)', label: '10th Grade', desc: 'Early PSAT / SAT Prep', isCollege: false },
-      { id: '9th Grade (Freshman)', label: '9th Grade', desc: 'High School Foundation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Reading and Writing', title: 'Reading and Writing', subtitle: 'Craft and Structure, Information and Ideas, Expression of Ideas', icon: '📖' },
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Algebra, Advanced Math, Problem-Solving & Geometry/Trigonometry', icon: '📐' }
-    ]
-  },
-  {
-    aliases: ['act', 'act exam'],
-    officialExamName: 'ACT (American College Testing)',
-    country: 'United States',
-    hasElectives: false,
-    grades: [
-      { id: '11th Grade (Junior)', label: '11th Grade', desc: 'Prime ACT Testing Year', isCollege: false },
-      { id: '12th Grade (Senior)', label: '12th Grade', desc: 'Final ACT Attempts', isCollege: false },
-      { id: '10th Grade (Sophomore)', label: '10th Grade', desc: 'PreACT Foundation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'English', title: 'English', subtitle: 'Usage, Mechanics & Rhetorical Skills', icon: '✍️' },
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Pre-Algebra, Elementary Algebra, Intermediate Algebra, Coordinate Geometry', icon: '📐' },
-      { id: 'Reading', title: 'Reading', subtitle: 'Prose Fiction, Social Studies, Humanities & Natural Sciences', icon: '📖' },
-      { id: 'Science', title: 'Science', subtitle: 'Data Representation, Research Summaries & Conflicting Viewpoints', icon: '🔬' }
-    ]
-  },
-  {
-    aliases: ['ap', 'ap exams', 'advanced placement'],
-    officialExamName: 'Advanced Placement (AP) Exams',
-    country: 'United States',
-    hasElectives: true,
-    grades: [
-      { id: '11th Grade (Junior)', label: '11th Grade', desc: 'Prime AP Course Year', isCollege: false },
-      { id: '12th Grade (Senior)', label: '12th Grade', desc: 'Senior AP Courses & College Credit', isCollege: false },
-      { id: '10th Grade (Sophomore)', label: '10th Grade', desc: 'Introductory AP Courses', isCollege: false }
-    ],
-    subjects: [
-      { id: 'AP_Calculus_AB', title: 'AP Calculus AB', subtitle: 'Limits, Derivatives & Integrals', icon: '📐' },
-      { id: 'AP_Calculus_BC', title: 'AP Calculus BC', subtitle: 'Series, Parametric, Polar & Advanced Integration', icon: '📐' },
-      { id: 'AP_Physics_1', title: 'AP Physics 1: Algebra-Based', subtitle: 'Kinematics, Dynamics, Energy & Momentum', icon: '⚡' },
-      { id: 'AP_Physics_C_Mechanics', title: 'AP Physics C: Mechanics', subtitle: 'Calculus-based Newtonian Mechanics', icon: '⚡' },
-      { id: 'AP_Chemistry', title: 'AP Chemistry', subtitle: 'Thermodynamics, Kinetics & Equilibrium', icon: '🧪' },
-      { id: 'AP_Biology', title: 'AP Biology', subtitle: 'Ecology, Genetics & Cellular Energetics', icon: '🧬' },
-      { id: 'AP_Computer_Science_A', title: 'AP Computer Science A', subtitle: 'Java Programming & OOP Fundamentals', icon: '💻' },
-      { id: 'AP_Macroeconomics', title: 'AP Macroeconomics', subtitle: 'National Income, Monetary & Fiscal Policy', icon: '📊' },
-      { id: 'AP_Microeconomics', title: 'AP Microeconomics', subtitle: 'Supply, Demand, Elasticity & Market Structures', icon: '📈' },
-      { id: 'AP_English_Language', title: 'AP English Language and Composition', subtitle: 'Rhetorical Analysis & Argumentative Synthesis', icon: '📚' },
-      { id: 'AP_US_History', title: 'AP United States History', subtitle: 'Historical Analysis & Document-Based Questioning', icon: '🏛️' },
-      { id: 'AP_Psychology', title: 'AP Psychology', subtitle: 'Cognition, Biological Bases & Behavior', icon: '🧠' }
-    ]
-  },
-  {
-    aliases: ['gcse', 'igcse', 'cambridge igcse'],
-    officialExamName: 'GCSE / IGCSE (General Certificate of Secondary Education)',
-    country: 'United Kingdom',
-    hasElectives: true,
-    grades: [
-      { id: 'Year 11', label: 'Year 11', desc: 'Final GCSE Examination Year', isCollege: false },
-      { id: 'Year 10', label: 'Year 10', desc: 'GCSE Year 1 Preparation', isCollege: false },
-      { id: 'Year 9', label: 'Year 9', desc: 'Pre-GCSE Foundation Year', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Mathematics', title: 'Mathematics (Higher / Foundation)', subtitle: 'Number, Algebra, Ratio, Geometry & Probability', icon: '📐' },
-      { id: 'English Language', title: 'English Language', subtitle: 'Fiction and Non-Fiction Analysis & Creative Writing', icon: '📚' },
-      { id: 'English Literature', title: 'English Literature', subtitle: 'Shakespeare, 19th Century Novel & Modern Poetry', icon: '📖' },
-      { id: 'Combined Science', title: 'Combined Science (Trilogy / Synergy)', subtitle: 'Core Biology, Chemistry & Physics', icon: '🔬' },
-      { id: 'Biology', title: 'Biology (Triple Award)', subtitle: 'Cell Biology, Bioenergetics, Genetics & Ecology', icon: '🧬' },
-      { id: 'Chemistry', title: 'Chemistry (Triple Award)', subtitle: 'Atomic Structure, Bonding, Quantitative Chemistry & Organic', icon: '🧪' },
-      { id: 'Physics', title: 'Physics (Triple Award)', subtitle: 'Forces, Energy, Waves, Electricity & Magnetism', icon: '⚡' },
-      { id: 'History', title: 'History', subtitle: 'Thematic Study, Period Study & Depth Studies', icon: '🏛️' },
-      { id: 'Geography', title: 'Geography', subtitle: 'Physical & Human Environments, Fieldwork', icon: '🌍' },
-      { id: 'Computer Science', title: 'Computer Science', subtitle: 'Computational Thinking, Algorithms & Python/VB', icon: '💻' }
-    ]
-  },
-  {
-    aliases: ['a levels', 'a-levels', 'a level', 'cambridge a level'],
-    officialExamName: 'GCE Advanced Level (A-Levels)',
-    country: 'United Kingdom',
-    hasElectives: true,
-    grades: [
-      { id: 'Year 13 (Upper Sixth)', label: 'Year 13 (Upper Sixth)', desc: 'A2 Final Examination Year', isCollege: false },
-      { id: 'Year 12 (Lower Sixth)', label: 'Year 12 (Lower Sixth)', desc: 'AS Level Year 1', isCollege: false },
-      { id: 'Resit / Gap Year', label: 'Resit / Gap Year', desc: 'Retake and Upgrade Preparation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Pure Mathematics, Mechanics & Statistics', icon: '📐' },
-      { id: 'Further Mathematics', title: 'Further Mathematics', subtitle: 'Complex Numbers, Matrices & Advanced Mechanics', icon: '📐' },
-      { id: 'Physics', title: 'Physics', subtitle: 'Particles, Quantum Phenomena, Fields & Nuclear Physics', icon: '⚡' },
-      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Physical, Inorganic and Organic Chemistry', icon: '🧪' },
-      { id: 'Biology', title: 'Biology', subtitle: 'Biological Molecules, Cells, Genetics & Ecosystems', icon: '🧬' },
-      { id: 'Economics', title: 'Economics', subtitle: 'Markets & Market Failure, The National & International Economy', icon: '📊' },
-      { id: 'Computer Science', title: 'Computer Science', subtitle: 'Programming, Data Structures, Boolean Algebra & Algorithms', icon: '💻' },
-      { id: 'Psychology', title: 'Psychology', subtitle: 'Social Influence, Memory, Attachment & Psychopathology', icon: '🧠' },
-      { id: 'English Literature', title: 'English Literature', subtitle: 'Poetry, Drama, Prose & Comparative Studies', icon: '📚' }
-    ]
-  },
-  {
-    aliases: ['ib', 'ib diploma', 'international baccalaureate'],
-    officialExamName: 'International Baccalaureate (IB) Diploma Programme',
-    country: 'Global',
-    hasElectives: true,
-    grades: [
-      { id: 'IB Year 2 (Grade 12)', label: 'IB Year 2 (Grade 12)', desc: 'Final Diploma Exam Year & IA Submission', isCollege: false },
-      { id: 'IB Year 1 (Grade 11)', label: 'IB Year 1 (Grade 11)', desc: 'Diploma Programme Year 1', isCollege: false },
-      { id: 'Pre-IB (Grade 10)', label: 'Pre-IB (Grade 10)', desc: 'MYP / Pre-IB Foundation Year', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Math_AA_HL_SL', title: 'Mathematics: Analysis and Approaches (AA)', subtitle: 'Calculus, Algebra, Functions & Proof', icon: '📐' },
-      { id: 'Math_AI_HL_SL', title: 'Mathematics: Applications and Interpretation (AI)', subtitle: 'Statistics, Modeling, Matrices & Geometry', icon: '📊' },
-      { id: 'Physics_HL_SL', title: 'Physics (HL / SL)', subtitle: 'Space, Time, Motion, Thermal & Quantum Physics', icon: '⚡' },
-      { id: 'Chemistry_HL_SL', title: 'Chemistry (HL / SL)', subtitle: 'Structure, Reactivity, Energetics & Organic Mechanisms', icon: '🧪' },
-      { id: 'Biology_HL_SL', title: 'Biology (HL / SL)', subtitle: 'Molecular Biology, Genetics, Ecology & Evolution', icon: '🧬' },
-      { id: 'Economics_HL_SL', title: 'Economics (HL / SL)', subtitle: 'Microeconomics, Macroeconomics & The Global Economy', icon: '📈' },
-      { id: 'English_A_Lang_Lit', title: 'English A: Language and Literature', subtitle: 'Literary & Non-Literary Textual Analysis', icon: '📚' },
-      { id: 'Computer_Science_HL_SL', title: 'Computer Science (HL / SL)', subtitle: 'System Fundamentals, Java OOP & Abstract Data Structures', icon: '💻' },
-      { id: 'History_HL_SL', title: 'History (HL / SL)', subtitle: 'Authoritarian States, The Cold War & World History Topics', icon: '🏛️' }
-    ]
-  },
-  {
-    aliases: ['mcat', 'mcat exam'],
-    officialExamName: 'MCAT (Medical College Admission Test)',
-    country: 'United States',
-    hasElectives: false,
-    grades: [
-      { id: 'College Junior / Year 3', label: 'College Junior / Year 3', desc: 'Pre-Med Testing Stage', isCollege: true },
-      { id: 'College Senior / Year 4', label: 'College Senior / Year 4', desc: 'Application Cycle Testing', isCollege: true },
-      { id: 'Post-Baccalaureate / Gap Year', label: 'Post-Baccalaureate / Gap Year', desc: 'Dedicated Full-Time Preparation', isCollege: true }
-    ],
-    subjects: [
-      { id: 'Chem_Phys', title: 'Chemical and Physical Foundations', subtitle: 'General Chemistry, Physics, Organic & Biochemistry', icon: '⚡' },
-      { id: 'CARS', title: 'Critical Analysis and Reasoning Skills (CARS)', subtitle: 'Humanities & Social Sciences Passage Analysis', icon: '📖' },
-      { id: 'Bio_Biochem', title: 'Biological and Biochemical Foundations', subtitle: 'Molecular Biology, Physiology & Microbiology', icon: '🧬' },
-      { id: 'Psych_Soc', title: 'Psychological, Social, and Biological Foundations', subtitle: 'Psychology, Sociology & Behavioral Principles', icon: '🧠' }
-    ]
-  },
-  {
-    aliases: ['nda', 'nda exam', 'national defence academy'],
-    officialExamName: 'NDA (National Defence Academy Examination)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Class 12', label: 'Class 12', desc: '12th Appearing Defence Aspirant', isCollege: false },
-      { id: 'Class 11', label: 'Class 11', desc: 'Early NDA Foundation', isCollege: false },
-      { id: 'Post-12th Aspirant', label: 'Post-12th Aspirant', desc: 'Full-Time NDA / SSB Preparation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Algebra, Trigonometry, Calculus, Vectors & Statistics', icon: '📐' },
-      { id: 'General Ability Test', title: 'General Ability Test (GAT)', subtitle: 'English Grammar, Physics, Chemistry, History & Current Affairs', icon: '🛡️' }
-    ]
-  },
-  {
-    aliases: ['gate', 'gate exam', 'gate cse'],
-    officialExamName: 'GATE (Graduate Aptitude Test in Engineering)',
-    country: 'India',
-    hasElectives: true,
-    grades: [
-      { id: 'B.Tech / B.E. Final Year', label: 'B.Tech / B.E. Final Year', desc: 'Graduation Year Aspirant', isCollege: true },
-      { id: 'B.Tech 3rd Year', label: 'B.Tech 3rd Year', desc: 'Early GATE Attempt', isCollege: true },
-      { id: 'College Graduate', label: 'College Graduate', desc: 'Full-Time GATE Aspirant / M.Tech / PSU Prep', isCollege: true }
-    ],
-    subjects: [
-      { id: 'Computer Science & IT', title: 'Computer Science & Information Technology', subtitle: 'Data Structures, Algorithms, OS, DBMS & TOC', icon: '💻' },
-      { id: 'Engineering Mathematics', title: 'Engineering Mathematics & Aptitude', subtitle: 'Discrete Math, Linear Algebra, Calculus & General Aptitude', icon: '📐' },
-      { id: 'Mechanical Engineering', title: 'Mechanical Engineering', subtitle: 'Thermodynamics, Fluid Mechanics & Manufacturing', icon: '⚙️' },
-      { id: 'Electrical Engineering', title: 'Electrical Engineering', subtitle: 'Circuit Analysis, Control Systems & Power Systems', icon: '⚡' },
-      { id: 'Electronics & Communication', title: 'Electronics & Communication', subtitle: 'Signals, Systems, Analog & Digital Circuits', icon: '📡' },
-      { id: 'Civil Engineering', title: 'Civil Engineering', subtitle: 'Structural Analysis, Geotechnical & Environmental Engg', icon: '🏗️' }
-    ]
-  },
-  {
-    aliases: ['cat', 'cat exam', 'iim cat'],
-    officialExamName: 'CAT (Common Admission Test for MBA)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Final Year Undergrad', label: 'Final Year Undergrad', desc: 'College Pre-MBA Aspirant', isCollege: true },
-      { id: 'Working Professional', label: 'Working Professional', desc: '1-3 Years Work Experience CAT Aspirant', isCollege: true },
-      { id: 'Dedicated Gap Year', label: 'Dedicated Gap Year', desc: 'Full-Time MBA Prep', isCollege: true }
-    ],
-    subjects: [
-      { id: 'VARC', title: 'Verbal Ability & Reading Comprehension (VARC)', subtitle: 'RC Passages, Parajumbles, Summary & Sentence Completion', icon: '📚' },
-      { id: 'DILR', title: 'Data Interpretation & Logical Reasoning (DILR)', subtitle: 'Caselets, Tables, Graphs, Puzzles & Seating Arrangements', icon: '📊' },
-      { id: 'QA', title: 'Quantitative Ability (QA)', subtitle: 'Arithmetic, Algebra, Geometry, Modern Math & Number Systems', icon: '📐' }
-    ]
-  },
-  {
-    aliases: ['ssc cgl', 'ssc cgl exam', 'ssc-cgl', 'cgl', 'staff selection commission cgl', 'ssc cgl 2025', 'ssc cgl 2026'],
-    officialExamName: 'Staff Selection Commission Combined Graduate Level (SSC CGL)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Graduate_Final_Year', label: 'Final Year Undergraduate', desc: 'Appearing in final year of Graduation', isCollege: true },
-      { id: 'Graduate_Full_Time', label: 'Graduate Aspirant (Full-Time)', desc: 'Dedicated full-time SSC CGL preparation', isCollege: true },
-      { id: 'Working_Professional', label: 'Working Professional', desc: 'Preparing along with employment', isCollege: true }
-    ],
-    subjects: [
-      { id: 'Quantitative_Aptitude', title: 'Quantitative Aptitude (Math)', subtitle: 'Arithmetic, Advanced Math, Algebra & Geometry', icon: '📐' },
-      { id: 'General_Intelligence_Reasoning', title: 'General Intelligence & Reasoning', subtitle: 'Analogies, Syllogisms, Coding-Decoding & Puzzles', icon: '🧠' },
-      { id: 'English_Comprehension', title: 'English Comprehension & Grammar', subtitle: 'Vocabulary, Grammar, Error Spotting & Reading Comprehension', icon: '📚' },
-      { id: 'General_Awareness', title: 'General Awareness (GK & GS)', subtitle: 'History, Polity, Geography, Economy & Current Affairs', icon: '🏛️' }
-    ]
-  },
-  {
-    aliases: ['ssc chsl', 'ssc chsl exam', 'ssc-chsl', 'chsl', 'ssc 10+2'],
-    officialExamName: 'Staff Selection Commission Combined Higher Secondary Level (SSC CHSL)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Class_12', label: 'Class 12 / 10+2 Passed', desc: '12th Appearing or Completed Aspirant', isCollege: false },
-      { id: 'Full_Time_Aspirant', label: 'Full-Time CHSL Aspirant', desc: 'Dedicated Government Exam Preparation', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Quantitative_Aptitude', title: 'Quantitative Aptitude', subtitle: 'Basic Arithmetic & Number Systems', icon: '📐' },
-      { id: 'General_Intelligence', title: 'General Intelligence & Reasoning', subtitle: 'Verbal & Non-Verbal Reasoning', icon: '🧠' },
-      { id: 'English_Language', title: 'English Language', subtitle: 'Grammar, Vocab & Comprehension', icon: '📚' },
-      { id: 'General_Awareness', title: 'General Awareness', subtitle: 'Current Affairs & Static GK', icon: '🏛️' }
-    ]
-  },
-  {
-    aliases: ['banking', 'bank po', 'bank clerk', 'ibps po', 'sbi po', 'ibps clerk', 'sbi clerk', 'bank exam', 'rbi grade b'],
-    officialExamName: 'Banking Recruitment Examinations (IBPS / SBI PO & Clerk)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Graduate_Aspirant', label: 'Graduate Aspirant', desc: 'Full-time Banking Preparation', isCollege: true },
-      { id: 'Final_Year_Student', label: 'Final Year Student', desc: 'Pre-Banking College Preparation', isCollege: true }
-    ],
-    subjects: [
-      { id: 'Quantitative_Aptitude', title: 'Quantitative Aptitude', subtitle: 'Data Interpretation, Arithmetic & Series', icon: '📐' },
-      { id: 'Reasoning_Ability', title: 'Reasoning Ability', subtitle: 'Puzzles, Seating Arrangements & Logic', icon: '🧠' },
-      { id: 'English_Language', title: 'English Language', subtitle: 'Reading Comprehension, Cloze Test & Grammar', icon: '📚' },
-      { id: 'Banking_Awareness', title: 'Banking & Financial Awareness', subtitle: 'Economy, RBI Guidelines & Current Affairs', icon: '🏦' }
-    ]
-  },
-  {
-    aliases: ['rrb ntpc', 'railway exam', 'rrb', 'ntpc', 'rrb group d', 'railway recruitment'],
-    officialExamName: 'Railway Recruitment Board NTPC (RRB NTPC)',
-    country: 'India',
-    hasElectives: false,
-    grades: [
-      { id: 'Graduate_Level', label: 'Graduate Level NTPC', desc: 'Station Master, Goods Guard, etc.', isCollege: true },
-      { id: 'Undergraduate_Level', label: 'Undergraduate Level (10+2)', desc: 'Junior Clerk, Trains Clerk, etc.', isCollege: false }
-    ],
-    subjects: [
-      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Number System, Decimals, Fractions, LCM & Ratio', icon: '📐' },
-      { id: 'General_Intelligence_Reasoning', title: 'General Intelligence and Reasoning', subtitle: 'Analogies, Syllogisms, Coding & Venn Diagrams', icon: '🧠' },
-      { id: 'General_Awareness', title: 'General Awareness', subtitle: 'Current Events, General Science, History & Polity', icon: '🌍' }
-    ]
-  }
-];
-
-function findPreVerifiedExam(inputExam: string, userCountry?: string): PreVerifiedExam | null {
-  if (!inputExam || typeof inputExam !== 'string') return null;
-  const clean = inputExam.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
-  const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return null;
-
-  for (const entry of PRE_VERIFIED_EXAMS) {
-    for (const alias of entry.aliases) {
-      const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
-      if (clean === cleanAlias || clean.startsWith(cleanAlias) || cleanAlias.startsWith(clean)) {
-        return entry;
-      }
-      if (clean.includes(cleanAlias)) {
-        return entry;
-      }
-    }
+  // 1. Civil Services / State PSC / Govt Recruitment / Police / SSC / Defence
+  if (
+    lower.includes('psc') || lower.includes('civil') || lower.includes('public') ||
+    lower.includes('daroga') || lower.includes('si') || lower.includes('constable') ||
+    lower.includes('police') || lower.includes('ssc') || lower.includes('clerk') ||
+    lower.includes('recruitment') || lower.includes('defence') || lower.includes('army') ||
+    lower.includes('navy') || lower.includes('air force') || lower.includes('patwari') ||
+    lower.includes('lekhpal') || lower.includes('bpsc') || lower.includes('uppsc') ||
+    lower.includes('mppsc') || lower.includes('ras') || lower.includes('rpsc') ||
+    lower.includes('wbpsc') || lower.includes('jpsc')
+  ) {
+    return {
+      subjects: [
+        { id: 'General_Studies', title: 'General Studies (GS)', subtitle: 'Indian History, Polity, Geography, Economy & Environment', icon: '🏛️' },
+        { id: 'Quantitative_Aptitude_Math', title: 'Quantitative Aptitude & Mathematics', subtitle: 'Arithmetic, Number Systems, Algebra & Data Interpretation', icon: '📐' },
+        { id: 'General_Intelligence_Reasoning', title: 'General Intelligence & Reasoning', subtitle: 'Verbal, Non-Verbal & Analytical Reasoning', icon: '🧠' },
+        { id: 'Language_Hindi_English', title: 'Language (General Hindi & English)', subtitle: 'Grammar, Comprehension, Vocabulary & Error Spotting', icon: '📚' },
+        { id: 'Current_Affairs_General_Science', title: 'Current Affairs & Everyday Science', subtitle: 'National/International Events & General Science', icon: '🌍' }
+      ],
+      grades: [
+        { id: 'Graduate_Aspirant', label: 'Graduate Full-Time Aspirant', desc: 'Dedicated Full-Time Preparation', isCollege: true },
+        { id: 'Final_Year_Student', label: 'Final Year Undergrad', desc: 'College Graduation Year Candidate', isCollege: true },
+        { id: 'Working_Professional', label: 'Working Professional', desc: 'Preparing along with employment', isCollege: true }
+      ]
+    };
   }
 
-  // Token-level semantic matching
-  if (words.includes('cgl')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('SSC CGL')) || null;
-  }
-  if (words.includes('chsl')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('SSC CHSL')) || null;
-  }
-  if (words.includes('ssc')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('SSC CGL')) || null;
-  }
-  if (words.includes('bank') || words.includes('ibps') || words.includes('sbi')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('Banking')) || null;
-  }
-  if (words.includes('rrb') || words.includes('railway') || words.includes('ntpc')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('Railway')) || null;
-  }
-
-  // Token-level semantic matching
-  if (words.includes('neet')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('NEET UG')) || null;
-  }
-  if (words.includes('jee')) {
-    if (words.includes('advanced') || words.includes('adv')) {
-      return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('JEE Advanced')) || null;
-    }
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('JEE Main')) || null;
-  }
-  if (words.includes('cbse')) {
-    if (words.includes('10') || words.includes('10th') || words.includes('x')) {
-      return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('CBSE Class 10')) || null;
-    }
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('CBSE Class 12')) || null;
-  }
-  if (words.includes('icse')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('ICSE Class 10')) || null;
-  }
-  if (words.includes('isc')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('ISC Class 12')) || null;
-  }
-  if (words.includes('upsc') || words.includes('ias')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('UPSC')) || null;
-  }
-  if (words.includes('cuet')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('CUET')) || null;
-  }
-  if (words.includes('sat')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('SAT')) || null;
-  }
-  if (words.includes('act')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('ACT')) || null;
-  }
-  if (words.includes('mcat')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('MCAT')) || null;
-  }
-  if (words.includes('nda')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('NDA')) || null;
-  }
-  if (words.includes('gate')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('GATE')) || null;
-  }
-  if (words.includes('cat')) {
-    return PRE_VERIFIED_EXAMS.find(e => e.officialExamName.includes('CAT')) || null;
+  // 2. Commerce / Finance / CA / CS / Accountancy
+  if (
+    lower.includes('commerce') || lower.includes('ca') || lower.includes('cma') ||
+    lower.includes('cs') || lower.includes('account') || lower.includes('finance') ||
+    lower.includes('b.com') || lower.includes('m.com') || lower.includes('tax')
+  ) {
+    return {
+      subjects: [
+        { id: 'Accountancy', title: 'Accountancy & Financial Statements', subtitle: 'Accounting Principles, Partnership & Company Accounts', icon: '📊' },
+        { id: 'Business_Studies', title: 'Business Studies & Management', subtitle: 'Principles of Management, Marketing, Planning & Finance', icon: '💼' },
+        { id: 'Economics', title: 'Economics (Micro & Macro)', subtitle: 'National Income, Demand, Supply, Banking & Indian Economy', icon: '📈' },
+        { id: 'Business_Mathematics', title: 'Business Mathematics & Statistics', subtitle: 'Financial Mathematics, Matrices & Probability', icon: '📐' }
+      ],
+      grades: [
+        { id: 'Class_12_Commerce', label: 'Class 12 Commerce', desc: 'Senior Secondary Commerce Board Year', isCollege: false },
+        { id: 'Undergraduate_Commerce', label: 'B.Com / BBA Undergrad', desc: 'Commerce Degree Candidate', isCollege: true },
+        { id: 'Professional_Aspirant', label: 'Professional Aspirant', desc: 'Full-Time Financial Course Prep', isCollege: true }
+      ]
+    };
   }
 
-  return null;
+  // 3. Law / Judiciary / Legal Studies / CLAT
+  if (
+    lower.includes('law') || lower.includes('clat') || lower.includes('judiciary') ||
+    lower.includes('llb') || lower.includes('ll.b') || lower.includes('bar') ||
+    lower.includes('legal')
+  ) {
+    return {
+      subjects: [
+        { id: 'Legal_Reasoning', title: 'Legal Reasoning & Constitutional Law', subtitle: 'Legal Principles, Constitutional Articles, Torts & Contracts', icon: '⚖️' },
+        { id: 'Current_Affairs_GK', title: 'Current Affairs & Static GK', subtitle: 'Contemporary National & Global Events, Legal News', icon: '🏛️' },
+        { id: 'Logical_Reasoning', title: 'Logical & Analytical Reasoning', subtitle: 'Arguments, Premises, Deductions & Syllogisms', icon: '🧠' },
+        { id: 'English_Language', title: 'English Language & Comprehension', subtitle: 'Vocabulary, Passage Comprehension & Grammar', icon: '📚' }
+      ],
+      grades: [
+        { id: 'Class_12_Law', label: 'Class 12 (Pre-Law)', desc: '12th Appearing NLU Aspirant', isCollege: false },
+        { id: 'Law_Graduate', label: 'Law Graduate (LL.B)', desc: 'Judiciary / PG Law Candidate', isCollege: true }
+      ]
+    };
+  }
+
+  // 4. Humanities / Arts / Social Sciences
+  if (
+    lower.includes('arts') || lower.includes('humanities') || lower.includes('history') ||
+    lower.includes('polity') || lower.includes('sociology') || lower.includes('geography') ||
+    lower.includes('b.a')
+  ) {
+    return {
+      subjects: [
+        { id: 'History', title: 'History (Ancient, Medieval, Modern & World)', subtitle: 'Civilizations, Freedom Struggles & World Events', icon: '🏛️' },
+        { id: 'Political_Science', title: 'Political Science & Civics', subtitle: 'Political Theory, Constitutions & Governance', icon: '🌐' },
+        { id: 'Geography', title: 'Geography (Physical & Human)', subtitle: 'Landforms, Climate, Resources & Demographics', icon: '🗺️' },
+        { id: 'Economics_Development', title: 'Economics & Development', subtitle: 'Indian Economic Development & Global Trends', icon: '📊' }
+      ],
+      grades: [
+        { id: 'Class_12_Arts', label: 'Class 12 Humanities', desc: 'Senior Secondary Arts / Humanities', isCollege: false },
+        { id: 'Undergraduate_Arts', label: 'B.A. Undergrad Aspirant', desc: 'College Humanities Candidate', isCollege: true }
+      ]
+    };
+  }
+
+  // 5. Default Science / Engineering / Medical / School Board (CBSE/ICSE/State Boards)
+  return {
+    subjects: [
+      { id: 'Physics', title: 'Physics', subtitle: 'Mechanics, Optics, Electromagnetism & Modern Physics', icon: '⚡' },
+      { id: 'Chemistry', title: 'Chemistry', subtitle: 'Physical, Inorganic, Coordination & Organic Chemistry', icon: '🧪' },
+      { id: 'Mathematics', title: 'Mathematics', subtitle: 'Calculus, Algebra, Geometry & Vectors', icon: '📐' },
+      { id: 'Biology', title: 'Biology & Life Sciences', subtitle: 'Genetics, Cell Biology, Physiology & Ecology', icon: '🧬' },
+      { id: 'English', title: 'English Language & Literature', subtitle: 'Reading Comprehension, Writing & Grammar', icon: '📚' }
+    ],
+    grades: [
+      { id: 'Class 12', label: 'Class 12 / Senior Secondary', desc: '12th Board / Entrance Prep Year', isCollege: false },
+      { id: 'Class 11', label: 'Class 11 / 1st Year', desc: '11th Grade Early Foundation', isCollege: false },
+      { id: 'Dropper / Repeater', label: 'Dedicated Full-Time Aspirant', desc: 'Comprehensive Prep / Gap Year', isCollege: false }
+    ]
+  };
 }
 
 app.post("/api/verify-and-research-exam", async (req, res) => {
@@ -4267,6 +3856,7 @@ app.post("/api/verify-and-research-exam", async (req, res) => {
       console.log(`[verify-and-research-exam] Fast-path hit for "${trimmedExam}" -> "${preVerified.officialExamName}" (${preVerified.country})`);
       return res.json({
         isValid: true,
+        shortName: preVerified.shortName || trimmedExam,
         officialExamName: preVerified.officialExamName,
         detectedCountry: preVerified.country,
         hasElectives: preVerified.hasElectives,
@@ -4373,22 +3963,15 @@ OR if completely non-existent / fake / gibberish:
           subjects: parsed.subjects
         });
       }
-      // If valid text string, resilient fallback
+      // If valid text string, resilient intelligent domain-aware fallback
+      const intelligent = getIntelligentExamFallback(trimmedExam, userCountry);
       return res.json({
         isValid: true,
         officialExamName: trimmedExam,
         detectedCountry: userCountry !== 'Global' ? userCountry : 'India',
-        hasElectives: false,
-        grades: [
-          { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & Senior Secondary", isCollege: false },
-          { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Entrance Prep", isCollege: false },
-          { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time Preparation / Gap Year", isCollege: false }
-        ],
-        subjects: [
-          { id: "Physics", title: "Physics", subtitle: "Core syllabus and principles", icon: "⚡" },
-          { id: "Chemistry", title: "Chemistry", subtitle: "Chemical principles and reactions", icon: "🧪" },
-          { id: "Mathematics", title: "Mathematics", subtitle: "Analytical and problem-solving topics", icon: "📐" }
-        ]
+        hasElectives: intelligent.subjects.length >= 6,
+        grades: intelligent.grades,
+        subjects: intelligent.subjects
       });
     }
 
@@ -4399,21 +3982,14 @@ OR if completely non-existent / fake / gibberish:
       });
     }
 
+    const intelligent = getIntelligentExamFallback(trimmedExam, userCountry);
     const subjects = Array.isArray(parsed.subjects) && parsed.subjects.length > 0
       ? parsed.subjects
-      : [
-          { id: "Physics", title: "Physics", subtitle: "Core syllabus topics", icon: "⚡" },
-          { id: "Chemistry", title: "Chemistry", subtitle: "Core syllabus topics", icon: "🧪" },
-          { id: "Mathematics", title: "Mathematics", subtitle: "Core syllabus topics", icon: "📐" }
-        ];
+      : intelligent.subjects;
 
     const grades = Array.isArray(parsed.grades) && parsed.grades.length > 0
       ? parsed.grades
-      : [
-          { id: 'Class 12', label: 'Class 12', desc: '12th Senior Secondary', isCollege: false },
-          { id: 'Class 11', label: 'Class 11', desc: '11th Senior Secondary', isCollege: false },
-          { id: 'Dropper / Repeater', label: 'Dropper / Repeater', desc: 'Dedicated Full-Time Preparation', isCollege: false }
-        ];
+      : intelligent.grades;
 
     return res.json({
       isValid: true,
@@ -4427,22 +4003,15 @@ OR if completely non-existent / fake / gibberish:
     console.error("[verify-and-research-exam] Error:", error);
     if (req.body?.examName && typeof req.body.examName === 'string' && req.body.examName.trim().length >= 2) {
       const fallbackExam = req.body.examName.trim();
+      const detectedCountry = sanitizeCountry(req.body.country, 'India');
+      const intelligent = getIntelligentExamFallback(fallbackExam, detectedCountry);
       return res.json({
         isValid: true,
         officialExamName: fallbackExam,
-        detectedCountry: sanitizeCountry(req.body.country, 'India'),
-        hasElectives: false,
-        grades: [
-          { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & Senior Secondary", isCollege: false },
-          { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Prep", isCollege: false },
-          { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time Preparation", isCollege: false }
-        ],
-        subjects: [
-          { id: "Physics", title: "Physics", subtitle: "Core syllabus and principles", icon: "⚡" },
-          { id: "Chemistry", title: "Chemistry", subtitle: "Chemical principles and reactions", icon: "🧪" },
-          { id: "Mathematics", title: "Mathematics", subtitle: "Analytical and problem-solving topics", icon: "📐" },
-          { id: "Biology", title: "Biology", subtitle: "Biological sciences and theory", icon: "🧬" }
-        ]
+        detectedCountry,
+        hasElectives: intelligent.subjects.length >= 6,
+        grades: intelligent.grades,
+        subjects: intelligent.subjects
       });
     }
     res.status(500).json({ 

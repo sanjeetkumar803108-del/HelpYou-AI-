@@ -119,6 +119,13 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
   // Step 2: Target Exam Selection & AI Verification
   const [targetExam, setTargetExam] = useState<string>(() => {
+    const raw = safeGetItem(`target_exam_short_${userId}`) || safeGetItem('target_exam_short') || safeGetItem(`academic_exam_${userId}`) || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+    if (raw && raw.includes('(')) {
+      return raw.split('(')[0].trim();
+    }
+    return raw;
+  });
+  const [officialExamTitle, setOfficialExamTitle] = useState<string>(() => {
     return safeGetItem(`academic_exam_${userId}`) || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
   });
   const [isVerifyingExam, setIsVerifyingExam] = useState<boolean>(false);
@@ -318,9 +325,11 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       // 0. FAST-PATH: Instant sub-millisecond check for recognized national & global exams (100% offline & network-proof for APK)
       const preVerified = findPreVerifiedExam(trimmed, finalCountry);
       if (preVerified) {
-        if (preVerified.officialExamName) {
-          setTargetExam(preVerified.officialExamName);
-        }
+        const officialName = preVerified.officialExamName || trimmed;
+        const shortName = preVerified.shortName || (trimmed.length <= 15 ? trimmed : officialName);
+        setOfficialExamTitle(officialName);
+        setTargetExam(shortName);
+
         if (preVerified.country && selectedCountryId !== 'Other') {
           const matchedCountry = COUNTRIES.find(
             c => c.name.toLowerCase() === preVerified.country.toLowerCase() || 
@@ -366,11 +375,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         return;
       }
 
-
-
       try {
         const abortController = new AbortController();
-        const timeoutId = setTimeout(() => abortController.abort(), 9000);
+        const timeoutId = setTimeout(() => abortController.abort(), 25000);
         const res = await fetch(getApiUrl('/api/verify-and-research-exam'), {
           signal: abortController.signal,
           method: 'POST',
@@ -396,9 +403,10 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         }
 
         // 2. Exam is VALID: Set standardized title and researched subjects
-        if (data.officialExamName) {
-          setTargetExam(data.officialExamName);
-        }
+        const official = data.officialExamName || trimmed;
+        const shortName = data.shortName || (trimmed.length <= 15 ? trimmed : official);
+        setOfficialExamTitle(official);
+        setTargetExam(shortName);
 
         // Seamlessly auto-sync country if exam belongs to a specific nation (only if user did not choose Other)
         if (data.detectedCountry && selectedCountryId !== 'Other') {
@@ -465,24 +473,40 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
         setIsVerifyingExam(false);
         setStep(3); // Advance to Grade selection
-            } catch (err: any) {
+      } catch (err: any) {
         console.warn("[AcademicSetup] AI exam verification network error/timeout, activating resilient auto-curation:", err);
-        // Resilient Fallback: Never block student on Step 2 due to network drop or Vercel serverless timeout
-        const fallbackSubjects = [
-          { id: 'Section_1', title: `${trimmed} - Section 1 / Core Syllabus`, subtitle: 'Core Subjects & Fundamental Principles', icon: '📚', color: SUBJECT_COLORS[0] },
-          { id: 'Section_2', title: `${trimmed} - Section 2 / Advanced Papers`, subtitle: 'Analytical Concepts & Advanced Working', icon: '⚡', color: SUBJECT_COLORS[1] },
-          { id: 'Aptitude_Reasoning', title: 'Quantitative Aptitude & Logical Reasoning', subtitle: 'Numerical Ability, Logic & Analytical Skills', icon: '🧠', color: SUBJECT_COLORS[2] },
-          { id: 'Language_Comprehension', title: 'Language & Reading Comprehension', subtitle: 'Verbal Ability & Textual Analysis', icon: '📖', color: SUBJECT_COLORS[3] }
+        // Resilient Fallback: check emergency pre-verified or authentic domain subjects
+        const emergencyMatch = findPreVerifiedExam(trimmed, finalCountry);
+        const fallbackSubjects = emergencyMatch?.subjects.map((s, idx) => ({
+          id: s.id || s.title,
+          title: s.title || s.id,
+          subtitle: s.subtitle || 'Official Exam Syllabus Topic',
+          icon: s.icon || '📚',
+          color: SUBJECT_COLORS[idx % SUBJECT_COLORS.length]
+        })) || [
+          { id: 'General_Studies', title: `${trimmed} - Core General Studies & Foundations`, subtitle: 'Primary syllabus and core conceptual units', icon: '🏛️', color: SUBJECT_COLORS[0] },
+          { id: 'Quantitative_Reasoning', title: 'Quantitative Aptitude & Logical Reasoning', subtitle: 'Analytical ability, mathematics & numerical aptitude', icon: '📐', color: SUBJECT_COLORS[1] },
+          { id: 'Language_Comprehension', title: 'Language & Reading Comprehension', subtitle: 'Verbal ability, grammar & textual comprehension', icon: '📚', color: SUBJECT_COLORS[2] },
+          { id: 'Domain_Specialization', title: `${trimmed} - Specialized Subject Papers`, subtitle: 'Domain-specific subjects and exam applications', icon: '⚡', color: SUBJECT_COLORS[3] }
         ];
-        const fallbackGrades = [
+
+        const fallbackGrades = emergencyMatch?.grades.map(g => ({
+          id: g.id || g.label,
+          label: g.label || g.id,
+          desc: g.desc || 'Exam preparation grade level',
+          isCollege: Boolean(g.isCollege)
+        })) || [
           { id: 'Final_Year_Candidate', label: 'Final Exam Appearing Year', desc: 'Active Candidate / Final Year', isCollege: false },
           { id: 'Foundation_Year', label: 'Foundation / 1st Year Prep', desc: 'Early Syllabus Preparation', isCollege: false },
           { id: 'Dedicated_Aspirant', label: 'Dedicated Full-Time Aspirant', desc: 'Comprehensive Prep / Self-Study', isCollege: false }
         ];
+
+        setOfficialExamTitle(emergencyMatch?.officialExamName || trimmed);
+        setTargetExam(emergencyMatch?.shortName || trimmed);
         setVerifiedExamSubjects(fallbackSubjects);
         safeSetItem(`cached_exam_subjects_${userId}`, JSON.stringify(fallbackSubjects));
-        setExamHasElectives(false);
-        safeSetItem(`cached_exam_has_electives_${userId}`, 'false');
+        setExamHasElectives(Boolean(emergencyMatch?.hasElectives));
+        safeSetItem(`cached_exam_has_electives_${userId}`, String(Boolean(emergencyMatch?.hasElectives)));
         setSelectedSubjectIds(fallbackSubjects.map(m => m.id));
 
         setVerifiedExamGrades(fallbackGrades);
@@ -550,7 +574,8 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     const finalCountry = selectedCountryId === 'Other' 
       ? ((customCountry || '').trim() || 'Global') 
       : countryObj.name;
-    const finalExam = (targetExam || '').trim() || 'General Studies';
+    const finalExam = (officialExamTitle || targetExam || '').trim() || 'General Studies';
+    const shortExam = (targetExam || '').trim() || finalExam;
     const effectiveRegion = finalCountry.toLowerCase() === 'india' ? 'India' : countryObj.regionSystem;
     
     // Resolve final subjects list from multi-selection
@@ -646,6 +671,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     safeSetItem('academic_region', effectiveRegion);
     safeSetItem('academic_exam', finalExam);
     safeSetItem('target_exam', finalExam);
+    safeSetItem('target_exam_short', shortExam);
     safeSetItem('academic_grade', selectedGrade);
     safeSetItem('onboarding_grade', studyLevel);
     safeSetItem('academic_subjects', JSON.stringify(finalSubjectsList));
@@ -682,6 +708,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       safeSetItem(`academic_region_${activeUid}`, effectiveRegion);
       safeSetItem(`academic_exam_${activeUid}`, finalExam);
       safeSetItem(`target_exam_${activeUid}`, finalExam);
+      safeSetItem(`target_exam_short_${activeUid}`, shortExam);
       safeSetItem(`academic_grade_${activeUid}`, selectedGrade);
       safeSetItem(`onboarding_grade_${activeUid}`, studyLevel);
       safeSetItem(`academic_subjects_${activeUid}`, JSON.stringify(finalSubjectsList));
@@ -995,6 +1022,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                       disabled={isVerifyingExam}
                       onChange={(e) => {
                         setTargetExam(e.target.value);
+                        setOfficialExamTitle('');
                         if (examError) setExamError(null);
                       }}
                       onKeyDown={(e) => {
@@ -1004,7 +1032,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                         }
                       }}
                       placeholder="e.g. JEE, NEET, SAT, AP Physics, CBSE..."
-                      className="w-full bg-transparent text-sm font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none disabled:opacity-50"
+                      className="w-full bg-transparent text-sm font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none disabled:opacity-50 truncate"
                       autoFocus
                     />
                     {targetExam.length > 0 && !isVerifyingExam && (
@@ -1013,14 +1041,24 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                         onClick={() => {
                           triggerVibration(10);
                           setTargetExam('');
+                          setOfficialExamTitle('');
                           setExamError(null);
                         }}
-                        className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full hover:bg-zinc-100 transition-colors"
+                        className="p-1 text-zinc-400 hover:text-zinc-600 rounded-full hover:bg-zinc-100 transition-colors shrink-0"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     )}
                   </div>
+                  {officialExamTitle && officialExamTitle.toLowerCase().trim() !== targetExam.toLowerCase().trim() && (
+                    <div className="mt-2.5 pt-2 border-t border-purple-100/80 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <p className="text-[10px] font-bold text-zinc-600 truncate">
+                        <span className="text-emerald-700 font-black">Official: </span>
+                        {officialExamTitle}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Inline Error Notice if Exam does not exist */}
@@ -1243,7 +1281,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               {isVerifyingExam ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                  <span>Verifying Exam...</span>
+                  <span>Verifying Syllabus with Authority...</span>
                 </>
               ) : (
                 <>

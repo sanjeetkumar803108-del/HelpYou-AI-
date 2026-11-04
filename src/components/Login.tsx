@@ -416,6 +416,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         // Grant free coins initially in local storage for instant responsiveness
         const userKey = `study_daily_limit_${newUser.uid}`;
         safeSetItem(userKey, String(initialCoins));
+        safeSetItem(`study_last_refill_${newUser.uid}`, new Date().toDateString());
         window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
 
         // Save default user object with coins inside Firestore upon account creation
@@ -432,13 +433,44 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
           console.error("Failed to write initial user profile to Firestore:", dbErr);
         }
 
-        // Immediately route the new student into the application seamlessly
-        await routeUserAfterAuth(newUser);
-        onClose();
+        // Sign out so they must verify email
+        await signOut(auth);
+
+        const verifyMsg = `Please verify your email address. A verification link has been sent to ${cleanEmail}. Please check your inbox or spam folder and verify before signing in.`;
+        setError(verifyMsg);
+        Alert.alert("Verify Your Email", verifyMsg);
+        setIsSignUp(false);
+        setPassword('');
+        setLoading(false);
         return;
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
         const loggedUser = userCredential.user;
+        const isGoogle = loggedUser.providerData?.some(p => p.providerId === 'google.com') || false;
+
+        // Check if email is verified for email/password users
+        if (!loggedUser.emailVerified && !isGoogle) {
+          // Freshly resend verification email
+          let emailSent = false;
+          try {
+            await sendEmailVerification(loggedUser);
+            emailSent = true;
+          } catch (resendErr) {
+            console.warn('[Login Auth] Resend verification email notice:', resendErr);
+          }
+
+          await signOut(auth);
+
+          const verifyNotice = emailSent
+            ? `Please verify your email address. A fresh verification link has just been sent to ${cleanEmail}. Please check your inbox or spam folder, click the link to verify, then sign in.`
+            : `Please verify your email address before logging in. A verification link was sent to ${cleanEmail}.`;
+          
+          setError(verifyNotice);
+          Alert.alert("Email Verification Required", verifyNotice);
+          setLoading(false);
+          return;
+        }
+
         await routeUserAfterAuth(loggedUser);
         onClose();
         return;
@@ -457,9 +489,10 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
       } else if (err.code === 'auth/user-not-found') {
         setError('No account found with this email. Please sign up first.');
       } else if (err.code === 'auth/email-already-in-use') {
-        const errMsg = 'An account with this email already exists. If you previously signed up using Google, please use the Google Sign-In button instead.';
+        setIsSignUp(false); // Automatically switch user to Sign In tab!
+        const errMsg = `An account with ${cleanEmail} already exists! We have switched you to the Sign In tab. Please enter your password to sign in. (If unverified, a verification link will be sent to your email).`;
         setError(errMsg);
-        Alert.alert("Account Exists", errMsg);
+        Alert.alert("Account Already Exists", errMsg);
       } else if (err.code === 'auth/weak-password') {
         setError('Password is too weak. Please use at least 6 characters.');
       } else if (err.code === 'auth/invalid-email') {
@@ -614,6 +647,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
 
           const userKey = `study_daily_limit_${loggedUser.uid}`;
           safeSetItem(userKey, String(initialCoins));
+          safeSetItem(`study_last_refill_${loggedUser.uid}`, new Date().toDateString());
           window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
 
           await setDoc(userDocRef, {
@@ -827,7 +861,11 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm font-semibold px-4 py-3 rounded-xl border border-red-200 flex items-center">
+            <div className={`text-sm font-semibold px-4 py-3 rounded-xl border flex items-center leading-snug ${
+              error.toLowerCase().includes('verification') || error.toLowerCase().includes('verify')
+                ? 'bg-amber-50 text-amber-900 border-amber-300'
+                : 'bg-red-50 text-red-600 border-red-200'
+            }`}>
               {error}
             </div>
           )}

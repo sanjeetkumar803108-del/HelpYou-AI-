@@ -23,8 +23,9 @@ export function getCoins(uid?: string): number {
   const storedLimit = safeGetItem(userKey);
 
   if (storedLimit === null) {
-    // New User or Guest! Default 20 free interactions
+    // New User or Guest! Default 20 free interactions for lifetime welcome bonus
     safeSetItem(userKey, '20');
+    safeSetItem(`study_last_refill_${targetUid}`, new Date().toDateString());
     return 20;
   }
 
@@ -110,24 +111,47 @@ export function getCoinHistory(uid?: string): Transaction[] {
   return [];
 }
 
-// refillDailyCoins ensures users get 20 free interactions every day
+// Daily login bonus: New users start with 20 lifetime initial coins.
+// On subsequent days, daily login grants 3 free bonus coins (not 20).
+export const DAILY_LOGIN_BONUS_COINS = 3;
+
 export function refillDailyCoins(): void {
+  if (isProUser()) return;
+
   const targetUid = auth.currentUser?.uid || 'guest';
   const today = new Date().toDateString();
   const lastRefillKey = `study_last_refill_${targetUid}`;
   const lastRefillDate = safeGetItem(lastRefillKey);
+  const userKey = `study_daily_limit_${targetUid}`;
+  const stored = safeGetItem(userKey);
 
-  if (lastRefillDate !== today) {
-    const userKey = `study_daily_limit_${targetUid}`;
-    const current = Number(safeGetItem(userKey) || '0');
-    if (current < 20) {
-      safeSetItem(userKey, '20');
-      safeSetItem(lastRefillKey, today);
-      window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: 20 }));
-      if (auth.currentUser) {
-        setDoc(doc(db, 'users', auth.currentUser.uid), { coins: 20 }, { merge: true }).catch(() => {});
-      }
+  // If brand new user with no coins record yet
+  if (stored === null) {
+    safeSetItem(userKey, '20');
+    safeSetItem(lastRefillKey, today);
+    window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: 20 }));
+    if (auth.currentUser) {
+      setDoc(doc(db, 'users', auth.currentUser.uid), { coins: 20 }, { merge: true }).catch(() => {});
     }
+    return;
+  }
+
+  // If already refilled today, do nothing
+  if (lastRefillDate === today) {
+    return;
+  }
+
+  // Daily login reward: grant 3 free coins (not 20)
+  const current = Number(stored || '0');
+  const newBalance = current + DAILY_LOGIN_BONUS_COINS;
+  safeSetItem(userKey, String(newBalance));
+  safeSetItem(lastRefillKey, today);
+
+  addCoinTransaction(`Daily Login Reward (+${DAILY_LOGIN_BONUS_COINS})`, DAILY_LOGIN_BONUS_COINS, targetUid);
+  window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: newBalance }));
+
+  if (auth.currentUser) {
+    setDoc(doc(db, 'users', auth.currentUser.uid), { coins: newBalance }, { merge: true }).catch(() => {});
   }
 }
 

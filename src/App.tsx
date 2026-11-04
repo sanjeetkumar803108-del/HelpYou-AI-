@@ -756,6 +756,7 @@ export default function App() {
                   }
                   const userKey = `study_daily_limit_${currentUser.uid}`;
                   safeSetItem(userKey, String(initialCoins));
+                  safeSetItem(`study_last_refill_${currentUser.uid}`, new Date().toDateString());
                   window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
                   await setDoc(doc(db, 'users', currentUser.uid), { coins: initialCoins }, { merge: true });
                 }
@@ -786,6 +787,7 @@ export default function App() {
               }
               const userKey = `study_daily_limit_${currentUser.uid}`;
               safeSetItem(userKey, String(initialCoins));
+              safeSetItem(`study_last_refill_${currentUser.uid}`, new Date().toDateString());
               window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
 
               await setDoc(doc(db, 'users', currentUser.uid), {

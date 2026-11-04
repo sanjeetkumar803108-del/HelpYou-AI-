@@ -252,14 +252,16 @@ export function getProfileContext(currentSubject?: string): string {
  * Returns a JSON payload merged with all relevant student profile parameters and exam blueprint.
  */
 export function getProfilePayload(additionalData: Record<string, any> = {}): Record<string, any> {
+  const uid = auth.currentUser?.uid || '';
   const profile = getUserProfileData();
-  const blueprint = getStoredExamBlueprint();
+  const blueprint = getStoredExamBlueprint(uid);
   const activeSubj = additionalData.subject || additionalData.stream || profile.subject;
-  const dedicatedSubjectBp = getSubjectBlueprint(activeSubj);
-  const overview = getExamOverview();
+  const dedicatedSubjectBp = getSubjectBlueprint(activeSubj, uid);
+  const overview = getExamOverview(uid);
 
   return {
     ...additionalData,
+    userId: uid,
     gradeLevel: additionalData.gradeLevel || profile.gradeLevel,
     subject: activeSubj,
     stream: activeSubj,
@@ -270,6 +272,7 @@ export function getProfilePayload(additionalData: Record<string, any> = {}): Rec
     academic_exam: additionalData.academic_exam || profile.targetExam,
     examBlueprint: additionalData.examBlueprint || dedicatedSubjectBp || blueprint,
     subjectBlueprint: dedicatedSubjectBp,
+    fullExamBlueprint: blueprint,
     examOverview: overview,
     learningStyle: profile.isVisualLearner ? 'Visual & Structured' : profile.isDeepFocus ? 'Deep Focus & Concise' : 'Balanced Pedagogical',
     profileContext: additionalData.profileContext || getProfileContext(activeSubj)
@@ -280,12 +283,14 @@ export function getProfilePayload(additionalData: Record<string, any> = {}): Rec
  * Appends student profile parameters and exam blueprint to a FormData object (for multipart uploads like scanner/tutor voice).
  */
 export function appendProfileToFormData(formData: FormData, currentSubject?: string): void {
+  const uid = auth.currentUser?.uid || '';
   const profile = getUserProfileData();
   const activeSubj = currentSubject || profile.subject;
-  const blueprint = getStoredExamBlueprint();
-  const dedicatedSubjectBp = getSubjectBlueprint(activeSubj);
-  const overview = getExamOverview();
+  const blueprint = getStoredExamBlueprint(uid);
+  const dedicatedSubjectBp = getSubjectBlueprint(activeSubj, uid);
+  const overview = getExamOverview(uid);
 
+  if (uid && !formData.has('userId')) formData.append('userId', uid);
   if (!formData.has('gradeLevel')) formData.append('gradeLevel', profile.gradeLevel);
   if (!formData.has('subject')) formData.append('subject', activeSubj);
   if (!formData.has('stream')) formData.append('stream', activeSubj);
@@ -302,7 +307,8 @@ export function appendProfileToFormData(formData: FormData, currentSubject?: str
     formData.append('examOverview', JSON.stringify(overview));
   }
   if (blueprint && !formData.has('examBlueprint')) {
-    formData.append('examBlueprint', JSON.stringify(blueprint));
+    formData.append('examBlueprint', JSON.stringify(dedicatedSubjectBp || blueprint));
+    formData.append('fullExamBlueprint', JSON.stringify(blueprint));
   }
   if (!formData.has('profileContext')) formData.append('profileContext', getProfileContext(activeSubj));
 }

@@ -59,11 +59,12 @@ export interface FullAcademicDossier {
 
 /**
  * Retrieves the permanently saved exam overview (exam name, authority, CBT format, total marks).
+ * Strictly isolated per user.
  */
 export function getExamOverview(userId?: string): ExamOverview | null {
-  const uid = userId || safeGetItem('last_logged_in_user') || '';
+  const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   const raw = (uid ? safeGetItem(`exam_overview_${uid}`) : null) 
-    || safeGetItem('exam_overview');
+    || (!uid ? safeGetItem('exam_overview') : null);
 
   if (raw) {
     try {
@@ -74,8 +75,7 @@ export function getExamOverview(userId?: string): ExamOverview | null {
 
   // Fallback check inside user_exam_blueprint
   const bpRaw = (uid ? safeGetItem(`user_exam_blueprint_${uid}`) : null)
-    || safeGetItem('user_exam_blueprint')
-    || safeGetItem('academic_exam_blueprint');
+    || (!uid ? (safeGetItem('user_exam_blueprint') || safeGetItem('academic_exam_blueprint')) : null);
 
   if (bpRaw) {
     try {
@@ -88,12 +88,12 @@ export function getExamOverview(userId?: string): ExamOverview | null {
 
 /**
  * Retrieves the permanently saved exam blueprint dictionary for the active user.
+ * Strictly isolated per user.
  */
 export function getStoredExamBlueprint(userId?: string): ExamBlueprintMap | null {
-  const uid = userId || safeGetItem('last_logged_in_user') || '';
+  const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   const raw = (uid ? safeGetItem(`user_exam_blueprint_${uid}`) : null) 
-    || safeGetItem('user_exam_blueprint') 
-    || safeGetItem('academic_exam_blueprint');
+    || (!uid ? (safeGetItem('user_exam_blueprint') || safeGetItem('academic_exam_blueprint')) : null);
   
   if (!raw) return null;
   try {
@@ -112,10 +112,11 @@ export function getStoredExamBlueprint(userId?: string): ExamBlueprintMap | null
 
 /**
  * Permanently saves or merges the exam blueprint dictionary in local storage.
+ * Strictly isolated per user.
  */
 export function saveStoredExamBlueprint(blueprint: ExamBlueprintMap, userId?: string, overview?: ExamOverview): void {
   if (!blueprint || typeof blueprint !== 'object') return;
-  const uid = userId || safeGetItem('last_logged_in_user') || '';
+  const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   const fullPayload = {
     examOverview: overview || getExamOverview(uid),
     subjectsBlueprint: blueprint
@@ -145,16 +146,16 @@ export function saveStoredExamBlueprint(blueprint: ExamBlueprintMap, userId?: st
 
 /**
  * Retrieves the dedicated blueprint for a single isolated subject (e.g. "Quantitative Aptitude").
- * Guarantees zero cross-subject data contamination.
+ * Guarantees zero cross-subject or cross-user data contamination.
  */
 export function getSubjectBlueprint(subject: string, userId?: string): SubjectBlueprint | null {
   if (!subject) return null;
-  const uid = userId || safeGetItem('last_logged_in_user') || '';
+  const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   const cleanSubjKey = subject.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
 
   // Check dedicated isolated per-subject key first
   const dedicatedRaw = (uid ? safeGetItem(`exam_subject_blueprint_${cleanSubjKey}_${uid}`) : null)
-    || safeGetItem(`exam_subject_blueprint_${cleanSubjKey}`);
+    || (!uid ? safeGetItem(`exam_subject_blueprint_${cleanSubjKey}`) : null);
 
   if (dedicatedRaw) {
     try {
@@ -164,7 +165,7 @@ export function getSubjectBlueprint(subject: string, userId?: string): SubjectBl
   }
 
   // Fallback to dictionary lookup
-  const map = getStoredExamBlueprint(userId);
+  const map = getStoredExamBlueprint(uid);
   if (!map || typeof map !== 'object') return null;
 
   // Direct match
@@ -185,7 +186,7 @@ export function getSubjectBlueprint(subject: string, userId?: string): SubjectBl
  */
 export function saveDedicatedSubjectBlueprint(subject: string, data: SubjectBlueprint, userId?: string): void {
   if (!subject || !data) return;
-  const uid = userId || safeGetItem('last_logged_in_user') || '';
+  const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   const cleanSubjKey = subject.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
   const jsonStr = JSON.stringify(data);
 
@@ -200,10 +201,15 @@ export function saveDedicatedSubjectBlueprint(subject: string, data: SubjectBlue
  * (used across AI Tutor, Question Generator, Quiz Generator, Test Prep, and Flashcards).
  */
 export function formatBlueprintForAIPrompt(subject: string, userId?: string): string {
-  const bp = getSubjectBlueprint(subject, userId);
-  const overview = getExamOverview(userId);
-  const exam = safeGetItem('academic_exam') || safeGetItem('target_exam') || overview?.examName || '';
-  const grade = safeGetItem('academic_grade') || '';
+  const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
+  const bp = getSubjectBlueprint(subject, uid);
+  const overview = getExamOverview(uid);
+  const exam = (uid ? (safeGetItem(`academic_exam_${uid}`) || safeGetItem(`target_exam_${uid}`)) : null)
+    || safeGetItem('academic_exam')
+    || safeGetItem('target_exam')
+    || overview?.examName
+    || '';
+  const grade = (uid ? safeGetItem(`academic_grade_${uid}`) : null) || safeGetItem('academic_grade') || '';
   
   if (!bp && !exam) return '';
 

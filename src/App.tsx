@@ -28,6 +28,7 @@ import { showToast } from './utils/toast';
 import { setupDailyLocalNotifications } from './utils/notifications';
 import confetti from 'canvas-confetti';
 import { resolveRealCountry } from './utils/profile';
+import { saveStoredExamBlueprint } from './utils/academicBlueprint';
 
 import { retryImport } from './utils/resilientLazy';
 import ToolsDashboard from './components/ToolsDashboard';
@@ -612,10 +613,13 @@ export default function App() {
 
               const localUpdated = Number(safeGetItem(`academic_profile_updated_at_${currentUser.uid}`) || safeGetItem('academic_profile_updated_at') || '0');
               const firestoreUpdated = userData?.updatedAt ? new Date(userData.updatedAt).getTime() : 0;
-              const isLocalNewer = localUpdated > 0 && (localUpdated >= firestoreUpdated || (Date.now() - localUpdated < 15 * 60 * 1000));
+              const localCountry = safeGetItem(`academic_country_${currentUser.uid}`) || safeGetItem('academic_country');
+              const localExam = safeGetItem(`academic_exam_${currentUser.uid}`) || safeGetItem('academic_exam') || safeGetItem('target_exam');
+              const isLocalCalibrated = Boolean(localCountry && localExam);
+              const isLocalNewer = isLocalCalibrated || (localUpdated > 0 && (localUpdated >= firestoreUpdated || (Date.now() - localUpdated < 24 * 60 * 60 * 1000)));
 
               if (isLocalNewer) {
-                console.log('[App] Local academic profile is newer than Firestore document. Preserving local calibrated profile.');
+                console.log('[App] Local academic profile is active on this device. Preserving local calibrated profile.');
               } else if (userData) {
                 if (userData.targetExam || userData.exam || userData.academic_exam) {
                   const savedExam = userData.targetExam || userData.exam || userData.academic_exam;
@@ -660,10 +664,7 @@ export default function App() {
                 if (userData.examBlueprint || userData.academicBlueprint) {
                   const savedBp = userData.academicBlueprint || userData.examBlueprint;
                   if (savedBp && typeof savedBp === 'object') {
-                    const bpStr = JSON.stringify(savedBp);
-                    safeSetItem('user_exam_blueprint', bpStr);
-                    safeSetItem('academic_exam_blueprint', bpStr);
-                    safeSetItem(`user_exam_blueprint_${currentUser.uid}`, bpStr);
+                    saveStoredExamBlueprint(savedBp, currentUser.uid, userData.examOverview);
                   }
                 }
 

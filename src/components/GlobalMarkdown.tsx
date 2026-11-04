@@ -723,6 +723,35 @@ export function healMarkdownTables(text: string): string {
   const lines = str.split('\n');
   const result: string[] = [];
   let inTable = false;
+  let tableRows: string[] = [];
+
+  const flushTable = () => {
+    if (tableRows.length === 0) return;
+    if (result.length > 0 && result[result.length - 1].trim() !== '') {
+      result.push('');
+    }
+
+    // Check maximum column count across all table rows
+    let maxCols = 0;
+    tableRows.forEach(r => {
+      const colCount = r.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1).length;
+      if (colCount > maxCols) maxCols = colCount;
+    });
+
+    if (maxCols > 0 && tableRows.length >= 2) {
+      // Ensure divider row (index 1) has exact matching number of columns
+      const divider = tableRows[1];
+      const divCols = divider.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1).length;
+      if (divCols < maxCols) {
+        const extra = Array(maxCols - divCols).fill(':---:').join(' | ');
+        tableRows[1] = divider.replace(/\|\s*$/, ` | ${extra} |`);
+      }
+    }
+
+    tableRows.forEach(r => result.push(r));
+    result.push('');
+    tableRows = [];
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -731,24 +760,23 @@ export function healMarkdownTables(text: string): string {
     const isNextDivider = /^[ \t]*\|[ \t]*:?-[ \t-:|]+:?[ \t]*\|[ \t]*$/.test(nextLine);
 
     if (!inTable && isRow && isNextDivider) {
-      if (result.length > 0 && result[result.length - 1].trim() !== '') {
-        result.push('');
-      }
       inTable = true;
-      result.push(line);
+      tableRows.push(line.trim());
     } else if (inTable) {
       if (isRow) {
-        result.push(line);
+        tableRows.push(line.trim());
       } else {
         inTable = false;
-        if (result.length > 0 && result[result.length - 1].trim() !== '') {
-          result.push('');
-        }
+        flushTable();
         result.push(line);
       }
     } else {
       result.push(line);
     }
+  }
+
+  if (inTable) {
+    flushTable();
   }
 
   return result.join('\n');

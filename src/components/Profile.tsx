@@ -314,15 +314,43 @@ export default function Profile({
 
   useEffect(() => {
     const handleProfileUpdated = () => {
-      const currentExam = (auth.currentUser?.uid ? safeGetItem(`academic_exam_${auth.currentUser.uid}`) : null) ||
+      const uid = auth.currentUser?.uid;
+      const currentExam = (uid ? safeGetItem(`academic_exam_${uid}`) : null) ||
+        (uid ? safeGetItem(`target_exam_${uid}`) : null) ||
         safeGetItem('academic_exam') ||
         safeGetItem('target_exam') ||
         targetExam;
-      const currentCountry = safeGetItem('academic_country') || selectedCountryName;
+      const rawCountry = (uid ? safeGetItem(`academic_country_${uid}`) : null) || safeGetItem('academic_country');
+      const customCountry = (uid ? safeGetItem(`academic_custom_country_${uid}`) : null) || safeGetItem('academic_custom_country');
+      const resolvedCountry = resolveRealCountry(rawCountry, customCountry, currentExam);
+
+      if (resolvedCountry && resolvedCountry !== 'Others' && resolvedCountry !== 'Other') {
+        setSelectedCountryName(resolvedCountry);
+      }
       if (currentExam) {
         setTargetExam(currentExam);
-        const schedule = getStoredExamSchedule(currentExam, currentCountry, auth.currentUser?.uid);
+        const schedule = getStoredExamSchedule(currentExam, resolvedCountry, uid);
         setExamSchedule(schedule);
+      }
+
+      const grade = (uid ? safeGetItem(`academic_grade_${uid}`) : null) || safeGetItem('academic_grade');
+      if (grade) setGradeLevel(grade);
+
+      const subjectsRaw = (uid ? safeGetItem(`academic_subjects_${uid}`) : null) || safeGetItem('academic_subjects');
+      if (subjectsRaw) {
+        try {
+          const parsed = JSON.parse(subjectsRaw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setUserSubjects(parsed);
+            setStreamMajor(parsed[0]);
+          }
+        } catch (_) {
+          const list = subjectsRaw.split(',').map((s: string) => s.trim()).filter(Boolean);
+          if (list.length > 0) {
+            setUserSubjects(list);
+            setStreamMajor(list[0]);
+          }
+        }
       }
     };
     window.addEventListener('academic_profile_updated', handleProfileUpdated);
@@ -789,21 +817,22 @@ export default function Profile({
           safeSetItem('study_passive_usage_data', JSON.stringify(firestoreUsage));
           setChartData(generateChartData(firestoreUsage));
 
-          // Check if local academic profile was recently calibrated or is newer than Firestore doc
-          const localUpdated = Number(safeGetItem(`academic_profile_updated_at_${user.uid}`) || safeGetItem('academic_profile_updated_at') || '0');
-          const firestoreUpdated = userData.updatedAt ? new Date(userData.updatedAt).getTime() : 0;
-          const isLocalNewer = localUpdated > 0 && (localUpdated >= firestoreUpdated || (Date.now() - localUpdated < 15 * 60 * 1000));
+          // Prioritize local calibrated academic profile (especially for owner tester)
+          const localCountry = (user?.uid ? safeGetItem(`academic_country_${user.uid}`) : null) || safeGetItem('academic_country');
+          const localExam = (user?.uid ? safeGetItem(`academic_exam_${user.uid}`) : null) || safeGetItem('academic_exam') || safeGetItem('target_exam');
+          const localGrade = (user?.uid ? safeGetItem(`academic_grade_${user.uid}`) : null) || safeGetItem('academic_grade');
+          const localSubjects = (user?.uid ? safeGetItem(`academic_subjects_${user.uid}`) : null) || safeGetItem('academic_subjects');
 
-          if (isLocalNewer) {
-            // Keep the user's freshly calibrated local profile and sync it to Firestore if needed
-            const localCountry = safeGetItem(`academic_country_${user.uid}`) || safeGetItem('academic_country');
-            const localExam = safeGetItem(`academic_exam_${user.uid}`) || safeGetItem('target_exam');
-            const localGrade = safeGetItem(`academic_grade_${user.uid}`) || safeGetItem('academic_grade');
-            const localSubjects = safeGetItem(`academic_subjects_${user.uid}`) || safeGetItem('academic_subjects');
+          if (localCountry || localExam) {
+            // User already has calibrated academic profile on this device -> preserve it!
             if (localCountry && localCountry !== 'Others' && localCountry !== 'Other') {
               setSelectedCountryName(localCountry);
             }
-            if (localExam) setTargetExam(localExam);
+            if (localExam) {
+              setTargetExam(localExam);
+              const sched = getStoredExamSchedule(localExam, localCountry || '', user?.uid);
+              if (sched) setExamSchedule(sched);
+            }
             if (localGrade) setGradeLevel(localGrade);
             if (localSubjects) {
               try {
@@ -815,7 +844,7 @@ export default function Profile({
               } catch (_) {}
             }
           } else {
-            // Seamlessly resolve and sync real country from cloud if cloud is genuinely newer
+            // First-time login on a brand new empty device: adopt cloud profile
             const firestoreCountry = resolveRealCountry(
               userData.country || userData.academic_country,
               userData.academic_custom_country || userData.customCountry,
@@ -825,15 +854,17 @@ export default function Profile({
               setSelectedCountryName(firestoreCountry);
               safeSetItem('academic_country', firestoreCountry);
               safeSetItem('academic_custom_country', firestoreCountry);
-              safeSetItem(`academic_country_${user.uid}`, firestoreCountry);
-              safeSetItem(`academic_custom_country_${user.uid}`, firestoreCountry);
+              if (user?.uid) {
+                safeSetItem(`academic_country_${user.uid}`, firestoreCountry);
+                safeSetItem(`academic_custom_country_${user.uid}`, firestoreCountry);
+              }
             }
             if (userData.targetExam || userData.academic_exam) {
               const examName = userData.targetExam || userData.academic_exam;
               setTargetExam(examName);
               safeSetItem('target_exam', examName);
-              safeSetItem(`academic_exam_${user.uid}`, examName);
-              const sched = getStoredExamSchedule(examName, userData.country || userData.academic_country || '', user.uid);
+              if (user?.uid) safeSetItem(`academic_exam_${user.uid}`, examName);
+              const sched = getStoredExamSchedule(examName, firestoreCountry || '', user?.uid);
               setExamSchedule(sched);
             }
           }

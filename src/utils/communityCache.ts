@@ -129,8 +129,15 @@ export function isGibberishCandidate(text: string): boolean {
       // Must contain at least one vowel (a, e, i, o, u, y)
       if (!/[aeiouy]/.test(letters)) return true;
 
-      // 5 or more consonants in a row (e.g. "dsghcdbc")
-      if (/[bcdfghjklmnpqrstvwxz]{5,}/i.test(letters)) return true;
+      // 4 or more consonants in a row (e.g. "dsgh", "cdbc", "rklt")
+      if (/[bcdfghjklmnpqrstvwxz]{4,}/i.test(letters)) return true;
+
+      // Vowel ratio check for longer tokens: must have reasonable vowel proportion
+      if (letters.length >= 6) {
+        const vowels = (letters.match(/[aeiouy]/g) || []).length;
+        const ratio = vowels / letters.length;
+        if (ratio < 0.18 || ratio > 0.85) return true;
+      }
 
       // 3 or more of the same letter in a row (e.g. "aaaa", "zzzz")
       if (/([a-z])\1{2,}/i.test(letters)) return true;
@@ -255,8 +262,11 @@ export async function verifySubTopicWithAI(
     };
   } catch (err: any) {
     console.warn('[verifySubTopicWithAI] AI verification network notice:', err);
-    // If offline or network issue, fallback to strict client check
-    return localCheck;
+    // Strict safety: never allow unverified custom inputs to bypass curriculum check
+    return {
+      isValid: false,
+      error: 'Could not connect to curriculum verification service. Please check your connection and try again.'
+    };
   }
 }
 

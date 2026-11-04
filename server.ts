@@ -890,23 +890,33 @@ function getExamBlueprintDirective(exam?: string, blueprint?: any, subject?: str
 • OFFICIAL EXAM OVERVIEW: ${ov.examName || exam} | Authority: ${ov.officialAuthority || 'Official Board'} | Format: ${ov.examFormat || 'Standard'} | Full Paper Marks: ${ov.totalExamMarks || 'N/A'}`;
       }
 
-      let activeBp = subject && bp[subject] ? bp[subject] : null;
+      // Check if blueprint passed is already a dedicated SubjectBlueprint
+      let activeBp: any = null;
+      if (bp && (bp.coreUnits || bp.markingScheme || bp.questionTypes || bp.subjectName || bp.totalMarks)) {
+        activeBp = bp;
+      }
+
+      if (!activeBp && subject && bp[subject]) {
+        activeBp = bp[subject];
+      }
       if (!activeBp && bp.subjectsBlueprint && subject) {
         activeBp = bp.subjectsBlueprint[subject] || null;
       }
       if (!activeBp && subject) {
         const lower = subject.toLowerCase().trim();
-        const searchPool = bp.subjectsBlueprint || bp;
+        const searchPool = bp.subjectsBlueprint || (bp.fullExamBlueprint?.subjectsBlueprint || bp.fullExamBlueprint) || bp;
         const k = Object.keys(searchPool).find(key => {
           const lKey = key.toLowerCase().trim();
           return lKey === lower || lower.includes(lKey) || lKey.includes(lower);
         });
-        if (k) activeBp = searchPool[k];
+        if (k && searchPool[k] && typeof searchPool[k] === 'object' && !Array.isArray(searchPool[k])) {
+          activeBp = searchPool[k];
+        }
       }
       if (!activeBp) {
-        const searchPool = bp.subjectsBlueprint || bp;
-        const firstKey = Object.keys(searchPool)[0];
-        if (firstKey && searchPool[firstKey] && typeof searchPool[firstKey] === 'object') {
+        const searchPool = bp.subjectsBlueprint || (bp.fullExamBlueprint?.subjectsBlueprint || bp.fullExamBlueprint) || bp;
+        const firstKey = Object.keys(searchPool).find(k => searchPool[k] && typeof searchPool[k] === 'object' && !Array.isArray(searchPool[k]) && (searchPool[k].markingScheme || searchPool[k].coreUnits));
+        if (firstKey) {
           activeBp = searchPool[firstKey];
         }
       }
@@ -4781,8 +4791,15 @@ app.post("/api/verify-subtopic", async (req, res) => {
         if (!/[aeiouy]/.test(letters)) {
           return res.json({ isValid: false, errorMessage: `"${normSubTopic}" is not a recognized academic concept.` });
         }
-        if (/[bcdfghjklmnpqrstvwxz]{5,}/i.test(letters)) {
+        if (/[bcdfghjklmnpqrstvwxz]{4,}/i.test(letters)) {
           return res.json({ isValid: false, errorMessage: `"${normSubTopic}" does not look like a valid academic term.` });
+        }
+        if (letters.length >= 6) {
+          const vowels = (letters.match(/[aeiouy]/g) || []).length;
+          const ratio = vowels / letters.length;
+          if (ratio < 0.18 || ratio > 0.85) {
+            return res.json({ isValid: false, errorMessage: `"${normSubTopic}" is not a recognized academic term.` });
+          }
         }
       }
     }
@@ -6175,12 +6192,12 @@ Return ONLY valid JSON:
           ]
         },
         {
-          q: `An automated sensor recorded experimental trial data for **${cleanTopic}**. The data acquisition is modeled by the following Python script and observation table:\n\n\`\`\`python\nimport numpy as np\nimport pandas as pd\n\nt = np.array([0.0, 1.0, 2.0, 3.0])\nx = np.array([0.0, 2.5, 10.0, 22.5]) # x(t) = 2.5 * t^2\ndf = pd.DataFrame({'Time t (s)': t, 'Displacement x (m)': x})\n\`\`\`\n\n| Trial | Time $t$ (s) | Measured $x$ (m) | Calculated Rate $v$ (\\text{m/s}) |\n| :---: | :---: | :---: | :---: |\n| 1 | 0.0 | 0.0 | 0.0 |\n| 2 | 1.0 | 2.5 | 5.0 |\n| 3 | 2.0 | 10.0 | 10.0 |\n| 4 | 3.0 | 22.5 | 15.0 |\n\n(a) Using the provided Python model and data table, determine whether the acceleration is uniform. (b) Formulate the governing differential relation and compute the net force on a $2\\text{ kg}$ test mass.`,
-          sol: `Official Model Solution:\n• Acceleration Analysis: The second derivative \\frac{d^2x}{dt^2} = 5.0\\text{ m/s}^2 is constant across all time intervals, confirming uniform acceleration.\n• Differential Formulation: $v(t) = \\frac{dx}{dt} = 5.0t\\text{ m/s}$. Acceleration $a = 5.0\\text{ m/s}^2$.\n• Force Calculation: By Newton's second law, $F_{\\text{net}} = ma = 2\\text{ kg} \\times 5.0\\text{ m/s}^2 = 10\\text{ N}$.`,
+          q: `An empirical experiment recorded structured trial measurements for **${cleanTopic}**. The observation data is organized in the following standard measurement table:\n\n| Trial | Time $t$ (s) | Measured Displacement $x$ (m) | Calculated Velocity $v$ (m/s) |\n| :---: | :---: | :---: | :---: |\n| 1 | 0.0 | 0.0 | 0.0 |\n| 2 | 1.0 | 2.5 | 5.0 |\n| 3 | 2.0 | 10.0 | 10.0 |\n| 4 | 3.0 | 22.5 | 15.0 |\n\n(a) Using the provided empirical table, evaluate whether the acceleration is uniform over the observed intervals.\n(b) Formulate the governing kinematic relation $x(t)$ and compute the net resultant force acting on a $2\\text{ kg}$ test mass.`,
+          sol: `Official Model Solution:\n• Acceleration Evaluation: Computing successive rate differences $\\Delta v / \\Delta t = \\frac{5.0 - 0.0}{1.0} = \\frac{10.0 - 5.0}{1.0} = 5.0\\text{ m/s}^2$ confirms constant acceleration.\n• Kinematic Equation: $x(t) = \\frac{1}{2}at^2 = 2.5t^2\\text{ m}$. Velocity function $v(t) = 5.0t\\text{ m/s}$.\n• Force Calculation: By Newton's Second Law, $F_{\\text{net}} = ma = (2\\text{ kg})(5.0\\text{ m/s}^2) = 10\\text{ N}$.`,
           rubric: [
-            "[1 Mark] Verification of uniform acceleration from the table and Python quadratic model",
-            "[2 Marks] Step-by-step differential derivation of velocity and acceleration functions",
-            "[1 Mark] Accurate final force calculation ($10\\text{ N}$) with correct SI units"
+            "[1 Mark] Step-by-step verification of uniform acceleration from the rate differentials",
+            "[2 Marks] Exact formulation of kinematic position and velocity equations",
+            "[1 Mark] Final net force calculation ($10\\text{ N}$) with correct SI units"
           ]
         },
         {
@@ -6193,12 +6210,12 @@ Return ONLY valid JSON:
           ]
         },
         {
-          q: `A mathematical model of **${cleanTopic}** is simulated using the following Python script, generating the potential energy curve shown below:\n\n\`\`\`python\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nx = np.linspace(0, 5, 100)\n# Potential energy function: U(x) = 2.0 * x**2\nU = 2.0 * (x**2)\nplt.plot(x, U, label='Potential Well U(x)')\n\`\`\`\n\n\`\`\`graph\n U(x) (J)\n  ^\n50|             .'\n  |           .'\n25|        .-'\n  |      .'\n 0+----+----+----+-----> x (m)\n  0    2    4    5\n\`\`\`\n\n(a) Using the Python script and graph, deduce the restoring force $F(x) = -\\frac{dU}{dx}$. (b) If the particle has total mechanical energy $E = 50\\text{ J}$, calculate the classical turning points and maximum kinetic energy.`,
-          sol: `Official Model Solution:\n• Restoring Force: Differentiating $U(x) = 2.0x^2$ gives $F(x) = -\\frac{dU}{dx} = -4.0x\\text{ N}$, which represents a linear harmonic restoring force.\n• Classical Turning Points: At turning points, kinetic energy $K = 0$, so $U(x) = E \\implies 2.0x^2 = 50 \\implies x = \\pm 5.0\\text{ m}$.\n• Maximum Kinetic Energy: $K_{\\text{max}} = E - U_{\\text{min}} = 50\\text{ J} - 0 = 50\\text{ J}$ occurring at the equilibrium origin $x = 0$.`,
+          q: `A particle of mass $m = 2\\text{ kg}$ executes bounded motion under **${cleanTopic}** in a conservative potential well $U(x) = 2.0 x^2\\text{ J}$, with total mechanical energy $E = 50\\text{ J}$.\n\n(a) Using conservative force dynamics $F(x) = -\\frac{dU}{dx}$, deduce the governing restoring force as an algebraic function of displacement $x$.\n(b) Calculate the classical turning points of the motion where velocity vanishes.\n(c) Determine the maximum kinetic energy $K_{\\text{max}}$ and state the equilibrium position where it is attained.`,
+          sol: `Official Model Solution:\n• Restoring Force Derivation: In a conservative field, $F(x) = -\\frac{dU}{dx} = -\\frac{d}{dx}(2.0x^2) = -4.0x\\text{ N}$, indicating a linear harmonic restoring force.\n• Classical Turning Points: At the boundaries of motion, kinetic energy $K = 0$, requiring $U(x) = E$. Thus, $2.0x^2 = 50 \\implies x^2 = 25 \\implies x = \\pm 5.0\\text{ m}$.\n• Maximum Kinetic Energy: By energy conservation, $E = K + U$. Kinetic energy is maximized where potential energy is minimized ($x = 0$, $U(0) = 0\\text{ J}$). Hence, $K_{\\text{max}} = 50\\text{ J}$ at the origin.`,
           rubric: [
-            "[1 Mark] Correct derivative deduction of restoring force $F(x) = -4.0x\\text{ N}$",
-            "[2 Marks] Analytical calculation of classical turning points ($x = \\pm 5\\text{ m}$)",
-            "[1 Mark] Maximum kinetic energy ($50\\text{ J}$) and equilibrium position"
+            "[1 Mark] Accurate differential derivation of restoring force $F(x) = -4.0x\\text{ N}$",
+            "[2 Marks] Rigorous algebraic solution for classical turning points ($x = \\pm 5.0\\text{ m}$)",
+            "[1 Mark] Determination of maximum kinetic energy ($50\\text{ J}$) at equilibrium ($x = 0$)"
           ]
         },
         {
@@ -8231,7 +8248,9 @@ app.post("/api/quiz-ai-help", async (req, res) => {
       stream,
       country,
       targetExam,
-      subject
+      subject,
+      examBlueprint,
+      fullExamBlueprint
     } = req.body;
 
     if (!question) {
@@ -8245,7 +8264,7 @@ app.post("/api/quiz-ai-help", async (req, res) => {
     const isHint = mode === 'hint';
 
     const gradeDirective = getGradePedagogicalDirective(effectiveGrade, effectiveStream, effectiveCountry);
-    const examDirective = getExamBlueprintDirective(effectiveExam, undefined, effectiveStream);
+    const examDirective = getExamBlueprintDirective(effectiveExam, examBlueprint || fullExamBlueprint, effectiveStream);
 
     const systemInstruction = [
       gradeDirective,

@@ -25,12 +25,30 @@ export interface UserProfileData {
  * it seamlessly resolves to that genuine country rather than generic 'Others'.
  */
 export function resolveRealCountry(rawCountry?: string | null, customCountry?: string | null, targetExam?: string | null): string {
+  // 1. Prioritize explicit user input: custom typed country (e.g. South Korea, Germany, UAE)
   const custom = (customCountry || '').trim();
   if (custom && custom.toLowerCase() !== 'others' && custom.toLowerCase() !== 'other') {
     return custom;
   }
 
+  // 2. Prioritize selected country from dropdown / country list (e.g. United States, United Kingdom, Canada, Australia)
+  const raw = (rawCountry || '').trim();
+  if (raw && raw.toLowerCase() !== 'others' && raw.toLowerCase() !== 'other') {
+    return raw;
+  }
+
+  // 3. Fallback ONLY if no authentic country was chosen or available
   const exam = (targetExam || '').toLowerCase().trim();
+
+  // South Korea (CSAT / Suneung / Korean High School)
+  const isKoreanExam = Boolean(
+    /\b(?:csat|suneung)\b/i.test(exam) ||
+    exam.includes('대학수학능력시험') ||
+    exam.includes('south korea') ||
+    exam.includes('korea')
+  );
+  if (isKoreanExam) return 'South Korea';
+
   const isIndianExam = Boolean(
     exam.includes('neet') ||
     exam.includes('jee') ||
@@ -65,16 +83,16 @@ export function resolveRealCountry(rawCountry?: string | null, customCountry?: s
   );
 
   const isUSExam = Boolean(
-    exam.includes('sat') ||
-    exam.includes('act') ||
-    exam.includes('ap ') ||
-    exam.endsWith(' ap') ||
-    exam.includes('ged') ||
-    exam.includes('gre') ||
-    exam.includes('gmat') ||
-    exam.includes('mcat') ||
-    exam.includes('lsat') ||
-    exam.includes('usmle')
+    /\b(?:digital\s+)?sat\b/i.test(exam) ||
+    /\bact\b/i.test(exam) ||
+    /\bap\b/i.test(exam) ||
+    exam.includes('advanced placement') ||
+    /\bged\b/i.test(exam) ||
+    /\bgre\b/i.test(exam) ||
+    /\bgmat\b/i.test(exam) ||
+    /\bmcat\b/i.test(exam) ||
+    /\blsat\b/i.test(exam) ||
+    /\busmle\b/i.test(exam)
   );
 
   const isUKExam = Boolean(
@@ -89,11 +107,6 @@ export function resolveRealCountry(rawCountry?: string | null, customCountry?: s
   if (isIndianExam) return 'India';
   if (isUSExam) return 'United States';
   if (isUKExam) return 'United Kingdom';
-
-  const raw = (rawCountry || '').trim();
-  if (raw && raw.toLowerCase() !== 'others' && raw.toLowerCase() !== 'other') {
-    return raw;
-  }
 
   return 'India';
 }

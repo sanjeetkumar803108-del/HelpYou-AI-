@@ -610,7 +610,13 @@ export default function App() {
                 }
               }
 
-              if (userData) {
+              const localUpdated = Number(safeGetItem(`academic_profile_updated_at_${currentUser.uid}`) || safeGetItem('academic_profile_updated_at') || '0');
+              const firestoreUpdated = userData?.updatedAt ? new Date(userData.updatedAt).getTime() : 0;
+              const isLocalNewer = localUpdated > 0 && (localUpdated >= firestoreUpdated || (Date.now() - localUpdated < 15 * 60 * 1000));
+
+              if (isLocalNewer) {
+                console.log('[App] Local academic profile is newer than Firestore document. Preserving local calibrated profile.');
+              } else if (userData) {
                 if (userData.targetExam || userData.exam || userData.academic_exam) {
                   const savedExam = userData.targetExam || userData.exam || userData.academic_exam;
                   safeSetItem('academic_exam', savedExam);

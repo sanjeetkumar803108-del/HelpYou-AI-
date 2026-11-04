@@ -246,7 +246,8 @@ export default function Profile({
 
   // Granular Academic Track
   const [gradeLevel, setGradeLevel] = useState(() => {
-    return safeGetItem('academic_grade') || '11th Grade (Junior)';
+    const uid = auth.currentUser?.uid;
+    return (uid ? safeGetItem(`academic_grade_${uid}`) : null) || safeGetItem('academic_grade') || '11th Grade (Junior)';
   });
   // User Subjects (Multi-subject academic curriculum)
   const [userSubjects, setUserSubjects] = useState<string[]>(() => {
@@ -601,6 +602,26 @@ export default function Profile({
         setSelectedCountryName(resolved);
       }
       if (exam) setTargetExam(exam);
+
+      const grade = (uid ? safeGetItem(`academic_grade_${uid}`) : null) || safeGetItem('academic_grade');
+      if (grade) setGradeLevel(grade);
+
+      const subjectsRaw = (uid ? safeGetItem(`academic_subjects_${uid}`) : null) || safeGetItem('academic_subjects');
+      if (subjectsRaw) {
+        try {
+          const parsed = JSON.parse(subjectsRaw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setUserSubjects(parsed);
+            setStreamMajor(parsed[0]);
+          }
+        } catch (_) {
+          const list = subjectsRaw.split(',').map((s: string) => s.trim()).filter(Boolean);
+          if (list.length > 0) {
+            setUserSubjects(list);
+            setStreamMajor(list[0]);
+          }
+        }
+      }
     };
 
     window.addEventListener('academic_profile_updated', handleProfileUpdate);
@@ -734,18 +755,51 @@ export default function Profile({
           safeSetItem('study_passive_usage_data', JSON.stringify(firestoreUsage));
           setChartData(generateChartData(firestoreUsage));
 
-          // Seamlessly resolve and sync real country
-          const firestoreCountry = resolveRealCountry(
-            userData.country || userData.academic_country,
-            userData.academic_custom_country || userData.customCountry,
-            userData.targetExam || userData.academic_exam
-          );
-          if (firestoreCountry && firestoreCountry !== 'Others' && firestoreCountry !== 'Other') {
-            setSelectedCountryName(firestoreCountry);
-            safeSetItem('academic_country', firestoreCountry);
-            safeSetItem('academic_custom_country', firestoreCountry);
-            safeSetItem(`academic_country_${user.uid}`, firestoreCountry);
-            safeSetItem(`academic_custom_country_${user.uid}`, firestoreCountry);
+          // Check if local academic profile was recently calibrated or is newer than Firestore doc
+          const localUpdated = Number(safeGetItem(`academic_profile_updated_at_${user.uid}`) || safeGetItem('academic_profile_updated_at') || '0');
+          const firestoreUpdated = userData.updatedAt ? new Date(userData.updatedAt).getTime() : 0;
+          const isLocalNewer = localUpdated > 0 && (localUpdated >= firestoreUpdated || (Date.now() - localUpdated < 15 * 60 * 1000));
+
+          if (isLocalNewer) {
+            // Keep the user's freshly calibrated local profile and sync it to Firestore if needed
+            const localCountry = safeGetItem(`academic_country_${user.uid}`) || safeGetItem('academic_country');
+            const localExam = safeGetItem(`academic_exam_${user.uid}`) || safeGetItem('target_exam');
+            const localGrade = safeGetItem(`academic_grade_${user.uid}`) || safeGetItem('academic_grade');
+            const localSubjects = safeGetItem(`academic_subjects_${user.uid}`) || safeGetItem('academic_subjects');
+            if (localCountry && localCountry !== 'Others' && localCountry !== 'Other') {
+              setSelectedCountryName(localCountry);
+            }
+            if (localExam) setTargetExam(localExam);
+            if (localGrade) setGradeLevel(localGrade);
+            if (localSubjects) {
+              try {
+                const parsed = JSON.parse(localSubjects);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setUserSubjects(parsed);
+                  setStreamMajor(parsed[0]);
+                }
+              } catch (_) {}
+            }
+          } else {
+            // Seamlessly resolve and sync real country from cloud if cloud is genuinely newer
+            const firestoreCountry = resolveRealCountry(
+              userData.country || userData.academic_country,
+              userData.academic_custom_country || userData.customCountry,
+              userData.targetExam || userData.academic_exam
+            );
+            if (firestoreCountry && firestoreCountry !== 'Others' && firestoreCountry !== 'Other') {
+              setSelectedCountryName(firestoreCountry);
+              safeSetItem('academic_country', firestoreCountry);
+              safeSetItem('academic_custom_country', firestoreCountry);
+              safeSetItem(`academic_country_${user.uid}`, firestoreCountry);
+              safeSetItem(`academic_custom_country_${user.uid}`, firestoreCountry);
+            }
+            if (userData.targetExam || userData.academic_exam) {
+              const examName = userData.targetExam || userData.academic_exam;
+              setTargetExam(examName);
+              safeSetItem('target_exam', examName);
+              safeSetItem(`academic_exam_${user.uid}`, examName);
+            }
           }
         }
       } catch (err) {

@@ -954,12 +954,35 @@ var PRE_VERIFIED_EXAMS = [
       { id: "Core Engineering Discipline", title: "Core Engineering Discipline", subtitle: "Subject-specific specialization papers", icon: "\u2699\uFE0F" }
     ]
   },
-  // 28. SAT (College Board Digital SAT)
+  // 28. South Korea - College Scholastic Ability Test (CSAT / Suneung / 대학수학능력시험)
+  {
+    aliases: ["csat", "korean csat", "suneung", "suneung exam", "csat exam", "college scholastic ability test", "\uB300\uD559\uC218\uD559\uB2A5\uB825\uC2DC\uD5D8", "\uC218\uB2A5", "south korea csat"],
+    shortName: "CSAT (Suneung)",
+    officialExamName: "College Scholastic Ability Test (CSAT / \uC218\uB2A5 - Suneung)",
+    country: "South Korea",
+    hasElectives: true,
+    grades: [
+      { id: "High School 3rd Year (Senior / 12th Grade)", label: "High School 3rd Year (Senior / 12th Grade)", desc: "Final Suneung Examination Year (\uACE03)", isCollege: false },
+      { id: "High School 2nd Year (Junior / 11th Grade)", label: "High School 2nd Year (Junior / 11th Grade)", desc: "Core CSAT Preparation & Mock Exams (\uACE02)", isCollege: false },
+      { id: "High School 1st Year (Sophomore / 10th Grade)", label: "High School 1st Year (Sophomore / 10th Grade)", desc: "Foundational Curriculum & Elective Selection (\uACE01)", isCollege: false },
+      { id: "N-su-saeng (CSAT Retaker)", label: "CSAT Retaker (Jaesusaeng)", desc: "Dedicated Full-Time CSAT Aspirant", isCollege: false }
+    ],
+    subjects: [
+      { id: "Korean Language", title: "Korean Language (\uAD6D\uC5B4)", subtitle: "Reading Comprehension, Literature, Speech & Writing / Grammar", icon: "\u{1F1F0}\u{1F1F7}" },
+      { id: "Mathematics", title: "Mathematics (\uC218\uD559)", subtitle: "Math I, Math II, Calculus / Probability & Statistics / Geometry", icon: "\u{1F4D0}" },
+      { id: "English", title: "English (\uC601\uC5B4)", subtitle: "Reading Comprehension, Vocabulary & Listening Comprehension", icon: "\u{1F4DA}" },
+      { id: "Korean History", title: "Korean History (\uD55C\uAD6D\uC0AC)", subtitle: "Mandatory National Korean History Curriculum", icon: "\u{1F3DB}\uFE0F" },
+      { id: "Inquiry - Science / Social Studies", title: "Inquiry: Science / Social Studies (\uD0D0\uAD6C\uC601\uC5ED)", subtitle: "Physics, Chemistry, Biology, Earth Science / Ethics, Geography, Politics", icon: "\u{1F52C}" },
+      { id: "Second Foreign Language", title: "Second Foreign Language / Hanja (\uC81C2\uC678\uAD6D\uC5B4/\uD55C\uBB38)", subtitle: "Chinese, Japanese, German, French, Spanish, Arabic, Vietnamese, Russian, Hanja", icon: "\u{1F310}" }
+    ]
+  },
+  // 29. SAT (College Board Digital SAT)
   {
     aliases: ["sat", "digital sat", "psat", "scholastic assessment test", "sat exam"],
     shortName: "SAT",
     officialExamName: "SAT (Digital Scholastic Assessment Test)",
     country: "United States",
+    isGlobal: true,
     hasElectives: false,
     grades: [
       { id: "11th Grade (Junior)", label: "11th Grade (Junior)", desc: "Prime SAT Testing Year", isCollege: false },
@@ -977,6 +1000,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "ACT",
     officialExamName: "ACT (American College Testing)",
     country: "United States",
+    isGlobal: true,
     hasElectives: false,
     grades: [
       { id: "11th Grade (Junior)", label: "11th Grade (Junior)", desc: "Prime ACT Testing Year", isCollege: false },
@@ -995,6 +1019,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "AP Exams",
     officialExamName: "Advanced Placement (AP) Examinations",
     country: "United States",
+    isGlobal: true,
     hasElectives: true,
     grades: [
       { id: "11th Grade (Junior)", label: "11th Grade", desc: "Prime AP Course Year", isCollege: false },
@@ -1016,6 +1041,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "GRE",
     officialExamName: "GRE (Graduate Record Examination)",
     country: "United States",
+    isGlobal: true,
     hasElectives: false,
     grades: [
       { id: "Undergraduate_Senior", label: "College Senior / Final Year", desc: "Preparing for Graduate / MS Admissions", isCollege: true },
@@ -1033,6 +1059,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "GMAT",
     officialExamName: "GMAT Focus Edition (Graduate Management Admission Test)",
     country: "United States",
+    isGlobal: true,
     hasElectives: false,
     grades: [
       { id: "MBA_Applicant", label: "MBA Applicant", desc: "Business School Candidate", isCollege: true },
@@ -1050,6 +1077,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "IELTS",
     officialExamName: "IELTS Academic (International English Language Testing System)",
     country: "United Kingdom",
+    isGlobal: true,
     hasElectives: false,
     grades: [
       { id: "University_Applicant", label: "University / Study Abroad Aspirant", desc: "Academic Admission Requirement", isCollege: true },
@@ -1068,6 +1096,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "TOEFL",
     officialExamName: "TOEFL iBT (Test of English as a Foreign Language)",
     country: "United States",
+    isGlobal: true,
     hasElectives: false,
     grades: [
       { id: "Study_Abroad_Student", label: "Study Abroad / University Candidate", desc: "Undergraduate or Graduate Admissions", isCollege: true }
@@ -1085,6 +1114,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "IGCSE",
     officialExamName: "Cambridge International General Certificate of Secondary Education (IGCSE)",
     country: "United Kingdom",
+    isGlobal: true,
     hasElectives: true,
     grades: [
       { id: "Year_11", label: "Year 11 / Grade 10", desc: "Final GCSE / IGCSE Examination Year", isCollege: false },
@@ -1104,6 +1134,7 @@ var PRE_VERIFIED_EXAMS = [
     shortName: "A Levels",
     officialExamName: "GCE Advanced Level (A Levels)",
     country: "United Kingdom",
+    isGlobal: true,
     hasElectives: true,
     grades: [
       { id: "Year_13_A2", label: "Year 13 (A2 Level)", desc: "Final Year Advanced Level Candidate", isCollege: false },
@@ -1118,12 +1149,39 @@ var PRE_VERIFIED_EXAMS = [
     ]
   }
 ];
-function findPreVerifiedExam(inputExam, _userCountry) {
+function isCountryMatch(entryCountry, userCountry, isGlobal) {
+  if (!userCountry || userCountry.toLowerCase() === "global" || userCountry.toLowerCase() === "all") {
+    return true;
+  }
+  if (isGlobal) {
+    return true;
+  }
+  const e = entryCountry.toLowerCase().trim();
+  const u = userCountry.toLowerCase().trim();
+  if (e === u) return true;
+  const isIndia = (c) => c === "india" || c === "in" || c === "ind" || c === "bharat";
+  const isUSA = (c) => c === "united states" || c === "usa" || c === "us" || c === "united states of america";
+  const isUK = (c) => c === "united kingdom" || c === "uk" || c === "gb" || c === "great britain" || c === "england";
+  const isSouthKorea = (c) => c === "south korea" || c === "korea" || c === "kr" || c === "republic of korea" || c === "\uD55C\uAD6D" || c === "\uB300\uD55C\uBBFC\uAD6D";
+  const isCanada = (c) => c === "canada" || c === "ca";
+  const isAustralia = (c) => c === "australia" || c === "au";
+  if (isIndia(e) && isIndia(u)) return true;
+  if (isUSA(e) && isUSA(u)) return true;
+  if (isUK(e) && isUK(u)) return true;
+  if (isSouthKorea(e) && isSouthKorea(u)) return true;
+  if (isCanada(e) && isCanada(u)) return true;
+  if (isAustralia(e) && isAustralia(u)) return true;
+  return false;
+}
+function findPreVerifiedExam(inputExam, userCountry) {
   if (!inputExam || typeof inputExam !== "string") return null;
   const clean = inputExam.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
   const words = clean.split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
   for (const entry of PRE_VERIFIED_EXAMS) {
+    if (userCountry && !isCountryMatch(entry.country, userCountry, entry.isGlobal)) {
+      continue;
+    }
     for (const alias of entry.aliases) {
       const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
       if (clean === cleanAlias) {
@@ -1131,123 +1189,147 @@ function findPreVerifiedExam(inputExam, _userCountry) {
       }
     }
   }
-  if (clean.length >= 3) {
+  for (const entry of PRE_VERIFIED_EXAMS) {
+    if (userCountry && !isCountryMatch(entry.country, userCountry, entry.isGlobal)) {
+      continue;
+    }
+    for (const alias of entry.aliases) {
+      const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
+      if (words.includes(cleanAlias)) {
+        return entry;
+      }
+    }
+  }
+  if (clean.length >= 4) {
     for (const entry of PRE_VERIFIED_EXAMS) {
+      if (userCountry && !isCountryMatch(entry.country, userCountry, entry.isGlobal)) {
+        continue;
+      }
       for (const alias of entry.aliases) {
         const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
-        if (clean === cleanAlias || clean.startsWith(cleanAlias) || cleanAlias.startsWith(clean)) {
-          return entry;
-        }
-        if (clean.includes(cleanAlias)) {
-          return entry;
+        if (cleanAlias.length >= 4) {
+          if (clean.startsWith(cleanAlias) || cleanAlias.startsWith(clean) || clean.includes(cleanAlias)) {
+            return entry;
+          }
         }
       }
     }
   }
+  const getCandidateIfCountryMatches = (shortName) => {
+    const found = PRE_VERIFIED_EXAMS.find((e) => e.shortName === shortName);
+    if (!found) return null;
+    if (userCountry && !isCountryMatch(found.country, userCountry, found.isGlobal)) {
+      return null;
+    }
+    return found;
+  };
+  if (words.includes("csat") || words.includes("suneung") || clean.includes("\uC218\uB2A5") || clean.includes("\uB300\uD559\uC218\uD559\uB2A5\uB825\uC2DC\uD5D8")) {
+    return getCandidateIfCountryMatches("CSAT (Suneung)");
+  }
   if (words.includes("cgl")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "SSC CGL") || null;
+    return getCandidateIfCountryMatches("SSC CGL");
   }
   if (words.includes("chsl")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "SSC CHSL") || null;
+    return getCandidateIfCountryMatches("SSC CHSL");
   }
   if (words.includes("mts")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "SSC MTS") || null;
+    return getCandidateIfCountryMatches("SSC MTS");
   }
   if (words.includes("gd")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "SSC GD") || null;
+    return getCandidateIfCountryMatches("SSC GD");
   }
   if (words.includes("ssc")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "SSC CGL") || null;
+    return getCandidateIfCountryMatches("SSC CGL");
   }
   if (words.includes("bpsc")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "BPSC") || null;
+    return getCandidateIfCountryMatches("BPSC");
   }
   if (words.includes("uppsc") || words.includes("uppcs")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "UPPSC") || null;
+    return getCandidateIfCountryMatches("UPPSC");
   }
   if (words.includes("mppsc")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "MPPSC") || null;
+    return getCandidateIfCountryMatches("MPPSC");
   }
   if (clean.includes("bihar board") || clean.includes("bseb")) {
     if (words.includes("10") || words.includes("10th") || words.includes("matric")) {
-      return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "Bihar Board 10th") || null;
+      return getCandidateIfCountryMatches("Bihar Board 10th");
     }
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "Bihar Board 12th") || null;
+    return getCandidateIfCountryMatches("Bihar Board 12th");
   }
   if (clean.includes("up board") || clean.includes("upmsp")) {
     if (words.includes("10") || words.includes("10th") || words.includes("highschool")) {
-      return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "UP Board 10th") || null;
+      return getCandidateIfCountryMatches("UP Board 10th");
     }
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "UP Board 12th") || null;
+    return getCandidateIfCountryMatches("UP Board 12th");
   }
   if (words.includes("neet")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "NEET UG") || null;
+    return getCandidateIfCountryMatches("NEET UG");
   }
   if (words.includes("jee")) {
     if (words.includes("advanced") || words.includes("adv")) {
-      return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "JEE Advanced") || null;
+      return getCandidateIfCountryMatches("JEE Advanced");
     }
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "JEE Main") || null;
+    return getCandidateIfCountryMatches("JEE Main");
   }
   if (words.includes("cbse")) {
     if (words.includes("10") || words.includes("10th") || words.includes("x")) {
-      return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "CBSE Class 10") || null;
+      return getCandidateIfCountryMatches("CBSE Class 10");
     }
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "CBSE Class 12") || null;
+    return getCandidateIfCountryMatches("CBSE Class 12");
   }
   if (words.includes("icse")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "ICSE Class 10") || null;
+    return getCandidateIfCountryMatches("ICSE Class 10");
   }
   if (words.includes("isc")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "ISC Class 12") || null;
+    return getCandidateIfCountryMatches("ISC Class 12");
   }
   if (words.includes("upsc") || words.includes("ias")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "UPSC CSE") || null;
+    return getCandidateIfCountryMatches("UPSC CSE");
   }
   if (words.includes("sat")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "SAT") || null;
+    return getCandidateIfCountryMatches("SAT");
   }
   if (words.includes("act")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "ACT") || null;
+    return getCandidateIfCountryMatches("ACT");
   }
   if (words.includes("cat")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "CAT") || null;
+    return getCandidateIfCountryMatches("CAT");
   }
   if (words.includes("gate")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "GATE") || null;
+    return getCandidateIfCountryMatches("GATE");
   }
   if (words.includes("nda")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "NDA") || null;
+    return getCandidateIfCountryMatches("NDA");
   }
   if (words.includes("cds")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "CDS") || null;
+    return getCandidateIfCountryMatches("CDS");
   }
   if (words.includes("cuet")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "CUET UG") || null;
+    return getCandidateIfCountryMatches("CUET UG");
   }
   if (words.includes("clat")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "CLAT") || null;
+    return getCandidateIfCountryMatches("CLAT");
   }
   if (words.includes("bank") || words.includes("ibps") || words.includes("sbi")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "Banking Exams") || null;
+    return getCandidateIfCountryMatches("Banking Exams");
   }
   if (words.includes("rrb") || words.includes("railway") || words.includes("ntpc")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "RRB NTPC") || null;
+    return getCandidateIfCountryMatches("RRB NTPC");
   }
   if (words.includes("ap") && (clean.includes("advanced placement") || clean.includes("ap "))) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "AP Exams") || null;
+    return getCandidateIfCountryMatches("AP Exams");
   }
   if (words.includes("gre")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "GRE") || null;
+    return getCandidateIfCountryMatches("GRE");
   }
   if (words.includes("gmat")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "GMAT") || null;
+    return getCandidateIfCountryMatches("GMAT");
   }
   if (words.includes("ielts")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "IELTS") || null;
+    return getCandidateIfCountryMatches("IELTS");
   }
   if (words.includes("toefl")) {
-    return PRE_VERIFIED_EXAMS.find((e) => e.shortName === "TOEFL") || null;
+    return getCandidateIfCountryMatches("TOEFL");
   }
   return null;
 }

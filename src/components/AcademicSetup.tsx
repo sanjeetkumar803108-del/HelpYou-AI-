@@ -21,6 +21,7 @@ export const COUNTRIES = [
   { id: 'UK', name: 'United Kingdom', flag: '🇬🇧', regionSystem: 'UK' },
   { id: 'CA', name: 'Canada', flag: '🇨🇦', regionSystem: 'CA' },
   { id: 'AU', name: 'Australia', flag: '🇦🇺', regionSystem: 'AU' },
+  { id: 'KR', name: 'South Korea', flag: '🇰🇷', regionSystem: 'KR' },
   { id: 'Other', name: 'Others', flag: '🌍', regionSystem: 'Global' },
 ];
 
@@ -206,6 +207,33 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     return (activeUid ? safeGetItem(`academic_custom_subject_${activeUid}`) : null) || safeGetItem('academic_custom_subject') || '';
   });
 
+  // Country name for dynamic headers and guidance
+  const displayCountryName = useMemo(() => {
+    if (selectedCountryId === 'Other') {
+      return (customCountry || '').trim() || 'your country';
+    }
+    const match = COUNTRIES.find(c => c.id === selectedCountryId);
+    return match?.name || 'your country';
+  }, [selectedCountryId, customCountry]);
+
+  // Dynamic contextual placeholders based on chosen country
+  const examPlaceholder = useMemo(() => {
+    const c = displayCountryName.toLowerCase();
+    if (c.includes('korea')) {
+      return 'e.g. CSAT / Suneung, SAT, TOPIK...';
+    }
+    if (c.includes('united kingdom') || c.includes('uk')) {
+      return 'e.g. GCSE, A Levels, BTEC, SAT...';
+    }
+    if (c.includes('united states') || c.includes('usa')) {
+      return 'e.g. SAT, ACT, AP Exams, MCAT, GRE...';
+    }
+    if (c.includes('india')) {
+      return 'e.g. NEET, JEE Main, UPSC, SSC CGL, CBSE...';
+    }
+    return `e.g. National Exam, Board Exam, SAT...`;
+  }, [displayCountryName]);
+
   const toggleSubject = (subjId: string) => {
     triggerVibration(10);
     setSelectedSubjectIds((prev) => {
@@ -291,6 +319,27 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         finalChosenCountry = countryObj.name;
       }
 
+      // Check if country changed: if so, wipe old exam & syllabus cache so stale exams never persist
+      const prevCountry = (userId ? safeGetItem(`academic_country_${userId}`) : null) || safeGetItem('academic_country') || '';
+      if (prevCountry && prevCountry.toLowerCase() !== finalChosenCountry.toLowerCase()) {
+        setTargetExam('');
+        setOfficialExamTitle('');
+        setExamError(null);
+        safeRemoveItem('academic_exam');
+        safeRemoveItem('target_exam');
+        safeRemoveItem('target_exam_short');
+        safeRemoveItem('cached_exam_subjects');
+        safeRemoveItem('cached_exam_grades');
+        if (userId) {
+          safeRemoveItem(`academic_exam_${userId}`);
+          safeRemoveItem(`target_exam_${userId}`);
+          safeRemoveItem(`target_exam_short_${userId}`);
+          safeRemoveItem(`cached_exam_subjects_${userId}`);
+          safeRemoveItem(`cached_exam_grades_${userId}`);
+          safeRemoveItem(`cached_exam_has_electives_${userId}`);
+        }
+      }
+
       // Immediately persist custom/selected country so it is never lost or overwritten
       safeSetItem('academic_country', finalChosenCountry);
       safeSetItem('academic_custom_country', finalChosenCountry);
@@ -315,12 +364,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       setIsVerifyingExam(true);
 
       const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
-      let finalCountry = selectedCountryId === 'Other' 
+      const finalCountry = selectedCountryId === 'Other' 
         ? ((customCountry || '').trim() || 'India') 
         : countryObj.name;
-      
-      // Auto-resolve real country if exam name unambiguously identifies national curriculum (e.g. NEET/JEE/CBSE/SSC CGL -> India)
-      finalCountry = resolveRealCountry(finalCountry, customCountry, trimmed);
 
       // 0. FAST-PATH: Instant sub-millisecond check for recognized national & global exams (100% offline & network-proof for APK)
       const preVerified = findPreVerifiedExam(trimmed, finalCountry);
@@ -330,17 +376,6 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         setOfficialExamTitle(officialName);
         setTargetExam(shortName);
 
-        if (preVerified.country && selectedCountryId !== 'Other') {
-          const matchedCountry = COUNTRIES.find(
-            c => c.name.toLowerCase() === preVerified.country.toLowerCase() || 
-                 c.id.toLowerCase() === preVerified.country.toLowerCase()
-          );
-          if (matchedCountry) {
-            setSelectedCountryId(matchedCountry.id);
-            safeSetItem('academic_country', matchedCountry.name);
-            if (userId) safeSetItem(`academic_country_${userId}`, matchedCountry.name);
-          }
-        }
         if (Array.isArray(preVerified.subjects) && preVerified.subjects.length > 0) {
           const mapped = preVerified.subjects.map((s, idx) => ({
             id: s.id || s.title,
@@ -394,9 +429,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         clearTimeout(timeoutId);
         const data = await res.json();
 
-        // 1. If exam does NOT exist, show error and stay on Step 2
+        // 1. If exam does NOT exist or does not belong to chosen country, show error and stay on Step 2
         if (!data.isValid) {
-          setExamError(data.errorMessage || `We could not verify "${trimmed}". Please check the spelling or enter a recognized exam name.`);
+          setExamError(data.errorMessage || `We could not verify "${trimmed}" for ${finalCountry}. Please enter an exam conducted in ${finalCountry} or a recognized global exam.`);
           setIsVerifyingExam(false);
           triggerVibration(25);
           return;
@@ -407,28 +442,6 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         const shortName = data.shortName || (trimmed.length <= 15 ? trimmed : official);
         setOfficialExamTitle(official);
         setTargetExam(shortName);
-
-        // Seamlessly auto-sync country if exam belongs to a specific nation (only if user did not choose Other)
-        if (data.detectedCountry && selectedCountryId !== 'Other') {
-          const matchedCountry = COUNTRIES.find(
-            c => c.name.toLowerCase() === data.detectedCountry.toLowerCase() || 
-                 c.id.toLowerCase() === data.detectedCountry.toLowerCase()
-          );
-          if (matchedCountry) {
-            setSelectedCountryId(matchedCountry.id);
-            safeSetItem('academic_country', matchedCountry.name);
-            if (userId) safeSetItem(`academic_country_${userId}`, matchedCountry.name);
-          } else if (data.detectedCountry !== 'Global') {
-            setSelectedCountryId('Other');
-            setCustomCountry(data.detectedCountry);
-            safeSetItem('academic_country', data.detectedCountry);
-            safeSetItem('academic_custom_country', data.detectedCountry);
-            if (userId) {
-              safeSetItem(`academic_country_${userId}`, data.detectedCountry);
-              safeSetItem(`academic_custom_country_${userId}`, data.detectedCountry);
-            }
-          }
-        }
 
         if (Array.isArray(data.subjects) && data.subjects.length > 0) {
           const mapped = data.subjects.map((s: any, idx: number) => ({
@@ -732,10 +745,13 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       safeSetItem(`onboarding_completed_${activeUid}`, 'true');
       safeSetItem(`isOnboardingComplete_${activeUid}`, 'true');
       safeSetItem(`isOnboardingCompleted_${activeUid}`, 'true');
+      const updatedTimestamp = String(Date.now());
+      safeSetItem('academic_profile_updated_at', updatedTimestamp);
+      safeSetItem(`academic_profile_updated_at_${activeUid}`, updatedTimestamp);
 
       // Update Firestore user document with isOnboardingComplete and selections
       try {
-        const userDocPayload: any = {
+        const corePayload: any = {
           isOnboardingComplete: true,
           isOnboardingCompleted: true,
           country: finalCountry,
@@ -754,20 +770,27 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
           academic_subject: finalSubject,
           stream: finalSubject,
           academic_stream: finalSubject,
-          regionSystem: effectiveRegion,
+          regionSystem: effectiveRegion || 'Global',
           updatedAt: new Date().toISOString()
         };
 
-        if (researchedBlueprint) {
-          userDocPayload.examBlueprint = researchedBlueprint;
-          userDocPayload.academicBlueprint = researchedBlueprint;
-          userDocPayload.subjectsBlueprint = researchedBlueprint;
-          if (researchedOverview) userDocPayload.examOverview = researchedOverview;
-          userDocPayload.blueprintLastUpdated = new Date().toISOString();
-        }
+        // 1. Primary write: Guarantee core profile settings are saved without payload bloat
+        await setDoc(doc(db, 'users', activeUid), corePayload, { merge: true });
+        console.log(`[AcademicSetup] Successfully updated user ${activeUid} profile in Firestore.`);
 
-        await setDoc(doc(db, 'users', activeUid), userDocPayload, { merge: true });
-        console.log(`[AcademicSetup] Successfully updated user ${activeUid} with calibrated exam blueprint.`);
+        // 2. Secondary write: Store researched blueprint safely without document size bloat
+        if (researchedBlueprint) {
+          const blueprintPayload: any = {
+            examBlueprint: researchedBlueprint,
+            blueprintLastUpdated: new Date().toISOString()
+          };
+          if (researchedOverview) {
+            blueprintPayload.examOverview = researchedOverview;
+          }
+          await setDoc(doc(db, 'users', activeUid), blueprintPayload, { merge: true }).catch(err => {
+            console.warn('[AcademicSetup] Blueprint write error (size limit or offline):', err);
+          });
+        }
       } catch (dbErr) {
         console.error('[AcademicSetup] Error saving setup state to Firestore:', dbErr);
       }
@@ -987,10 +1010,10 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
             >
               <div className="text-left mb-3 shrink-0">
                 <h1 className="text-2xl font-black text-zinc-950 tracking-tight leading-tight">
-                  Which exam are you preparing for?
+                  Which exam in <span className="text-purple-600 capitalize">{displayCountryName}</span>?
                 </h1>
                 <p className="text-xs text-zinc-500 font-semibold mt-1">
-                  AI will automatically curate your syllabus
+                  AI will verify official {displayCountryName} curriculum & curate your syllabus
                 </p>
               </div>
 
@@ -1031,7 +1054,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                           handleNextStep();
                         }
                       }}
-                      placeholder="e.g. JEE, NEET, SAT, AP Physics, CBSE..."
+                      placeholder={examPlaceholder}
                       className="w-full bg-transparent text-sm font-black text-zinc-900 placeholder:text-zinc-400 placeholder:font-medium focus:outline-none disabled:opacity-50 truncate"
                       autoFocus
                     />

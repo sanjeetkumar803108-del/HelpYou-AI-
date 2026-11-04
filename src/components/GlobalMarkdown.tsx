@@ -355,125 +355,179 @@ export function formatSuggestionMath(content: string): string {
   return text;
 }
 
+/**
+ * Dedicated healer for quiz options (e.g. "A) 3x^2 \cdot e^x", "None of the above", "v_0 = 10\sqrt{3}\text{ m/s}"):
+ * 1. Guarantees options use single inline math ($...$) and NEVER block display math ($$...$$).
+ * 2. Unpacks accidentally wrapped English sentences ($Both A and B$) so words have normal typography and spacing.
+ * 3. Keeps narrative options ("Decreases linearly", "At infinity") in normal Roman font.
+ * 4. Safely encloses genuine math expressions ($x = 3$, $\frac{1}{2}$, $10^{-5}\text{ M}$) in inline KaTeX.
+ */
+function healQuizOption(line: string): string {
+  let l = line.trim();
+  if (!l) return line;
+
+  // Extract option prefix if present (A), B), (C), D., Option A:)
+  const optionPrefixMatch = l.match(/^((?:Option\s+[A-Da-d]:?|[A-Da-d][\)\.]|\([A-Da-d]\)))\s*/i);
+  const prefix = optionPrefixMatch ? optionPrefixMatch[0] : '';
+  let body = optionPrefixMatch ? l.slice(prefix.length).trim() : l;
+
+  // Convert any block math $$ to single inline $
+  body = body.replace(/\$\$/g, '$');
+
+  // Check for narrative English words
+  const stripped = body.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\]|_\{[^{}]*\}|\^\{[^{}]*\})*/g, '');
+  const words = stripped.match(/\b[a-zA-Z]{2,}\b/g) || [];
+  const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()) && !['dx','dy','dt','dz','v0','v_0','x1','x2','y1','y2','kb','k_b'].includes(w.toLowerCase()));
+
+  // Case 1: Body was already wrapped in outer $...$
+  if (body.startsWith('$') && body.endsWith('$') && body.length > 2) {
+    const inner = body.slice(1, -1).trim();
+    if (narrativeWords.length >= 2 && !inner.includes('\\text{')) {
+      body = inner;
+    } else if (narrativeWords.length < 2) {
+      // Pure math already in $...$: normalize internal * to \cdot and function names
+      let cleanInner = inner.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
+      cleanInner = cleanInner.replace(/(?<![a-zA-Z\\])(cos|sin|tan|sec|csc|cot|log|ln)\b/g, '\\$1');
+      return `${prefix}$${cleanInner}$`;
+    }
+  }
+
+  // Case 2: English narrative option (e.g. "Decreases linearly", "Both A and B", "At infinity", "Decreases by \frac{1}{2}")
+  if (narrativeWords.length >= 2 || (narrativeWords.length >= 1 && !/[=+\-*/\\^_{}√≤≥≠]/.test(body))) {
+    let cleanBody = body;
+    // Auto-wrap isolated LaTeX commands
+    cleanBody = replaceOutsideMath(cleanBody, /(\\frac\{[^{}]*\}\{[^{}]*\}|\\sqrt(?:\[[^\]]*\])?\{[^{}]*\}|\\boxed\{[^{}]*\})/g, '$$$1$$');
+    cleanBody = replaceOutsideMath(cleanBody, /(\\(?:alpha|beta|gamma|delta|theta|lambda|mu|pi|rho|sigma|tau|phi|omega|pm|times|div|cdot|leq|geq|neq|approx|infty)\b)/g, '$$$1$$');
+    cleanBody = replaceOutsideMath(cleanBody, /([a-zA-Z0-9)\]]+)\^(\{[^{}]+\}|-?[0-9]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1^$2$$');
+    cleanBody = replaceOutsideMath(cleanBody, /([a-zA-Z0-9)\]]+)_(\{[^{}]+\}|[0-9]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1_$2$$');
+    cleanBody = cleanBody.replace(/\$\$+/g, '$').replace(/\$\s*\$/g, ' ');
+    return `${prefix}${cleanBody}`;
+  }
+
+  // Case 3: Pure mathematical option (e.g. "x = 3", "\frac{1}{2}", "3x^2 \cdot e^x", "10\sqrt{3}\text{ m/s}")
+  let mathBody = body.replace(/^\$+|\$+$/g, '').trim();
+  mathBody = mathBody.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
+  mathBody = mathBody.replace(/(?<![a-zA-Z\\])(cos|sin|tan|sec|csc|cot|log|ln)\b/g, '\\$1');
+  return `${prefix}$${mathBody}$`;
+}
+
+/**
+ * Dedicated healer for quiz question headers:
+ * Ensures question sentences remain natural English typography while wrapping formulas in inline $...$.
+ */
+function healQuizQuestion(text: string): string {
+  let q = text.trim();
+  if (!q) return text;
+
+  // Questions are headings/inline: convert any block math $$ to single inline $
+  q = q.replace(/\$\$/g, '$');
+
+  // Wrap full LaTeX expressions with arguments (\frac{...}{...}, \sqrt{...}, \boxed{...})
+  q = replaceOutsideMath(q, /(\\frac\{[^{}]*\}\{[^{}]*\}|\\sqrt(?:\[[^\]]*\])?\{[^{}]*\}|\\boxed\{[^{}]*\})/g, '$$$1$$');
+
+  // Wrap math functions with arguments e.g. \sin(\theta), \cos(2x), \ln(x)
+  q = replaceOutsideMath(q, /(\\(?:sin|cos|tan|sec|csc|cot|log|ln|exp)(?:\^[0-9a-zA-Z]+)?\s*(?:\([^\)\n]*\)|\{[^{}\n]*\}))/g, '$$$1$$');
+
+  // Wrap standalone LaTeX symbols
+  q = replaceOutsideMath(q, /(\\(?:alpha|beta|gamma|delta|theta|lambda|mu|pi|rho|sigma|tau|phi|omega|Delta|Omega|pm|times|div|leq|geq|neq|approx|infty|cdot|to|rightarrow|partial|int|sum|prod|lim)\b)/g, '$$$1$$');
+
+  // Wrap superscripts outside math: e.g. x^2, e^{-x}, 10^5, 30^\circ
+  q = replaceOutsideMath(q, /(?<![\w$\\])([a-zA-Z0-9)\]]+)\^(\{[^{}]+\}|-?[0-9]+|\\[a-zA-Z]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1^$2$$');
+
+  // Wrap subscripts outside math: e.g. v_0, x_1, k_B
+  q = replaceOutsideMath(q, /\b([a-zA-Z][a-zA-Z]?)_([0-9a-zA-Z]+|\{[^{}]+\})\b/g, '$$$1_$2$$');
+
+  // Wrap equations outside math: e.g. f(x) = x^2 - 4, y = 2x, v_0 = 10 m/s
+  q = replaceOutsideMath(q, /(?<![\w$\\])([a-zA-Z](?:\([a-zA-Z0-9,\s+-]+\))?)\s*([=<>≤≥≠≈])\s*([a-zA-Z0-9_()+*/\\^ -]+?)(?=[,.;:?!]|\s+(?:where|find|for|if|and|with|at|when)\b|$)/g, (_m, lhs, op, rhs) => {
+    const strippedRhs = rhs.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{2,}\b/g) || [];
+    const nw = strippedRhs.filter((w: string) => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
+    if (nw.length >= 2) return _m;
+    return `$${lhs} ${op} ${rhs.trim()}$`;
+  });
+
+  // Clean up double dollars
+  q = q.replace(/\$\$+/g, '$').replace(/\$\s*\$/g, ' ');
+
+  // Fix unclosed single dollar
+  const dollarCount = (q.match(/\$/g) || []).length;
+  if (dollarCount % 2 !== 0) {
+    q = q.replace(/\$(?=[^$]*$)/, '');
+  }
+
+  return q;
+}
+
 function healSingleQuizLine(line: string): string {
   const l = line.trim();
   if (!l) return line;
 
-  // 1. Quiz options e.g. "A) 3x^2 * e^x + x^3 * e^x" or "A) $3x^2 \cdot e^x$"
-  const optionPrefixMatch = line.match(/^([A-Da-d][\)\.]|\([A-Da-d]\))\s*/);
-  if (optionPrefixMatch) {
-    const prefix = optionPrefixMatch[0];
-    const body = line.slice(prefix.length).trim();
-
-    // Check if option contains natural language narrative English words
-    const unescapedWords = body.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\]|_\{[^{}]*\}|\^\{[^{}]*\})*/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
-    const narrativeWords = unescapedWords.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
-
-    // Case 1A: Body was already wrapped in $...$
-    if (body.startsWith('$') && body.endsWith('$') && body.length > 2) {
-      const inner = body.slice(1, -1).trim();
-      if (narrativeWords.length >= 2 && !inner.includes('\\text{')) {
-        // Natural language sentence accidentally wrapped in math mode ($...$)
-        // Unpack it using formatFormulaBoxContent so words have normal typography & spaces
-        return `${prefix}${formatFormulaBoxContent(inner)}`;
-      }
-      return line;
-    }
-
-    // Case 1B: Natural language sentence (e.g. "Dividends are tax-deferred, whereas capital gains...")
-    if (narrativeWords.length >= 2) {
-      // Natural language options should NEVER be wrapped in outer math mode $...$
-      // Instead, format any inline formulas within it safely
-      return `${prefix}${formatFormulaBoxContent(body)}`;
-    }
-
-    // Case 1C: Pure mathematical option (e.g. "3x^2 - 5x + 2" or "\frac{1}{2}")
-    if (/[\^_=+\-*/\\√≤≥≠]/.test(body) || /\b(?:sin|cos|tan|log|ln|sqrt|frac)\b/.test(body)) {
-      let mathBody = body.replace(/^\$|\$$/g, '').trim();
-      mathBody = mathBody.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
-      mathBody = mathBody.replace(/(?<![a-zA-Z\\])(cos|sin|tan|sec|csc|cot|log|ln)\b/g, (_, fn) => '\\' + fn);
-      return `${prefix}$${mathBody}$`;
-    }
+  // 1. If line is an option (e.g. "A) ...", "B) ...", "Option C"):
+  if (/^((?:Option\s+[A-Da-d]:?|[A-Da-d][\)\.]|\([A-Da-d]\)))\s*/i.test(l)) {
+    return healQuizOption(l);
   }
 
   // 2. Colons preceding a pure mathematical equation or derivation:
-  // e.g. "gives: v_{0x}=v_0cos(\theta)$" or "hypotenuse: \cos(\theta) = \frac{\text{Adjacent}}{\text{Hypotenuse}} = \frac{v_{0x}}{v_0}"
+  // e.g. "gives: v_{0x}=v_0cos(\theta)$" or "Formula: T = \frac{2u\sin\theta}{g}"
   const colonIdx = line.indexOf(':');
   if (colonIdx !== -1) {
     const prefix = line.slice(0, colonIdx + 1);
     const rest = line.slice(colonIdx + 1).trim();
 
-    // Check English narrative words in rest (excluding LaTeX math operators)
-    const words = rest.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\]|_\{[^{}]*\}|\^\{[^{}]*\})*/g, '').match(/[a-zA-Z]{3,}/g) || [];
-    const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
+    const words = rest.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\]|_\{[^{}]*\}|\^\{[^{}]*\})*/g, '').match(/\b[a-zA-Z]{2,}\b/g) || [];
+    const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()) && !['dx','dy','dt','v0','v_0'].includes(w.toLowerCase()));
 
-    // If rest is essentially a mathematical equation rather than an English sentence
-    if (narrativeWords.length <= 2) {
-      const hasLatex = /\\(?:frac|sqrt|left|right|cos|sin|tan|theta|cdot|text|circ|alpha|beta|pm|times|lim|sum|int)\b/.test(rest);
-      const hasMathChars = /[=+\-*/]/.test(rest) && /[\\_{}^]/.test(rest);
-
-      if (hasLatex || hasMathChars) {
-        let cleanRest = rest.replace(/^\$|\$$/g, '').trim();
-        cleanRest = cleanRest.replace(/(?<![a-zA-Z\\])(cos|sin|tan|sec|csc|cot|log|ln)\b/g, (_, fn) => '\\' + fn);
-        return `${prefix} $${cleanRest}$`;
-      }
+    if (narrativeWords.length <= 1 && (/[=+\-*/\\^_{}]/.test(rest) || /\\(?:frac|sqrt|sin|cos|tan)\b/.test(rest))) {
+      let cleanRest = rest.replace(/^\$+|\$+$/g, '').trim();
+      cleanRest = cleanRest.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
+      cleanRest = cleanRest.replace(/(?<![a-zA-Z\\])(cos|sin|tan|sec|csc|cot|log|ln)\b/g, '\\$1');
+      return `${prefix} $${cleanRest}$`;
     }
   }
 
-  // 3. Standalone equation lines without colons:
-  // e.g. "\cos(\theta) = \frac{\text{Adjacent}}{\text{Hypotenuse}} = \frac{v_{0x}}{v_0}"
-  // or "v_{0x} = \left(\frac{20}{2}\right) \sqrt{3}= 10\sqrt{3}\text{ m/s}"
-  // or "\lim_{x \to 0} \frac{\sin(x)}{x} = 1"
+  // 3. Standalone equation lines (e.g. "\cos(\theta) = \frac{v_{0x}}{v_0}" or "\lim_{x \to 0} \frac{\sin x}{x} = 1"):
   const isEquationStart = /^\\(?:frac|sqrt|left|cos|sin|tan|sum|int|lim|prod|alpha|beta|theta)\b/i.test(l) ||
     /^\\(?:lim|sum|int|prod)[_^(]/i.test(l) ||
     (/^[a-zA-Z0-9_{}()\\^]+\s*=\s*.+/.test(l) && /\\(?:frac|sqrt|left|right|cos|sin|tan|cdot|text|theta|circ)\b/.test(l));
 
   if (isEquationStart) {
-    const words = l.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\]|_\{[^{}]*\}|\^\{[^{}]*\})*/g, '').match(/[a-zA-Z]{3,}/g) || [];
+    const words = l.replace(/\\[a-zA-Z]+(?:\{[^{}]*\}|\[[^\]]*\]|_\{[^{}]*\}|\^\{[^{}]*\})*/g, '').match(/\b[a-zA-Z]{2,}\b/g) || [];
     const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
-    if (narrativeWords.length <= 2) {
-      let cleanLine = l.replace(/^\$|\$$/g, '').trim();
-      cleanLine = cleanLine.replace(/(?<![a-zA-Z\\])(cos|sin|tan|sec|csc|cot|log|ln)\b/g, (_, fn) => '\\' + fn);
+    if (narrativeWords.length <= 1) {
+      let cleanLine = l.replace(/^\$+|\$+$/g, '').trim();
+      cleanLine = cleanLine.replace(/(?<![a-zA-Z\\])(cos|sin|tan|sec|csc|cot|log|ln)\b/g, '\\$1');
       return `$${cleanLine}$`;
     }
   }
 
   // 4. Mixed lines with narrative text and inline formulas:
-  // Protect already valid $...$ blocks by substituting with placeholders
   let mixed = line;
-  const mathBlocks: string[] = [];
-  mixed = mixed.replace(/\$[^$]+\$/g, (m) => {
-    mathBlocks.push(m);
-    return `__MATH_BLOCK_${mathBlocks.length - 1}__`;
-  });
 
   // Convert raw * to \cdot between math variables
-  mixed = mixed.replace(/(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
+  mixed = replaceOutsideMath(mixed, /(?<=[a-zA-Z0-9)\]^_])\s*\*\s*(?=[a-zA-Z0-9(\[^\\])/g, ' \\cdot ');
 
-  // Wrap unquoted LaTeX expressions including function arguments like \sin(30^\circ) and \sqrt{3}\text{ m/s}^2
-  mixed = mixed.replace(/(?<![\w\\])([0-9a-zA-Z_^{}().\-]*\\[a-zA-Z]+(?:\([^)\n]*\)|\[[^\]\n]*\]|\{[^{}\n]*\})*(?:[0-9a-zA-Z_^{}().+*=/.\s\\-]*\\text\{[^{}]*\}(?:\^\{[^{}]*\}|\^[0-9a-zA-Z]+|_\{[^{}]*\}|_[0-9a-zA-Z]+)?)?)/g, (match) => {
-    const trimmed = match.trim();
-    if (trimmed.includes('\\') && !trimmed.startsWith('__MATH_BLOCK_')) {
-      return `$${trimmed}$`;
-    }
-    return match;
-  });
+  // Wrap full LaTeX expressions with arguments (\frac{...}{...}, \sqrt{...}, \boxed{...})
+  mixed = replaceOutsideMath(mixed, /(\\frac\{[^{}]*\}\{[^{}]*\}|\\sqrt(?:\[[^\]]*\])?\{[^{}]*\}|\\boxed\{[^{}]*\})/g, '$$$1$$');
 
-  // 5. Restore all protected math blocks
-  for (let i = 0; i < mathBlocks.length; i++) {
-    const block = mathBlocks[i];
-    const inner = block.slice(1, -1).trim();
-    // If the block is pure non-math text/acronym like "$B.Tech$" or "$Ph.D.$", strip $ so it appears natural
-    const isPureAcronym = /^[a-zA-Z0-9.\s\-_/()]+$/.test(inner) && !/[=+\-*/\\^_{}]/.test(inner) && !/\b(?:frac|sqrt|sin|cos|tan)\b/i.test(inner);
-    const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
-    const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
-    const isNarrativeProse = narrativeWords.length >= 2 && !inner.includes('\\text{');
-    const replacement = (isPureAcronym || isNarrativeProse) ? formatFormulaBoxContent(inner) : block;
-    mixed = mixed.split(`__MATH_BLOCK_${i}__`).join(replacement);
+  // Wrap math functions with arguments
+  mixed = replaceOutsideMath(mixed, /(\\(?:sin|cos|tan|sec|csc|cot|log|ln|exp)(?:\^[0-9a-zA-Z]+)?\s*(?:\([^\)\n]*\)|\{[^{}\n]*\}))/g, '$$$1$$');
+
+  // Wrap standalone LaTeX symbols
+  mixed = replaceOutsideMath(mixed, /(\\(?:alpha|beta|gamma|delta|theta|lambda|mu|pi|rho|sigma|tau|phi|omega|Delta|Omega|pm|times|div|leq|geq|neq|approx|infty|cdot|to|rightarrow|partial|int|sum|prod|lim)\b)/g, '$$$1$$');
+
+  // Wrap superscripts outside math
+  mixed = replaceOutsideMath(mixed, /(?<![\w$\\])([a-zA-Z0-9)\]]+)\^(\{[^{}]+\}|-?[0-9]+|\\[a-zA-Z]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1^$2$$');
+
+  // Wrap subscripts outside math
+  mixed = replaceOutsideMath(mixed, /\b([a-zA-Z][a-zA-Z]?)_([0-9a-zA-Z]+|\{[^{}]+\})\b/g, '$$$1_$2$$');
+
+  // Clean up double dollars
+  mixed = mixed.replace(/\$\$+/g, '$').replace(/\$\s*\$/g, ' ');
+
+  // Fix unclosed single dollar on the line
+  const count = (mixed.match(/\$/g) || []).length;
+  if (count % 2 !== 0) {
+    mixed = mixed.replace(/\$(?=[^$]*$)/, '');
   }
-
-  // Safety guard against any orphaned placeholders
-  mixed = mixed.replace(/_{2,3}MATH_BLOCK_\d+_{2,3}/g, '');
 
   return mixed;
 }
@@ -487,6 +541,23 @@ export function formatQuizMath(content: string): string {
   if (!content) return '';
   const text = cleanMarkdownMath(String(content)).trim();
   if (text.includes('```')) return text;
+
+  // If content is an option (starts with option prefix or is a single short option choice):
+  const isOption = /^((?:Option\s+[A-Da-d]:?|[A-Da-d][\)\.]|\([A-Da-d]\)))\s*/i.test(text) ||
+    (!text.includes('\n') && text.length <= 120 && !text.includes('?') && !/^(what|which|calculate|find|solve|evaluate|determine|explain|how|why|if|consider|state)\b/i.test(text));
+
+  if (isOption) {
+    return healQuizOption(text);
+  }
+
+  // If content is a question heading/prompt:
+  const isQuestion = !text.includes('\n\n') && (text.includes('?') || /^(what|which|calculate|find|solve|evaluate|determine|explain|how|why|if|consider|state)\b/i.test(text));
+
+  if (isQuestion) {
+    return healQuizQuestion(text);
+  }
+
+  // Multi-line explanation or solution:
   const lines = text.split('\n');
   return lines.map(healSingleQuizLine).join('\n');
 }
@@ -793,11 +864,19 @@ export function healMarkdownTables(text: string): string {
  * 5. Chemical formulas (H2O, CO2, H2SO4)
  * 6. Preserves tables, code blocks, and valid math blocks 100% without corrupting delimiters!
  */
-export function healGlobalMarkdown(content: string): string {
+export function healGlobalMarkdown(content: string, options?: { isInline?: boolean }): string {
   if (!content) return '';
+
+  const isInline = !!options?.isInline;
 
   // Step 0: Pre-heal collapsed tables so rows joined with || become proper newline-separated rows
   let text = healMarkdownTables(String(content));
+
+  // If in inline mode (e.g. option button, question header, badge):
+  // Downgrade any block math $$ to single inline $
+  if (isInline) {
+    text = text.replace(/\$\$/g, '$');
+  }
 
   // Step 1: Protect Code Blocks (```...```) and Inline Code (`...`) FIRST before any math/text transformation
   const codePlaceholders: string[] = [];
@@ -862,10 +941,11 @@ export function healGlobalMarkdown(content: string): string {
     const words = stripped.match(/[a-zA-Z]{3,}/g) || [];
     const narrativeWords = words.filter(w => !['sin','cos','tan','sec','csc','cot','log','ln','lim','exp','min','max','dx','dy','dt','left','right'].includes(w.toLowerCase()));
 
-    // If it has LaTeX and <= 2 narrative words, and has math characters
-    if (narrativeWords.length <= 2 && /[=+\-*/^_{}\\]/.test(l)) {
+    // If it has LaTeX and <= 1 narrative words, and has math characters
+    if (narrativeWords.length <= 1 && /[=+\-*/^_{}\\]/.test(l)) {
       const token = `___MATH_BLOCK_${mathPlaceholders.length}___`;
-      mathPlaceholders.push(`$$${l}$$`);
+      const wrapDelim = isInline ? '$' : '$$';
+      mathPlaceholders.push(`${wrapDelim}${l}${wrapDelim}`);
       return token;
     }
     return line;
@@ -1049,29 +1129,38 @@ export function healGlobalMarkdown(content: string): string {
   }
 
   // 15. Promote standalone derivation and calculation lines to centered block math ($$...$$)
-  text = text.split('\n\n').map(block => {
-    const b = block.trim();
-    const match = b.match(/^\$([^$]+)\$(\.?)$/);
-    if (match) {
-      const inner = match[1].trim();
-      if (/[=+\-*/]/.test(inner) && inner.length > 5) {
-        return `$$${inner}$$`;
+  // ONLY if not in inline container, and strictly within multi-paragraph blocks (never single lines or options)
+  if (!isInline && text.includes('\n\n')) {
+    text = text.split('\n\n').map(block => {
+      const b = block.trim();
+      // Never promote option prefixes, bullets, or numbers
+      if (/^((?:Option\s+[A-Da-d]:?|[A-Da-d][\)\.]|\([A-Da-d]\)|[-*•\d+\.]))\s*/i.test(b)) return block;
+      const match = b.match(/^\$([^$]+)\$(\.?)$/);
+      if (match) {
+        const inner = match[1].trim();
+        const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{2,}\b/g) || [];
+        const narrativeWords = words.filter(w => !MATH_OPERATOR_WORDS.has(w.toLowerCase()));
+        if (narrativeWords.length <= 1 && /[=+\-*/]/.test(inner) && inner.length > 5) {
+          return `$$${inner}$$`;
+        }
       }
-    }
-    return block;
-  }).join('\n\n');
+      return block;
+    }).join('\n\n');
+  }
 
   text = text.replace(/\n{3,}/g, '\n\n').trim();
 
   return text;
 }
 
-function GlobalMarkdown({ children, className = '', components = {} }: GlobalMarkdownProps) {
+function GlobalMarkdown({ children, className = '', components = {}, isInline }: GlobalMarkdownProps) {
   if (!children) return null;
 
+  const effectiveInline = isInline || className.includes('inline');
+
   const processedContent = useMemo(() => {
-    return healGlobalMarkdown(children);
-  }, [children]);
+    return healGlobalMarkdown(children, { isInline: effectiveInline });
+  }, [children, effectiveInline]);
 
   const mergedComponents = useMemo(() => {
     if (!components || Object.keys(components).length === 0) {

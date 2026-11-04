@@ -3782,9 +3782,11 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                     <div className="space-y-3">
                       <div className="text-xs md:text-sm text-zinc-800 leading-relaxed font-medium bg-white/95 rounded-2xl p-4.5 border border-zinc-150 shadow-xs overflow-x-auto">
                         <GlobalMarkdown className="text-xs md:text-sm text-zinc-800 leading-relaxed space-y-3 font-medium">
-                          {askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
-                           askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
-                           (quiz[currentIndex]?.explanation ? `### 📝 Solution & Concept Breakdown\n${quiz[currentIndex]?.explanation}` : 'Generating live AI response...')}
+                          {formatQuizMath(
+                            askAICacheRef.current[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                            askAICache[currentIndex]?.[activeQuestionAIMode[currentIndex]!] ||
+                            (quiz[currentIndex]?.explanation ? `### 📝 Solution & Concept Breakdown\n${quiz[currentIndex]?.explanation}` : 'Generating live AI response...')
+                          )}
                         </GlobalMarkdown>
                       </div>
 

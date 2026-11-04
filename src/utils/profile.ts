@@ -30,13 +30,8 @@ export function resolveRealCountry(rawCountry?: string | null, customCountry?: s
     return custom;
   }
 
-  const raw = (rawCountry || '').trim();
-  if (raw && raw.toLowerCase() !== 'others' && raw.toLowerCase() !== 'other') {
-    return raw;
-  }
-
   const exam = (targetExam || '').toLowerCase().trim();
-  if (
+  const isIndianExam = Boolean(
     exam.includes('neet') ||
     exam.includes('jee') ||
     exam.includes('cbse') ||
@@ -45,20 +40,62 @@ export function resolveRealCountry(rawCountry?: string | null, customCountry?: s
     exam.includes('gate') ||
     exam.includes('nda') ||
     exam.includes('cuet') ||
-    exam.includes('clat')
-  ) {
-    return 'India';
+    exam.includes('clat') ||
+    exam.includes('ssc') ||
+    exam.includes('cgl') ||
+    exam.includes('chsl') ||
+    exam.includes('mts') ||
+    exam.includes('rrb') ||
+    exam.includes('ntpc') ||
+    exam.includes('railway') ||
+    exam.includes('banking') ||
+    exam.includes('ibps') ||
+    exam.includes('sbi') ||
+    exam.includes('cat') ||
+    exam.includes('bpsc') ||
+    exam.includes('mppsc') ||
+    exam.includes('uppsc') ||
+    exam.includes('state board') ||
+    exam.includes('bihar board') ||
+    exam.includes('up board') ||
+    exam.includes('wbjee') ||
+    exam.includes('mhcet') ||
+    exam.includes('kcet') ||
+    exam.includes('keam')
+  );
+
+  const isUSExam = Boolean(
+    exam.includes('sat') ||
+    exam.includes('act') ||
+    exam.includes('ap ') ||
+    exam.endsWith(' ap') ||
+    exam.includes('ged') ||
+    exam.includes('gre') ||
+    exam.includes('gmat') ||
+    exam.includes('mcat') ||
+    exam.includes('lsat') ||
+    exam.includes('usmle')
+  );
+
+  const isUKExam = Boolean(
+    exam.includes('gcse') ||
+    exam.includes('igcse') ||
+    exam.includes('a level') ||
+    exam.includes('a-level') ||
+    exam.includes('alevel') ||
+    exam.includes('btec')
+  );
+
+  if (isIndianExam) return 'India';
+  if (isUSExam) return 'United States';
+  if (isUKExam) return 'United Kingdom';
+
+  const raw = (rawCountry || '').trim();
+  if (raw && raw.toLowerCase() !== 'others' && raw.toLowerCase() !== 'other') {
+    return raw;
   }
 
-  if (exam.includes('sat') || exam.includes('act') || exam.includes('ap ') || exam.endsWith(' ap')) {
-    return 'United States';
-  }
-
-  if (exam.includes('gcse') || exam.includes('a level') || exam.includes('a-level')) {
-    return 'United Kingdom';
-  }
-
-  return raw && raw.toLowerCase() !== 'others' && raw.toLowerCase() !== 'other' ? raw : 'United States';
+  return 'India';
 }
 
 /**

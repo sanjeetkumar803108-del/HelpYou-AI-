@@ -73,16 +73,45 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
   // Step 1: Country Selection
   const [selectedCountryId, setSelectedCountryId] = useState<string>(() => {
+    // 1. If user previously typed a custom country, check it first
+    const savedCustom = (userId ? safeGetItem(`academic_custom_country_${userId}`) : null) || safeGetItem('academic_custom_country');
+    if (savedCustom && savedCustom.trim() && savedCustom.toLowerCase() !== 'others' && savedCustom.toLowerCase() !== 'other') {
+      const matchInList = COUNTRIES.find(c => c.name.toLowerCase() === savedCustom.trim().toLowerCase());
+      if (matchInList && matchInList.id !== 'Other') {
+        return matchInList.id;
+      }
+      return 'Other';
+    }
+
     const savedCountry = safeGetItem(`academic_country_${userId}`) || safeGetItem('academic_country');
-    const matched = COUNTRIES.find(c => c.name === savedCountry || c.id === savedCountry);
-    return matched ? matched.id : (savedCountry && savedCountry !== 'India' && savedCountry !== 'United States' ? 'Other' : 'IN');
+    if (savedCountry) {
+      const matched = COUNTRIES.find(c => c.name.toLowerCase() === savedCountry.toLowerCase() || c.id.toLowerCase() === savedCountry.toLowerCase());
+      if (matched) {
+        if (matched.id === 'USA') {
+          // Guard against stale USA default when exam has Indian context (e.g. SSC CGL, NEET, JEE, UPSC)
+          const exam = (safeGetItem(`academic_exam_${userId}`) || safeGetItem('academic_exam') || safeGetItem('target_exam') || '').toLowerCase();
+          if (exam.includes('ssc') || exam.includes('cgl') || exam.includes('chsl') || exam.includes('neet') || exam.includes('jee') || exam.includes('cbse') || exam.includes('upsc') || exam.includes('rrb') || exam.includes('bpsc') || exam.includes('banking')) {
+            return 'IN';
+          }
+          return 'USA';
+        }
+        return matched.id;
+      }
+      if (savedCountry.toLowerCase() !== 'others' && savedCountry.toLowerCase() !== 'other') {
+        return 'Other';
+      }
+    }
+    return 'IN'; // Safe default to India
   });
+
   const [customCountry, setCustomCountry] = useState<string>(() => {
     const savedCustom = (userId ? safeGetItem(`academic_custom_country_${userId}`) : null) || safeGetItem('academic_custom_country');
-    if (savedCustom && savedCustom !== 'Others' && savedCustom !== 'Other') return savedCustom;
+    if (savedCustom && savedCustom.trim() && savedCustom.toLowerCase() !== 'others' && savedCustom.toLowerCase() !== 'other') {
+      return savedCustom.trim();
+    }
     const savedCountry = (userId ? safeGetItem(`academic_country_${userId}`) : null) || safeGetItem('academic_country');
-    if (savedCountry && savedCountry !== 'Others' && savedCountry !== 'Other' && !COUNTRIES.some(c => c.name === savedCountry)) {
-      return savedCountry;
+    if (savedCountry && savedCountry.toLowerCase() !== 'others' && savedCountry.toLowerCase() !== 'other' && !COUNTRIES.some(c => c.name.toLowerCase() === savedCountry.toLowerCase())) {
+      return savedCountry.trim();
     }
     return '';
   });
@@ -240,6 +269,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     triggerVibration(15);
 
     if (step === 1) {
+      let finalChosenCountry = '';
       if (selectedCountryId === 'Other') {
         const trimmedCustom = customCountry.trim();
         if (!trimmedCustom) {
@@ -248,13 +278,18 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
           triggerVibration(25);
           return;
         }
-        // Immediately persist custom country so it is never lost
-        safeSetItem('academic_country', trimmedCustom);
-        safeSetItem('academic_custom_country', trimmedCustom);
-        if (userId) {
-          safeSetItem(`academic_country_${userId}`, trimmedCustom);
-          safeSetItem(`academic_custom_country_${userId}`, trimmedCustom);
-        }
+        finalChosenCountry = trimmedCustom;
+      } else {
+        const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
+        finalChosenCountry = countryObj.name;
+      }
+
+      // Immediately persist custom/selected country so it is never lost or overwritten
+      safeSetItem('academic_country', finalChosenCountry);
+      safeSetItem('academic_custom_country', finalChosenCountry);
+      if (userId) {
+        safeSetItem(`academic_country_${userId}`, finalChosenCountry);
+        safeSetItem(`academic_custom_country_${userId}`, finalChosenCountry);
       }
       setCountryError(null);
       setStep(2); // From Country -> Exam
@@ -274,10 +309,10 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
       const countryObj = COUNTRIES.find(c => c.id === selectedCountryId) || COUNTRIES[0];
       let finalCountry = selectedCountryId === 'Other' 
-        ? ((customCountry || '').trim() || 'Global') 
+        ? ((customCountry || '').trim() || 'India') 
         : countryObj.name;
       
-      // Auto-resolve real country if exam name unambiguously identifies national curriculum (e.g. NEET/JEE/CBSE -> India)
+      // Auto-resolve real country if exam name unambiguously identifies national curriculum (e.g. NEET/JEE/CBSE/SSC CGL -> India)
       finalCountry = resolveRealCountry(finalCountry, customCountry, trimmed);
 
       // 0. FAST-PATH: Instant sub-millisecond check for recognized national & global exams (100% offline & network-proof for APK)
@@ -286,7 +321,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         if (preVerified.officialExamName) {
           setTargetExam(preVerified.officialExamName);
         }
-        if (preVerified.country) {
+        if (preVerified.country && selectedCountryId !== 'Other') {
           const matchedCountry = COUNTRIES.find(
             c => c.name.toLowerCase() === preVerified.country.toLowerCase() || 
                  c.id.toLowerCase() === preVerified.country.toLowerCase()
@@ -365,8 +400,8 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
           setTargetExam(data.officialExamName);
         }
 
-        // Seamlessly auto-sync country if exam belongs to a specific nation
-        if (data.detectedCountry) {
+        // Seamlessly auto-sync country if exam belongs to a specific nation (only if user did not choose Other)
+        if (data.detectedCountry && selectedCountryId !== 'Other') {
           const matchedCountry = COUNTRIES.find(
             c => c.name.toLowerCase() === data.detectedCountry.toLowerCase() || 
                  c.id.toLowerCase() === data.detectedCountry.toLowerCase()
@@ -476,6 +511,14 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     } else if (step === 3) {
       setStep(2); // From Grade -> Exam
     } else if (step === 2) {
+      if (customCountry && customCountry.trim() && customCountry.toLowerCase() !== 'others') {
+        const matched = COUNTRIES.find(c => c.name.toLowerCase() === customCountry.trim().toLowerCase());
+        if (matched && matched.id !== 'Other') {
+          setSelectedCountryId(matched.id);
+        } else {
+          setSelectedCountryId('Other');
+        }
+      }
       setStep(1); // From Exam -> Country
     } else if (step === 1 && onCancel) {
       onCancel();
@@ -807,6 +850,13 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                               otherCountryBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                               customCountryInputRef.current?.focus({ preventScroll: true });
                             }, 80);
+                          } else {
+                            safeSetItem('academic_country', country.name);
+                            safeSetItem('academic_custom_country', country.name);
+                            if (userId) {
+                              safeSetItem(`academic_country_${userId}`, country.name);
+                              safeSetItem(`academic_custom_country_${userId}`, country.name);
+                            }
                           }
                         }}
                         className={`p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
@@ -853,6 +903,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setCustomCountry(val);
+                                  setSelectedCountryId('Other');
                                   if (countryError) setCountryError(null);
                                   if (val.trim()) {
                                     safeSetItem('academic_custom_country', val.trim());

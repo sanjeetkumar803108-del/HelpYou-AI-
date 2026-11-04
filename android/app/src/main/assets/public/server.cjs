@@ -47,6 +47,441 @@ var ALLOWED_ORIGINS = /* @__PURE__ */ new Set([
   "http://127.0.0.1:3001"
 ]);
 
+// src/utils/examSyllabusCatalog.ts
+var EXAM_SYLLABUS_CATALOG = {
+  // 1. SSC CGL
+  "ssc_cgl": {
+    examOverview: {
+      examName: "Staff Selection Commission Combined Graduate Level (SSC CGL)",
+      country: "India",
+      officialAuthority: "Staff Selection Commission (ssc.gov.in)",
+      examType: "National Central Government Recruitment (Group B & C)",
+      examFormat: "Computer Based Examination (CBT) Tier 1 & Tier 2",
+      totalExamMarks: 200,
+      totalQuestions: 100,
+      hasSubjective: false,
+      hasNegativeMarking: true,
+      negativeFormula: "+2 for correct, -0.50 for incorrect in Tier 1; +3 correct, -1 incorrect in Tier 2"
+    },
+    subjects: {
+      "Quantitative Aptitude": {
+        subjectName: "Quantitative Aptitude",
+        totalMarks: 50,
+        totalQuestions: 25,
+        attemptRequired: 25,
+        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
+        negativeMarking: -0.5,
+        marksPerCorrect: 2,
+        questionFormats: ["Single Choice Objective MCQ", "Data Interpretation Tables & Graphs", "Speed Calculation Problems"],
+        mcqStyle: {
+          optionsCount: 4,
+          style: "High speed, multi-step arithmetic calculation, advanced geometry & algebraic traps",
+          negativePenalty: "-0.50 marks"
+        },
+        subjectiveStyle: {
+          hasSubjective: false,
+          format: "N/A - Objective CBT Only",
+          wordLimits: "N/A",
+          markingRubric: "N/A"
+        },
+        nomenclature: "Chapters",
+        coreUnits: [
+          "Number System & Divisibility",
+          "HCF and LCM",
+          "Simplification & Square Roots",
+          "Percentages",
+          "Ratio, Proportion & Variation",
+          "Average",
+          "Simple Interest & Compound Interest",
+          "Profit, Loss and Discount",
+          "Time and Work & Efficiency",
+          "Pipes and Cisterns",
+          "Speed, Time and Distance",
+          "Boats and Streams",
+          "Mixtures and Alligations",
+          "Partnership",
+          "Basic Algebraic Identities & Polynomials",
+          "Linear Equations & Graphs",
+          "Geometry (Lines, Angles, Triangles)",
+          "Circles, Chords & Tangents",
+          "Mensuration 2D (Perimeter & Area)",
+          "Mensuration 3D (Surface Area & Volume)",
+          "Trigonometric Ratios & Identities",
+          "Heights and Distances",
+          "Data Interpretation (Bar, Pie, Line, Table & Histograms)"
+        ],
+        subTopics: {
+          "Number System & Divisibility": ["Divisibility Rules of 7, 11, 13, 72, 88", "Unit Digit & Last Two Digits", "Remainder Theorems", "Number of Zeroes & Factors"],
+          "Percentages": ["Fraction to Percentage Equivalents", "Successive Percentage Changes", "Expenditure, Price & Consumption Models", "Election & Voting Problems"],
+          "Profit, Loss and Discount": ["Marked Price vs Cost Price Relations", "Dishonest Dealer Traps", "Successive Discounts", "Free Article Schemes"],
+          "Geometry (Lines, Angles, Triangles)": ["Congruence & Similarity of Triangles", "Centroid, Incentre, Circumcentre, Orthocentre", "Pythagoras & Apollonius Theorems", "Angle Bisector Properties"],
+          "Circles, Chords & Tangents": ["Intersecting Chord Theorem", "Direct and Transverse Common Tangents", "Cyclic Quadrilaterals", "Angles in Alternate Segments"],
+          "Trigonometric Ratios & Identities": ["Complementary Angle Identities", "Standard Value Substitutions (0\xB0, 30\xB0, 45\xB0, 60\xB0, 90\xB0)", "Maxima and Minima of Trigonometric Functions", "Algebraic Reductions"]
+        },
+        detailedNotesGuidelines: "Provide step-by-step mathematical proofs, derivation of shortcut tricks, standard identification templates, and highlight common arithmetic calculation traps.",
+        revisionGuidelines: "Ultra-condensed formula sheets, standard geometric identity tables, shortcut factor tables, and high-frequency algebraic expansions.",
+        essayTone: null,
+        examTone: "Competitive high speed and arithmetic accuracy, advanced geometry theorems, algebraic value putting",
+        officialSource: "Staff Selection Commission Examination Bulletin (ssc.gov.in)"
+      },
+      "General Intelligence & Reasoning": {
+        subjectName: "General Intelligence & Reasoning",
+        totalMarks: 50,
+        totalQuestions: 25,
+        attemptRequired: 25,
+        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
+        negativeMarking: -0.5,
+        marksPerCorrect: 2,
+        questionFormats: ["Single Choice Objective MCQ", "Verbal Logic", "Non-Verbal Visual Pattern Puzzles"],
+        mcqStyle: {
+          optionsCount: 4,
+          style: "Pattern recognition, logical deduction, visual spatial rotation, mathematical operator traps",
+          negativePenalty: "-0.50 marks"
+        },
+        subjectiveStyle: {
+          hasSubjective: false,
+          format: "N/A - Objective CBT Only",
+          wordLimits: "N/A",
+          markingRubric: "N/A"
+        },
+        nomenclature: "Chapters",
+        coreUnits: [
+          "Semantic & Number Analogies",
+          "Classification & Odd One Out",
+          "Coding-Decoding & Letter Shifting",
+          "Number Series, Alphabet Series & Mixed Series",
+          "Missing Number in Matrix / Figures",
+          "Blood Relations",
+          "Direction and Distance Sense",
+          "Order and Ranking",
+          "Syllogisms & Logical Deductions",
+          "Venn Diagrams",
+          "Mathematical Operations & Sign Interchange",
+          "Clock and Calendar",
+          "Dice and Cube Problems",
+          "Paper Folding and Cutting",
+          "Mirror and Water Images",
+          "Embedded Figures & Completion of Patterns",
+          "Counting of Figures (Triangles, Squares, Rectangles)",
+          "Statement and Conclusions / Assumptions"
+        ],
+        subTopics: {
+          "Coding-Decoding & Letter Shifting": ["Direct Alphabet Position Numbers (1-26)", "Reverse Alphabet Equivalents (A-Z, B-Y)", "Cross Pattern Shift", "Vowel-Consonant Specific Operations"],
+          "Syllogisms & Logical Deductions": ["All A are B & Some A are B", "No A is B & Some Not", "Possibility Cases", "Either-Or Conditions"],
+          "Blood Relations": ["Pointed Picture / Dialogue Relations", "Coded Blood Relations (A+B means father)", "Family Tree Diagramming"],
+          "Dice and Cube Problems": ["Standard vs General Dice", "Opposite Face Determination with 2 Positions", "Open Dice Folding"]
+        },
+        detailedNotesGuidelines: "Visual logic matrices, systematic tree diagrams, rule-of-elimination techniques, and pattern catalogues.",
+        revisionGuidelines: "Quick rules of opposite dice faces, alphabet rank memory sheet (EJOTY & Reverse), and syllogism Venn rules.",
+        essayTone: null,
+        examTone: "Instant pattern recognition, visual dexterity, eliminate misleading distractor options",
+        officialSource: "Staff Selection Commission Examination Bulletin (ssc.gov.in)"
+      },
+      "English Comprehension": {
+        subjectName: "English Comprehension",
+        totalMarks: 50,
+        totalQuestions: 25,
+        attemptRequired: 25,
+        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
+        negativeMarking: -0.5,
+        marksPerCorrect: 2,
+        questionFormats: ["Single Choice Objective MCQ", "Cloze Test", "Sentence Improvement", "Reading Comprehension"],
+        mcqStyle: {
+          optionsCount: 4,
+          style: "Grammar rule exceptions, vocabulary nuance, context clue extraction, idiom definitions",
+          negativePenalty: "-0.50 marks"
+        },
+        subjectiveStyle: {
+          hasSubjective: false,
+          format: "N/A - Objective CBT Only",
+          wordLimits: "N/A",
+          markingRubric: "N/A"
+        },
+        nomenclature: "Chapters",
+        coreUnits: [
+          "Spotting the Error (Grammar Foundations)",
+          "Sentence Improvement & Phrase Replacement",
+          "Fill in the Blanks (Prepositions & Collocations)",
+          "Synonyms and Antonyms",
+          "Idioms and Phrases",
+          "One Word Substitution",
+          "Spelling Errors & Misspelt Words",
+          "Active and Passive Voice Transformations",
+          "Direct and Indirect Speech (Narration)",
+          "Sentence Rearrangement (Para Jumbles / PQRS)",
+          "Cloze Test (Passage Blank Completion)",
+          "Reading Comprehension (Factual & Inferential)"
+        ],
+        subTopics: {
+          "Spotting the Error (Grammar Foundations)": ["Subject-Verb Agreement Rules", "Tense Consistency & Conditionals", "Prepositional Placement & Phrasal Verbs", "Pronoun Antecedent Agreement", "Modifiers & Inversion Rules"],
+          "Active and Passive Voice Transformations": ["Simple, Continuous & Perfect Tense Changes", "Imperative Sentence Transformations", "Interrogative Voice Change", "Preposition Retaining Passive"],
+          "Direct and Indirect Speech (Narration)": ["Reporting Verb Changes", "Tense Backshifting Rules", "Pronoun Changes", "Exclamatory & Imperative Narration"]
+        },
+        detailedNotesGuidelines: "Comprehensive 100 Golden Rules of Grammar with authentic exam examples, root-word etymology, and contextual sentence application.",
+        revisionGuidelines: "High-frequency idiom glossary, repeating one-word substitutions list, and active/passive shortcut table.",
+        essayTone: "Grammatically rigorous, formal academic standard English, precise register, correct prepositional usage, no informal colloquialisms.",
+        examTone: "Strict grammatical precision, nuanced vocabulary usage, reading speed and inference",
+        officialSource: "Staff Selection Commission Official Guidelines (ssc.gov.in)"
+      },
+      "General Awareness": {
+        subjectName: "General Awareness",
+        totalMarks: 50,
+        totalQuestions: 25,
+        attemptRequired: 25,
+        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
+        negativeMarking: -0.5,
+        marksPerCorrect: 2,
+        questionFormats: ["Single Choice Objective MCQ", "Statement I & II Verification", "Chronological Matching"],
+        mcqStyle: {
+          optionsCount: 4,
+          style: "Direct factual recall, historical timeline sequence, constitutional articles, static GK",
+          negativePenalty: "-0.50 marks"
+        },
+        subjectiveStyle: {
+          hasSubjective: false,
+          format: "N/A - Objective CBT Only",
+          wordLimits: "N/A",
+          markingRubric: "N/A"
+        },
+        nomenclature: "Chapters",
+        coreUnits: [
+          "Ancient Indian History (Harappan to Guptas)",
+          "Medieval Indian History (Delhi Sultanate & Mughals)",
+          "Modern Indian History & Freedom Struggle",
+          "Indian Constitution & Polity (Articles & Amendments)",
+          "Physical & Indian Geography (Rivers, Mountains, Minerals)",
+          "Indian Economy, Planning & Fiscal Policy",
+          "General Science: Physics in Everyday Life",
+          "General Science: Chemistry in Everyday Life",
+          "General Science: Biology & Human Health",
+          "Static GK: Classical Dances, Music & Festivals",
+          "Static GK: National Parks, Wildlife & Ramsar Sites",
+          "Static GK: Important Books, Awards & Honors",
+          "Current Affairs & Government Welfare Schemes"
+        ],
+        subTopics: {
+          "Indian Constitution & Polity (Articles & Amendments)": ["Preamble & Fundamental Rights (Art 12-35)", "Directive Principles & Fundamental Duties", "President, Governor & Emergency Powers", "Supreme Court & High Courts", "Important Constitutional Amendments (42nd, 44th, 73rd, 86th, 101st)"],
+          "Physical & Indian Geography (Rivers, Mountains, Minerals)": ["Himalayan and Peninsular Drainage Systems", "Monsoon Mechanism & Soil Types of India", "National Parks & Biosphere Reserves", "Mineral Belts & Multipurpose River Valley Projects"]
+        },
+        detailedNotesGuidelines: "Chronological tables, constitutional article charts, geographical maps breakdown, and verified factual summaries.",
+        revisionGuidelines: "High-yield one-liner memory sheet, articles summary table, major national festivals and dances matrix.",
+        essayTone: null,
+        examTone: "Broad factual memory, conceptual clarity in general sciences, constitutional awareness",
+        officialSource: "Staff Selection Commission Official Guidelines (ssc.gov.in)"
+      }
+    }
+  },
+  // 2. NEET UG
+  "neet_ug": {
+    examOverview: {
+      examName: "NEET UG (National Eligibility cum Entrance Test)",
+      country: "India",
+      officialAuthority: "National Testing Agency (NTA) & National Medical Commission (NMC)",
+      examType: "National Pre-Medical Entrance Examination",
+      examFormat: "Pen and Paper Mode (OMR Based)",
+      totalExamMarks: 720,
+      totalQuestions: 200,
+      hasSubjective: false,
+      hasNegativeMarking: true,
+      negativeFormula: "+4 for correct, -1 for incorrect, 0 for unattempted"
+    },
+    subjects: {
+      "Physics": {
+        subjectName: "Physics",
+        totalMarks: 180,
+        totalQuestions: 50,
+        attemptRequired: 45,
+        markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
+        negativeMarking: -1,
+        marksPerCorrect: 4,
+        questionFormats: ["Single Choice Objective MCQ", "Assertion-Reason", "Match The Columns", "Numerical Value MCQ"],
+        mcqStyle: {
+          optionsCount: 4,
+          style: "Direct NCERT line-by-line formula application, diagrammatic ray tracing, dimensional analysis, sign convention traps",
+          negativePenalty: "-1 mark"
+        },
+        subjectiveStyle: {
+          hasSubjective: false,
+          format: "N/A - OMR MCQ Only",
+          wordLimits: "N/A",
+          markingRubric: "N/A"
+        },
+        nomenclature: "Chapters",
+        coreUnits: [
+          "Units and Measurements",
+          "Motion in a Straight Line",
+          "Motion in a Plane & Vectors",
+          "Laws of Motion & Friction",
+          "Work, Energy and Power",
+          "System of Particles & Rotational Motion",
+          "Gravitation",
+          "Mechanical Properties of Solids",
+          "Mechanical Properties of Fluids",
+          "Thermal Properties of Matter",
+          "Thermodynamics",
+          "Kinetic Theory of Gases",
+          "Oscillations (Simple Harmonic Motion)",
+          "Waves & Acoustics",
+          "Electrostatics (Charges & Fields)",
+          "Electrostatic Potential & Capacitance",
+          "Current Electricity",
+          "Moving Charges and Magnetism",
+          "Magnetism and Matter",
+          "Electromagnetic Induction",
+          "Alternating Current",
+          "Electromagnetic Waves",
+          "Ray Optics and Optical Instruments",
+          "Wave Optics",
+          "Dual Nature of Radiation and Matter",
+          "Atoms",
+          "Nuclei",
+          "Semiconductor Electronics: Materials, Devices & Simple Circuits"
+        ],
+        subTopics: {
+          "Work, Energy and Power": ["Work-Energy Theorem", "Conservative vs Non-Conservative Forces", "Potential Energy Curve & Equilibrium", "Elastic & Inelastic Collisions in 1D and 2D"],
+          "Current Electricity": ["Ohm's Law & Drift Velocity", "Kirchhoff's Laws & Circuit Analysis", "Wheatstone Bridge Principle", "Temperature Dependence of Resistance"],
+          "Ray Optics and Optical Instruments": ["Lens Maker's Formula & Combinations", "Total Internal Reflection & Prisms", "Compound Microscope & Astronomical Telescope Magnification"]
+        },
+        detailedNotesGuidelines: "Clear formula derivations, free-body diagram tutorials, sign convention reminders, and NCERT-exemplar numerical illustrations.",
+        revisionGuidelines: "High-yield formula sheet with SI units, dimensional formula reference table, and standard circuit shortcut formulas.",
+        essayTone: null,
+        examTone: "Rigorous NCERT conceptual grounding with standard numerical problem-solving",
+        officialSource: "National Medical Commission (NMC) & NTA Information Bulletin"
+      },
+      "Chemistry": {
+        subjectName: "Chemistry",
+        totalMarks: 180,
+        totalQuestions: 50,
+        attemptRequired: 45,
+        markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
+        negativeMarking: -1,
+        marksPerCorrect: 4,
+        questionFormats: ["Single Choice Objective MCQ", "Assertion-Reason", "Match The Columns", "Statement I & II Verification"],
+        mcqStyle: {
+          optionsCount: 4,
+          style: "Strict NCERT textbook facts, reagent selectivity in Organic, periodic trends in Inorganic, stoichiometric calculations in Physical",
+          negativePenalty: "-1 mark"
+        },
+        subjectiveStyle: {
+          hasSubjective: false,
+          format: "N/A - OMR MCQ Only",
+          wordLimits: "N/A",
+          markingRubric: "N/A"
+        },
+        nomenclature: "Chapters",
+        coreUnits: [
+          "Some Basic Concepts of Chemistry (Mole Concept)",
+          "Structure of Atom",
+          "Classification of Elements & Periodicity in Properties",
+          "Chemical Bonding and Molecular Structure",
+          "Chemical Thermodynamics",
+          "Chemical and Ionic Equilibrium",
+          "Redox Reactions",
+          "Solutions & Colligative Properties",
+          "Electrochemistry",
+          "Chemical Kinetics",
+          "p-Block Elements",
+          "d- and f-Block Elements",
+          "Coordination Compounds",
+          "Organic Chemistry: Basic Principles and Techniques (GOC)",
+          "Hydrocarbons (Alkanes, Alkenes, Alkynes, Aromatic)",
+          "Haloalkanes and Haloarenes",
+          "Alcohols, Phenols and Ethers",
+          "Aldehydes, Ketones and Carboxylic Acids",
+          "Organic Compounds Containing Nitrogen (Amines)",
+          "Biomolecules (Carbohydrates, Proteins, Nucleic Acids)"
+        ],
+        subTopics: {
+          "Chemical Bonding and Molecular Structure": ["VSEPR Theory & Molecular Shapes", "Hybridization (sp, sp2, sp3, sp3d, sp3d2)", "Molecular Orbital Theory & Bond Order", "Hydrogen Bonding"],
+          "Coordination Compounds": ["Werner's Theory", "IUPAC Nomenclature of Coordination Complexes", "Isomerism (Structural & Stereoisomerism)", "Crystal Field Theory & Magnetic Moments"],
+          "Aldehydes, Ketones and Carboxylic Acids": ["Nucleophilic Addition Reactions", "Aldol Condensation & Cannizzaro Reaction", "Tollens' & Fehling's Test", "Acidic Strength of Carboxylic Acids"]
+        },
+        detailedNotesGuidelines: "Organic named reaction mechanisms with reagents, Inorganic periodic trend charts with exceptions, and Physical chemistry formula derivations.",
+        revisionGuidelines: "Organic reaction roadmap, coordinate complex color & magnetic moment sheet, and electrochemistry Nernst cheat sheet.",
+        essayTone: null,
+        examTone: "100% faithful to NCERT textbook lines, reaction conditions, and quantitative calculations",
+        officialSource: "National Medical Commission (NMC) & NTA Information Bulletin"
+      },
+      "Biology": {
+        subjectName: "Biology",
+        totalMarks: 360,
+        totalQuestions: 100,
+        attemptRequired: 90,
+        markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
+        negativeMarking: -1,
+        marksPerCorrect: 4,
+        questionFormats: ["Single Choice Objective MCQ", "Assertion-Reason", "Match The Columns", "Statement I & II Verification", "Diagram-based Questions"],
+        mcqStyle: {
+          optionsCount: 4,
+          style: "Every single option derived strictly from NCERT textbook lines, morphological anatomical terminology, genetic probability ratios",
+          negativePenalty: "-1 mark"
+        },
+        subjectiveStyle: {
+          hasSubjective: false,
+          format: "N/A - OMR MCQ Only",
+          wordLimits: "N/A",
+          markingRubric: "N/A"
+        },
+        nomenclature: "Chapters",
+        coreUnits: [
+          "The Living World",
+          "Biological Classification",
+          "Plant Kingdom",
+          "Animal Kingdom",
+          "Morphology of Flowering Plants",
+          "Anatomy of Flowering Plants",
+          "Structural Organisation in Animals (Frog & Tissue Types)",
+          "Cell: The Unit of Life",
+          "Biomolecules",
+          "Cell Cycle and Cell Division",
+          "Photosynthesis in Higher Plants",
+          "Respiration in Plants",
+          "Plant Growth and Development",
+          "Breathing and Exchange of Gases",
+          "Body Fluids and Circulation",
+          "Excretory Products and their Elimination",
+          "Locomotion and Movement",
+          "Neural Control and Coordination",
+          "Chemical Coordination and Integration",
+          "Sexual Reproduction in Flowering Plants",
+          "Human Reproduction",
+          "Reproductive Health",
+          "Principles of Inheritance and Variation (Genetics I)",
+          "Molecular Basis of Inheritance (Genetics II)",
+          "Evolution",
+          "Human Health and Disease",
+          "Microbes in Human Welfare",
+          "Biotechnology: Principles and Processes",
+          "Biotechnology and its Applications",
+          "Organisms and Populations",
+          "Ecosystem",
+          "Biodiversity and Conservation"
+        ],
+        subTopics: {
+          "Principles of Inheritance and Variation (Genetics I)": ["Mendel's Monohybrid & Dihybrid Crosses", "Incomplete Dominance & Co-dominance", "Chromosomal Theory of Inheritance", "Linkage and Recombination Ratios", "Pedigree Analysis & Genetic Disorders"],
+          "Molecular Basis of Inheritance (Genetics II)": ["Structure of DNA Double Helix", "Meselson and Stahl Experiment", "Transcription in Prokaryotes & Eukaryotes", "Genetic Code Properties & Translation Mechanism", "Lac Operon Model"],
+          "Biotechnology: Principles and Processes": ["Restriction Endonucleases & Ligases", "pBR322 Cloning Vector Features", "Polymerase Chain Reaction (PCR) Steps", "Bioreactors & Downstream Processing"]
+        },
+        detailedNotesGuidelines: "Verbatim NCERT line explanations, histological and physiological flowcharts, anatomical tables, and genetic cross diagrams.",
+        revisionGuidelines: "High-yield scientist discoveries list, dates and percentages table, biological examples index, and hormone origin-target matrix.",
+        essayTone: null,
+        examTone: "Exhaustive NCERT line verification, botanical zoological exact terminologies, and diagrams",
+        officialSource: "National Medical Commission (NMC) & NTA Information Bulletin"
+      }
+    }
+  }
+};
+function findCatalogExamBlueprint(examName, country) {
+  const norm = (examName || "").toLowerCase().trim();
+  if (norm.includes("cgl") || norm.includes("ssc") && !norm.includes("chsl") && !norm.includes("mts")) {
+    return EXAM_SYLLABUS_CATALOG["ssc_cgl"];
+  }
+  if (norm.includes("neet")) {
+    return EXAM_SYLLABUS_CATALOG["neet_ug"];
+  }
+  return null;
+}
+
 // server.ts
 var import_dotenv = __toESM(require("dotenv"), 1);
 var import_express = __toESM(require("express"), 1);
@@ -742,6 +1177,7 @@ function isOffTopicOrChatter(rawTopic) {
 function getExamBlueprintDirective(exam, blueprint, subject) {
   if (!exam && !blueprint) return "";
   let details = "";
+  let overviewDetails = "";
   if (blueprint) {
     let bp = blueprint;
     if (typeof bp === "string") {
@@ -751,31 +1187,51 @@ function getExamBlueprintDirective(exam, blueprint, subject) {
       }
     }
     if (bp && typeof bp === "object") {
+      if (bp.examOverview) {
+        const ov = bp.examOverview;
+        overviewDetails = `
+\u2022 OFFICIAL EXAM OVERVIEW: ${ov.examName || exam} | Authority: ${ov.officialAuthority || "Official Board"} | Format: ${ov.examFormat || "Standard"} | Full Paper Marks: ${ov.totalExamMarks || "N/A"}`;
+      }
       let activeBp = subject && bp[subject] ? bp[subject] : null;
+      if (!activeBp && bp.subjectsBlueprint && subject) {
+        activeBp = bp.subjectsBlueprint[subject] || null;
+      }
       if (!activeBp && subject) {
         const lower = subject.toLowerCase().trim();
-        const k = Object.keys(bp).find((key) => key.toLowerCase().trim() === lower || lower.includes(key.toLowerCase().trim()) || key.toLowerCase().trim().includes(lower));
-        if (k) activeBp = bp[k];
+        const searchPool = bp.subjectsBlueprint || bp;
+        const k = Object.keys(searchPool).find((key) => {
+          const lKey = key.toLowerCase().trim();
+          return lKey === lower || lower.includes(lKey) || lKey.includes(lower);
+        });
+        if (k) activeBp = searchPool[k];
       }
       if (!activeBp) {
-        const firstKey = Object.keys(bp)[0];
-        if (firstKey && bp[firstKey] && typeof bp[firstKey] === "object") activeBp = bp[firstKey];
+        const searchPool = bp.subjectsBlueprint || bp;
+        const firstKey = Object.keys(searchPool)[0];
+        if (firstKey && searchPool[firstKey] && typeof searchPool[firstKey] === "object") {
+          activeBp = searchPool[firstKey];
+        }
       }
       if (activeBp) {
+        const isEnglish = /english|language|reading|verbal|literature/i.test(subject || "");
         details = `
-\u2022 TARGET SUBJECT CALIBRATION: ${subject || "Active Curriculum"}
+\u2022 TARGET SUBJECT CALIBRATION: ${subject || activeBp.subjectName || "Active Curriculum"}
 \u2022 OFFICIAL MARKING SCHEME: ${activeBp.markingScheme || "Official Standard"} (Total Marks: ${activeBp.totalMarks || "N/A"}, Questions to Attempt: ${activeBp.attemptRequired || "N/A"}/${activeBp.totalQuestions || "N/A"})
+\u2022 NEGATIVE MARKING PENALTY: ${activeBp.negativeMarking !== void 0 ? activeBp.negativeMarking : "Official Exam Formula"}
 \u2022 OFFICIAL QUESTION FORMATS: ${Array.isArray(activeBp.questionTypes) ? activeBp.questionTypes.join(", ") : "Standardized Formats"}
 \u2022 CORE OFFICIAL SYLLABUS UNITS: ${Array.isArray(activeBp.coreUnits) ? activeBp.coreUnits.join(", ") : "Official Syllabus"}
 \u2022 OFFICIAL EXAM TONE & RIGOR: ${activeBp.examTone || "Standard examination rigor"}
-\u2022 ACCREDITED TESTING AUTHORITY: ${activeBp.officialSource || "Official Testing Guidelines"}`;
+\u2022 ACCREDITED TESTING AUTHORITY: ${activeBp.officialSource || "Official Testing Guidelines"}
+${activeBp.detailedNotesGuidelines ? `\u2022 DETAILED NOTES GUIDELINES: ${activeBp.detailedNotesGuidelines}` : ""}
+${activeBp.revisionGuidelines ? `\u2022 REVISION & CHEAT SHEET GUIDELINES: ${activeBp.revisionGuidelines}` : ""}
+${isEnglish && activeBp.essayTone ? `\u2022 OFFICIAL ESSAY TONE & ACADEMIC FORMAT: ${activeBp.essayTone}` : ""}`;
       }
     }
   }
   return `
 =======================================================
 [TARGET EXAMINATION ACCREDITATION & CALIBRATION]
-\u2022 STUDENT TARGET EXAM: ${exam || "Standardized Examination"}
+\u2022 STUDENT TARGET EXAM: ${exam || "Standardized Examination"}${overviewDetails}
 ${details}
 \u2022 MANDATORY EXAM ALIGNMENT DIRECTIVES:
 1. QUESTION PAPERS, QUIZZES & PRACTICE TESTS: You MUST generate questions that strictly reflect the official question formats (e.g. Assertion-Reason, Statement I/II, or Numerical calculations as calibrated above) with authentic distractor patterns.
@@ -3796,6 +4252,7 @@ User Entered Exam Name: "${trimmedExam}"
 
 TASK:
 You are an authoritative global educational curriculum verification engine. Your task is to verify if "${trimmedExam}" is a real, recognized academic examination AND research its official subjects and preparation grades.
+MANDATE ON SOURCES: When conducting live research for "${trimmedExam}", consult strictly official examination authority portals, education ministry gazettes, and official board websites (.gov, .nic.in, .ac.in, .org, official testing agencies). Strictly ignore informal coaching blogs, commercial ads, or unverified 3rd-party aggregator websites.
 
 1. EXAMINATION VALIDITY CHECK:
    - Check whether "${trimmedExam}" is a real, legitimate standardized examination, board test, entrance exam, or academic qualification anywhere in the world.
@@ -3962,6 +4419,7 @@ app.post("/api/deep-research-exam-blueprint", async (req, res) => {
     const normGrade = (grade || "Senior Secondary").trim();
     const cleanSubjects = subjects.map((s) => String(s).trim()).filter(Boolean);
     const cacheKey = `${normCountry.toLowerCase()}__${normExam.toLowerCase()}__${normGrade.toLowerCase()}__${cleanSubjects.slice().sort().join("+").toLowerCase()}`;
+    const catalogMatch = findCatalogExamBlueprint(normExam, normCountry);
     const promptText = `
 User Selected Country: "${normCountry}"
 Target Examination: "${normExam}"
@@ -3970,47 +4428,103 @@ Selected Subjects: ${JSON.stringify(cleanSubjects)}
 
 TASK:
 You are an authoritative global educational curriculum and assessment research engine.
-Conduct deep web research strictly using official examination authority guidelines (e.g. NTA, NMC, CBSE, NCERT, CollegeBoard, ACT, Ofqual, Cambridge Assessment, International Baccalaureate, etc.).
-STRICTLY IGNORE informal coaching blogs or outdated SEO aggregator pages.
+Conduct deep web research strictly using official examination authority guidelines (e.g. NTA, NMC, SSC, UPSC, CBSE, NCERT, CollegeBoard, ACT, Ofqual, Cambridge Assessment, etc.).
+STRICTLY IGNORE informal coaching blogs, commercial ads, or outdated SEO aggregator pages.
 
-For EACH subject in ${JSON.stringify(cleanSubjects)}, extract and curate:
-1. "totalMarks": Official total marks allocated for this subject in ${normExam} (e.g. 180 in NEET, 100 in CBSE/JEE, 800 in SAT, etc. Return as integer or standard string).
-2. "totalQuestions": Official total questions presented for this subject in the exam paper (e.g. 50, 45, 100, 30).
-3. "attemptRequired": Exact number of questions the student must attempt (e.g. 45 out of 50 in NEET UG Section B choices, or 50).
-4. "markingScheme": Exact official marking formula (e.g. "+4 for correct, -1 for incorrect, 0 for unattempted", or "+1 / 0", etc.).
-5. "questionTypes": Array of 3-5 real question formats used in ${normExam} (e.g. ["Single Choice MCQ", "Assertion-Reason", "Match The Following", "Statement I & II", "Numerical Value Questions"]).
-6. "coreUnits": Array of 6 to 16 authentic official syllabus subdivisions as prescribed by the official examination authority or board.
-   CRITICAL MANDATE ON CHAPTERS & NOMENCLATURE:
-   - NEVER clamp or fix the list to 4 generic items! Real curriculum has 6 to 16 distinct chapters/domains.
-   - For ${normCountry} or ${normExam}, determine the authentic subdivision term used by educators (e.g. "Chapters" for India/CBSE/State, "Units" for US/AP/NEET/JEE, "Domains" for Netherlands/VWO/Colloquium Doctum, "Topics" for UK/GCSE/A-Levels).
-7. "nomenclature": The exact authentic subdivision term in plural: "Chapters" | "Units" | "Domains" | "Topics".
-8. "examTone": Concise, actionable description of real exam difficulty and question style (e.g. "Strictly NCERT textbook line-by-line concept verification with direct numerical calculation and diagram-based analysis").
-9. "officialSource": Official board or agency name (e.g. "NTA / NMC Official Guidelines", "CollegeBoard Official Framework", "CBSE Curriculum Guidelines").
-10. "subTopics": An object where EVERY key is an exact chapter name from "coreUnits", and the value is an array of 4 to 6 authentic, core exam sub-topics / micro-concepts for that chapter.
+You MUST research and return two major sections:
+1. "examOverview":
+   - "examName": Full standardized official examination name.
+   - "country": Official native country or educational jurisdiction.
+   - "officialAuthority": Official conducting authority (e.g., "Staff Selection Commission", "National Testing Agency", "CBSE").
+   - "examType": Real exam classification (e.g., "National Central Government Recruitment", "Pre-Medical Entrance", "Senior Secondary Board").
+   - "examFormat": Real test mode (e.g., "Computer Based Examination (CBT)", "Pen and Paper Mode (OMR Based)", "Descriptive Written").
+   - "totalExamMarks": Aggregate total marks of the full paper across all sections (e.g. 200, 720, 300, 100).
+   - "totalQuestions": Aggregate total questions in the full examination.
+   - "hasSubjective": boolean (true if subjective/essay papers exist, false if strictly objective MCQ).
+   - "hasNegativeMarking": boolean (true if negative marking exists).
+   - "negativeFormula": Concise description of negative marking formula (e.g. "+2 correct, -0.50 incorrect" or "+4 correct, -1 incorrect").
+
+2. "subjectsBlueprint":
+   For EACH subject in ${JSON.stringify(cleanSubjects)}, extract and curate:
+   - "subjectName": Clean subject name matching ${JSON.stringify(cleanSubjects)}.
+   - "totalMarks": Official total marks allocated for this subject in ${normExam} (e.g. 50 in SSC CGL, 180 in NEET, 100 in JEE/CBSE).
+   - "totalQuestions": Official total questions presented for this subject in the paper.
+   - "attemptRequired": Exact number of questions the student must attempt (e.g. 25, 45 out of 50).
+   - "markingScheme": Exact official marking formula (e.g. "+2 correct, -0.50 incorrect, 0 unattempted" or "+4 correct, -1 incorrect").
+   - "negativeMarking": Exact numerical negative penalty (e.g. -0.50, -1, -0.25, or 0).
+   - "marksPerCorrect": Exact numerical positive marks (e.g. 2, 4, 1).
+   - "questionFormats": Array of authentic question formats in this subject (e.g. ["Single Choice Objective MCQ", "Data Interpretation", "Assertion-Reason"]).
+   - "mcqStyle": {
+       "optionsCount": 4 or 5,
+       "style": "Concise description of how MCQs are asked in this exam for this subject (e.g. speed calculation, conceptual NCERT line verification, grammar exception traps)",
+       "negativePenalty": "e.g. -0.50 marks"
+     }
+   - "subjectiveStyle": {
+       "hasSubjective": boolean,
+       "format": "e.g. Short answer, Long derivation, Essay, or N/A - Objective CBT Only",
+       "wordLimits": "e.g. 150-200 words, or N/A",
+       "markingRubric": "Step marking, concept definition, diagram rubric, or N/A"
+     }
+   - "nomenclature": "Chapters" | "Units" | "Domains" | "Topics".
+   - "coreUnits": Array containing the 100% COMPLETE, EXHAUSTIVE, AUTHENTIC official chapters / units for this subject as prescribed in the official exam syllabus!
+     *** CRITICAL MANDATE ON ALL CHAPTERS (ZERO GENERIC FILLERS) ***:
+     - DO NOT clamp or fix the list to 4 or 6 generic items!
+     - List ALL official chapters that exist in this subject (e.g. all 19-23 chapters for SSC CGL Quant; all 28-32 chapters for NEET Biology; all 14-16 chapters for CBSE).
+     - STRICTLY PROHIBITED: NEVER invent generic filler names like 'Theoretical Frameworks', 'Core Foundations & Principles', 'Unit 1'. Every chapter MUST be the real, recognized chapter name taught by educators and tested by the authority.
+   - "subTopics": Object where EVERY key is an exact chapter name from "coreUnits", mapping to 3 to 6 authentic micro-concepts.
+   - "detailedNotesGuidelines": Actionable instructions for generating full detailed study notes for this subject (e.g. formulas, proofs, named reactions, constitutional articles).
+   - "revisionGuidelines": Actionable instructions for generating short revision cheat sheets, formula summaries, and mnemonics for this subject.
+   - "essayTone": IF this subject is English, Reading, Writing, or a Language paper, provide the official essay tone and academic format (e.g. "Formal, structured thesis, standard academic prose, precise grammatical register, no slang"). If NOT a language subject, set to null.
+   - "examTone": Concise description of real exam difficulty and question style.
+   - "officialSource": Official authority or bulletin name.
 
 OUTPUT REQUIREMENT:
 Output ONLY a single valid JSON object. No explanation text or markdown outside JSON.
 Format:
 {
-  "exam": "${normExam}",
-  "grade": "${normGrade}",
-  "country": "${normCountry}",
-  "nomenclature": "Chapters",
+  "examOverview": {
+    "examName": "${normExam}",
+    "country": "${normCountry}",
+    "officialAuthority": "Official Testing Board",
+    "examType": "National Competitive / Board",
+    "examFormat": "CBT / OMR / Descriptive",
+    "totalExamMarks": 200,
+    "totalQuestions": 100,
+    "hasSubjective": false,
+    "hasNegativeMarking": true,
+    "negativeFormula": "+2 correct, -0.50 incorrect"
+  },
   "subjectsBlueprint": {
     "${cleanSubjects[0]}": {
-      "totalMarks": 180,
-      "totalQuestions": 50,
-      "attemptRequired": 45,
-      "markingScheme": "+4 correct, -1 incorrect, 0 unattempted",
-      "questionTypes": ["MCQ Single Correct", "Assertion-Reason", "Match The Columns"],
-      "nomenclature": "Chapters",
-      "coreUnits": ["Real Chapter 1", "Real Chapter 2", "Real Chapter 3", "Real Chapter 4", "Real Chapter 5", "Real Chapter 6"],
-      "subTopics": {
-        "Real Chapter 1": ["Sub-topic 1.1", "Sub-topic 1.2", "Sub-topic 1.3", "Sub-topic 1.4"],
-        "Real Chapter 2": ["Sub-topic 2.1", "Sub-topic 2.2", "Sub-topic 2.3", "Sub-topic 2.4"]
+      "subjectName": "${cleanSubjects[0]}",
+      "totalMarks": 50,
+      "totalQuestions": 25,
+      "attemptRequired": 25,
+      "markingScheme": "+2 correct, -0.50 incorrect, 0 unattempted",
+      "negativeMarking": -0.50,
+      "marksPerCorrect": 2,
+      "questionFormats": ["Single Choice Objective MCQ", "Data Interpretation"],
+      "mcqStyle": {
+        "optionsCount": 4,
+        "style": "Fast calculation, multi-step word problems",
+        "negativePenalty": "-0.50"
       },
-      "examTone": "NCERT conceptual and numerical",
-      "officialSource": "Official Examination Authority"
+      "subjectiveStyle": {
+        "hasSubjective": false,
+        "format": "N/A - Objective only",
+        "wordLimits": "N/A",
+        "markingRubric": "N/A"
+      },
+      "nomenclature": "Chapters",
+      "coreUnits": ["Real Chapter 1", "Real Chapter 2"],
+      "subTopics": {
+        "Real Chapter 1": ["Micro Topic 1", "Micro Topic 2"]
+      },
+      "detailedNotesGuidelines": "Proofs, standard formulas, step-by-step problem templates",
+      "revisionGuidelines": "Formula cheat sheets, shortcuts, identity tables",
+      "essayTone": null,
+      "examTone": "Competitive speed and accuracy",
+      "officialSource": "Official Guidelines"
     }
   }
 }
@@ -4026,123 +4540,245 @@ Format:
         },
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
-        maxOutputTokens: 3500
+        maxOutputTokens: 4e3
       }
     });
     const rawText = response.text || "";
     let parsed = safeParseJSON(rawText, "object");
-    if (!parsed || !parsed.subjectsBlueprint || typeof parsed.subjectsBlueprint !== "object" || Object.keys(parsed.subjectsBlueprint).length === 0) {
-      console.warn("[deep-research-exam-blueprint] Empty or invalid AI response, generating robust blueprint heuristics");
-      const fallbackBlueprint2 = {};
-      const isDutch = normExam.toLowerCase().includes("colloquium") || normCountry.toLowerCase().includes("netherland");
-      const defaultNomenclature2 = isDutch ? "Domains" : normExam.toLowerCase().includes("ap") ? "Units" : "Chapters";
-      cleanSubjects.forEach((subj) => {
-        const lowerSubj = subj.toLowerCase();
-        let fallbackUnits = [
-          "Core Foundations & Principles",
-          "Advanced Theoretical Frameworks",
-          "Analytical Problem Solving",
-          "Applied Systems & Methods",
-          "Critical Evaluation & Case Studies",
-          "High-Yield Examination Traps"
+    const isDutch = normExam.toLowerCase().includes("colloquium") || normCountry.toLowerCase().includes("netherland");
+    const defaultNomenclature = isDutch ? "Domains" : normExam.toLowerCase().includes("ap") ? "Units" : "Chapters";
+    const getAuthenticFallbackUnits = (subj) => {
+      const lower = subj.toLowerCase();
+      if (catalogMatch && catalogMatch.subjects[subj]) {
+        return catalogMatch.subjects[subj].coreUnits;
+      }
+      if (lower.includes("quant") || lower.includes("math") || lower.includes("calc")) {
+        return [
+          "Number System & Divisibility",
+          "HCF and LCM",
+          "Simplification & Square Roots",
+          "Percentages",
+          "Ratio, Proportion & Variation",
+          "Average",
+          "Simple & Compound Interest",
+          "Profit, Loss and Discount",
+          "Time and Work & Efficiency",
+          "Pipes and Cisterns",
+          "Speed, Time and Distance",
+          "Boats and Streams",
+          "Algebraic Identities & Polynomials",
+          "Linear Equations & Inequalities",
+          "Geometry (Triangles, Polygons, Lines)",
+          "Circles, Chords & Tangents",
+          "Mensuration 2D (Area & Perimeter)",
+          "Mensuration 3D (Surface Area & Volume)",
+          "Trigonometric Ratios & Identities",
+          "Heights and Distances",
+          "Data Interpretation (Bar, Pie, Table & Line Charts)"
         ];
-        if (lowerSubj.includes("math") || lowerSubj.includes("calc")) {
-          fallbackUnits = [
-            "Limits, Continuity & Differentiability",
-            "Derivatives & Applications of Derivatives",
-            "Integrals & Fundamental Theorem of Calculus",
-            "Differential Equations & Mathematical Modeling",
-            "Matrices, Determinants & Linear Algebra",
-            "Vector Algebra & Three-Dimensional Geometry",
-            "Probability, Distributions & Permutations",
-            "Relations, Functions & Inverse Trigonometry"
-          ];
-        } else if (lowerSubj.includes("phys")) {
-          fallbackUnits = [
-            "Units, Measurements & Vector Kinematics",
-            "Newton\u2019s Laws of Motion & Friction",
-            "Work, Energy, Power & Collisions",
-            "Rotational Dynamics & Gravity",
-            "Thermodynamics & Kinetic Theory",
-            "Oscillations, Waves & Acoustics",
-            "Electrostatics & Current Electricity",
-            "Electromagnetism & AC Circuits",
-            "Optics & Modern Physics"
-          ];
-        } else if (lowerSubj.includes("chem")) {
-          fallbackUnits = [
-            "Atomic Structure & Chemical Bonding",
-            "Thermodynamics & Equilibrium",
-            "Electrochemistry & Kinetics",
-            "Solutions & Colligative Properties",
-            "Coordination & Transition Elements",
-            "Organic Hydrocarbons & Haloalkanes",
-            "Alcohols, Phenols & Carbonyl Compounds",
-            "Biomolecules & Applied Chemistry"
-          ];
-        } else if (lowerSubj.includes("bio")) {
-          fallbackUnits = [
-            "Diversity of Living Organisms",
-            "Cell Biology & Biomolecules",
-            "Plant Physiology & Photosynthesis",
-            "Human Physiology & Organ Systems",
-            "Genetics, Inheritance & Evolution",
-            "Biotechnology & Applications",
-            "Ecology & Environmental Systems"
-          ];
-        } else if (lowerSubj.includes("hist")) {
-          fallbackUnits = [
-            "Ancient & Classical Civilizations",
-            "Feudal Orders & Global Trade Networks",
-            "Renaissance, Enlightenment & Science",
-            "Industrialization & Imperial Politics",
-            "Decolonization & Nationalist Movements",
-            "The World Wars & Cold War Dynamics"
-          ];
-        } else if (lowerSubj.includes("econ")) {
-          fallbackUnits = [
-            "Consumer Choice, Demand & Elasticity",
-            "Production, Costs & Market Structures",
-            "National Income & Macro Aggregates",
-            "Money, Banking & Monetary Policy",
-            "Fiscal Policy, Budgets & Deficits",
-            "International Trade & Exchange Rates"
-          ];
-        } else if (lowerSubj.includes("geog")) {
-          fallbackUnits = [
-            "Geomorphology & Tectonic Systems",
-            "Climatology & Atmospheric Dynamics",
-            "Hydrology, Ocean Currents & Water Cycles",
-            "Biogeography & Soil Geography",
-            "Human Geography & Demographics",
-            "Economic Geography & Global Resources"
-          ];
-        } else if (lowerSubj.includes("eng")) {
-          fallbackUnits = [
-            "Critical Reading & Complex Inferences",
-            "Literary Devices, Style & Rhetoric",
-            "Argumentative & Analytical Essays",
-            "Advanced Grammar, Syntax & Transformations",
-            "Vocabulary, Idioms & Tone Analysis"
-          ];
-        }
-        fallbackBlueprint2[subj] = {
-          totalMarks: 100,
-          totalQuestions: 40,
-          attemptRequired: 40,
-          markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
-          questionTypes: ["Multiple Choice Questions", "Assertion & Reasoning", "Conceptual Problem Solving"],
-          nomenclature: defaultNomenclature2,
-          coreUnits: fallbackUnits,
-          examTone: `Standardized examination level tailored for ${normExam} (${normGrade})`,
-          officialSource: `${normExam} Curriculum Standards`
+      }
+      if (lower.includes("reason") || lower.includes("intel") || lower.includes("logic")) {
+        return [
+          "Analogies & Semantic Relationships",
+          "Classification & Odd One Out",
+          "Coding-Decoding & Letter Shifting",
+          "Number Series & Alphabet Series",
+          "Missing Numbers in Figures & Matrix",
+          "Blood Relations",
+          "Direction and Distance Sense",
+          "Order and Ranking",
+          "Syllogisms & Logical Deductions",
+          "Venn Diagrams",
+          "Mathematical Operations & Sign Interchange",
+          "Clock and Calendar",
+          "Dice and Cube Problems",
+          "Paper Folding and Cutting",
+          "Mirror and Water Images",
+          "Counting of Figures (Triangles & Squares)",
+          "Statement and Assumptions / Conclusions"
+        ];
+      }
+      if (lower.includes("eng") || lower.includes("comprehension") || lower.includes("verbal")) {
+        return [
+          "Spotting the Error (Subject-Verb, Tenses, Prepositions)",
+          "Sentence Improvement & Phrase Replacement",
+          "Fill in the Blanks (Collocations & Connectors)",
+          "Synonyms and Antonyms",
+          "Idioms and Phrases",
+          "One Word Substitution",
+          "Spelling Check & Misspelt Words",
+          "Active and Passive Voice Transformations",
+          "Direct and Indirect Speech (Narration)",
+          "Para Jumbles & Sentence Rearrangement",
+          "Cloze Test (Passage Completion)",
+          "Reading Comprehension (Inference & Tone)"
+        ];
+      }
+      if (lower.includes("aware") || lower.includes("gk") || lower.includes("gs") || lower.includes("general knowledge")) {
+        return [
+          "Ancient Indian History (Harappan, Vedic, Mauryas, Guptas)",
+          "Medieval Indian History (Delhi Sultanate, Mughals, Marathas)",
+          "Modern Indian History & National Movement",
+          "Indian Constitution & Polity (Articles, Amendments, Judiciary)",
+          "Physical & Indian Geography (Rivers, Mountains, Climate, Soils)",
+          "Indian Economy, Fiscal Policy & Budgetary System",
+          "General Science: Everyday Physics & Mechanics",
+          "General Science: Chemistry & Industrial Compounds",
+          "General Science: Human Biology, Diseases & Nutrition",
+          "Static GK: Classical Dances, Music & Festivals of India",
+          "Static GK: National Parks, Wildlife Sanctuaries & Ramsar Sites",
+          "Current Affairs, Sports & Government Welfare Schemes"
+        ];
+      }
+      if (lower.includes("phys")) {
+        return [
+          "Units and Measurements",
+          "Motion in a Straight Line",
+          "Motion in a Plane & Vectors",
+          "Laws of Motion & Friction",
+          "Work, Energy and Power",
+          "System of Particles & Rotational Dynamics",
+          "Gravitation",
+          "Mechanical Properties of Solids & Fluids",
+          "Thermodynamics & Kinetic Theory",
+          "Oscillations & Waves",
+          "Electrostatics & Capacitance",
+          "Current Electricity",
+          "Magnetic Effects of Current & Magnetism",
+          "Electromagnetic Induction & Alternating Current",
+          "Ray Optics and Optical Instruments",
+          "Wave Optics",
+          "Dual Nature of Radiation and Matter",
+          "Atoms & Nuclei",
+          "Semiconductor Electronics"
+        ];
+      }
+      if (lower.includes("chem")) {
+        return [
+          "Some Basic Concepts of Chemistry (Mole Concept)",
+          "Structure of Atom",
+          "Classification of Elements & Periodicity",
+          "Chemical Bonding and Molecular Structure",
+          "Chemical Thermodynamics",
+          "Equilibrium (Chemical & Ionic)",
+          "Redox Reactions & Electrochemistry",
+          "Chemical Kinetics",
+          "Solutions & Colligative Properties",
+          "Coordination Compounds",
+          "d- and f-Block Elements",
+          "p-Block Elements",
+          "Organic Chemistry: Basic Principles (GOC)",
+          "Hydrocarbons",
+          "Haloalkanes and Haloarenes",
+          "Alcohols, Phenols and Ethers",
+          "Aldehydes, Ketones and Carboxylic Acids",
+          "Organic Compounds Containing Nitrogen (Amines)",
+          "Biomolecules"
+        ];
+      }
+      if (lower.includes("bio")) {
+        return [
+          "The Living World & Biological Classification",
+          "Plant Kingdom",
+          "Animal Kingdom",
+          "Morphology & Anatomy of Flowering Plants",
+          "Structural Organisation in Animals",
+          "Cell: The Unit of Life & Cell Cycle",
+          "Biomolecules",
+          "Photosynthesis & Respiration in Plants",
+          "Plant Growth and Development",
+          "Breathing and Exchange of Gases",
+          "Body Fluids and Circulation",
+          "Excretory Products and Elimination",
+          "Locomotion and Movement",
+          "Neural & Chemical Coordination",
+          "Reproduction in Organisms & Flowering Plants",
+          "Human Reproduction & Reproductive Health",
+          "Principles of Inheritance and Variation (Genetics)",
+          "Molecular Basis of Inheritance",
+          "Evolution",
+          "Human Health and Disease",
+          "Biotechnology: Principles and Processes",
+          "Biotechnology and its Applications",
+          "Organisms and Populations",
+          "Ecosystem, Biodiversity and Conservation"
+        ];
+      }
+      return [
+        "Core Syllabus Principles & Definitions",
+        "Key Historical Developments & Models",
+        "Fundamental Methodologies & Frameworks",
+        "Applied Analytical Techniques",
+        "Comparative Perspectives & Evaluation",
+        "Contemporary Problems & Case Studies"
+      ];
+    };
+    if (!parsed || !parsed.subjectsBlueprint || typeof parsed.subjectsBlueprint !== "object" || Object.keys(parsed.subjectsBlueprint).length === 0) {
+      console.warn("[deep-research-exam-blueprint] Empty or invalid AI response, generating robust catalog-grounded blueprint");
+      const fallbackBlueprint = {};
+      cleanSubjects.forEach((subj) => {
+        const catalogSubject = catalogMatch?.subjects[subj];
+        const isEnglish = /english|language|reading|verbal|literature/i.test(subj);
+        fallbackBlueprint[subj] = catalogSubject || {
+          subjectName: subj,
+          totalMarks: catalogMatch?.examOverview?.totalExamMarks ? Math.round(catalogMatch.examOverview.totalExamMarks / cleanSubjects.length) : 50,
+          totalQuestions: catalogMatch?.examOverview?.totalQuestions ? Math.round(catalogMatch.examOverview.totalQuestions / cleanSubjects.length) : 25,
+          attemptRequired: catalogMatch?.examOverview?.totalQuestions ? Math.round(catalogMatch.examOverview.totalQuestions / cleanSubjects.length) : 25,
+          markingScheme: catalogMatch?.examOverview?.negativeFormula || "+2 for correct, -0.50 for incorrect, 0 for unattempted",
+          negativeMarking: catalogMatch?.examOverview?.hasNegativeMarking ? -0.5 : 0,
+          marksPerCorrect: 2,
+          questionFormats: ["Single Choice Objective MCQ", "Statement & Concept Verification"],
+          mcqStyle: {
+            optionsCount: 4,
+            style: `Standard assessment style for ${normExam}`,
+            negativePenalty: "-0.50 marks"
+          },
+          subjectiveStyle: {
+            hasSubjective: false,
+            format: "N/A - Objective CBT Only",
+            wordLimits: "N/A",
+            markingRubric: "N/A"
+          },
+          nomenclature: defaultNomenclature,
+          coreUnits: getAuthenticFallbackUnits(subj),
+          detailedNotesGuidelines: "Comprehensive theorems, standard formulas, solved examples, and exam traps.",
+          revisionGuidelines: "High-yield formula cheat sheet, shortcut tables, and quick identity sheets.",
+          essayTone: isEnglish ? "Formal, structured thesis, standard academic prose, precise grammatical register, no slang" : null,
+          examTone: `Official curriculum standard tailored for ${normExam} (${normGrade})`,
+          officialSource: catalogMatch?.examOverview?.officialAuthority || `${normExam} Official Standards`
         };
       });
       parsed = {
+        examOverview: catalogMatch?.examOverview || {
+          examName: normExam,
+          country: normCountry,
+          officialAuthority: `${normExam} Examination Authority`,
+          examType: "Standardized Academic Assessment",
+          examFormat: "Computer Based Examination (CBT)",
+          totalExamMarks: 50 * cleanSubjects.length,
+          totalQuestions: 25 * cleanSubjects.length,
+          hasSubjective: false,
+          hasNegativeMarking: true,
+          negativeFormula: "+2 correct, -0.50 incorrect"
+        },
         exam: normExam,
         grade: normGrade,
         country: normCountry,
-        subjectsBlueprint: fallbackBlueprint2
+        subjectsBlueprint: fallbackBlueprint
+      };
+    }
+    if (!parsed.examOverview) {
+      parsed.examOverview = catalogMatch?.examOverview || {
+        examName: normExam,
+        country: normCountry,
+        officialAuthority: `${normExam} Official Conducting Board`,
+        examType: "Standardized Academic Assessment",
+        examFormat: "Computer Based Examination (CBT)",
+        totalExamMarks: 50 * cleanSubjects.length,
+        totalQuestions: 25 * cleanSubjects.length,
+        hasSubjective: false,
+        hasNegativeMarking: true,
+        negativeFormula: "+2 correct, -0.50 incorrect"
       };
     }
     if (parsed && parsed.subjectsBlueprint && typeof parsed.subjectsBlueprint === "object") {
@@ -4160,28 +4796,48 @@ Format:
           if (parts[parts.length - 1].trim().length >= 2) cleanKey = parts[parts.length - 1].trim();
         }
         cleanKey = cleanKey.replace(/\s*\([^)]*(?:Exam|Examination|Board|Level|Grade|Colloquium|Curriculum)[^)]*\)\s*/gi, " ").trim();
-        normalizedBlueprint[cleanKey || rawKey] = parsed.subjectsBlueprint[rawKey];
+        const subjData = parsed.subjectsBlueprint[rawKey];
+        if (subjData && Array.isArray(subjData.coreUnits)) {
+          const hasGenericPlaceholders = subjData.coreUnits.some(
+            (u) => /core foundations|theoretical frameworks|applied systems|critical evaluation|high-yield examination traps/i.test(u)
+          );
+          if (hasGenericPlaceholders || subjData.coreUnits.length <= 4) {
+            subjData.coreUnits = getAuthenticFallbackUnits(cleanKey || rawKey);
+          }
+        }
+        normalizedBlueprint[cleanKey || rawKey] = subjData;
       });
       parsed.subjectsBlueprint = normalizedBlueprint;
     }
     cleanSubjects.forEach((subj) => {
       const match = Object.keys(parsed.subjectsBlueprint).find((k) => k.toLowerCase() === subj.toLowerCase());
       if (!match) {
-        parsed.subjectsBlueprint[subj] = fallbackBlueprint[subj] || {
-          totalMarks: 100,
-          totalQuestions: 40,
-          attemptRequired: 40,
-          markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
-          questionTypes: ["Multiple Choice Questions", "Assertion & Reasoning", "Conceptual Questions"],
+        const isEnglish = /english|language|reading|verbal|literature/i.test(subj);
+        parsed.subjectsBlueprint[subj] = catalogMatch?.subjects[subj] || {
+          subjectName: subj,
+          totalMarks: 50,
+          totalQuestions: 25,
+          attemptRequired: 25,
+          markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
+          negativeMarking: -0.5,
+          marksPerCorrect: 2,
+          questionFormats: ["Single Choice Objective MCQ", "Conceptual Questions"],
+          mcqStyle: {
+            optionsCount: 4,
+            style: `Standard examination questions for ${normExam}`,
+            negativePenalty: "-0.50 marks"
+          },
+          subjectiveStyle: {
+            hasSubjective: false,
+            format: "N/A - Objective CBT Only",
+            wordLimits: "N/A",
+            markingRubric: "N/A"
+          },
           nomenclature: defaultNomenclature,
-          coreUnits: [
-            "Foundational Principles & Concepts",
-            "Advanced Core Theory",
-            "Analytical Problem Solving",
-            "Real-World Applications & Case Studies",
-            "High-Yield Examination Topics",
-            "Comprehensive Examination Review"
-          ],
+          coreUnits: getAuthenticFallbackUnits(subj),
+          detailedNotesGuidelines: "Formulas, theorems, solved problems, and traps.",
+          revisionGuidelines: "Formula sheet and summary notes.",
+          essayTone: isEnglish ? "Formal, structured thesis, standard academic prose, precise grammatical register, no slang" : null,
           examTone: `Official curriculum standard for ${normExam}`,
           officialSource: `${normExam} Guidelines`
         };
@@ -4191,24 +4847,48 @@ Format:
   } catch (error) {
     console.error("[deep-research-exam-blueprint] Error:", error);
     const cleanSubjects = Array.isArray(req.body?.subjects) ? req.body.subjects : ["General Studies"];
-    const fallbackBlueprint2 = {};
+    const fallbackBlueprint = {};
     cleanSubjects.forEach((subj) => {
-      fallbackBlueprint2[String(subj)] = {
-        totalMarks: 100,
-        totalQuestions: 40,
-        attemptRequired: 40,
-        markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
-        questionTypes: ["Multiple Choice Questions", "Assertion & Reasoning", "Conceptual Questions"],
-        coreUnits: ["Core Syllabus Concepts", "High-Yield Topics", "Problem Solving"],
+      fallbackBlueprint[String(subj)] = {
+        subjectName: String(subj),
+        totalMarks: 50,
+        totalQuestions: 25,
+        attemptRequired: 25,
+        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
+        negativeMarking: -0.5,
+        marksPerCorrect: 2,
+        questionFormats: ["Multiple Choice Questions", "Assertion & Reasoning", "Conceptual Questions"],
+        nomenclature: "Chapters",
+        coreUnits: [
+          "Number System & Core Arithmetic",
+          "Algebraic Expressions & Equations",
+          "Geometry & Trigonometry",
+          "Data Analysis & Practice Sets"
+        ],
+        detailedNotesGuidelines: "Standard formulas and concept derivations.",
+        revisionGuidelines: "Formula cheat sheets and shortcuts.",
+        essayTone: null,
         examTone: "Official examination curriculum standard",
         officialSource: "Curriculum Standards"
       };
     });
     return res.json({
+      examOverview: {
+        examName: req.body?.examName || "Standardized Exam",
+        country: req.body?.country || "Global",
+        officialAuthority: "Official Examination Authority",
+        examType: "Standardized Academic Assessment",
+        examFormat: "Computer Based Examination (CBT)",
+        totalExamMarks: 50 * cleanSubjects.length,
+        totalQuestions: 25 * cleanSubjects.length,
+        hasSubjective: false,
+        hasNegativeMarking: true,
+        negativeFormula: "+2 correct, -0.50 incorrect"
+      },
       exam: req.body?.examName || "Standardized Exam",
       grade: req.body?.grade || "Senior",
       country: req.body?.country || "Global",
-      subjectsBlueprint: fallbackBlueprint2
+      subjectsBlueprint: fallbackBlueprint
     });
   }
 });

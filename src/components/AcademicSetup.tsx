@@ -577,8 +577,11 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
       if (res.ok) {
         const data = await res.json();
-        if (data && data.subjectsBlueprint) {
-          researchedBlueprint = data.subjectsBlueprint;
+        if (data) {
+          researchedBlueprint = data.subjectsBlueprint || data;
+          if (data.examOverview) {
+            safeSetItem('exam_overview', JSON.stringify(data.examOverview));
+          }
         }
       }
     } catch (apiErr) {
@@ -612,6 +615,13 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     if (researchedBlueprint) {
       safeSetItem('user_exam_blueprint', JSON.stringify(researchedBlueprint));
       safeSetItem('academic_exam_blueprint', JSON.stringify(researchedBlueprint));
+
+      // STRICT ISOLATED STORAGE PER SUBJECT (No Cross-Subject Contamination)
+      Object.keys(researchedBlueprint).forEach((subj) => {
+        const cleanSubjKey = subj.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const subjDataStr = JSON.stringify(researchedBlueprint[subj]);
+        safeSetItem(`exam_subject_blueprint_${cleanSubjKey}`, subjDataStr);
+      });
     }
 
     safeSetItem('onboarding_completed', 'true');
@@ -640,6 +650,12 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
 
       if (researchedBlueprint) {
         safeSetItem(`user_exam_blueprint_${activeUid}`, JSON.stringify(researchedBlueprint));
+
+        // Isolated per-subject key for user
+        Object.keys(researchedBlueprint).forEach((subj) => {
+          const cleanSubjKey = subj.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+          safeSetItem(`exam_subject_blueprint_${cleanSubjKey}_${activeUid}`, JSON.stringify(researchedBlueprint[subj]));
+        });
       }
 
       safeSetItem(`academic_setup_completed_${activeUid}`, 'true');
@@ -675,6 +691,8 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         if (researchedBlueprint) {
           userDocPayload.examBlueprint = researchedBlueprint;
           userDocPayload.academicBlueprint = researchedBlueprint;
+          userDocPayload.subjectsBlueprint = researchedBlueprint;
+          if (researchedOverview) userDocPayload.examOverview = researchedOverview;
           userDocPayload.blueprintLastUpdated = new Date().toISOString();
         }
 

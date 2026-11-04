@@ -1500,13 +1500,23 @@ Please evaluate this answer strictly according to your system rubric.`;
       const personaSuffix = PERSONAS[activePersona].promptSuffix;
 
       let scannerRoutingInstructions = "";
-      if (subject) {
-        if (subject === 'Physics') {
+      const currentActiveSubject = subject || safeGetItem('selected_subject') || safeGetItem('academic_subject') || safeGetItem('subject') || 'General Studies';
+      if (currentActiveSubject) {
+        const sLower = currentActiveSubject.toLowerCase();
+        if (sLower.includes('phys')) {
           scannerRoutingInstructions += "\n\nAnalyze this image specifically for Physics concepts. Extract any formulas, identify variables, and solve step-by-step with SI units.";
-        } else if (subject === 'Chemistry') {
+        } else if (sLower.includes('chem')) {
           scannerRoutingInstructions += "\n\nAnalyze this image for Chemistry. Accurately read chemical equations, structural formulas, or IUPAC names and provide balanced reactions or detailed mechanisms.";
-        } else if (subject === 'Biology') {
+        } else if (sLower.includes('bio')) {
           scannerRoutingInstructions += "\n\nAnalyze this image for Biology. Identify anatomical structures, cellular processes, or genetic sequences, and provide detailed functional explanations.";
+        } else if (sLower.includes('math') || sLower.includes('quant')) {
+          scannerRoutingInstructions += "\n\nAnalyze this image specifically for Quantitative Aptitude / Mathematics. Extract numerical equations, geometry diagrams, and solve with standard step-by-step theorems and shortcut verification.";
+        } else if (sLower.includes('reason') || sLower.includes('intel')) {
+          scannerRoutingInstructions += "\n\nAnalyze this image specifically for General Intelligence and Reasoning. Decipher logic patterns, syllogisms, or matrix diagrams and outline the exact deductive reasoning rule.";
+        } else if (sLower.includes('eng') || sLower.includes('comprehension')) {
+          scannerRoutingInstructions += "\n\nAnalyze this image specifically for English Language and Comprehension. Identify grammar rules, sentence corrections, vocabulary context, or reading passage inferences.";
+        } else if (sLower.includes('aware') || sLower.includes('gk') || sLower.includes('polity') || sLower.includes('hist')) {
+          scannerRoutingInstructions += "\n\nAnalyze this image specifically for General Knowledge and Social Sciences. Identify historical events, constitutional articles, or geographical data.";
         }
       }
       if (handwritten) {
@@ -1519,7 +1529,9 @@ Please evaluate this answer strictly according to your system rubric.`;
         ? SYSTEM_INSTRUCTION_NURSERY + personaSuffix + scannerRoutingInstructions
         : SYSTEM_INSTRUCTION_TEXT_CHAT + personaSuffix;
       formData.append('customSystemInstruction', baseSystemInstruction);
-      formData.append('profileContext', getProfileContext());
+      formData.append('profileContext', getProfileContext(currentActiveSubject));
+      formData.append('subject', currentActiveSubject);
+      formData.append('stream', currentActiveSubject);
       formData.append('gradeLevel', safeGetItem('academic_grade') || '11th Grade (Junior)');
 
       // Optimize history: Keep last 6 turns and prune distant massive JSON payloads to eliminate latency on long inputs

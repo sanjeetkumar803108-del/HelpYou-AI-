@@ -886,45 +886,25 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     const curriculum = profile.region || 'National Board';
     const subject = customTopic || profile.stream || stream || 'General Academic';
 
-    // 1. Immediately transition to the AI Magic Tutor tab and dispatch the question, text, and image file
-    if (onNavigateToTab) {
-      onNavigateToTab('aitutor');
-    }
-
-    const promptText = answerText || "[See attached handwritten answer image]";
-
-    setTimeout(() => {
-      const event = new CustomEvent('study-scanner-send-to-tutor', {
-        detail: {
-          text: promptText,
-          imageFile: uploadedFile,
-          subject: subject,
-          handwritten: !!uploadedFile,
-          isEvaluation: true,
-          evaluationDetails: {
-            subjectTopic: subject,
-            userGrade: userGrade,
-            questionText: questionText,
-            userAnswer: promptText
-          }
-        }
-      });
-      window.dispatchEvent(event);
-    }, 150);
-
-    // 2. Also update evaluations locally if they go back
-    if (uploadedFile) {
-      if (isMountedRef.current) {
-        setEvaluations(prev => ({
-          ...prev,
-          [index]: "✨ **Handwritten Answer Image Transferred!**\n\nYour handwritten photo has been uploaded directly to the **AI Tutor** for deep step-marking evaluation. Please check the AI Tutor tab for your live interactive feedback!"
-        }));
-        setEvaluatingIndex(null);
-      }
-      return;
-    }
-
     try {
+      let imageBase64: string | undefined = undefined;
+      if (uploadedFile) {
+        try {
+          imageBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(uploadedFile);
+          });
+        } catch (fileErr) {
+          console.error("Failed to read answer image file:", fileErr);
+        }
+      }
+
+      const qItem = questions?.[index];
+      const rubric = getKeyRubricPoints(qItem);
+      const modelAns = getExpectedAnswer(qItem);
+
       const response = await fetch(getApiUrl('/api/evaluate-answer'), {
         method: 'POST',
         headers: {
@@ -939,6 +919,10 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
           country: profile.country,
           curriculum,
           subject,
+          image: imageBase64,
+          imageBase64: imageBase64,
+          scoringRubric: rubric.length > 0 ? rubric : undefined,
+          modelAnswer: modelAns || undefined,
         }),
       });
 
@@ -956,6 +940,10 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     } catch (err: any) {
       if (isMountedRef.current) {
         console.error("Error evaluating answer:", err);
+        setEvaluations(prev => ({
+          ...prev,
+          [index]: `⚠️ **Evaluation Error:** ${err?.message || "Failed to evaluate answer. Please try again."}`
+        }));
       }
     } finally {
       if (isMountedRef.current) {
@@ -1706,6 +1694,13 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                           <div className="text-[10px] text-purple-600 font-bold animate-pulse flex items-center gap-1 mt-1 pl-2">
                             <Sparkles className="w-3 h-3 text-amber-500 animate-spin" />
                             Transcribing handwritten answer...
+                          </div>
+                        )}
+
+                        {evaluatingIndex === index && (
+                          <div className="mt-3 bg-purple-50/80 border border-purple-100 rounded-2xl p-3.5 flex items-center gap-2.5 text-xs text-purple-700 font-semibold animate-pulse shadow-sm">
+                            <Loader2 className="w-4 h-4 text-purple-600 animate-spin shrink-0" />
+                            <span>Magic Tutor is evaluating your answer with step-marking...</span>
                           </div>
                         )}
 

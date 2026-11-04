@@ -381,3 +381,4 @@ export function saveExamSchedule(schedule: ExamScheduleData, uid?: string): void
     }
   } catch (_) {}
 }
+

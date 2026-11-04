@@ -643,6 +643,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     }, 3800);
 
     let researchedBlueprint: any = null;
+    let researchedOverview: any = null;
 
     try {
       const res = await fetch(getApiUrl('/api/deep-research-exam-blueprint'), {
@@ -661,7 +662,11 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         if (data) {
           researchedBlueprint = data.subjectsBlueprint || data;
           if (data.examOverview) {
+            researchedOverview = data.examOverview;
             safeSetItem('exam_overview', JSON.stringify(data.examOverview));
+            if (data.examOverview.examSchedule) {
+              safeSetItem('exam_schedule', JSON.stringify(data.examOverview.examSchedule));
+            }
           }
         }
       }
@@ -741,6 +746,13 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         });
       }
 
+      if (researchedOverview) {
+        safeSetItem(`exam_overview_${activeUid}`, JSON.stringify(researchedOverview));
+        if (researchedOverview.examSchedule) {
+          safeSetItem(`exam_schedule_${activeUid}`, JSON.stringify(researchedOverview.examSchedule));
+        }
+      }
+
       safeSetItem(`academic_setup_completed_${activeUid}`, 'true');
       safeSetItem(`onboarding_completed_${activeUid}`, 'true');
       safeSetItem(`isOnboardingComplete_${activeUid}`, 'true');
@@ -786,6 +798,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
           };
           if (researchedOverview) {
             blueprintPayload.examOverview = researchedOverview;
+            if (researchedOverview.examSchedule) {
+              blueprintPayload.examSchedule = researchedOverview.examSchedule;
+            }
           }
           await setDoc(doc(db, 'users', activeUid), blueprintPayload, { merge: true }).catch(err => {
             console.warn('[AcademicSetup] Blueprint write error (size limit or offline):', err);

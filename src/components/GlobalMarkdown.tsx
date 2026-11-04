@@ -594,6 +594,15 @@ const CodeBlock = memo(({ inline, className, children, ...props }: any) => {
     textColor = 'text-cyan-300';
   }
 
+  let displayCode = rawContent.trim();
+  // Strip leading duplicate language tag if LLM output e.g. "python def ..." or "python\ndef ..."
+  displayCode = displayCode.replace(/^(?:python3?|py|javascript|typescript|js|ts|cpp|java|c|bash|sh|graph|diagram)\s*\n?/i, '').trim();
+
+  // If after stripping, the block is completely empty or meaningless, suppress rendering
+  if (!displayCode) {
+    return null;
+  }
+
   return (
     <div className={`my-3.5 rounded-2xl border ${borderColor} bg-zinc-950 text-zinc-100 shadow-md overflow-hidden text-left transition-all`}>
       <div className="bg-zinc-900/95 px-3.5 py-2 border-b border-zinc-800/80 flex items-center justify-between">
@@ -623,7 +632,7 @@ const CodeBlock = memo(({ inline, className, children, ...props }: any) => {
 
       <div className="p-3.5 overflow-x-auto text-xs sm:text-[13px] font-mono leading-relaxed select-text">
         <pre className={`bg-transparent p-0 m-0 border-0 font-mono ${textColor} whitespace-pre`}>
-          <code>{rawContent.trim()}</code>
+          <code>{displayCode}</code>
         </pre>
       </div>
     </div>
@@ -706,16 +715,43 @@ export function healMarkdownTables(text: string): string {
   let str = String(text);
 
   // 1. Expand single-line collapsed tables where rows were output joined by ||
-  // In markdown tables, row 1 ends with | and row 2 starts with |, producing || or ||:---
-  if (/\|\|/.test(str) && (/:?-+:?/.test(str) || /\|[-: ]+\|/.test(str))) {
+  if (/\|\|/.test(str)) {
     str = str.replace(/\|\|\s*/g, '|\n| ');
   }
 
-  // 2. Ensure table has an empty line before and after so remark-gfm parses it cleanly as a block table
-  str = str.replace(/([^\n])\n([ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t]*:?-[^\n]+\|)/g, '$1\n\n$2');
-  str = str.replace(/([ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t]*:?-[^\n]+\|[ \t]*(?:\n[ \t]*\|[^\n]+\|[ \t]*)+)\n([^\n|])/g, '$1\n\n$2');
+  // 2. Line-by-line inspection to ensure every table is isolated with empty lines before and after
+  const lines = str.split('\n');
+  const result: string[] = [];
+  let inTable = false;
 
-  return str;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isRow = /^[ \t]*\|.+?\|[ \t]*$/.test(line);
+    const nextLine = lines[i + 1] || '';
+    const isNextDivider = /^[ \t]*\|[ \t]*:?-[ \t-:|]+:?[ \t]*\|[ \t]*$/.test(nextLine);
+
+    if (!inTable && isRow && isNextDivider) {
+      if (result.length > 0 && result[result.length - 1].trim() !== '') {
+        result.push('');
+      }
+      inTable = true;
+      result.push(line);
+    } else if (inTable) {
+      if (isRow) {
+        result.push(line);
+      } else {
+        inTable = false;
+        if (result.length > 0 && result[result.length - 1].trim() !== '') {
+          result.push('');
+        }
+        result.push(line);
+      }
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
 }
 
 /**
@@ -735,7 +771,15 @@ export function healGlobalMarkdown(content: string): string {
   // Step 0: Pre-heal collapsed tables so rows joined with || become proper newline-separated rows
   let text = healMarkdownTables(String(content));
 
-  // Step 0.5: Protect Markdown Tables so table column pipes (|) and math cells ($x_i$, $f_i$) are never mangled
+  // Step 1: Protect Code Blocks (```...```) and Inline Code (`...`) FIRST before any math/text transformation
+  const codePlaceholders: string[] = [];
+  text = text.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (match) => {
+    const token = `___CODE_BLOCK_${codePlaceholders.length}___`;
+    codePlaceholders.push(match);
+    return token;
+  });
+
+  // Step 2: Protect Markdown Tables so table column pipes (|) and math cells ($x_i$, $f_i$) are never mangled
   const tablePlaceholders: string[] = [];
   const TABLE_REGEX = /(?:^|\n)([ \t]*\|[^\n]+\|[ \t]*\n[ \t]*\|[ \t]*:?-[^\n]+\|[ \t]*(?:\n[ \t]*\|[^\n]+\|[ \t]*)+)/g;
   text = text.replace(TABLE_REGEX, (_match, table) => {
@@ -744,15 +788,8 @@ export function healGlobalMarkdown(content: string): string {
     return `\n\n${token}\n\n`;
   });
 
+  // Step 3: Clean LaTeX math symbols on non-code, non-table content
   text = cleanMarkdownMath(text);
-
-  // 1. Protect Code Blocks (```...```) and Inline Code (`...`)
-  const codePlaceholders: string[] = [];
-  text = text.replace(/(```[\s\S]*?```|`[^`\n]+`)/g, (match) => {
-    const token = `___CODE_BLOCK_${codePlaceholders.length}___`;
-    codePlaceholders.push(match);
-    return token;
-  });
 
   // 2. Protect existing block math ($$...$$) and inline math ($...$)
   const mathPlaceholders: string[] = [];

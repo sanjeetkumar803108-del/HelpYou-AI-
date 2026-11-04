@@ -482,6 +482,252 @@ function findCatalogExamBlueprint(examName, country) {
   return null;
 }
 
+// src/utils/examSchedule.ts
+function computeDaysRemaining(dateStr) {
+  if (!dateStr || typeof dateStr !== "string") {
+    return { days: 0, adjustedDate: dateStr || "" };
+  }
+  const now = /* @__PURE__ */ new Date();
+  let parsed = new Date(dateStr);
+  if (isNaN(parsed.getTime())) {
+    const parts = dateStr.trim().split(/\s+/);
+    if (parts.length === 2) {
+      parsed = /* @__PURE__ */ new Date(`${parts[0]} 1, ${parts[1]}`);
+    }
+  }
+  if (isNaN(parsed.getTime())) {
+    return { days: 0, adjustedDate: dateStr };
+  }
+  if (parsed.getTime() < now.getTime()) {
+    while (parsed.getTime() < now.getTime()) {
+      parsed.setFullYear(parsed.getFullYear() + 1);
+    }
+  }
+  const diffMs = parsed.getTime() - now.getTime();
+  const days = Math.max(0, Math.ceil(diffMs / (1e3 * 60 * 60 * 24)));
+  const formatted = parsed.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+  return { days, adjustedDate: formatted };
+}
+function resolveUpcomingExamDate(monthIndex, day) {
+  const current = /* @__PURE__ */ new Date();
+  let target = new Date(current.getFullYear(), monthIndex, day);
+  if (target.getTime() <= current.getTime()) {
+    target = new Date(current.getFullYear() + 1, monthIndex, day);
+  }
+  const diffDays = Math.max(0, Math.ceil((target.getTime() - current.getTime()) / (1e3 * 60 * 60 * 24)));
+  const formattedDate = target.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+  return { date: formattedDate, days: diffDays, year: target.getFullYear() };
+}
+function resolveCatalogExamSchedule(examName, country = "") {
+  const clean = (examName || "").trim().toLowerCase();
+  const normCountry = (country || "").trim().toLowerCase();
+  if (clean.includes("ssc") && clean.includes("cgl")) {
+    const info = resolveUpcomingExamDate(8, 9);
+    return {
+      examName: "SSC CGL (Tier 1)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official SSC Calendar",
+      cycleLabel: `${info.year} Combined Graduate Level`,
+      officialSourceNote: "Staff Selection Commission Examination Calendar"
+    };
+  }
+  if (clean.includes("neet")) {
+    const info = resolveUpcomingExamDate(4, 3);
+    return {
+      examName: "NEET UG",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official NTA Annual Date",
+      cycleLabel: `${info.year} Medical Entrance`,
+      officialSourceNote: "National Testing Agency Examination Schedule"
+    };
+  }
+  if (clean.includes("jee") && (clean.includes("main") || !clean.includes("adv"))) {
+    const info = resolveUpcomingExamDate(3, 4);
+    return {
+      examName: "JEE Main (Session 2)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official NTA CBT Window",
+      cycleLabel: `${info.year} Engineering Entrance`,
+      officialSourceNote: "National Testing Agency Public Bulletin"
+    };
+  }
+  if (clean.includes("jee") && clean.includes("adv")) {
+    const info = resolveUpcomingExamDate(4, 24);
+    return {
+      examName: "JEE Advanced",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official IIT Admission Date",
+      cycleLabel: `${info.year} IIT Admission`,
+      officialSourceNote: "Joint Admission Board Schedule"
+    };
+  }
+  if (clean.includes("upsc") || clean.includes("ias") || clean.includes("civil services")) {
+    const info = resolveUpcomingExamDate(4, 24);
+    return {
+      examName: "UPSC CSE (Prelims)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official UPSC Calendar",
+      cycleLabel: `${info.year} Civil Services`,
+      officialSourceNote: "Union Public Service Commission Annual Program"
+    };
+  }
+  if (clean.includes("cbse")) {
+    const is10 = clean.includes("10") || clean.includes("x");
+    const info = resolveUpcomingExamDate(1, 15);
+    return {
+      examName: is10 ? "CBSE Class 10 Board" : "CBSE Class 12 Board",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official Board Datesheet",
+      cycleLabel: `${info.year} Annual Board`,
+      officialSourceNote: "Central Board of Secondary Education Notification"
+    };
+  }
+  if (clean.includes("icse") || clean.includes("isc")) {
+    const info = resolveUpcomingExamDate(1, 15);
+    return {
+      examName: clean.includes("isc") ? "ISC Class 12 Board" : "ICSE Class 10 Board",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official CISCE Datesheet",
+      cycleLabel: `${info.year} Board Examinations`,
+      officialSourceNote: "Council for the Indian School Certificate Examinations"
+    };
+  }
+  if (clean.includes("cuet")) {
+    const info = resolveUpcomingExamDate(4, 15);
+    return {
+      examName: "CUET UG",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official NTA Window",
+      cycleLabel: `${info.year} University Entrance`,
+      officialSourceNote: "National Testing Agency Public Notice"
+    };
+  }
+  if (clean.includes("cat") && !clean.includes("scat")) {
+    const info = resolveUpcomingExamDate(10, 29);
+    return {
+      examName: "CAT (IIM Entrance)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official Annual Date",
+      cycleLabel: `${info.year} Common Admission Test`,
+      officialSourceNote: "IIM CAT Organizing Committee"
+    };
+  }
+  if (clean.includes("gate")) {
+    const info = resolveUpcomingExamDate(1, 7);
+    return {
+      examName: "GATE Examination",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official IIT Schedule",
+      cycleLabel: `${info.year} Graduate Aptitude Test`,
+      officialSourceNote: "GATE Organizing Institute Bulletin"
+    };
+  }
+  if (clean.includes("clat")) {
+    const info = resolveUpcomingExamDate(11, 6);
+    return {
+      examName: "CLAT (NLU Entrance)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official Consortium Date",
+      cycleLabel: `${info.year} Law Admission`,
+      officialSourceNote: "Consortium of National Law Universities"
+    };
+  }
+  if (clean.includes("nda") || clean.includes("cds")) {
+    const info = resolveUpcomingExamDate(3, 19);
+    return {
+      examName: clean.includes("nda") ? "NDA & NA Examination" : "CDS Examination",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official UPSC Calendar",
+      cycleLabel: `${info.year} Defence Academy Entrance`,
+      officialSourceNote: "Union Public Service Commission"
+    };
+  }
+  if (clean.includes("sat") && !clean.includes("csat")) {
+    const info = resolveUpcomingExamDate(4, 2);
+    return {
+      examName: "Digital SAT",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official Administration Date",
+      cycleLabel: `${info.year} College Board Administration`,
+      officialSourceNote: "College Board International Testing Calendar"
+    };
+  }
+  if (clean.includes("act")) {
+    const info = resolveUpcomingExamDate(3, 11);
+    return {
+      examName: "ACT Test",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official National Test Date",
+      cycleLabel: `${info.year} National Testing Cycle`,
+      officialSourceNote: "ACT Official Examination Schedule"
+    };
+  }
+  if (clean.includes("bpsc")) {
+    const info = resolveUpcomingExamDate(8, 30);
+    return {
+      examName: "BPSC CCE (Prelims)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official BPSC Calendar",
+      cycleLabel: `${info.year} Combined Competitive`,
+      officialSourceNote: "Bihar Public Service Commission Examination Calendar"
+    };
+  }
+  if (clean.includes("csat") || clean.includes("suneung")) {
+    const info = resolveUpcomingExamDate(10, 19);
+    return {
+      examName: "CSAT (Suneung)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official KICE Schedule",
+      cycleLabel: `${info.year} University College Entrance`,
+      officialSourceNote: "Korea Institute for Curriculum and Evaluation"
+    };
+  }
+  if (clean.includes("gaokao")) {
+    const info = resolveUpcomingExamDate(5, 7);
+    return {
+      examName: "Gaokao (NCEE)",
+      examStartDate: info.date,
+      daysRemaining: info.days,
+      scheduleStatus: "Official National Schedule",
+      cycleLabel: `${info.year} National College Entrance`,
+      officialSourceNote: "Ministry of Education of the People's Republic of China"
+    };
+  }
+  const defaultInfo = resolveUpcomingExamDate(4, 15);
+  return {
+    examName: examName || "Standardized Examination",
+    examStartDate: defaultInfo.date,
+    daysRemaining: defaultInfo.days,
+    scheduleStatus: "Upcoming Examination Cycle",
+    cycleLabel: `${defaultInfo.year} Academic Cycle`,
+    officialSourceNote: "Official Curriculum Guidelines"
+  };
+}
+
 // src/utils/preVerifiedExams.ts
 var PRE_VERIFIED_EXAMS = [
   // 1. SSC CGL
@@ -4925,6 +5171,14 @@ You MUST research and return two major sections:
    - "hasSubjective": boolean (true if subjective/essay papers exist, false if strictly objective MCQ).
    - "hasNegativeMarking": boolean (true if negative marking exists).
    - "negativeFormula": Concise description of negative marking formula (e.g. "+2 correct, -0.50 incorrect" or "+4 correct, -1 incorrect").
+   - "examSchedule": {
+       "examStartDate": "Official or officially expected start date for the upcoming cycle (e.g. 'September 9, 2027', 'May 3, 2027', 'April 4, 2027', 'December 6, 2026'). Must be in clean English.",
+       "examEndDate": "Official end date if exam has a multi-day testing window (or same as start date)",
+       "daysRemaining": integer days remaining until exam start date from today,
+       "scheduleStatus": "Official Confirmed" | "Annual Schedule Announced" | "Tentative Notification Window",
+       "cycleLabel": "Clean label of upcoming cycle, e.g. '2027 Annual Cycle' or 'Tier 1 Examination Window'",
+       "officialSourceNote": "Official conducting authority notification / calendar source"
+     }
 
 2. "subjectsBlueprint":
    For EACH subject in ${JSON.stringify(cleanSubjects)}, extract and curate:
@@ -4974,7 +5228,15 @@ Format:
     "totalQuestions": 100,
     "hasSubjective": false,
     "hasNegativeMarking": true,
-    "negativeFormula": "+2 correct, -0.50 incorrect"
+    "negativeFormula": "+2 correct, -0.50 incorrect",
+    "examSchedule": {
+      "examStartDate": "September 9, 2027",
+      "examEndDate": "September 26, 2027",
+      "daysRemaining": 309,
+      "scheduleStatus": "Official Confirmed",
+      "cycleLabel": "2027 Official Examination Cycle",
+      "officialSourceNote": "Official Examination Calendar"
+    }
   },
   "subjectsBlueprint": {
     "${cleanSubjects[0]}": {
@@ -5261,6 +5523,21 @@ Format:
         hasSubjective: false,
         hasNegativeMarking: true,
         negativeFormula: "+2 correct, -0.50 incorrect"
+      };
+    }
+    const fallbackSchedule = resolveCatalogExamSchedule(normExam, normCountry);
+    if (!parsed.examOverview.examSchedule || !parsed.examOverview.examSchedule.examStartDate) {
+      parsed.examOverview.examSchedule = fallbackSchedule;
+    } else {
+      const computed = computeDaysRemaining(parsed.examOverview.examSchedule.examStartDate);
+      parsed.examOverview.examSchedule = {
+        examName: parsed.examOverview.examSchedule.examName || normExam,
+        examStartDate: computed.adjustedDate || parsed.examOverview.examSchedule.examStartDate,
+        examEndDate: parsed.examOverview.examSchedule.examEndDate || computed.adjustedDate || parsed.examOverview.examSchedule.examStartDate,
+        daysRemaining: computed.days,
+        scheduleStatus: parsed.examOverview.examSchedule.scheduleStatus || fallbackSchedule.scheduleStatus,
+        cycleLabel: parsed.examOverview.examSchedule.cycleLabel || fallbackSchedule.cycleLabel,
+        officialSourceNote: parsed.examOverview.examSchedule.officialSourceNote || fallbackSchedule.officialSourceNote
       };
     }
     if (parsed && parsed.subjectsBlueprint && typeof parsed.subjectsBlueprint === "object") {
@@ -6528,47 +6805,33 @@ CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - You MUST systematically distribute the ${requestedCount} questions evenly across all core chapters/topics of THIS subject.
 - ABSOLUTELY STRICT SUBJECT ISOLATION: ALL questions MUST be strictly and exclusively from THIS subject. DO NOT mix or introduce concepts from any other unrelated subject!
 ` : "";
-    const isCodingSubject = /python|coding|programming|computer science|informatics|data science|c\+\+|java\b|sql\b|software/i.test(`${topicText} ${stream || ""}`);
-    const multiModalSection = isCodingSubject ? `
-3. MANDATORY MULTI-MODAL & COMPUTATIONAL QUESTIONS (CODE & SCHEMATICS):
-   - At least 2 questions must actively integrate Python programming snippets (\`\`\`python ... \`\`\`), algorithmic execution flow, or system data structures.
-   - For outputs or data: Pair with clean Markdown tables or ASCII console outputs.
+    const isExplicitProgrammingCourse = /^(python|c\+\+|java|javascript|typescript|c programming|sql database)\s*(course|language|programming)?$/i.test(topicText.trim()) || /^(python|c\+\+|java|javascript|c programming)\s*(course|language|programming)?$/i.test((stream || "").trim());
+    const multiModalSection = isExplicitProgrammingCourse ? `
+3. PROGRAMMING COURSE SYLLABUS DIRECTIVE:
+   - The user is studying an explicit computer programming course (${topicText}).
+   - You may include clean code snippets (\`\`\`python ... \`\`\`), accompanied by clean execution traces and clear syntax.
 ` : `
-3. AUTHENTIC MULTI-MODAL QUESTIONS (TABLES, GRAPHS & SCHEMATICS):
-   Real examination board papers (CBSE, SSC, ICSE, NEET, State Boards, College Exams) integrate observation tables, coordinate graphs, and schematic setups for authentic analytical problem solving.
+3. AUTHENTIC EXAMINATION BOARD QUESTIONS (TABLES, DATA & DIAGRAMS):
+   Real examination board papers (CBSE, SSC, ICSE, NEET, State Boards, College Exams) integrate observation tables, data distribution tables, and structured analytical problems.
    CRITICAL MANDATE:
-   - FOR DATA & EXPERIMENTAL OBSERVATIONS (Chemistry, Physics, Economics, History, Geography, Commerce, Biology, Statistics):
+   - FOR DATA & EXPERIMENTAL OBSERVATIONS (Chemistry, Physics, Economics, History, Geography, Commerce, Biology, Statistics, Quantitative Aptitude, Reasoning):
      Provide clean, structured Markdown Tables.
      CRITICAL TABLE FORMATTING RULE:
+     * Always put an empty line (\\n\\n) before the table and after the table.
      * Put a newline (\\n) after EVERY single table row.
-     * NEVER merge rows with double pipes (||) or collapse the table onto a single line!
+     * Table columns MUST be aligned with clean single pipes (|).
+     * NEVER merge rows with double pipes (||) or collapse onto a single line!
      * Format:
        | Col 1 | Col 2 | Col 3 |
        | :---: | :---: | :---: |
        | Val 1 | Val 2 | Val 3 |
        | Val 4 | Val 5 | Val 6 |
-   - FOR COORDINATE CURVES, KINEMATICS & FUNCTION PLOTS:
-     Provide a clean ASCII/Unicode coordinate curve inside a \`\`\`graph ... \`\`\` block.
-     Example:
-     \`\`\`graph
-      v (m/s)
-       ^
-     24| \\
-     12|   \\
-      0+-----+-----> t (s)
-       0     2     4
-     \`\`\`
-   - FOR APPARATUS SETUPS, CIRCUITS, OPTICAL RAYS & FLOWCHARTS:
-     Provide a clean ASCII/Unicode diagram inside a \`\`\`diagram ... \`\`\` block.
-     Example:
-     \`\`\`diagram
-     +---[ Resistor R1 = 4\u03A9 ]---+
-     |                          |
-     (E = 12V)                  [ Resistor R2 = 6\u03A9 ]
-     |                          |
-     +--------------------------+
-     \`\`\`
-   - CRITICAL PROHIBITION: DO NOT output any Python, matplotlib, numpy, or pandas code blocks! Students are practicing for academic/competitive examination questions, NOT writing Python scripts! Code blocks are strictly forbidden for non-programming subjects!
+   - STRICT PROHIBITION ON PYTHON CODE BLOCKS:
+     NEVER output any Python scripts, pandas/numpy code blocks, or developer terminal code!
+     Students are preparing for academic and competitive board exams, NOT writing Python code!
+     NEVER present question scenarios as Python functions or snippets!
+   - FOR VISUAL DIAGRAMS / FLOWCHARTS:
+     Use clean formatted ASCII boxes or structured bulleted steps, NEVER programming code!
 `;
     const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
 Your task is to craft authentic, real-exam style SUBJECTIVE (descriptive / open-ended) practice questions along with official examiner marking rubrics and score allocations.
@@ -6657,16 +6920,13 @@ MANDATE: You MUST explore entirely DIFFERENT, fresh subtopics, alternative formu
     ];
     const dynamicAngle = pedagogicalAngles[Math.floor(Math.random() * pedagogicalAngles.length)];
     const randomEntropySeed = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const multiModalUserPrompt = isCodingSubject ? `
-CRITICAL MULTI-MODAL MANDATE (CODE, TABLES & ALGORITHMS):
-- At least 1 question should include a clean Python/CS script block (\`\`\`python ... \`\`\`).
-- Formulate analytical multi-part questions ((a), (b), (c)) testing the student's code trace and comprehension!
+    const multiModalUserPrompt = isExplicitProgrammingCourse ? `
+CRITICAL MULTI-MODAL MANDATE (PROGRAMMING COURSE ONLY):
+- Include a clean, complete code snippet block if appropriate for testing this programming concept.
 ` : `
-CRITICAL MULTI-MODAL MANDATE (TABLES, GRAPHS & SCHEMATICS):
-Out of the ${requestedCount} generated questions:
-- At least 1 question should include a structured Markdown observation/data table (| ... |) with newlines (\\n) between each row.
-- At least 1 question can include a coordinate function graph (\`\`\`graph ... \`\`\`) or schematic apparatus setup (\`\`\`diagram ... \`\`\`) when applicable.
-- STRICTLY PROHIBIT Python/NumPy/Pandas code blocks (students are taking an academic subject exam, not programming!).
+CRITICAL MULTI-MODAL & QUESTION FORMATTING MANDATE:
+- When questions involve numerical data, experimental measurements, historical chronologies, or comparative distributions, ALWAYS present the data in a clean, standard Markdown Table with empty line before/after and newlines (\\n) between each row.
+- STRICTLY FORBIDDEN: NEVER output Python code snippets, scripts, or programming terminal blocks! Questions must be formatted as official, clean examination board problems.
 `;
     const userPrompt = `Topic: "${topicText}".
 Target Grade: ${gradeLevel}.

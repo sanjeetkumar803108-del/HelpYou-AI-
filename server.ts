@@ -1,5 +1,6 @@
 import { ALLOWED_ORIGINS } from "./ALLOWED_ORIGINS";
 import { findCatalogExamBlueprint } from "./src/utils/examSyllabusCatalog";
+import { resolveCatalogExamSchedule, computeDaysRemaining } from "./src/utils/examSchedule";
 import { findPreVerifiedExam, PRE_VERIFIED_EXAMS, PreVerifiedExam } from "./src/utils/preVerifiedExams";
 import dotenv from "dotenv";
 dotenv.config();
@@ -4114,6 +4115,14 @@ You MUST research and return two major sections:
    - "hasSubjective": boolean (true if subjective/essay papers exist, false if strictly objective MCQ).
    - "hasNegativeMarking": boolean (true if negative marking exists).
    - "negativeFormula": Concise description of negative marking formula (e.g. "+2 correct, -0.50 incorrect" or "+4 correct, -1 incorrect").
+   - "examSchedule": {
+       "examStartDate": "Official or officially expected start date for the upcoming cycle (e.g. 'September 9, 2027', 'May 3, 2027', 'April 4, 2027', 'December 6, 2026'). Must be in clean English.",
+       "examEndDate": "Official end date if exam has a multi-day testing window (or same as start date)",
+       "daysRemaining": integer days remaining until exam start date from today,
+       "scheduleStatus": "Official Confirmed" | "Annual Schedule Announced" | "Tentative Notification Window",
+       "cycleLabel": "Clean label of upcoming cycle, e.g. '2027 Annual Cycle' or 'Tier 1 Examination Window'",
+       "officialSourceNote": "Official conducting authority notification / calendar source"
+     }
 
 2. "subjectsBlueprint":
    For EACH subject in ${JSON.stringify(cleanSubjects)}, extract and curate:
@@ -4163,7 +4172,15 @@ Format:
     "totalQuestions": 100,
     "hasSubjective": false,
     "hasNegativeMarking": true,
-    "negativeFormula": "+2 correct, -0.50 incorrect"
+    "negativeFormula": "+2 correct, -0.50 incorrect",
+    "examSchedule": {
+      "examStartDate": "September 9, 2027",
+      "examEndDate": "September 26, 2027",
+      "daysRemaining": 309,
+      "scheduleStatus": "Official Confirmed",
+      "cycleLabel": "2027 Official Examination Cycle",
+      "officialSourceNote": "Official Examination Calendar"
+    }
   },
   "subjectsBlueprint": {
     "${cleanSubjects[0]}": {
@@ -4461,6 +4478,23 @@ Format:
         hasSubjective: false,
         hasNegativeMarking: true,
         negativeFormula: "+2 correct, -0.50 incorrect"
+      };
+    }
+
+    // Ensure authoritative examSchedule is calculated and attached
+    const fallbackSchedule = resolveCatalogExamSchedule(normExam, normCountry);
+    if (!parsed.examOverview.examSchedule || !parsed.examOverview.examSchedule.examStartDate) {
+      parsed.examOverview.examSchedule = fallbackSchedule;
+    } else {
+      const computed = computeDaysRemaining(parsed.examOverview.examSchedule.examStartDate);
+      parsed.examOverview.examSchedule = {
+        examName: parsed.examOverview.examSchedule.examName || normExam,
+        examStartDate: computed.adjustedDate || parsed.examOverview.examSchedule.examStartDate,
+        examEndDate: parsed.examOverview.examSchedule.examEndDate || computed.adjustedDate || parsed.examOverview.examSchedule.examStartDate,
+        daysRemaining: computed.days,
+        scheduleStatus: parsed.examOverview.examSchedule.scheduleStatus || fallbackSchedule.scheduleStatus,
+        cycleLabel: parsed.examOverview.examSchedule.cycleLabel || fallbackSchedule.cycleLabel,
+        officialSourceNote: parsed.examOverview.examSchedule.officialSourceNote || fallbackSchedule.officialSourceNote
       };
     }
 
@@ -5814,48 +5848,35 @@ CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - ABSOLUTELY STRICT SUBJECT ISOLATION: ALL questions MUST be strictly and exclusively from THIS subject. DO NOT mix or introduce concepts from any other unrelated subject!
 ` : '';
 
-    const isCodingSubject = /python|coding|programming|computer science|informatics|data science|c\+\+|java\b|sql\b|software/i.test(`${topicText} ${stream || ''}`);
+    const isExplicitProgrammingCourse = /^(python|c\+\+|java|javascript|typescript|c programming|sql database)\s*(course|language|programming)?$/i.test(topicText.trim()) ||
+      /^(python|c\+\+|java|javascript|c programming)\s*(course|language|programming)?$/i.test((stream || '').trim());
 
-    const multiModalSection = isCodingSubject ? `
-3. MANDATORY MULTI-MODAL & COMPUTATIONAL QUESTIONS (CODE & SCHEMATICS):
-   - At least 2 questions must actively integrate Python programming snippets (\`\`\`python ... \`\`\`), algorithmic execution flow, or system data structures.
-   - For outputs or data: Pair with clean Markdown tables or ASCII console outputs.
+    const multiModalSection = isExplicitProgrammingCourse ? `
+3. PROGRAMMING COURSE SYLLABUS DIRECTIVE:
+   - The user is studying an explicit computer programming course (${topicText}).
+   - You may include clean code snippets (\`\`\`python ... \`\`\`), accompanied by clean execution traces and clear syntax.
 ` : `
-3. AUTHENTIC MULTI-MODAL QUESTIONS (TABLES, GRAPHS & SCHEMATICS):
-   Real examination board papers (CBSE, SSC, ICSE, NEET, State Boards, College Exams) integrate observation tables, coordinate graphs, and schematic setups for authentic analytical problem solving.
+3. AUTHENTIC EXAMINATION BOARD QUESTIONS (TABLES, DATA & DIAGRAMS):
+   Real examination board papers (CBSE, SSC, ICSE, NEET, State Boards, College Exams) integrate observation tables, data distribution tables, and structured analytical problems.
    CRITICAL MANDATE:
-   - FOR DATA & EXPERIMENTAL OBSERVATIONS (Chemistry, Physics, Economics, History, Geography, Commerce, Biology, Statistics):
+   - FOR DATA & EXPERIMENTAL OBSERVATIONS (Chemistry, Physics, Economics, History, Geography, Commerce, Biology, Statistics, Quantitative Aptitude, Reasoning):
      Provide clean, structured Markdown Tables.
      CRITICAL TABLE FORMATTING RULE:
+     * Always put an empty line (\\n\\n) before the table and after the table.
      * Put a newline (\\n) after EVERY single table row.
-     * NEVER merge rows with double pipes (||) or collapse the table onto a single line!
+     * Table columns MUST be aligned with clean single pipes (|).
+     * NEVER merge rows with double pipes (||) or collapse onto a single line!
      * Format:
        | Col 1 | Col 2 | Col 3 |
        | :---: | :---: | :---: |
        | Val 1 | Val 2 | Val 3 |
        | Val 4 | Val 5 | Val 6 |
-   - FOR COORDINATE CURVES, KINEMATICS & FUNCTION PLOTS:
-     Provide a clean ASCII/Unicode coordinate curve inside a \`\`\`graph ... \`\`\` block.
-     Example:
-     \`\`\`graph
-      v (m/s)
-       ^
-     24| \\
-     12|   \\
-      0+-----+-----> t (s)
-       0     2     4
-     \`\`\`
-   - FOR APPARATUS SETUPS, CIRCUITS, OPTICAL RAYS & FLOWCHARTS:
-     Provide a clean ASCII/Unicode diagram inside a \`\`\`diagram ... \`\`\` block.
-     Example:
-     \`\`\`diagram
-     +---[ Resistor R1 = 4Ω ]---+
-     |                          |
-     (E = 12V)                  [ Resistor R2 = 6Ω ]
-     |                          |
-     +--------------------------+
-     \`\`\`
-   - CRITICAL PROHIBITION: DO NOT output any Python, matplotlib, numpy, or pandas code blocks! Students are practicing for academic/competitive examination questions, NOT writing Python scripts! Code blocks are strictly forbidden for non-programming subjects!
+   - STRICT PROHIBITION ON PYTHON CODE BLOCKS:
+     NEVER output any Python scripts, pandas/numpy code blocks, or developer terminal code!
+     Students are preparing for academic and competitive board exams, NOT writing Python code!
+     NEVER present question scenarios as Python functions or snippets!
+   - FOR VISUAL DIAGRAMS / FLOWCHARTS:
+     Use clean formatted ASCII boxes or structured bulleted steps, NEVER programming code!
 `;
 
     const systemInstruction = `You are a Chief Academic Examiner, Master Board Question Paper Setter, and Senior Pedagogical Architect.
@@ -5941,16 +5962,13 @@ JSON structure:
     const dynamicAngle = pedagogicalAngles[Math.floor(Math.random() * pedagogicalAngles.length)];
     const randomEntropySeed = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-    const multiModalUserPrompt = isCodingSubject ? `
-CRITICAL MULTI-MODAL MANDATE (CODE, TABLES & ALGORITHMS):
-- At least 1 question should include a clean Python/CS script block (\`\`\`python ... \`\`\`).
-- Formulate analytical multi-part questions ((a), (b), (c)) testing the student's code trace and comprehension!
+    const multiModalUserPrompt = isExplicitProgrammingCourse ? `
+CRITICAL MULTI-MODAL MANDATE (PROGRAMMING COURSE ONLY):
+- Include a clean, complete code snippet block if appropriate for testing this programming concept.
 ` : `
-CRITICAL MULTI-MODAL MANDATE (TABLES, GRAPHS & SCHEMATICS):
-Out of the ${requestedCount} generated questions:
-- At least 1 question should include a structured Markdown observation/data table (| ... |) with newlines (\\n) between each row.
-- At least 1 question can include a coordinate function graph (\`\`\`graph ... \`\`\`) or schematic apparatus setup (\`\`\`diagram ... \`\`\`) when applicable.
-- STRICTLY PROHIBIT Python/NumPy/Pandas code blocks (students are taking an academic subject exam, not programming!).
+CRITICAL MULTI-MODAL & QUESTION FORMATTING MANDATE:
+- When questions involve numerical data, experimental measurements, historical chronologies, or comparative distributions, ALWAYS present the data in a clean, standard Markdown Table with empty line before/after and newlines (\\n) between each row.
+- STRICTLY FORBIDDEN: NEVER output Python code snippets, scripts, or programming terminal blocks! Questions must be formatted as official, clean examination board problems.
 `;
 
     const userPrompt = `Topic: "${topicText}".

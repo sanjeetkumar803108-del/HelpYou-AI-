@@ -472,11 +472,13 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     // Step 0: Pre-heal collapsed tables (e.g. rows separated by ||) into structured newline-separated rows
     let safe = healMarkdownTables(text);
 
-    // Step 0.5: Filter out unwanted Python simulation scripts in non-coding academic subjects (e.g. ```python import pandas ... ```)
+    // Step 0.5: Filter out unwanted Python/programming blocks in general academic examination subjects
     const userProfile = getUserProfileData();
-    const isCoding = /python|coding|programming|computer|informatics/i.test(`${customTopic || ''} ${stream || ''} ${userProfile?.stream || ''} ${userProfile?.subject || ''}`);
-    if (!isCoding) {
-      safe = safe.replace(/```(?:python|py)\s*(?:import\s+(?:pandas|numpy|matplotlib|scipy)[\s\S]*?)```/gi, '');
+    const isExplicitCoding = /^(python|c\+\+|java|javascript|typescript|c programming|sql database)\s*(course|language|programming)?$/i.test((customTopic || '').trim()) ||
+      /^(python|c\+\+|java|javascript|c programming)\s*(course|language|programming)?$/i.test((stream || userProfile?.stream || userProfile?.subject || '').trim());
+    if (!isExplicitCoding) {
+      safe = safe.replace(/```(?:python|py|code|bash|sh|c\+\+|java)?[\s\S]*?```/gi, '');
+      safe = safe.replace(/(?:Consider|Observe|Refer\s+to|Given)\s+the\s+following\s+Python\s+(?:snippet|script|code|function)[^.:;\n]*[.:;\n]/gi, '');
     }
 
     // 1. Protect Code Blocks (```...```) and diagrams from receiving accidental mid-block break splits

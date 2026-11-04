@@ -4,9 +4,10 @@ import {
   UserCircle, Settings, LogOut, X, Crown, Lock, Mail, Shield, 
   HelpCircle, Star, Bug, FileText, Trash2, ChevronRight, ChevronDown,
   Check, MessageSquare, AlertTriangle, Eye, EyeOff, Sparkles, Send, Moon,
-  GraduationCap, Calendar, Trophy, Edit3, Save, Flame, User, Info, Target, Zap,
+  GraduationCap, Calendar, Clock, Trophy, Edit3, Save, Flame, User, Info, Target, Zap,
   Loader2, Download, CreditCard, Bell, Share2, Play, Pause, Square, Plus, BookOpen, AlertCircle
 } from 'lucide-react';
+import { getStoredExamSchedule, ExamScheduleData } from '../utils/examSchedule';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { Share } from '@capacitor/share';
@@ -297,6 +298,37 @@ export default function Profile({
   const [isEditingCountry, setIsEditingCountry] = useState(false);
   const [tempCountryInput, setTempCountryInput] = useState('');
 
+  // Target Exam Schedule & Live Countdown state
+  const [examSchedule, setExamSchedule] = useState<ExamScheduleData | null>(() => {
+    return getStoredExamSchedule(targetExam, selectedCountryName, auth.currentUser?.uid);
+  });
+
+  useEffect(() => {
+    if (targetExam) {
+      const schedule = getStoredExamSchedule(targetExam, selectedCountryName, auth.currentUser?.uid);
+      setExamSchedule(schedule);
+    } else {
+      setExamSchedule(null);
+    }
+  }, [targetExam, selectedCountryName]);
+
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      const currentExam = (auth.currentUser?.uid ? safeGetItem(`academic_exam_${auth.currentUser.uid}`) : null) ||
+        safeGetItem('academic_exam') ||
+        safeGetItem('target_exam') ||
+        targetExam;
+      const currentCountry = safeGetItem('academic_country') || selectedCountryName;
+      if (currentExam) {
+        setTargetExam(currentExam);
+        const schedule = getStoredExamSchedule(currentExam, currentCountry, auth.currentUser?.uid);
+        setExamSchedule(schedule);
+      }
+    };
+    window.addEventListener('academic_profile_updated', handleProfileUpdated);
+    return () => window.removeEventListener('academic_profile_updated', handleProfileUpdated);
+  }, [targetExam, selectedCountryName]);
+
   const [isGradeDropdownOpen, setIsGradeDropdownOpen] = useState(false);
   const [isSubjectsDropdownOpen, setIsSubjectsDropdownOpen] = useState(false);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
@@ -539,6 +571,8 @@ export default function Profile({
     setIsEditingExam(false);
     safeSetItem('academic_exam', trimmed);
     safeSetItem('target_exam', trimmed);
+    const sched = getStoredExamSchedule(trimmed, selectedCountryName, auth.currentUser?.uid);
+    setExamSchedule(sched);
     if (auth.currentUser?.uid) {
       safeSetItem(`academic_exam_${auth.currentUser.uid}`, trimmed);
       safeSetItem(`target_exam_${auth.currentUser.uid}`, trimmed);

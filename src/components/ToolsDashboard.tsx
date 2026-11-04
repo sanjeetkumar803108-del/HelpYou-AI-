@@ -657,7 +657,7 @@ function ToolsDashboard({
             }}
             className="w-full bg-white border border-zinc-200 text-zinc-800 font-extrabold text-sm py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer hover:bg-zinc-50 active:scale-99"
           >
-            <span>{showAllTools ? 'Show Less Tools' : 'More Tools'}</span>
+            <span>{showAllTools ? 'Show Less Features' : 'View More Features'}</span>
             {showAllTools ? <ChevronUp className="w-4 h-4 text-zinc-500" /> : <ChevronDown className="w-4 h-4 text-zinc-500" />}
           </button>
         </div>

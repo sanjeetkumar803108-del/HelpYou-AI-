@@ -1,4 +1,5 @@
 import { safeGetItem, safeSetItem } from './storage';
+import { auth } from '../lib/firebase';
 
 export interface ExamOverview {
   examName: string;

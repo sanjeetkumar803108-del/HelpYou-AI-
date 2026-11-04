@@ -113,5 +113,10 @@ service cloud.firestore {
       allow create, update: if isSignedIn();
       allow delete: if false;
     }
+
+    // 12. Allocated Emails Rules (Anti-Abuse Coin Allocation)
+    match /allocated_emails/{emailKey} {
+      allow read, write: if isSignedIn();
+    }
   }
 }

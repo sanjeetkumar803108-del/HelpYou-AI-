@@ -333,10 +333,7 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser && userInitiatedAuth.current) {
-        const isGoogle = currentUser.providerData?.some(p => p.providerId === 'google.com') || false;
-        if (currentUser.emailVerified || isGoogle) {
-          routeUserAfterAuth(currentUser);
-        }
+        routeUserAfterAuth(currentUser);
       }
     });
     return () => unsubscribe();
@@ -364,9 +361,9 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     }
 
     if (isSignUp) {
-      if (!isPasswordValid(password)) {
-        setError('Password must contain at least 8 characters, 1 uppercase letter, 1 number, and 1 special symbol.');
-        showToast('Please satisfy all password rules.', 'error', 3500);
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long.');
+        showToast('Password must be at least 6 characters.', 'error', 3500);
         return;
       }
     } else {
@@ -387,31 +384,38 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
         const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         const newUser = userCredential.user;
 
-        // Trigger email verification
-        await sendEmailVerification(newUser);
+        // Trigger email verification safely in background
+        try {
+          await sendEmailVerification(newUser);
+        } catch (mailErr) {
+          console.warn('[Signup] Email verification dispatch notice:', mailErr);
+        }
         
-        // Lifetime limit check for email
-        const emailKey = cleanEmail.toLowerCase();
-        const emailDocRef = doc(db, 'allocated_emails', emailKey);
-        const emailDocSnap = await getDoc(emailDocRef);
-        
+        // Lifetime limit check for email safely wrapped in try-catch
         let initialCoins = 20;
-        if (emailDocSnap.exists()) {
-          initialCoins = 0;
-          console.log(`[Signup Check] Email ${cleanEmail} has already been allocated coins. Setting signup initial to 0.`);
-        } else {
-          await setDoc(emailDocRef, {
-            allocated: true,
-            allocatedAt: new Date().toISOString(),
-            userId: newUser.uid
-          });
-          console.log(`[Signup Check] Email ${cleanEmail} allocated lifetime 20 coins.`);
+        try {
+          const emailKey = cleanEmail.toLowerCase();
+          const emailDocRef = doc(db, 'allocated_emails', emailKey);
+          const emailDocSnap = await getDoc(emailDocRef);
+          
+          if (emailDocSnap.exists()) {
+            initialCoins = 0;
+            console.log(`[Signup Check] Email ${cleanEmail} has already been allocated coins. Setting signup initial to 0.`);
+          } else {
+            await setDoc(emailDocRef, {
+              allocated: true,
+              allocatedAt: new Date().toISOString(),
+              userId: newUser.uid
+            });
+            console.log(`[Signup Check] Email ${cleanEmail} allocated lifetime 20 coins.`);
+          }
+        } catch (allocErr) {
+          console.warn('[Signup Coins Allocation notice]', allocErr);
         }
 
         // Grant free coins initially in local storage for instant responsiveness
         const userKey = `study_daily_limit_${newUser.uid}`;
         safeSetItem(userKey, String(initialCoins));
-        // Dispatch global update event to keep the UI in sync
         window.dispatchEvent(new CustomEvent('study-coins-updated', { detail: initialCoins }));
 
         // Save default user object with coins inside Firestore upon account creation
@@ -422,44 +426,31 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
             coins: initialCoins,
             isPro: false,
             createdAt: new Date().toISOString()
-          });
+          }, { merge: true });
           console.log(`[Auth Signup] Default user object initialized with ${initialCoins} coins in Firestore for ${newUser.uid}`);
         } catch (dbErr) {
           console.error("Failed to write initial user profile to Firestore:", dbErr);
         }
 
-        // Sign out immediately so unverified account cannot access the app
-        await signOut(auth);
-
-        Alert.alert("Verification Email Sent", "Please verify your email address before logging in. A verification link has been sent to your inbox.");
-        setError("Verification email sent! Please check your inbox and verify your email before logging in.");
-        setIsSignUp(false);
-        setPassword('');
-        setLoading(false);
+        // Immediately route the new student into the application seamlessly
+        await routeUserAfterAuth(newUser);
+        onClose();
         return;
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
         const loggedUser = userCredential.user;
-        const isGoogle = loggedUser.providerData?.some(p => p.providerId === 'google.com') || false;
-
-        if (!loggedUser.emailVerified && !isGoogle) {
-          setError('Please verify your email address before logging in.');
-          Alert.alert("Verification Required", "Please verify your email address before logging in.");
-          await signOut(auth);
-          setLoading(false);
-          return;
-        }
-      }
-      if (auth.currentUser) {
-        await routeUserAfterAuth(auth.currentUser);
-      } else {
-        onLoginSuccess('onboarding');
+        await routeUserAfterAuth(loggedUser);
         onClose();
+        return;
       }
     } catch (err: any) {
       safeRemoveItem('helpyou_auth_in_progress');
       console.warn('[Auth Error]', err?.code, err?.message);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/operation-not-allowed') {
+        const errMsg = 'Email/Password sign-in is disabled in Firebase Console. Please enable "Email/Password" under Authentication > Sign-in method in Firebase Console.';
+        setError(errMsg);
+        Alert.alert("Firebase Configuration", errMsg);
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
         const errMsg = 'Incorrect password, or this email is registered via Google Sign-In. Please use the Google button below.';
         setError(errMsg);
         Alert.alert("Login Failed", errMsg);
@@ -795,15 +786,15 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
                 </p>
                 <div className="flex flex-col gap-1.5">
                   {[
-                    { label: 'At least 8 characters', met: password.length >= 8 },
-                    { label: 'Contains uppercase', met: /[A-Z]/.test(password) },
-                    { label: 'Contains a number', met: /[0-9]/.test(password) },
-                    { label: 'Contains a special character', met: /[^A-Za-z0-9]/.test(password) }
+                    { label: 'At least 6 characters (Required)', met: password.length >= 6, required: true },
+                    { label: 'Contains uppercase', met: /[A-Z]/.test(password), required: false },
+                    { label: 'Contains a number', met: /[0-9]/.test(password), required: false },
+                    { label: 'Contains a special character', met: /[^A-Za-z0-9]/.test(password), required: false }
                   ].map((rule, idx) => {
                     const hasTyped = password.length > 0;
                     const textClass = rule.met 
                       ? 'text-emerald-600 font-semibold' 
-                      : hasTyped 
+                      : (hasTyped && rule.required)
                         ? 'text-rose-500/85 font-medium' 
                         : 'text-zinc-400 font-medium';
                     return (

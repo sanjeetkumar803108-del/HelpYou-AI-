@@ -16,6 +16,12 @@ import {
   saveToFlashcardsBank,
   loadFlashcardsBank
 } from "./src/utils/flashcardsBank";
+import {
+  extractNotesHierarchy,
+  findInNotesBank,
+  saveToNotesBank,
+  loadNotesBank
+} from "./src/utils/notesBank";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -2134,6 +2140,101 @@ const handleSummarizePdfUpload = (req: any, res: any, next: any) => {
     next();
   });
 };
+export const shuffleAndBalanceQuizOptions = (quizList: any[]): any[] => {
+  if (!Array.isArray(quizList) || quizList.length === 0) return quizList;
+
+  const letters = ['A', 'B', 'C', 'D'];
+  const numQuestions = quizList.length;
+
+  // Build a mathematically balanced distribution of target answer positions [0, 1, 2, 3]
+  // e.g. for 10 questions: [0, 1, 2, 3, 0, 1, 2, 3, 0, 1] shuffled
+  const targetSlots: number[] = [];
+  for (let i = 0; i < numQuestions; i++) {
+    targetSlots.push(i % 4);
+  }
+  // Fisher-Yates shuffle the targetSlots array
+  for (let i = targetSlots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [targetSlots[i], targetSlots[j]] = [targetSlots[j], targetSlots[i]];
+  }
+
+  return quizList.map((item, qIdx) => {
+    if (!item || typeof item !== 'object' || !Array.isArray(item.options) || item.options.length !== 4) {
+      return item;
+    }
+
+    // 1. Extract raw bodies of options (strip existing "A) ", "B. ", "(A) ", etc.)
+    const cleanOptionBody = (opt: string) => {
+      if (typeof opt !== 'string') return '';
+      return opt.replace(/^([A-Da-d][\)\.]|\([A-Da-d]\))\s*/, '').trim();
+    };
+
+    const rawBodies = item.options.map(cleanOptionBody);
+    const rawAnswer = typeof item.correctAnswer === 'string' ? cleanOptionBody(item.correctAnswer) : '';
+
+    // 2. Identify index of the correct option
+    let correctIdx = rawBodies.findIndex(b => b === rawAnswer);
+    if (correctIdx === -1) {
+      // Match by letter prefix in item.correctAnswer
+      const letterMatch = (item.correctAnswer || '').match(/^(?:option\s*)?\(?([a-d])\)?[\.\:\)\s\-]?/i);
+      if (letterMatch) {
+        const l = letterMatch[1].toUpperCase();
+        correctIdx = ['A', 'B', 'C', 'D'].indexOf(l);
+      }
+    }
+    if (correctIdx === -1) {
+      // Normalized matching
+      const normA = rawAnswer.replace(/\\?\$/g, '').replace(/\s+/g, '').toLowerCase();
+      correctIdx = rawBodies.findIndex(b => {
+        const normB = b.replace(/\\?\$/g, '').replace(/\s+/g, '').toLowerCase();
+        return normB === normA || (normB.length > 3 && normA.length > 3 && (normB.includes(normA) || normA.includes(normB)));
+      });
+    }
+    if (correctIdx === -1) {
+      correctIdx = 0;
+    }
+
+    const correctBody = rawBodies[correctIdx];
+    const distractorBodies = rawBodies.filter((_, idx) => idx !== correctIdx);
+
+    // Shuffle the 3 distractors among themselves
+    for (let i = distractorBodies.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [distractorBodies[i], distractorBodies[j]] = [distractorBodies[j], distractorBodies[i]];
+    }
+
+    // 3. Place correctBody at target slot, distractors in other 3 slots
+    const targetSlot = targetSlots[qIdx] ?? (Math.floor(Math.random() * 4));
+    const newOptions: string[] = [];
+    let distractorPtr = 0;
+
+    for (let slot = 0; slot < 4; slot++) {
+      const letter = letters[slot];
+      if (slot === targetSlot) {
+        newOptions.push(`${letter}) ${correctBody}`);
+      } else {
+        newOptions.push(`${letter}) ${distractorBodies[distractorPtr++]}`);
+      }
+    }
+
+    const newCorrectAnswer = newOptions[targetSlot];
+
+    // 4. Update explanation if it mentions "Option [A-D]"
+    let newExplanation = item.explanation;
+    if (typeof newExplanation === 'string') {
+      const targetLetter = letters[targetSlot];
+      newExplanation = newExplanation.replace(/\b(?:option\s*)([A-Da-d])\b/gi, `Option ${targetLetter}`);
+    }
+
+    return {
+      ...item,
+      options: newOptions,
+      correctAnswer: newCorrectAnswer,
+      explanation: newExplanation
+    };
+  });
+};
+
 
 app.post("/api/summarize", handleSummarizePdfUpload, async (req, res) => {
   try {
@@ -6596,6 +6697,29 @@ app.post("/api/generate-ai-notes", async (req, res) => {
     const examBlueprint = req.body.examBlueprint;
     const examDirective = getExamBlueprintDirective(targetExam, examBlueprint, subject);
 
+    const hierarchyNotes = extractNotesHierarchy(req.body);
+    const cachedNotes = findInNotesBank({
+      country: hierarchyNotes.country,
+      exam: hierarchyNotes.exam,
+      grade: hierarchyNotes.grade,
+      subject: hierarchyNotes.subject,
+      chapter: hierarchyNotes.chapter,
+      subtopic: hierarchyNotes.subtopic,
+      noteType: hierarchyNotes.noteType,
+      feature: 'AI Notes'
+    });
+
+    if (cachedNotes) {
+      console.log(`[NotesBank] HIT! Serving cached notes for [${hierarchyNotes.country} > ${hierarchyNotes.exam} > ${hierarchyNotes.grade} > ${hierarchyNotes.subject} > ${hierarchyNotes.chapter} > ${hierarchyNotes.subtopic} (${hierarchyNotes.noteType})] ($0 AI cost)`);
+      return res.json({
+        ...cachedNotes,
+        cached: true,
+        source: "notes_bank"
+      });
+    }
+
+    console.log(`[NotesBank] MISS for [${hierarchyNotes.country} > ${hierarchyNotes.exam} > ${hierarchyNotes.grade} > ${hierarchyNotes.subject} > ${hierarchyNotes.chapter} > ${hierarchyNotes.subtopic} (${hierarchyNotes.noteType})]. Generating via Gemini AI...`);
+
     // Caching removed: always perform fresh live AI notes generation
 
     const systemInstruction = `You are a Legendary National Exam Topper, Master Textbook Author, and Elite Handwritten Study Notes Architect.
@@ -6729,10 +6853,47 @@ Ensure that for Full Detailed Notes, NO concept, formula, or sub-topic is omitte
 
     
 
-    return res.json(notesData);
+    if (notesData && (notesData.conceptMap || notesData.pages)) {
+      saveToNotesBank({
+        country: hierarchyNotes.country,
+        exam: hierarchyNotes.exam,
+        grade: hierarchyNotes.grade,
+        subject: hierarchyNotes.subject,
+        chapter: hierarchyNotes.chapter,
+        subtopic: hierarchyNotes.subtopic,
+        noteType: hierarchyNotes.noteType,
+        feature: 'AI Notes',
+        notes: notesData
+      });
+    }
+    return res.json({ ...notesData, cached: false });
   } catch (error: any) {
     console.error("[generate-ai-notes] Error:", error);
     return res.status(500).json({ error: error.message || "Failed to generate AI notes" });
+  }
+});
+
+app.post("/api/save-notes-bank", async (req, res) => {
+  try {
+    const hierarchy = extractNotesHierarchy(req.body);
+    const notes = req.body.notes || req.body.data;
+    if (notes) {
+      saveToNotesBank({
+        country: hierarchy.country,
+        exam: hierarchy.exam,
+        grade: hierarchy.grade,
+        subject: hierarchy.subject,
+        chapter: hierarchy.chapter,
+        subtopic: hierarchy.subtopic,
+        noteType: hierarchy.noteType,
+        feature: 'AI Notes',
+        notes
+      });
+      return res.json({ success: true, message: "Notes saved to bank successfully" });
+    }
+    res.status(400).json({ error: "Missing or invalid notes data" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to save notes to bank" });
   }
 });
 
@@ -9033,14 +9194,20 @@ CRITICAL AUDIT & VERIFICATION DIRECTIVES (ZERO TOLERANCE FOR MISMATCHES OR CALCU
    - For every question, recalculate and independently derive the true scientific or mathematical answer BEFORE looking at the options.
    - If your calculated answer does not match any of the 4 options, immediately adjust the options so the true calculated answer is present in the choices.
    - NEVER bend calculations or alter facts to match an incorrect option! Physical laws and arithmetic must be 100% accurate.
-2. EXACTLY ONE ACCURATE OPTION:
+2. STRICT SINGLE-TRUTH & DISTRACTOR EXCLUSIVITY AUDIT (ZERO AMBIGUITY):
    - Ensure exactly ONE option (A, B, C, or D) is unambiguously correct.
+   - Rigorously verify that the other 3 distractors are undeniably FALSE and cannot be argued as alternative correct answers (e.g. if the question asks for a dimensionless quantity, verify that ALL 3 distractors have non-zero dimensions; replace any distractor that is also dimensionless!).
    - The "correctAnswer" field MUST be 100% verbatim identical to that exact option string in the "options" array.
-3. ZERO THINKING LEAKAGE IN EXPLANATIONS:
+3. ANTI-BIAS ANSWER POSITIONING:
+   - Do NOT default the correct answer to Option A. Distribute correct answers across A, B, C, and D.
+4. ZERO THINKING LEAKAGE IN EXPLANATIONS:
    - The "explanation" must be a clean, pedagogical, step-by-step educational proof.
    - ABSOLUTELY FORBIDDEN: Words like "Wait,", "Recalculating", "Let me adjust options", "Hold on", "Let's check". Strip any internal monologue immediately.
-4. BALANCED LATEX ($...$) & CURRENCY ($50 -> \\$50):
+   - Do NOT refer to options by letter in explanations (never say "Option A is correct"). Refer directly to the concept, equation, or physical principle itself.
+5. BALANCED LATEX ($...) & NO TRAILING .$ DELIMITERS:
    - Wrap all formulas and variables in balanced single dollar signs ($...). Balance any unclosed single dollar signs.
+   - Never write a trailing period inside or after math delimiter (write $x = 5$. NOT $x = 5.$).
+   - Format degree Celsius as $2^\circ\text{C}$ (never raw \circC).
 
 Return ONLY a valid JSON array of verified questions in this exact structure:
 [
@@ -9100,7 +9267,15 @@ const sanitizeQuizItems = (quizList: any[]): any[] => {
 
   const balanceLatex = (txt: string) => {
     if (typeof txt !== "string") return txt;
-    let s = txt.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$$2");
+    let s = txt;
+    // Fix trailing .$ inside or outside formulas
+    s = s.replace(/(\[[^\]]+\]|\b[a-zA-Z0-9\^_-]+)\.\$/g, "$1$.");
+    s = s.replace(/\.\$/g, "$.");
+    // Fix invalid KaTeX degree notation like \circC or ^\circC -> ^\circ\text{C}
+    s = s.replace(/\\circ\s*C\b/g, "\\circ\\text{C}");
+    // Fix currency amounts: $50 -> \$50
+    s = s.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$2");
+    // Ensure balanced single dollar signs
     const count = (s.match(/(^|[^\\])\$/g) || []).length;
     if (count % 2 !== 0) s += "$";
     return s;
@@ -9207,8 +9382,12 @@ app.post("/api/generate-quiz", async (req, res) => {
     });
     if (cachedQuiz && cachedQuiz.length >= requestedCount) {
       console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic} | mode: ${hierarchyQuiz.practiceMode}] ($0 AI cost)`);
+      const sanitizedCached = sanitizeQuizItems(cachedQuiz.slice(0, requestedCount));
+      // Auto-balance options if legacy cached quiz has heavy Option A bias
+      const aCount = sanitizedCached.filter((q: any) => (q.correctAnswer || '').startsWith('A)') || (q.options?.[0] === q.correctAnswer)).length;
+      const finalToServe = (aCount / sanitizedCached.length) > 0.5 ? shuffleAndBalanceQuizOptions(sanitizedCached) : sanitizedCached;
       return res.json({
-        quiz: sanitizeQuizItems(cachedQuiz.slice(0, requestedCount)),
+        quiz: finalToServe,
         cached: true,
         source: "questions_bank"
       });
@@ -9244,6 +9423,16 @@ CRITICAL RULES:
    - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within ±15% of each other).
    - NEVER make the correct answer significantly longer, more verbose, or more elaborate than the wrong choices (distractors). Length cueing is strictly prohibited!
    - Every incorrect option (distractor) must be realistic, plausible, sophisticated, and written with the exact same grammatical structure, tone, and level of academic detail as the correct option so that students cannot guess the answer based on option length.
+5. CRITICAL DISTRACTOR EXCLUSIVITY & ZERO AMBIGUITY MANDATE:
+   - Exactly ONE option must be scientifically, mathematically, and conceptually correct.
+   - The 3 incorrect options (distractors) MUST be unambiguously FALSE and NEVER valid alternative answers.
+   - For example: If asking "Which of the following is a dimensionless quantity?", ONLY the designated correct option may be dimensionless (e.g. Relative density); the other 3 options MUST have non-zero dimensions (e.g. Force, Velocity, Viscosity). NEVER include another dimensionless quantity (such as Coefficient of friction, Strain, or Refractive index) as a distractor!
+   - If asking "Which is an SI base unit?", only ONE choice may be an SI base unit; the other 3 MUST be derived units.
+   - Distractors must be mutually exclusive with the correct concept.
+6. ANTI-OPTION-A BIAS & BALANCED KEY DISTRIBUTION:
+   - You MUST randomly and evenly distribute the correct answer across A, B, C, and D across the generated questions (approx 25% A, 25% B, 25% C, 25% D). NEVER make Option A the answer for all or most questions!
+7. EXPLANATIONS MUST AVOID OPTION LETTERS:
+   - In the "explanation" field, NEVER refer to options by letter (never say "Hence Option A is correct" or "Option B is right"). Always refer directly to the concept, equation, or physical principle itself.
 5. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
 6. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX VS PLAIN ENGLISH):
    - Wrap ONLY genuine mathematical equations, algebraic expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
@@ -9389,13 +9578,14 @@ Use this exact JSON structure:
           topic
         });
         const sanitized = sanitizeQuizItems(verified);
+        const balanced = shuffleAndBalanceQuizOptions(sanitized);
         saveToQuestionBank({
           ...hierarchyQuiz,
           feature: 'ai_quizzes',
           difficulty,
-          questions: sanitized
+          questions: balanced
         });
-        return res.json({ quiz: sanitized, cached: false, source: "ai_generated" });
+        return res.json({ quiz: balanced, cached: false, source: "ai_generated" });
       }
     }
 

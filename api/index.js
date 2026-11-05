@@ -1592,6 +1592,101 @@ function normalizeKeyPart(str, fallback = "general") {
   const slug = trimmed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
   return slug || fallback;
 }
+function canonicalizeCountry(country) {
+  if (!country || typeof country !== "string") return "global";
+  const clean = country.trim().toLowerCase();
+  if (clean === "other" || clean === "others" || clean === "all") return "global";
+  return normalizeKeyPart(clean, "global");
+}
+function canonicalizeExam(exam) {
+  if (!exam || typeof exam !== "string") return "general_exam";
+  const clean = exam.trim().toLowerCase();
+  if (/neet|national\s*eligibility/i.test(clean)) return "neet";
+  if (/jee\s*(?:adv|advanced)|iit\s*jee\s*adv/i.test(clean)) return "jee_advanced";
+  if (/jee|joint\s*entrance|iit\s*jee/i.test(clean)) return "jee_main";
+  if (/upsc|civil\s*services/i.test(clean)) return "upsc_cse";
+  if (/ssc\s*cgl/i.test(clean)) return "ssc_cgl";
+  if (/ssc\s*chsl/i.test(clean)) return "ssc_chsl";
+  if (/ssc\s*mts/i.test(clean)) return "ssc_mts";
+  if (/ssc\s*gd/i.test(clean)) return "ssc_gd";
+  if (/banking|ibps|sbi\s*po|sbi\s*clerk/i.test(clean)) return "banking_exams";
+  if (/rrb|ntpc/i.test(clean)) return "rrb_ntpc";
+  if (/cbse.*12/i.test(clean)) return "cbse_class_12";
+  if (/cbse.*10/i.test(clean)) return "cbse_class_10";
+  if (/cbse/i.test(clean)) return "cbse";
+  if (/icse/i.test(clean)) return "icse_class_10";
+  if (/isc/i.test(clean)) return "isc_class_12";
+  if (/bihar.*12/i.test(clean)) return "bihar_board_12th";
+  if (/bihar.*10/i.test(clean)) return "bihar_board_10th";
+  if (/up\s*board.*12/i.test(clean)) return "up_board_12th";
+  if (/up\s*board.*10/i.test(clean)) return "up_board_10th";
+  if (/\bnda\b/i.test(clean)) return "nda";
+  if (/\bcds\b/i.test(clean)) return "cds";
+  if (/\bclat\b/i.test(clean)) return "clat";
+  if (/\bcat\b/i.test(clean)) return "cat";
+  if (/\bgate\b/i.test(clean)) return "gate";
+  if (/cuet/i.test(clean)) return "cuet_ug";
+  if (/\bsat\b/i.test(clean)) return "sat";
+  if (/\bact\b/i.test(clean)) return "act";
+  if (/\bap\s*exams?|\badvanced\s*placement\b/i.test(clean)) return "ap_exams";
+  if (/\bgre\b/i.test(clean)) return "gre";
+  if (/\bgmat\b/i.test(clean)) return "gmat";
+  if (/\bielts\b/i.test(clean)) return "ielts";
+  if (/\btoefl\b/i.test(clean)) return "toefl";
+  if (/\bigcse\b/i.test(clean)) return "igcse";
+  if (/a\s*levels?/i.test(clean)) return "a_levels";
+  if (/\bib\b|international\s*baccalaureate/i.test(clean)) return "ib";
+  return normalizeKeyPart(clean, "exam");
+}
+function canonicalizeGrade(grade) {
+  if (!grade || typeof grade !== "string") return "general_grade";
+  const clean = grade.trim().toLowerCase();
+  const m = clean.match(/(?:class|grade|year|std|standard)?[\s_.-]*\b([1-9]|1[0-2])(?:th|st|nd|rd)?\b/i) || clean.match(/\b([1-9]|1[0-2])(?:th|st|nd|rd)?\b[\s_.-]*(?:grade|class|year|std|standard)?/i);
+  if (m && m[1]) {
+    return `class_${m[1]}`;
+  }
+  if (/freshman/i.test(clean)) return "class_9";
+  if (/sophomore/i.test(clean)) return "class_10";
+  if (/junior/i.test(clean)) return "class_11";
+  if (/senior/i.test(clean)) return "class_12";
+  if (/dropper|repeater|gap[\s_-]*year/i.test(clean)) return "dropper_repeater";
+  if (/college|undergrad|bachelor|b\.?tech|graduate/i.test(clean)) return "college_undergraduate";
+  if (/working[\s_-]*prof/i.test(clean)) return "working_professional";
+  return normalizeKeyPart(clean, "grade");
+}
+function canonicalizeSubject(subject) {
+  if (!subject || typeof subject !== "string") return "general_subject";
+  const clean = subject.trim().toLowerCase();
+  if (/^(?:all\s*subjects?|all_subjects_all_topics)$/i.test(clean)) {
+    return "all_subjects_all_topics";
+  }
+  const stripped = clean.replace(/\s*\([^)]*\)/g, "").trim();
+  if (/biology|botany|zoology/i.test(stripped)) return "biology";
+  if (/physics/i.test(stripped)) return "physics";
+  if (/chemistry/i.test(stripped)) return "chemistry";
+  if (/math(?:ematics)?/i.test(stripped)) {
+    const branchMatch = stripped.match(/math(?:ematics)?[\s_-]*([a-z0-9]+)/i);
+    if (branchMatch && !["and", "or", "for", "class", "grade"].includes(branchMatch[1].toLowerCase())) {
+      return `mathematics_${normalizeKeyPart(branchMatch[1])}`;
+    }
+    return "mathematics";
+  }
+  if (/english/i.test(stripped)) return "english";
+  if (/history/i.test(stripped)) return "history";
+  if (/geography/i.test(stripped)) return "geography";
+  if (/economics/i.test(stripped)) return "economics";
+  if (/computer|cs|coding|information\s*tech/i.test(stripped)) return "computer_science";
+  return normalizeKeyPart(stripped, "subject");
+}
+function normalizeChapterOrSubtopic(str, fallback = "general") {
+  if (!str || typeof str !== "string") return fallback;
+  const trimmed = str.trim();
+  if (/^(?:all\s*subjects?\s*(?:\/|&|-)?\s*all\s*topics?|all\s*subjects?|all\s*topics?|practice\s*entire\s*chapter|entire\s*chapter|all\s*chapters?|full\s*syllabus)$/i.test(trimmed)) {
+    return "all_subjects_all_topics";
+  }
+  const strippedNumbering = trimmed.replace(/^(?:ch|chapter|unit)\s*[0-9ivx]+\s*[:\.-]?\s*/i, "");
+  return normalizeKeyPart(strippedNumbering, fallback);
+}
 function getTopicCeilingLimit(subtopic) {
   const norm = normalizeKeyPart(subtopic);
   if (norm === "all_subjects_all_topics") {
@@ -1601,12 +1696,12 @@ function getTopicCeilingLimit(subtopic) {
 }
 function getTopicAccumulatedQuestions(params) {
   const bank = loadQuestionsBank();
-  const c = normalizeKeyPart(params.country, "global");
-  const e = normalizeKeyPart(params.examName, "exam");
-  const g = normalizeKeyPart(params.grade, "grade");
-  const s = normalizeKeyPart(params.subject, "subject");
-  const ch = normalizeKeyPart(params.chapter, "chapter");
-  const sub = normalizeKeyPart(params.subtopic, "all_subjects_all_topics");
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.examName);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
+  const ch = normalizeChapterOrSubtopic(params.chapter, "chapter");
+  const sub = normalizeChapterOrSubtopic(params.subtopic, "all_subjects_all_topics");
   const f = normalizeKeyPart(params.feature, "quiz");
   const d = normalizeKeyPart(params.difficulty, "medium");
   const basePrefix = `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}__`;
@@ -1642,12 +1737,12 @@ function normalizePracticeMode(mode) {
   return "standard";
 }
 function generateQuestionBankKey(params) {
-  const c = normalizeKeyPart(params.country, "global");
-  const e = normalizeKeyPart(params.examName, "exam");
-  const g = normalizeKeyPart(params.grade, "grade");
-  const s = normalizeKeyPart(params.subject, "subject");
-  const ch = normalizeKeyPart(params.chapter, "chapter");
-  const sub = normalizeKeyPart(params.subtopic, "all_subjects_all_topics");
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.examName);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
+  const ch = normalizeChapterOrSubtopic(params.chapter, "chapter");
+  const sub = normalizeChapterOrSubtopic(params.subtopic, "all_subjects_all_topics");
   const f = normalizeKeyPart(params.feature, "quiz");
   const d = normalizeKeyPart(params.difficulty, "medium");
   const p = normalizePracticeMode(params.practiceMode);
@@ -1717,21 +1812,72 @@ function loadQuestionsBank() {
     return memoryQuestionsBank;
   }
   try {
+    let raw = null;
     if (fs.existsSync(TMP_QUESTIONS_FILE_PATH)) {
       const content = fs.readFileSync(TMP_QUESTIONS_FILE_PATH, "utf-8");
-      memoryQuestionsBank = JSON.parse(content);
-      return memoryQuestionsBank || {};
-    }
-    if (fs.existsSync(QUESTIONS_FILE_PATH)) {
+      raw = JSON.parse(content);
+    } else if (fs.existsSync(QUESTIONS_FILE_PATH)) {
       const content = fs.readFileSync(QUESTIONS_FILE_PATH, "utf-8");
-      memoryQuestionsBank = JSON.parse(content);
-      return memoryQuestionsBank || {};
+      raw = JSON.parse(content);
+    }
+    if (raw && typeof raw === "object") {
+      memoryQuestionsBank = migrateAndCanonicalizeBank(raw);
+      return memoryQuestionsBank;
     }
   } catch (err) {
     console.warn("[QuestionsBank] Notice reading questions.json:", err);
   }
   memoryQuestionsBank = {};
   return memoryQuestionsBank;
+}
+function migrateAndCanonicalizeBank(rawBank) {
+  let hasChanges = false;
+  const canonicalBank = {};
+  for (const [oldKey, entry] of Object.entries(rawBank)) {
+    if (!entry || !Array.isArray(entry.questions)) continue;
+    const canonicalKey = generateQuestionBankKey({
+      country: entry.country,
+      examName: entry.examName,
+      grade: entry.grade,
+      subject: entry.subject,
+      chapter: entry.chapter,
+      subtopic: entry.subtopic,
+      feature: entry.feature,
+      difficulty: entry.difficulty,
+      practiceMode: entry.practiceMode
+    });
+    if (canonicalKey !== oldKey) {
+      hasChanges = true;
+    }
+    if (!canonicalBank[canonicalKey]) {
+      canonicalBank[canonicalKey] = {
+        ...entry,
+        totalQuestions: entry.questions.length
+      };
+    } else {
+      hasChanges = true;
+      const existing = canonicalBank[canonicalKey];
+      const existingTexts = new Set(existing.questions.map((q) => (q.question || "").toLowerCase().trim()));
+      for (const q of entry.questions) {
+        const text = (q.question || "").toLowerCase().trim();
+        if (text && !existingTexts.has(text)) {
+          existingTexts.add(text);
+          existing.questions.push(q);
+        }
+      }
+      existing.totalQuestions = existing.questions.length;
+      existing.hitCount = (existing.hitCount || 0) + (entry.hitCount || 0);
+    }
+  }
+  if (hasChanges) {
+    try {
+      const content = JSON.stringify(canonicalBank, null, 2);
+      fs.writeFileSync(QUESTIONS_FILE_PATH, content, "utf-8");
+      console.log("[QuestionsBank] Migrated and canonicalized question bank keys successfully.");
+    } catch (e) {
+    }
+  }
+  return canonicalBank;
 }
 function saveQuestionsBank(bank) {
   memoryQuestionsBank = bank;
@@ -1753,7 +1899,7 @@ function findInQuestionBank(params) {
   if (!entry || !Array.isArray(entry.questions) || entry.questions.length === 0) {
     return null;
   }
-  const isMatch = normalizeKeyPart(entry.country) === normalizeKeyPart(params.country) && normalizeKeyPart(entry.examName) === normalizeKeyPart(params.examName) && normalizeKeyPart(entry.grade) === normalizeKeyPart(params.grade) && normalizeKeyPart(entry.subject) === normalizeKeyPart(params.subject) && normalizeKeyPart(entry.chapter) === normalizeKeyPart(params.chapter) && normalizeKeyPart(entry.subtopic) === normalizeKeyPart(params.subtopic) && normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) && normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty) && normalizePracticeMode(entry.practiceMode) === normalizePracticeMode(params.practiceMode);
+  const isMatch = canonicalizeCountry(entry.country) === canonicalizeCountry(params.country) && canonicalizeExam(entry.examName) === canonicalizeExam(params.examName) && canonicalizeGrade(entry.grade) === canonicalizeGrade(params.grade) && canonicalizeSubject(entry.subject) === canonicalizeSubject(params.subject) && normalizeChapterOrSubtopic(entry.chapter) === normalizeChapterOrSubtopic(params.chapter) && normalizeChapterOrSubtopic(entry.subtopic) === normalizeChapterOrSubtopic(params.subtopic) && normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) && normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty) && normalizePracticeMode(entry.practiceMode) === normalizePracticeMode(params.practiceMode);
   if (!isMatch) {
     return null;
   }
@@ -2012,11 +2158,178 @@ function saveToFlashcardsBank(params) {
   console.log(`[FlashcardBank] Saved ${mergedCards.length} flashcards for [${params.country} > ${params.exam} > ${params.subject} > ${params.chapter} > ${normalizedSubtopic}]. Key: ${key}`);
 }
 
+// src/utils/notesBank.ts
+import path3 from "path";
+import fs3 from "fs";
+function normalizeNotesKeyPart(str, fallback = "general") {
+  if (!str || typeof str !== "string") return fallback;
+  const trimmed = str.trim();
+  if (/^(?:all\s*topics?\s*notes?|all\s*topics?|all\s*cards?|practice\s*full\s*chapter|full\s*chapter|entire\s*chapter|full\s*syllabus|all)$/i.test(trimmed)) {
+    return "all_topics_notes";
+  }
+  if (/^(?:revision|short|short\s*revision|quick|summary)$/i.test(trimmed)) {
+    return "revision";
+  }
+  if (/^(?:detailed|full|comprehensive|deep)$/i.test(trimmed)) {
+    return "detailed";
+  }
+  const slug = trimmed.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
+  return slug || fallback;
+}
+function generateNotesBankKey(params) {
+  const c = normalizeNotesKeyPart(params.country, "global");
+  const e = normalizeNotesKeyPart(params.exam, "general");
+  const g = normalizeNotesKeyPart(params.grade, "standard");
+  const s = normalizeNotesKeyPart(params.subject, "general");
+  const ch = normalizeNotesKeyPart(params.chapter, "all");
+  const sub = normalizeNotesKeyPart(params.subtopic, "all_topics_notes");
+  const t = normalizeNotesKeyPart(params.noteType, "detailed");
+  const f = normalizeNotesKeyPart(params.feature, "ai_notes");
+  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${t}__${f}`;
+}
+function extractNotesHierarchy(body) {
+  const rawCountry = (body.country || body.academic_country || "Global").trim();
+  const country = rawCountry.toLowerCase() === "others" || rawCountry.toLowerCase() === "other" ? body.customCountry || "Global" : rawCountry;
+  const exam = (body.exam || body.targetExam || body.target_exam || body.academic_exam || "General").trim();
+  const grade = (body.grade || body.gradeLevel || body.userGrade || "Standard").trim();
+  const rawType = (body.noteType || body.depth || "detailed").toString().toLowerCase().trim();
+  const noteType = rawType === "revision" || rawType === "short" || rawType === "standard" ? "revision" : "detailed";
+  const rawTopic = (body.chapter || body.topic || body.prompt || body.text || "").trim();
+  let subject = (body.subject || body.stream || "").trim();
+  let chapter = (body.chapter || "").trim();
+  let subtopic = (body.subtopic || "").trim();
+  const isFullChapterMatch = /^(?:all|all\s*topics?|all\s*notes?|practice\s*full\s*chapter|full\s*chapter|entire\s*chapter|full\s*syllabus)$/i.test(subtopic) || /all\s*topics?\s*notes?|practice\s*full\s*chapter|full\s*chapter/i.test(rawTopic);
+  if ((!subject || !chapter || !subtopic || chapter.includes(" - ")) && rawTopic) {
+    const parts = rawTopic.split(/\s*[-–—:]\s*/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      if (!subject) subject = parts[0];
+      chapter = parts[1];
+      subtopic = parts.slice(2).join(" - ");
+    } else if (parts.length === 2) {
+      if (subject && subject.toLowerCase() !== parts[0].toLowerCase()) {
+        chapter = parts[0];
+        subtopic = parts[1];
+      } else {
+        if (!subject) subject = parts[0];
+        chapter = parts[1];
+        if (!subtopic) subtopic = "All Topics Notes";
+      }
+    } else if (parts.length === 1) {
+      chapter = parts[0];
+      if (!subtopic) subtopic = "All Topics Notes";
+      if (!subject) subject = "General Studies";
+    }
+  }
+  if (isFullChapterMatch || !subtopic || subtopic.toLowerCase() === "all") {
+    subtopic = "All Topics Notes";
+  }
+  if (!subject) subject = "General Studies";
+  if (!chapter) chapter = "Core Curriculum";
+  return {
+    country,
+    exam,
+    grade,
+    subject,
+    chapter,
+    subtopic,
+    noteType,
+    feature: "AI Notes"
+  };
+}
+var NOTES_FILE_PATH = path3.join(process.cwd(), "notes.json");
+var TMP_NOTES_FILE_PATH = path3.join("/tmp", "notes.json");
+var memoryNotesBank = null;
+function loadNotesBank() {
+  if (memoryNotesBank) {
+    return memoryNotesBank;
+  }
+  try {
+    const targetFile = fs3.existsSync(TMP_NOTES_FILE_PATH) ? TMP_NOTES_FILE_PATH : fs3.existsSync(NOTES_FILE_PATH) ? NOTES_FILE_PATH : null;
+    if (targetFile) {
+      const content = fs3.readFileSync(targetFile, "utf-8");
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        memoryNotesBank = {};
+        for (const item of parsed) {
+          const key = generateNotesBankKey(item);
+          memoryNotesBank[key] = item;
+        }
+        return memoryNotesBank;
+      } else if (parsed && typeof parsed === "object") {
+        memoryNotesBank = parsed;
+        return memoryNotesBank || {};
+      }
+    }
+  } catch (err) {
+    console.warn("[NotesBank] Notice reading notes.json:", err);
+  }
+  memoryNotesBank = {};
+  return memoryNotesBank;
+}
+function saveNotesBank(bank) {
+  memoryNotesBank = bank;
+  const content = JSON.stringify(bank, null, 2);
+  try {
+    fs3.writeFileSync(NOTES_FILE_PATH, content, "utf-8");
+  } catch (err) {
+    try {
+      fs3.writeFileSync(TMP_NOTES_FILE_PATH, content, "utf-8");
+    } catch (tmpErr) {
+      console.warn("[NotesBank] Warning writing notes to /tmp:", tmpErr);
+    }
+  }
+}
+function findInNotesBank(params) {
+  const bank = loadNotesBank();
+  const key = generateNotesBankKey({
+    ...params,
+    feature: params.feature || "AI Notes"
+  });
+  const entry = bank[key];
+  if (!entry || !entry.notes) {
+    return null;
+  }
+  const isMatch = normalizeNotesKeyPart(entry.country) === normalizeNotesKeyPart(params.country) && normalizeNotesKeyPart(entry.exam) === normalizeNotesKeyPart(params.exam) && normalizeNotesKeyPart(entry.grade) === normalizeNotesKeyPart(params.grade) && normalizeNotesKeyPart(entry.subject) === normalizeNotesKeyPart(params.subject) && normalizeNotesKeyPart(entry.chapter) === normalizeNotesKeyPart(params.chapter) && normalizeNotesKeyPart(entry.subtopic) === normalizeNotesKeyPart(params.subtopic) && normalizeNotesKeyPart(entry.noteType) === normalizeNotesKeyPart(params.noteType) && normalizeNotesKeyPart(entry.feature) === normalizeNotesKeyPart(params.feature || "AI Notes");
+  if (!isMatch) {
+    return null;
+  }
+  entry.hitCount = (entry.hitCount || 0) + 1;
+  entry.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  saveNotesBank(bank);
+  return entry.notes;
+}
+function saveToNotesBank(params) {
+  if (!params.notes) return;
+  const bank = loadNotesBank();
+  const key = generateNotesBankKey({
+    ...params,
+    feature: params.feature || "AI Notes"
+  });
+  const existing = bank[key];
+  const normalizedSubtopic = /^(?:all|all\s*topics?|all\s*notes?|practice\s*full\s*chapter|full\s*chapter|entire\s*chapter|full\s*syllabus)$/i.test(params.subtopic) || !params.subtopic || params.subtopic.trim() === "" ? "All Topics Notes" : params.subtopic;
+  bank[key] = {
+    country: params.country,
+    exam: params.exam,
+    grade: params.grade,
+    subject: params.subject,
+    chapter: params.chapter,
+    subtopic: normalizedSubtopic,
+    noteType: params.noteType,
+    feature: "AI Notes",
+    notes: params.notes,
+    createdAt: existing?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    hitCount: (existing?.hitCount || 0) + 1
+  };
+  saveNotesBank(bank);
+  console.log(`[NotesBank] Saved notes for [${params.country} > ${params.exam} > ${params.subject} > ${params.chapter} > ${normalizedSubtopic} (${params.noteType})]. Key: ${key}`);
+}
+
 // server.ts
 import dotenv from "dotenv";
 import express from "express";
-import path3 from "path";
-import fs3 from "fs";
+import path4 from "path";
+import fs4 from "fs";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -2070,11 +2383,11 @@ var apiLimiter = rateLimit({
   validate: { xForwardedForHeader: false, default: false }
 });
 app.use("/api/", apiLimiter);
-var SUBS_FILE_PATH = path3.join(process.cwd(), "subscriptions.json");
+var SUBS_FILE_PATH = path4.join(process.cwd(), "subscriptions.json");
 function getStoredSubscriptions() {
   try {
-    if (fs3.existsSync(SUBS_FILE_PATH)) {
-      return JSON.parse(fs3.readFileSync(SUBS_FILE_PATH, "utf-8"));
+    if (fs4.existsSync(SUBS_FILE_PATH)) {
+      return JSON.parse(fs4.readFileSync(SUBS_FILE_PATH, "utf-8"));
     }
   } catch (error) {
     console.error("Error reading subscriptions from file:", error);
@@ -2083,7 +2396,7 @@ function getStoredSubscriptions() {
 }
 function writeStoredSubscriptions(subs) {
   try {
-    fs3.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
+    fs4.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
   } catch (error) {
     console.error("Error saving subscriptions to file:", error);
   }
@@ -2103,12 +2416,12 @@ function isClientPro(clientId, req) {
 }
 var DAILY_LIMIT_PRO = 150;
 var DAILY_LIMIT_MAX = 100;
-var DAILY_USAGE_FILE_PATH = process.env.VERCEL ? path3.join("/tmp", "ai_daily_usage.json") : path3.join(process.cwd(), "ai_daily_usage.json");
+var DAILY_USAGE_FILE_PATH = process.env.VERCEL ? path4.join("/tmp", "ai_daily_usage.json") : path4.join(process.cwd(), "ai_daily_usage.json");
 var dailyUsageStore = /* @__PURE__ */ new Map();
 function loadDailyUsageStore() {
   try {
-    if (fs3.existsSync(DAILY_USAGE_FILE_PATH)) {
-      const raw = fs3.readFileSync(DAILY_USAGE_FILE_PATH, "utf-8");
+    if (fs4.existsSync(DAILY_USAGE_FILE_PATH)) {
+      const raw = fs4.readFileSync(DAILY_USAGE_FILE_PATH, "utf-8");
       const data = JSON.parse(raw);
       const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       for (const [key, record] of Object.entries(data)) {
@@ -2136,7 +2449,7 @@ function scheduleSaveDailyUsage() {
           data[key] = record;
         }
       }
-      fs3.writeFileSync(DAILY_USAGE_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+      fs4.writeFileSync(DAILY_USAGE_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
     } catch (err) {
       console.error("[DailyLimit] Error saving daily usage to disk:", err);
     }
@@ -3757,6 +4070,77 @@ var handleSummarizePdfUpload = (req, res, next) => {
       return res.status(400).json({ error: "File upload stream interrupted. Please retry uploading your document." });
     }
     next();
+  });
+};
+var shuffleAndBalanceQuizOptions = (quizList) => {
+  if (!Array.isArray(quizList) || quizList.length === 0) return quizList;
+  const letters = ["A", "B", "C", "D"];
+  const numQuestions = quizList.length;
+  const targetSlots = [];
+  for (let i = 0; i < numQuestions; i++) {
+    targetSlots.push(i % 4);
+  }
+  for (let i = targetSlots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [targetSlots[i], targetSlots[j]] = [targetSlots[j], targetSlots[i]];
+  }
+  return quizList.map((item, qIdx) => {
+    if (!item || typeof item !== "object" || !Array.isArray(item.options) || item.options.length !== 4) {
+      return item;
+    }
+    const cleanOptionBody = (opt) => {
+      if (typeof opt !== "string") return "";
+      return opt.replace(/^([A-Da-d][\)\.]|\([A-Da-d]\))\s*/, "").trim();
+    };
+    const rawBodies = item.options.map(cleanOptionBody);
+    const rawAnswer = typeof item.correctAnswer === "string" ? cleanOptionBody(item.correctAnswer) : "";
+    let correctIdx = rawBodies.findIndex((b) => b === rawAnswer);
+    if (correctIdx === -1) {
+      const letterMatch = (item.correctAnswer || "").match(/^(?:option\s*)?\(?([a-d])\)?[\.\:\)\s\-]?/i);
+      if (letterMatch) {
+        const l = letterMatch[1].toUpperCase();
+        correctIdx = ["A", "B", "C", "D"].indexOf(l);
+      }
+    }
+    if (correctIdx === -1) {
+      const normA = rawAnswer.replace(/\\?\$/g, "").replace(/\s+/g, "").toLowerCase();
+      correctIdx = rawBodies.findIndex((b) => {
+        const normB = b.replace(/\\?\$/g, "").replace(/\s+/g, "").toLowerCase();
+        return normB === normA || normB.length > 3 && normA.length > 3 && (normB.includes(normA) || normA.includes(normB));
+      });
+    }
+    if (correctIdx === -1) {
+      correctIdx = 0;
+    }
+    const correctBody = rawBodies[correctIdx];
+    const distractorBodies = rawBodies.filter((_, idx) => idx !== correctIdx);
+    for (let i = distractorBodies.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [distractorBodies[i], distractorBodies[j]] = [distractorBodies[j], distractorBodies[i]];
+    }
+    const targetSlot = targetSlots[qIdx] ?? Math.floor(Math.random() * 4);
+    const newOptions = [];
+    let distractorPtr = 0;
+    for (let slot = 0; slot < 4; slot++) {
+      const letter = letters[slot];
+      if (slot === targetSlot) {
+        newOptions.push(`${letter}) ${correctBody}`);
+      } else {
+        newOptions.push(`${letter}) ${distractorBodies[distractorPtr++]}`);
+      }
+    }
+    const newCorrectAnswer = newOptions[targetSlot];
+    let newExplanation = item.explanation;
+    if (typeof newExplanation === "string") {
+      const targetLetter = letters[targetSlot];
+      newExplanation = newExplanation.replace(/\b(?:option\s*)([A-Da-d])\b/gi, `Option ${targetLetter}`);
+    }
+    return {
+      ...item,
+      options: newOptions,
+      correctAnswer: newCorrectAnswer,
+      explanation: newExplanation
+    };
   });
 };
 app.post("/api/summarize", handleSummarizePdfUpload, async (req, res) => {
@@ -7787,6 +8171,26 @@ app.post("/api/generate-ai-notes", async (req, res) => {
     const isDetailed = depth === "detailed";
     const examBlueprint2 = req.body.examBlueprint;
     const examDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, subject);
+    const hierarchyNotes = extractNotesHierarchy(req.body);
+    const cachedNotes = findInNotesBank({
+      country: hierarchyNotes.country,
+      exam: hierarchyNotes.exam,
+      grade: hierarchyNotes.grade,
+      subject: hierarchyNotes.subject,
+      chapter: hierarchyNotes.chapter,
+      subtopic: hierarchyNotes.subtopic,
+      noteType: hierarchyNotes.noteType,
+      feature: "AI Notes"
+    });
+    if (cachedNotes) {
+      console.log(`[NotesBank] HIT! Serving cached notes for [${hierarchyNotes.country} > ${hierarchyNotes.exam} > ${hierarchyNotes.grade} > ${hierarchyNotes.subject} > ${hierarchyNotes.chapter} > ${hierarchyNotes.subtopic} (${hierarchyNotes.noteType})] ($0 AI cost)`);
+      return res.json({
+        ...cachedNotes,
+        cached: true,
+        source: "notes_bank"
+      });
+    }
+    console.log(`[NotesBank] MISS for [${hierarchyNotes.country} > ${hierarchyNotes.exam} > ${hierarchyNotes.grade} > ${hierarchyNotes.subject} > ${hierarchyNotes.chapter} > ${hierarchyNotes.subtopic} (${hierarchyNotes.noteType})]. Generating via Gemini AI...`);
     const systemInstruction = `You are a Legendary National Exam Topper, Master Textbook Author, and Elite Handwritten Study Notes Architect.
 Your mission is to produce authentic, publication-grade HANDWRITTEN TOPPER STUDY NOTES for the chapter "${chapter}" in "${subject}".
 ${examDirective ? `
@@ -7909,10 +8313,46 @@ Ensure that for Full Detailed Notes, NO concept, formula, or sub-topic is omitte
       console.warn("[generate-ai-notes] Generating authentic curriculum fallback notes for:", chapter);
       notesData = generateFallbackNotes(subject, chapter, targetExam2, isDetailed);
     }
-    return res.json(notesData);
+    if (notesData && (notesData.conceptMap || notesData.pages)) {
+      saveToNotesBank({
+        country: hierarchyNotes.country,
+        exam: hierarchyNotes.exam,
+        grade: hierarchyNotes.grade,
+        subject: hierarchyNotes.subject,
+        chapter: hierarchyNotes.chapter,
+        subtopic: hierarchyNotes.subtopic,
+        noteType: hierarchyNotes.noteType,
+        feature: "AI Notes",
+        notes: notesData
+      });
+    }
+    return res.json({ ...notesData, cached: false });
   } catch (error) {
     console.error("[generate-ai-notes] Error:", error);
     return res.status(500).json({ error: error.message || "Failed to generate AI notes" });
+  }
+});
+app.post("/api/save-notes-bank", async (req, res) => {
+  try {
+    const hierarchy = extractNotesHierarchy(req.body);
+    const notes = req.body.notes || req.body.data;
+    if (notes) {
+      saveToNotesBank({
+        country: hierarchy.country,
+        exam: hierarchy.exam,
+        grade: hierarchy.grade,
+        subject: hierarchy.subject,
+        chapter: hierarchy.chapter,
+        subtopic: hierarchy.subtopic,
+        noteType: hierarchy.noteType,
+        feature: "AI Notes",
+        notes
+      });
+      return res.json({ success: true, message: "Notes saved to bank successfully" });
+    }
+    res.status(400).json({ error: "Missing or invalid notes data" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to save notes to bank" });
   }
 });
 var verifySubjectiveQuestionsWithAI = async (questions, context) => {
@@ -10083,14 +10523,20 @@ CRITICAL AUDIT & VERIFICATION DIRECTIVES (ZERO TOLERANCE FOR MISMATCHES OR CALCU
    - For every question, recalculate and independently derive the true scientific or mathematical answer BEFORE looking at the options.
    - If your calculated answer does not match any of the 4 options, immediately adjust the options so the true calculated answer is present in the choices.
    - NEVER bend calculations or alter facts to match an incorrect option! Physical laws and arithmetic must be 100% accurate.
-2. EXACTLY ONE ACCURATE OPTION:
+2. STRICT SINGLE-TRUTH & DISTRACTOR EXCLUSIVITY AUDIT (ZERO AMBIGUITY):
    - Ensure exactly ONE option (A, B, C, or D) is unambiguously correct.
+   - Rigorously verify that the other 3 distractors are undeniably FALSE and cannot be argued as alternative correct answers (e.g. if the question asks for a dimensionless quantity, verify that ALL 3 distractors have non-zero dimensions; replace any distractor that is also dimensionless!).
    - The "correctAnswer" field MUST be 100% verbatim identical to that exact option string in the "options" array.
-3. ZERO THINKING LEAKAGE IN EXPLANATIONS:
+3. ANTI-BIAS ANSWER POSITIONING:
+   - Do NOT default the correct answer to Option A. Distribute correct answers across A, B, C, and D.
+4. ZERO THINKING LEAKAGE IN EXPLANATIONS:
    - The "explanation" must be a clean, pedagogical, step-by-step educational proof.
    - ABSOLUTELY FORBIDDEN: Words like "Wait,", "Recalculating", "Let me adjust options", "Hold on", "Let's check". Strip any internal monologue immediately.
-4. BALANCED LATEX ($...$) & CURRENCY ($50 -> \\$50):
+   - Do NOT refer to options by letter in explanations (never say "Option A is correct"). Refer directly to the concept, equation, or physical principle itself.
+5. BALANCED LATEX ($...) & NO TRAILING .$ DELIMITERS:
    - Wrap all formulas and variables in balanced single dollar signs ($...). Balance any unclosed single dollar signs.
+   - Never write a trailing period inside or after math delimiter (write $x = 5$. NOT $x = 5.$).
+   - Format degree Celsius as $2^circ	ext{C}$ (never raw circC).
 
 Return ONLY a valid JSON array of verified questions in this exact structure:
 [
@@ -10174,7 +10620,11 @@ var sanitizeQuizItems = (quizList) => {
   };
   const balanceLatex = (txt) => {
     if (typeof txt !== "string") return txt;
-    let s = txt.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$$2");
+    let s = txt;
+    s = s.replace(/(\[[^\]]+\]|\b[a-zA-Z0-9\^_-]+)\.\$/g, "$1$.");
+    s = s.replace(/\.\$/g, "$.");
+    s = s.replace(/\\circ\s*C\b/g, "\\circ\\text{C}");
+    s = s.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$2");
     const count = (s.match(/(^|[^\\])\$/g) || []).length;
     if (count % 2 !== 0) s += "$";
     return s;
@@ -10263,8 +10713,11 @@ app.post("/api/generate-quiz", async (req, res) => {
     });
     if (cachedQuiz && cachedQuiz.length >= requestedCount) {
       console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic} | mode: ${hierarchyQuiz.practiceMode}] ($0 AI cost)`);
+      const sanitizedCached = sanitizeQuizItems(cachedQuiz.slice(0, requestedCount));
+      const aCount = sanitizedCached.filter((q) => (q.correctAnswer || "").startsWith("A)") || q.options?.[0] === q.correctAnswer).length;
+      const finalToServe = aCount / sanitizedCached.length > 0.5 ? shuffleAndBalanceQuizOptions(sanitizedCached) : sanitizedCached;
       return res.json({
-        quiz: sanitizeQuizItems(cachedQuiz.slice(0, requestedCount)),
+        quiz: finalToServe,
         cached: true,
         source: "questions_bank"
       });
@@ -10314,6 +10767,16 @@ CRITICAL RULES:
    - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within \xB115% of each other).
    - NEVER make the correct answer significantly longer, more verbose, or more elaborate than the wrong choices (distractors). Length cueing is strictly prohibited!
    - Every incorrect option (distractor) must be realistic, plausible, sophisticated, and written with the exact same grammatical structure, tone, and level of academic detail as the correct option so that students cannot guess the answer based on option length.
+5. CRITICAL DISTRACTOR EXCLUSIVITY & ZERO AMBIGUITY MANDATE:
+   - Exactly ONE option must be scientifically, mathematically, and conceptually correct.
+   - The 3 incorrect options (distractors) MUST be unambiguously FALSE and NEVER valid alternative answers.
+   - For example: If asking "Which of the following is a dimensionless quantity?", ONLY the designated correct option may be dimensionless (e.g. Relative density); the other 3 options MUST have non-zero dimensions (e.g. Force, Velocity, Viscosity). NEVER include another dimensionless quantity (such as Coefficient of friction, Strain, or Refractive index) as a distractor!
+   - If asking "Which is an SI base unit?", only ONE choice may be an SI base unit; the other 3 MUST be derived units.
+   - Distractors must be mutually exclusive with the correct concept.
+6. ANTI-OPTION-A BIAS & BALANCED KEY DISTRIBUTION:
+   - You MUST randomly and evenly distribute the correct answer across A, B, C, and D across the generated questions (approx 25% A, 25% B, 25% C, 25% D). NEVER make Option A the answer for all or most questions!
+7. EXPLANATIONS MUST AVOID OPTION LETTERS:
+   - In the "explanation" field, NEVER refer to options by letter (never say "Hence Option A is correct" or "Option B is right"). Always refer directly to the concept, equation, or physical principle itself.
 5. MULTIPLE EQUATIONS FORMATTING: If generating any math questions, options, or explanations that contain multiple equations (such as systems of linear equations), you must strictly separate the equations using a clear delimiter like the word 'and' or a newline character (\\n) so they do not blend together into a single string.
 6. MATHEMATICAL & SCIENTIFIC NOTATION (LATEX VS PLAIN ENGLISH):
    - Wrap ONLY genuine mathematical equations, algebraic expressions, variables, superscripts (exponents), and subscripts in standard single dollar signs ($...).
@@ -10453,13 +10916,14 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
           topic
         });
         const sanitized = sanitizeQuizItems(verified);
+        const balanced = shuffleAndBalanceQuizOptions(sanitized);
         saveToQuestionBank({
           ...hierarchyQuiz,
           feature: "ai_quizzes",
           difficulty,
-          questions: sanitized
+          questions: balanced
         });
-        return res.json({ quiz: sanitized, cached: false, source: "ai_generated" });
+        return res.json({ quiz: balanced, cached: false, source: "ai_generated" });
       }
     }
     return res.json({ quiz: sanitizeQuizItems(fallbackQuiz(topic, requestedCount)) });
@@ -12130,28 +12594,28 @@ app.post("/api/revenuecat-webhook", async (req, res) => {
   }
 });
 async function startServer() {
-  const distPath = path3.join(process.cwd(), "dist");
-  const hasDist = fs3.existsSync(path3.join(distPath, "index.html"));
+  const distPath = path4.join(process.cwd(), "dist");
+  const hasDist = fs4.existsSync(path4.join(distPath, "index.html"));
   const isDevExplicit = (process.env.NODE_ENV || "").toLowerCase() === "development";
   if (hasDist && !isDevExplicit) {
     console.log("[Server] Serving production static frontend from:", distPath);
     app.use("/assets", (req, res, next) => {
-      const assetDir = path3.join(distPath, "assets");
+      const assetDir = path4.join(distPath, "assets");
       const cleanPath = req.path.replace(/^\//, "");
-      const requestedFile = path3.join(assetDir, cleanPath);
-      if (fs3.existsSync(requestedFile)) {
+      const requestedFile = path4.join(assetDir, cleanPath);
+      if (fs4.existsSync(requestedFile)) {
         return next();
       }
-      const filename = path3.basename(req.path);
+      const filename = path4.basename(req.path);
       const match = filename.match(/^([A-Za-z0-9_-]+?)-[A-Za-z0-9_-]+\.(js|css|map)$/);
-      if (match && fs3.existsSync(assetDir)) {
+      if (match && fs4.existsSync(assetDir)) {
         const prefix = match[1];
         const ext = match[2];
         try {
-          const files = fs3.readdirSync(assetDir);
+          const files = fs4.readdirSync(assetDir);
           const matchingFiles = files.filter((f) => f.startsWith(`${prefix}-`) && f.endsWith(`.${ext}`)).map((f) => {
             try {
-              return { name: f, time: fs3.statSync(path3.join(assetDir, f)).mtimeMs };
+              return { name: f, time: fs4.statSync(path4.join(assetDir, f)).mtimeMs };
             } catch (_) {
               return { name: f, time: 0 };
             }
@@ -12167,7 +12631,7 @@ async function startServer() {
       }
       next();
     });
-    app.use("/assets", express.static(path3.join(distPath, "assets"), {
+    app.use("/assets", express.static(path4.join(distPath, "assets"), {
       maxAge: "1y",
       immutable: true
     }));
@@ -12179,12 +12643,12 @@ async function startServer() {
       }
     }));
     app.get("*", (req, res) => {
-      const ext = path3.extname(req.path);
+      const ext = path4.extname(req.path);
       if (ext || req.path.startsWith("/src") || req.path.startsWith("/api")) {
         return res.status(404).send("Not Found");
       }
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.sendFile(path3.join(distPath, "index.html"));
+      res.sendFile(path4.join(distPath, "index.html"));
     });
   } else {
     try {
@@ -12232,6 +12696,7 @@ export {
   getAuthentic4Subtopics,
   getExamAwareUnitsAndSubtopics,
   researchSingleSubjectBlueprint,
+  shuffleAndBalanceQuizOptions,
   verifyQuizWithAI,
   verifySubjectiveQuestionsWithAI
 };

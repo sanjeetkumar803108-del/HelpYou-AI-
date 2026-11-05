@@ -1,5 +1,5 @@
 {
-  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium__standard": {
+  "norway__norwegian_upper_secondary_exit_examinations__class_11__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium__standard": {
     "country": "Norway",
     "examName": "Norwegian Upper Secondary Exit Examinations",
     "grade": "11th Grade",
@@ -17,8 +17,8 @@
         "options": [
           "A) z = 1.0",
           "B) z = 2.0",
-          "C) z = 2.5",
-          "D) z = 0.5"
+          "C) z = 0.5",
+          "D) z = 2.5"
         ],
         "correctAnswer": "B) z = 2.0",
         "explanation": "z = (60 - 50) / 5 = 2.0."
@@ -28,8 +28,8 @@
         "question": "Wat stelt de standaardafwijking (σ) voor in een normale verdeling?",
         "options": [
           "A) De spreiding rond het gemiddelde",
-          "B) Het maximum",
-          "C) De mediaan",
+          "B) De mediaan",
+          "C) Het maximum",
           "D) De steekproefgrootte"
         ],
         "correctAnswer": "A) De spreiding rond het gemiddelde",
@@ -40,7 +40,7 @@
     "updatedAt": "2026-11-05T12:00:33.199Z",
     "hitCount": 4
   },
-  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__all_subjects_all_topics__all_subjects_all_topics__all_subjects_all_topics__ai_quizzes__hard__standard": {
+  "norway__norwegian_upper_secondary_exit_examinations__class_11__all_subjects_all_topics__all_subjects_all_topics__all_subjects_all_topics__ai_quizzes__hard__standard": {
     "country": "Norway",
     "examName": "Norwegian Upper Secondary Exit Examinations",
     "grade": "11th Grade",
@@ -69,7 +69,7 @@
     "updatedAt": "2026-11-05T10:33:20.592Z",
     "hitCount": 2
   },
-  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium__more_questions_to_practice": {
+  "norway__norwegian_upper_secondary_exit_examinations__class_11__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium__more_questions_to_practice": {
     "country": "Norway",
     "examName": "Norwegian Upper Secondary Exit Examinations",
     "grade": "11th Grade",
@@ -85,12 +85,12 @@
         "id": 101,
         "question": "More Practice Q1: Wat is de kans P(X < 50) voor een normale verdeling met μ = 50?",
         "options": [
-          "A) 0.50",
-          "B) 0.25",
-          "C) 0.75",
-          "D) 1.00"
+          "A) 1.00",
+          "B) 0.50",
+          "C) 0.25",
+          "D) 0.75"
         ],
-        "correctAnswer": "A) 0.50",
+        "correctAnswer": "B) 0.50",
         "explanation": "Omdat de verdeling symmetrisch is rond het gemiddelde μ = 50."
       },
       {
@@ -98,9 +98,9 @@
         "question": "More Practice Q2: Welke eigenschap heeft de standaardnormale verdeling?",
         "options": [
           "A) μ = 0 en σ = 1",
-          "B) μ = 1 en σ = 0",
+          "B) μ = 100 en σ = 15",
           "C) μ = 50 en σ = 5",
-          "D) μ = 100 en σ = 15"
+          "D) μ = 1 en σ = 0"
         ],
         "correctAnswer": "A) μ = 0 en σ = 1",
         "explanation": "Een standaardnormale verdeling heeft per definitie μ = 0 en σ = 1."
@@ -110,7 +110,7 @@
     "updatedAt": "2026-11-05T12:00:33.225Z",
     "hitCount": 3
   },
-  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__poisson_verdeling__ai_quizzes__medium__standard": {
+  "norway__norwegian_upper_secondary_exit_examinations__class_11__mathematics_a__statistiek__poisson_verdeling__ai_quizzes__medium__standard": {
     "country": "Norway",
     "examName": "Norwegian Upper Secondary Exit Examinations",
     "grade": "11th Grade",
@@ -126,17 +126,497 @@
         "id": 1,
         "question": "Wat is de kansformule van de Poisson-verdeling?",
         "options": [
-          "P(X=k) = (λ^k * e^-λ) / k!",
-          "P(X=k) = (n kies k) * p^k * (1-p)^(n-k)",
-          "P(X=k) = 1 / (b - a)",
-          "P(X=k) = e^-λk"
+          "A) P(X=k) = (λ^k * e^-λ) / k!",
+          "B) P(X=k) = (n kies k) * p^k * (1-p)^(n-k)",
+          "C) P(X=k) = e^-λk",
+          "D) P(X=k) = 1 / (b - a)"
         ],
-        "correctAnswer": "P(X=k) = (λ^k * e^-λ) / k!",
+        "correctAnswer": "A) P(X=k) = (λ^k * e^-λ) / k!",
         "explanation": "Dit is de standaard definitie van de Poisson kansfunctie."
       }
     ],
     "createdAt": "2026-11-05T11:32:45.791Z",
     "updatedAt": "2026-11-05T11:32:45.792Z",
     "hitCount": 2
+  },
+  "india__neet__class_11__biology__cell__structure_and_function_cell_the_unit_of_life__ai_quizzes__medium__standard": {
+    "country": "India",
+    "examName": "neet",
+    "grade": "11th Grade (Junior)",
+    "subject": "Biology",
+    "chapter": "Cell",
+    "subtopic": "Structure and Function - Cell - The Unit of Life",
+    "feature": "ai_quizzes",
+    "difficulty": "Medium",
+    "practiceMode": "standard",
+    "totalQuestions": 10,
+    "questions": [
+      {
+        "question": "Which specific component is responsible for the synthesis of lipids in animal cells?",
+        "options": [
+          "A) Rough Endoplasmic Reticulum",
+          "B) Smooth Endoplasmic Reticulum",
+          "C) Golgi apparatus cisternae",
+          "D) Mitochondrial matrix enzymes"
+        ],
+        "correctAnswer": "B) Smooth Endoplasmic Reticulum",
+        "explanation": "The Smooth Endoplasmic Reticulum (SER) is devoid of ribosomes and serves as the primary site for the synthesis of lipids, including phospholipids and cholesterol, as well as steroid hormones in specialized cells."
+      },
+      {
+        "question": "The 'fluid mosaic model' describes the plasma membrane as a fluid structure. Which component primarily provides this fluidity?",
+        "options": [
+          "A) Integral membrane proteins",
+          "B) Glycoprotein surface layers",
+          "C) Peripheral membrane proteins",
+          "D) Phospholipid bilayer matrix"
+        ],
+        "correctAnswer": "D) Phospholipid bilayer matrix",
+        "explanation": "According to the fluid mosaic model, the phospholipid bilayer acts as a two-dimensional fluid matrix. The lateral diffusion of phospholipids within this bilayer provides the membrane with its characteristic fluidity and dynamic nature."
+      },
+      {
+        "question": "Which organelle is considered the 'powerhouse of the cell' due to its role in aerobic respiration?",
+        "options": [
+          "A) Mitochondria organelles",
+          "B) Lysosome vesicle units",
+          "C) Chloroplast structures",
+          "D) Ribosome complexes"
+        ],
+        "correctAnswer": "A) Mitochondria organelles",
+        "explanation": "Mitochondria are double-membrane-bound organelles that serve as the site for aerobic respiration. They generate ATP through the Krebs cycle and the electron transport chain located on the inner mitochondrial membrane (cristae)."
+      },
+      {
+        "question": "Which cytoskeletal element is composed of tubulin dimers and functions in intracellular transport?",
+        "options": [
+          "A) Microtubule polymers",
+          "B) Centrosome proteins",
+          "C) Microfilament strands",
+          "D) Intermediate filaments"
+        ],
+        "correctAnswer": "A) Microtubule polymers",
+        "explanation": "Microtubules are hollow, cylindrical structures composed of $\\alpha$ and $\\beta$-tubulin dimers. They function as structural scaffolds and act as tracks for motor proteins (dynein and kinesin) to transport vesicles and organelles."
+      },
+      {
+        "question": "What is the primary function of the nucleolus found within the eukaryotic nucleus?",
+        "options": [
+          "A) Ribosomal RNA synthesis",
+          "B) DNA replication initiation",
+          "C) Protein folding kinetics",
+          "D) Nuclear envelope repair"
+        ],
+        "correctAnswer": "A) Ribosomal RNA synthesis",
+        "explanation": "The nucleolus is a dense, non-membrane-bound sub-nuclear structure where ribosomal RNA (rRNA) is transcribed, processed, and assembled with ribosomal proteins to form ribosomal subunits."
+      },
+      {
+        "question": "Which organelle utilizes digestive enzymes to perform intracellular digestion and autophagy?",
+        "options": [
+          "A) Vacuole storage units",
+          "B) Golgi secretory stacks",
+          "C) Lysosome vesicle sacs",
+          "D) Peroxisome lipid bodies"
+        ],
+        "correctAnswer": "C) Lysosome vesicle sacs",
+        "explanation": "Lysosomes are membrane-bound vesicles containing a variety of hydrolytic enzymes (acid hydrolases) that function at an acidic pH to digest macromolecules, worn-out organelles, and foreign particles."
+      },
+      {
+        "question": "In plant cells, which structure is primarily responsible for maintaining turgor pressure?",
+        "options": [
+          "A) Cytoplasmic streaming flux",
+          "B) Rigid cell wall layer",
+          "C) Plastid storage organelle",
+          "D) Large central vacuole"
+        ],
+        "correctAnswer": "D) Large central vacuole",
+        "explanation": "The large central vacuole in plant cells stores water and solutes. By exerting turgor pressure against the cell wall, it maintains the structural rigidity and turgidity of the plant cell."
+      },
+      {
+        "question": "Which protein complex is responsible for the synthesis of polypeptide chains in both prokaryotes and eukaryotes?",
+        "options": [
+          "A) Mitochondrial matrix",
+          "B) Golgi body complex",
+          "C) Ribosome granule unit",
+          "D) Endoplasmic reticulum"
+        ],
+        "correctAnswer": "C) Ribosome granule unit",
+        "explanation": "Ribosomes are the universal cellular machinery for protein synthesis. They consist of two subunits (large and small) composed of rRNA and proteins, which translate mRNA into polypeptide chains."
+      },
+      {
+        "question": "The Golgi apparatus is primarily involved in which cellular process?",
+        "options": [
+          "A) DNA damage repair cycles",
+          "B) Protein glycosylation steps",
+          "C) Lipid bilayer synthesis",
+          "D) ATP production pathways"
+        ],
+        "correctAnswer": "B) Protein glycosylation steps",
+        "explanation": "The Golgi apparatus acts as the post-office of the cell. It modifies proteins and lipids received from the ER, primarily through glycosylation (adding carbohydrate chains) and sorting them for transport to their final destinations."
+      },
+      {
+        "question": "Which feature distinguishes a prokaryotic cell from a eukaryotic cell?",
+        "options": [
+          "A) Lack of plasma membrane",
+          "B) Absence of nuclear envelope",
+          "C) Absence of cytoplasm fluid",
+          "D) Presence of circular DNA"
+        ],
+        "correctAnswer": "B) Absence of nuclear envelope",
+        "explanation": "The defining characteristic of prokaryotic cells is the absence of a membrane-bound nucleus (nuclear envelope) and membrane-bound organelles, whereas eukaryotic cells possess a well-defined nucleus containing genetic material."
+      }
+    ],
+    "createdAt": "2026-11-05T12:02:59.492Z",
+    "updatedAt": "2026-11-05T12:02:59.492Z",
+    "hitCount": 1
+  },
+  "india__neet__class_11__biology__cell__the_unit_of_life__ai_quizzes__medium__standard": {
+    "country": "India",
+    "examName": "National Eligibility cum Entrance Test (Undergraduate)",
+    "grade": "Class_11",
+    "subject": "Biology (Botany & Zoology)",
+    "chapter": "Cell",
+    "subtopic": "The Unit of Life",
+    "feature": "ai_quizzes",
+    "difficulty": "Medium",
+    "practiceMode": "standard",
+    "totalQuestions": 10,
+    "questions": [
+      {
+        "question": "Which specific organelle is responsible for the packaging and dispatching of proteins to their target destinations within or outside the cell?",
+        "options": [
+          "A) The Endoplasmic reticulum performs protein synthesis tasks",
+          "B) The Golgi apparatus performs modification and packaging",
+          "C) The Lysosomes perform intracellular digestion of materials",
+          "D) The Mitochondria perform oxidative phosphorylation of glucose"
+        ],
+        "correctAnswer": "B) The Golgi apparatus performs modification and packaging",
+        "explanation": "The Golgi apparatus acts as the post office of the cell by modifying, sorting, and packaging proteins into vesicles for secretion or delivery to other organelles."
+      },
+      {
+        "question": "What is the primary chemical difference between the cell walls of prokaryotic organisms like bacteria and eukaryotic plant cells?",
+        "options": [
+          "A) Bacterial walls contain peptidoglycan and plant cell cellulose",
+          "B) Bacterial walls contain pectin and plant cell lipoidal",
+          "C) Bacterial walls contain chitin and plant cell proteinaceous",
+          "D) Bacterial walls contain cellulose and plant cell chitinous"
+        ],
+        "correctAnswer": "A) Bacterial walls contain peptidoglycan and plant cell cellulose",
+        "explanation": "Bacterial cell walls are uniquely composed of peptidoglycan (murein), whereas plant cell walls are primarily composed of cellulose microfibrils."
+      },
+      {
+        "question": "Which of the following structures is common to both prokaryotic and eukaryotic cells, serving as the site of protein synthesis?",
+        "options": [
+          "A) Lysosomes are present in both cell types surely",
+          "B) Ribosomes are present in both cell types freely",
+          "C) Mitochondria are present in both cell types widely",
+          "D) Nuclei are present in both cell types clearly"
+        ],
+        "correctAnswer": "B) Ribosomes are present in both cell types freely",
+        "explanation": "Ribosomes are non-membrane-bound organelles found in both prokaryotes and eukaryotes, essential for the translation of mRNA into polypeptide chains."
+      },
+      {
+        "question": "The fluid mosaic model proposed by Singer and Nicolson describes the plasma membrane as a semi-fluid structure primarily composed of:",
+        "options": [
+          "A) A steroid layer with embedded polysaccharide chains",
+          "B) A protein bilayer with embedded lipid droplet molecules",
+          "C) A phospholipid bilayer with embedded protein molecules",
+          "D) A carbohydrate monolayer with embedded nucleic acids"
+        ],
+        "correctAnswer": "C) A phospholipid bilayer with embedded protein molecules",
+        "explanation": "The fluid mosaic model defines the membrane as a lipid bilayer where proteins are distributed like a mosaic, allowing lateral movement of molecules."
+      },
+      {
+        "question": "Which organelle is referred to as the powerhouse of the cell due to its role in the production of ATP through aerobic respiration?",
+        "options": [
+          "A) The chloroplast contains thylakoids for light absorption",
+          "B) The vacuole contains cell sap for osmotic regulation",
+          "C) The peroxisome contains enzymes for lipid metabolism",
+          "D) The mitochondria contain cristae to increase surface area"
+        ],
+        "correctAnswer": "D) The mitochondria contain cristae to increase surface area",
+        "explanation": "Mitochondria produce energy (ATP) via the Krebs cycle and electron transport chain, with cristae providing increased surface area for these enzymatic reactions."
+      },
+      {
+        "question": "What is the primary function of the nucleolus found within the nucleus of a eukaryotic cell?",
+        "options": [
+          "A) Synthesis of ribosomal RNA and assembly of subunits",
+          "B) Replication of cellular DNA during the S-phase cycle",
+          "C) Transcription of messenger RNA for protein synthesis",
+          "D) Storage of calcium ions for signaling pathways cells"
+        ],
+        "correctAnswer": "A) Synthesis of ribosomal RNA and assembly of subunits",
+        "explanation": "The nucleolus is a dense region within the nucleus where rRNA is synthesized and ribosomal subunits are assembled before export to the cytoplasm."
+      },
+      {
+        "question": "Which of the following eukaryotic organelles is part of the endomembrane system and is involved in lipid synthesis and detoxification?",
+        "options": [
+          "A) Vacuolar membrane for ionic gradient maintenance",
+          "B) Smooth endoplasmic reticulum for lipid metabolism",
+          "C) Rough endoplasmic reticulum for protein folding",
+          "D) Golgi complex for carbohydrate synthesis pathways"
+        ],
+        "correctAnswer": "B) Smooth endoplasmic reticulum for lipid metabolism",
+        "explanation": "The smooth ER lacks ribosomes and is specialized for lipid synthesis, steroid hormone production, and detoxifying drugs and poisons in liver cells."
+      },
+      {
+        "question": "Lysosomes are characterized by their content of which type of enzymes, enabling them to perform intracellular digestion?",
+        "options": [
+          "A) Hydrolytic enzymes active at acidic pH levels",
+          "B) Reductive enzymes active at neutral pH levels",
+          "C) Lipolytic enzymes active at alkaline pH levels",
+          "D) Oxidative enzymes active at basic pH levels"
+        ],
+        "correctAnswer": "A) Hydrolytic enzymes active at acidic pH levels",
+        "explanation": "Lysosomes contain various acid hydrolases that are optimally active at an acidic pH, ensuring they only digest materials when the membrane is intact."
+      },
+      {
+        "question": "What is the functional significance of the double-membrane structure found in both mitochondria and chloroplasts?",
+        "options": [
+          "A) Prevention of DNA mutation during cellular division",
+          "B) Regulation of protein synthesis rate within organelles",
+          "C) Facilitation of rapid movement within the cytoplasm",
+          "D) Creation of distinct compartments for metabolic processes"
+        ],
+        "correctAnswer": "D) Creation of distinct compartments for metabolic processes",
+        "explanation": "The double membrane allows for the establishment of electrochemical gradients (like the proton gradient) necessary for ATP production in both organelles."
+      },
+      {
+        "question": "Microtubules and microfilaments are components of the cytoskeleton. Which statement accurately describes their role?",
+        "options": [
+          "A) They synthesize ATP for immediate cellular work",
+          "B) They facilitate transport of water across membranes",
+          "C) They provide structural support and aid movement",
+          "D) They assist in replication of the nuclear DNA"
+        ],
+        "correctAnswer": "C) They provide structural support and aid movement",
+        "explanation": "The cytoskeleton, composed of microtubules, microfilaments, and intermediate filaments, maintains cell shape and enables intracellular transport and cell motility."
+      }
+    ],
+    "createdAt": "2026-11-05T12:03:22.714Z",
+    "updatedAt": "2026-11-05T12:03:22.714Z",
+    "hitCount": 1
+  },
+  "india__neet__class_11__physics__physical_world_and_measurement__units_and_dimensions__ai_quizzes__medium__standard": {
+    "country": "India",
+    "examName": "neet",
+    "grade": "11th Grade (Junior)",
+    "subject": "Physics",
+    "chapter": "Physical World and Measurement",
+    "subtopic": "Units and Dimensions",
+    "feature": "ai_quizzes",
+    "difficulty": "Medium",
+    "practiceMode": "standard",
+    "totalQuestions": 19,
+    "questions": [
+      {
+        "question": "Which of the following physical quantities has the same dimensional formula as that of impulse?",
+        "options": [
+          "A) Moment of force",
+          "B) Angular momentum",
+          "C) Linear momentum",
+          "D) Work done per time"
+        ],
+        "correctAnswer": "C) Linear momentum",
+        "explanation": "Impulse is defined as the product of force and time interval ($F \\cdot \\Delta t$), which equals the change in linear momentum according to the impulse-momentum theorem. Both share the dimensional formula $[M^1 L^1 T^{-1}]$. NCERT Physics, Class 11, Chapter 2."
+      },
+      {
+        "question": "The dimensional formula of the constant $a$ in the van der Waals equation $(P + \\frac{a}{V^2})(V - b) = RT$ is:",
+        "options": [
+          "A) $[M^1 L^3 T^{-2}]$",
+          "B) $[M^1 L^5 T^{-2}]$",
+          "C) $[M^{-1} L^5 T^{-2}]$",
+          "D) $[M^1 L^5 T^{-1}]$"
+        ],
+        "correctAnswer": "B) $[M^1 L^5 T^{-2}]$",
+        "explanation": "According to the principle of dimensional homogeneity, quantities added together must have the same dimensions. Since $\\frac{a}{V^2}$ is added to pressure $P$, its dimensions must equal the dimensions of $P$. Thus, $[a] = [P] \\cdot [V]^2 = ([M^1 L^{-1} T^{-2}]) \\cdot ([L^3]^2) = [M^1 L^5 T^{-2}]$. NEET exam standard question."
+      },
+      {
+        "question": "Which of the following is a dimensionless quantity?",
+        "options": [
+          "A) Gravitational constant",
+          "B) Relative density",
+          "C) Planck's constant",
+          "D) Coefficient of viscosity"
+        ],
+        "correctAnswer": "B) Relative density",
+        "explanation": "Relative density is defined as the ratio of the density of a substance to the density of water at ^\\circ\\text{C}$. Being a ratio of two identical physical quantities, it is a dimensionless and unitless quantity."
+      },
+      {
+        "question": "If force $F$, velocity $v$, and time $t$ are taken as fundamental units, the dimension of mass is:",
+        "options": [
+          "A) $[F \\cdot v^1 \\cdot t^{-1}]$",
+          "B) $[F \\cdot v^{-1} \\cdot t^1]$",
+          "C) $[F \\cdot v^2 \\cdot t^{-1}]$",
+          "D) $[F \\cdot v^{-2} \\cdot t^1]$"
+        ],
+        "correctAnswer": "B) $[F \\cdot v^{-1} \\cdot t^1]$",
+        "explanation": "From Newton's second law, Force $F = m \\cdot a$. Acceleration $a = \\frac{v}{t}$. Substituting this gives $F = m \\cdot \\frac{v}{t}$, which rearranges to mass $m = \\frac{F \\cdot t}{v} = [F \\cdot v^{-1} \\cdot t^1]$. Common NEET and JEE dimensional analysis model."
+      },
+      {
+        "question": "The SI unit of the universal gas constant $R$ is expressed as:",
+        "options": [
+          "A) $J \\cdot K^{-1} \\cdot \\text{mol}^{-1}$",
+          "B) $J \\cdot K^1 \\cdot \\text{mol}^{-1}$",
+          "C) $J \\cdot K \\cdot \\text{mol}^1$",
+          "D) $J^{-1} \\cdot K \\cdot \\text{mol}^{-1}$"
+        ],
+        "correctAnswer": "A) $J \\cdot K^{-1} \\cdot \\text{mol}^{-1}$",
+        "explanation": "From the ideal gas equation $PV = nRT$, the gas constant is $R = \\frac{PV}{nT}$. Since $PV$ has dimensions of energy or work measured in Joules ($J$), $n$ in moles, and $T$ in Kelvin ($K$), the unit is $J \\cdot K^{-1} \\cdot \\text{mol}^{-1}$."
+      },
+      {
+        "question": "The dimensional formula for surface tension is:",
+        "options": [
+          "A) $[M^1 L^2 T^{-2}]$",
+          "B) $[M^0 L^1 T^{-2}]$",
+          "C) $[M^1 L^0 T^{-2}]$",
+          "D) $[M^1 L^1 T^{-2}]$"
+        ],
+        "correctAnswer": "C) $[M^1 L^0 T^{-2}]$",
+        "explanation": "Surface tension $S$ is defined as force per unit length: $S = \\frac{F}{L}$. Substituting dimensions, $[S] = \\frac{[M L T^{-2}]}{[L]} = [M^1 L^0 T^{-2}]$. NEET standard unit and dimension retrieval format."
+      },
+      {
+        "question": "A student measures distance $d$ using the kinematic relation $d = vt + \\frac{1}{2}at^2$. The dimensions of $d$ are:",
+        "options": [
+          "A) $[L^1 T^{-1}]$",
+          "B) $[L^1 T^{-2}]$",
+          "C) $[L^1]$",
+          "D) $[L^2]$"
+        ],
+        "correctAnswer": "C) $[L^1]$",
+        "explanation": "By the principle of dimensional homogeneity, every term in a correct physical equation must possess identical dimensions. Since $d$ represents distance or displacement, its dimensional formula is strictly length, i.e., $[L^1]$. Term contributions like $vt$ and $\\frac{1}{2}at^2$ also evaluate to $[L^1]$."
+      },
+      {
+        "question": "The SI unit of magnetic flux is:",
+        "options": [
+          "A) Weber",
+          "B) Ampere",
+          "C) Henry",
+          "D) Tesla"
+        ],
+        "correctAnswer": "A) Weber",
+        "explanation": "Magnetic flux $\\Phi = \\vec{B} \\cdot \\vec{A}$ is measured in Weber (Wb). Tesla is the SI unit of magnetic field intensity ($B$), and Henry is the unit of self or mutual inductance."
+      },
+      {
+        "question": "Which of the following pairs of physical quantities has different dimensions?",
+        "options": [
+          "A) Velocity and Speed",
+          "B) Force and Impulse",
+          "C) Torque and Energy",
+          "D) Pressure and Stress"
+        ],
+        "correctAnswer": "B) Force and Impulse",
+        "explanation": "Force has the dimensional formula $[M L T^{-2}]$, whereas impulse (Force $\\times$ Time) has the dimensional formula $[M L T^{-1}]$. Torque and energy both share $[M L^2 T^{-2}]$, pressure and stress share $[M L^{-1} T^{-2}]$, and velocity and speed both share $[L T^{-1}]$. Thus, Option B is the correct choice as they have different dimensions."
+      },
+      {
+        "question": "If the percentage error in the measurement of the radius of a sphere is \\$2\\%$, the percentage error in its volume is:$",
+        "options": [
+          "A) \\$2\\%$$",
+          "B) \\$2\\%$$",
+          "C) \\$2\\%$$",
+          "D) \\$2\\%$$"
+        ],
+        "correctAnswer": "A) \\$2\\%$$",
+        "explanation": "The volume of a sphere is given by $V = \\frac{4}{3}\\pi r^3$. Taking the natural logarithm and differentiating for fractional errors, $\\frac{\\Delta V}{V} = 3\\left(\\frac{\\Delta r}{r}\\right)$. Given that the relative error in radius is $\\frac{\\Delta r}{r} = 2\\%$, the error in volume becomes \\$2 \\times 2\\% = 6\\%$. Standard error propagation formula for NEET$."
+      },
+      {
+        "question": "Which of the following physical quantities has the same dimensional formula as pressure?",
+        "options": [
+          "A) Young's modulus",
+          "B) Angular momentum",
+          "C) Surface tension",
+          "D) Coefficient of viscosity"
+        ],
+        "correctAnswer": "A) Young's modulus",
+        "explanation": "Pressure is defined as force per unit area, $[F]/[A] = [MLT^{-2}]/[L^2] = [ML^{-1}T^{-2}]$. Young's modulus is defined as stress/strain. Since strain is dimensionless, Young's modulus has the same dimensions as stress (force per unit area), which is $[ML^{-1}T^{-2}]$."
+      },
+      {
+        "question": "The dimensional formula for the universal gravitational constant $G$ is given by:",
+        "options": [
+          "A) $[M^{-1}L^2T^{-2}]$",
+          "B) $[ML^2T^{-2}]$",
+          "C) $[M^{-1}L^3T^{-2}]$",
+          "D) $[ML^3T^{-1}]$"
+        ],
+        "correctAnswer": "C) $[M^{-1}L^3T^{-2}]$",
+        "explanation": "From Newton's law of gravitation, $F = G \\frac{m_1m_2}{r^2}$, we isolate $G = \\frac{Fr^2}{m_1m_2}$. Substituting dimensions: $[G] = \\frac{[MLT^{-2}][L^2]}{[M^2]} = [M^{-1}L^3T^{-2}]$."
+      },
+      {
+        "question": "Which pair of physical quantities does not have the same dimensional formula?",
+        "options": [
+          "A) Torque and work",
+          "B) Impulse and momentum",
+          "C) Force and energy",
+          "D) Stress and pressure"
+        ],
+        "correctAnswer": "C) Force and energy",
+        "explanation": "Force has dimensions $[MLT^{-2}]$. Energy (or work) has dimensions $[ML^2T^{-2}]$. Since these are not identical, they are dimensionally distinct."
+      },
+      {
+        "question": "In the equation $P + \\frac{a}{V^2} = RT$, what is the dimensional formula of the constant $a$?",
+        "options": [
+          "A) $[M^0L^3T^0]$",
+          "B) $[ML^5T^{-2}]$",
+          "C) $[ML^2T^{-2}]$",
+          "D) $[ML^{-1}T^{-2}]$"
+        ],
+        "correctAnswer": "B) $[ML^5T^{-2}]$",
+        "explanation": "By the principle of homogeneity, quantities added together must have the same dimensions. Therefore, $[P] = [a/V^2]$. Thus, $[a] = [P][V^2] = [ML^{-1}T^{-2}][L^3]^2 = [ML^{-1}T^{-2}][L^6] = [ML^5T^{-2}]$."
+      },
+      {
+        "question": "The dimensional formula for Planck's constant $h$ is equivalent to that of:",
+        "options": [
+          "A) Linear momentum",
+          "B) Moment of inertia",
+          "C) Potential energy",
+          "D) Angular momentum"
+        ],
+        "correctAnswer": "D) Angular momentum",
+        "explanation": "From the relation $E = h\\nu$, where $\\nu$ is frequency ($[T^{-1}]$), we have $[h] = [E]/[\\nu] = [ML^2T^{-2}]/[T^{-1}] = [ML^2T^{-1}]$. Angular momentum $L = mvr$ has dimensions $[M][LT^{-1}][L] = [ML^2T^{-1}]$. Both match."
+      },
+      {
+        "question": "Which of the following is a dimensionless physical quantity?",
+        "options": [
+          "A) Relative density",
+          "B) Coefficient of viscosity",
+          "C) Gravitational constant",
+          "D) Planck's constant"
+        ],
+        "correctAnswer": "A) Relative density",
+        "explanation": "Relative density is defined as the ratio of the density of a substance to the density of water at ^\\circ\\text{C}$. Being a ratio of two identical physical quantities, it is a dimensionless and unitless quantity."
+      },
+      {
+        "question": "What is the dimensional representation of the surface tension of a liquid?",
+        "options": [
+          "A) $[MLT^{-2}]$",
+          "B) $[ML^{-1}T^{-2}]$",
+          "C) $[ML^2T^{-1}]$",
+          "D) $[ML^0T^{-2}]$"
+        ],
+        "correctAnswer": "D) $[ML^0T^{-2}]$",
+        "explanation": "Surface tension is defined as force per unit length. $[T] = [F]/[L] = [MLT^{-2}]/[L] = [ML^0T^{-2}]$."
+      },
+      {
+        "question": "If energy $E$, length $L$, and time $T$ were chosen as fundamental quantities, the dimension of mass is:",
+        "options": [
+          "A) $[EL^{1}T^{-2}]$",
+          "B) $[EL^{-1}T^1]$",
+          "C) $[EL^{2}T^{-2}]$",
+          "D) $[EL^{-2}T^2]$"
+        ],
+        "correctAnswer": "D) $[EL^{-2}T^2]$",
+        "explanation": "Using the kinetic energy formula $E = \\frac{1}{2}mv^2$, we have $E \\propto m(L/T)^2$. Solving for mass, $m = E \\cdot (T/L)^2 = E \\cdot L^{-2} \\cdot T^2$."
+      },
+      {
+        "question": "The constant $b$ in the van der Waals equation $(P + \\frac{a}{V^2})(V - b) = RT$ has dimensions of:",
+        "options": [
+          "A) $[M^0L^1T^0]$",
+          "B) $[M^0L^2T^0]$",
+          "C) $[M^1L^3T^0]$",
+          "D) $[L^3]$"
+        ],
+        "correctAnswer": "D) $[L^3]$",
+        "explanation": "According to the principle of homogeneity, only quantities with the same dimensions can be subtracted. Since $b$ is subtracted from volume $V$, $b$ must have the dimensions of volume, which is $[L^3]$."
+      }
+    ],
+    "createdAt": "2026-11-05T12:09:30.758Z",
+    "updatedAt": "2026-11-05T12:33:27.940Z",
+    "hitCount": 4
   }
 }

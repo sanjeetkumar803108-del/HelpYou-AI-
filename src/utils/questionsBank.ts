@@ -48,6 +48,132 @@ export function normalizeKeyPart(str: string | undefined, fallback: string = 'ge
   return slug || fallback;
 }
 
+export function canonicalizeCountry(country: string | undefined): string {
+  if (!country || typeof country !== 'string') return 'global';
+  const clean = country.trim().toLowerCase();
+  if (clean === 'other' || clean === 'others' || clean === 'all') return 'global';
+  return normalizeKeyPart(clean, 'global');
+}
+
+export function canonicalizeExam(exam: string | undefined): string {
+  if (!exam || typeof exam !== 'string') return 'general_exam';
+  const clean = exam.trim().toLowerCase();
+
+  // NEET
+  if (/neet|national\s*eligibility/i.test(clean)) return 'neet';
+  // JEE Advanced
+  if (/jee\s*(?:adv|advanced)|iit\s*jee\s*adv/i.test(clean)) return 'jee_advanced';
+  // JEE Main
+  if (/jee|joint\s*entrance|iit\s*jee/i.test(clean)) return 'jee_main';
+  // UPSC
+  if (/upsc|civil\s*services/i.test(clean)) return 'upsc_cse';
+  // SSC
+  if (/ssc\s*cgl/i.test(clean)) return 'ssc_cgl';
+  if (/ssc\s*chsl/i.test(clean)) return 'ssc_chsl';
+  if (/ssc\s*mts/i.test(clean)) return 'ssc_mts';
+  if (/ssc\s*gd/i.test(clean)) return 'ssc_gd';
+  // Banking / Railways
+  if (/banking|ibps|sbi\s*po|sbi\s*clerk/i.test(clean)) return 'banking_exams';
+  if (/rrb|ntpc/i.test(clean)) return 'rrb_ntpc';
+  // State / National Boards
+  if (/cbse.*12/i.test(clean)) return 'cbse_class_12';
+  if (/cbse.*10/i.test(clean)) return 'cbse_class_10';
+  if (/cbse/i.test(clean)) return 'cbse';
+  if (/icse/i.test(clean)) return 'icse_class_10';
+  if (/isc/i.test(clean)) return 'isc_class_12';
+  if (/bihar.*12/i.test(clean)) return 'bihar_board_12th';
+  if (/bihar.*10/i.test(clean)) return 'bihar_board_10th';
+  if (/up\s*board.*12/i.test(clean)) return 'up_board_12th';
+  if (/up\s*board.*10/i.test(clean)) return 'up_board_10th';
+  // Entrance & Defence
+  if (/\bnda\b/i.test(clean)) return 'nda';
+  if (/\bcds\b/i.test(clean)) return 'cds';
+  if (/\bclat\b/i.test(clean)) return 'clat';
+  if (/\bcat\b/i.test(clean)) return 'cat';
+  if (/\bgate\b/i.test(clean)) return 'gate';
+  if (/cuet/i.test(clean)) return 'cuet_ug';
+  // International
+  if (/\bsat\b/i.test(clean)) return 'sat';
+  if (/\bact\b/i.test(clean)) return 'act';
+  if (/\bap\s*exams?|\badvanced\s*placement\b/i.test(clean)) return 'ap_exams';
+  if (/\bgre\b/i.test(clean)) return 'gre';
+  if (/\bgmat\b/i.test(clean)) return 'gmat';
+  if (/\bielts\b/i.test(clean)) return 'ielts';
+  if (/\btoefl\b/i.test(clean)) return 'toefl';
+  if (/\bigcse\b/i.test(clean)) return 'igcse';
+  if (/a\s*levels?/i.test(clean)) return 'a_levels';
+  if (/\bib\b|international\s*baccalaureate/i.test(clean)) return 'ib';
+
+  return normalizeKeyPart(clean, 'exam');
+}
+
+export function canonicalizeGrade(grade: string | undefined): string {
+  if (!grade || typeof grade !== 'string') return 'general_grade';
+  const clean = grade.trim().toLowerCase();
+
+  // Match numeric grades 1 to 12
+  const m = clean.match(/(?:class|grade|year|std|standard)?[\s_.-]*\b([1-9]|1[0-2])(?:th|st|nd|rd)?\b/i) ||
+            clean.match(/\b([1-9]|1[0-2])(?:th|st|nd|rd)?\b[\s_.-]*(?:grade|class|year|std|standard)?/i);
+
+  if (m && m[1]) {
+    return `class_${m[1]}`;
+  }
+
+  if (/freshman/i.test(clean)) return 'class_9';
+  if (/sophomore/i.test(clean)) return 'class_10';
+  if (/junior/i.test(clean)) return 'class_11';
+  if (/senior/i.test(clean)) return 'class_12';
+  if (/dropper|repeater|gap[\s_-]*year/i.test(clean)) return 'dropper_repeater';
+  if (/college|undergrad|bachelor|b\.?tech|graduate/i.test(clean)) return 'college_undergraduate';
+  if (/working[\s_-]*prof/i.test(clean)) return 'working_professional';
+
+  return normalizeKeyPart(clean, 'grade');
+}
+
+export function canonicalizeSubject(subject: string | undefined): string {
+  if (!subject || typeof subject !== 'string') return 'general_subject';
+  const clean = subject.trim().toLowerCase();
+
+  if (/^(?:all\s*subjects?|all_subjects_all_topics)$/i.test(clean)) {
+    return 'all_subjects_all_topics';
+  }
+
+  // Strip parenthetical descriptors: "Biology (Botany & Zoology)" -> "biology"
+  const stripped = clean.replace(/\s*\([^)]*\)/g, '').trim();
+
+  if (/biology|botany|zoology/i.test(stripped)) return 'biology';
+  if (/physics/i.test(stripped)) return 'physics';
+  if (/chemistry/i.test(stripped)) return 'chemistry';
+  if (/math(?:ematics)?/i.test(stripped)) {
+    const branchMatch = stripped.match(/math(?:ematics)?[\s_-]*([a-z0-9]+)/i);
+    if (branchMatch && !['and', 'or', 'for', 'class', 'grade'].includes(branchMatch[1].toLowerCase())) {
+      return `mathematics_${normalizeKeyPart(branchMatch[1])}`;
+    }
+    return 'mathematics';
+  }
+  if (/english/i.test(stripped)) return 'english';
+  if (/history/i.test(stripped)) return 'history';
+  if (/geography/i.test(stripped)) return 'geography';
+  if (/economics/i.test(stripped)) return 'economics';
+  if (/computer|cs|coding|information\s*tech/i.test(stripped)) return 'computer_science';
+
+  return normalizeKeyPart(stripped, 'subject');
+}
+
+export function normalizeChapterOrSubtopic(str: string | undefined, fallback: string = 'general'): string {
+  if (!str || typeof str !== 'string') return fallback;
+  const trimmed = str.trim();
+
+  if (/^(?:all\s*subjects?\s*(?:\/|&|-)?\s*all\s*topics?|all\s*subjects?|all\s*topics?|practice\s*entire\s*chapter|entire\s*chapter|all\s*chapters?|full\s*syllabus)$/i.test(trimmed)) {
+    return 'all_subjects_all_topics';
+  }
+
+  // Strip chapter numbering prefixes like "CH 01 ", "Chapter 1: ", "Unit 1 - "
+  const strippedNumbering = trimmed.replace(/^(?:ch|chapter|unit)\s*[0-9ivx]+\s*[:\.-]?\s*/i, '');
+
+  return normalizeKeyPart(strippedNumbering, fallback);
+}
+
 
 export function getTopicCeilingLimit(subtopic?: string): number {
   const norm = normalizeKeyPart(subtopic);
@@ -68,12 +194,12 @@ export function getTopicAccumulatedQuestions(params: {
   difficulty?: string;
 }): { totalCount: number; ceiling: number; isSaturated: boolean; questions: QuestionBankItem[] } {
   const bank = loadQuestionsBank();
-  const c = normalizeKeyPart(params.country, 'global');
-  const e = normalizeKeyPart(params.examName, 'exam');
-  const g = normalizeKeyPart(params.grade, 'grade');
-  const s = normalizeKeyPart(params.subject, 'subject');
-  const ch = normalizeKeyPart(params.chapter, 'chapter');
-  const sub = normalizeKeyPart(params.subtopic, 'all_subjects_all_topics');
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.examName);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
+  const ch = normalizeChapterOrSubtopic(params.chapter, 'chapter');
+  const sub = normalizeChapterOrSubtopic(params.subtopic, 'all_subjects_all_topics');
   const f = normalizeKeyPart(params.feature, 'quiz');
   const d = normalizeKeyPart(params.difficulty, 'medium');
 
@@ -115,12 +241,12 @@ export function normalizePracticeMode(mode: string | boolean | undefined): 'stan
 }
 
 /**
- * Generates strict 9-point composite cache key:
+ * Generates strict 9-point composite cache key with canonical normalization:
  * 1. country
- * 2. examName
- * 3. grade
- * 4. subject
- * 5. chapter
+ * 2. examName (canonicalized)
+ * 3. grade (canonicalized)
+ * 4. subject (canonicalized)
+ * 5. chapter (canonicalized)
  * 6. subtopic (supports "All Subjects / All Topics")
  * 7. feature (ai_quizzes vs ai_questions)
  * 8. difficulty
@@ -137,12 +263,12 @@ export function generateQuestionBankKey(params: {
   difficulty?: string;
   practiceMode?: string | boolean;
 }): string {
-  const c = normalizeKeyPart(params.country, 'global');
-  const e = normalizeKeyPart(params.examName, 'exam');
-  const g = normalizeKeyPart(params.grade, 'grade');
-  const s = normalizeKeyPart(params.subject, 'subject');
-  const ch = normalizeKeyPart(params.chapter, 'chapter');
-  const sub = normalizeKeyPart(params.subtopic, 'all_subjects_all_topics');
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.examName);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
+  const ch = normalizeChapterOrSubtopic(params.chapter, 'chapter');
+  const sub = normalizeChapterOrSubtopic(params.subtopic, 'all_subjects_all_topics');
   const f = normalizeKeyPart(params.feature, 'quiz');
   const d = normalizeKeyPart(params.difficulty, 'medium');
   const p = normalizePracticeMode(params.practiceMode);
@@ -247,15 +373,17 @@ export function loadQuestionsBank(): Record<string, QuestionBankEntry> {
   }
 
   try {
+    let raw: Record<string, QuestionBankEntry> | null = null;
     if (fs.existsSync(TMP_QUESTIONS_FILE_PATH)) {
       const content = fs.readFileSync(TMP_QUESTIONS_FILE_PATH, 'utf-8');
-      memoryQuestionsBank = JSON.parse(content);
-      return memoryQuestionsBank || {};
-    }
-    if (fs.existsSync(QUESTIONS_FILE_PATH)) {
+      raw = JSON.parse(content);
+    } else if (fs.existsSync(QUESTIONS_FILE_PATH)) {
       const content = fs.readFileSync(QUESTIONS_FILE_PATH, 'utf-8');
-      memoryQuestionsBank = JSON.parse(content);
-      return memoryQuestionsBank || {};
+      raw = JSON.parse(content);
+    }
+    if (raw && typeof raw === 'object') {
+      memoryQuestionsBank = migrateAndCanonicalizeBank(raw);
+      return memoryQuestionsBank;
     }
   } catch (err) {
     console.warn('[QuestionsBank] Notice reading questions.json:', err);
@@ -263,6 +391,63 @@ export function loadQuestionsBank(): Record<string, QuestionBankEntry> {
 
   memoryQuestionsBank = {};
   return memoryQuestionsBank;
+}
+
+export function migrateAndCanonicalizeBank(rawBank: Record<string, QuestionBankEntry>): Record<string, QuestionBankEntry> {
+  let hasChanges = false;
+  const canonicalBank: Record<string, QuestionBankEntry> = {};
+
+  for (const [oldKey, entry] of Object.entries(rawBank)) {
+    if (!entry || !Array.isArray(entry.questions)) continue;
+
+    const canonicalKey = generateQuestionBankKey({
+      country: entry.country,
+      examName: entry.examName,
+      grade: entry.grade,
+      subject: entry.subject,
+      chapter: entry.chapter,
+      subtopic: entry.subtopic,
+      feature: entry.feature,
+      difficulty: entry.difficulty,
+      practiceMode: entry.practiceMode
+    });
+
+    if (canonicalKey !== oldKey) {
+      hasChanges = true;
+    }
+
+    if (!canonicalBank[canonicalKey]) {
+      canonicalBank[canonicalKey] = {
+        ...entry,
+        totalQuestions: entry.questions.length
+      };
+    } else {
+      hasChanges = true;
+      const existing = canonicalBank[canonicalKey];
+      const existingTexts = new Set(existing.questions.map(q => (q.question || '').toLowerCase().trim()));
+      for (const q of entry.questions) {
+        const text = (q.question || '').toLowerCase().trim();
+        if (text && !existingTexts.has(text)) {
+          existingTexts.add(text);
+          existing.questions.push(q);
+        }
+      }
+      existing.totalQuestions = existing.questions.length;
+      existing.hitCount = (existing.hitCount || 0) + (entry.hitCount || 0);
+    }
+  }
+
+  if (hasChanges) {
+    try {
+      const content = JSON.stringify(canonicalBank, null, 2);
+      fs.writeFileSync(QUESTIONS_FILE_PATH, content, 'utf-8');
+      console.log('[QuestionsBank] Migrated and canonicalized question bank keys successfully.');
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  return canonicalBank;
 }
 
 export function saveQuestionsBank(bank: Record<string, QuestionBankEntry>): void {
@@ -313,14 +498,14 @@ export function findInQuestionBank(params: {
     return null;
   }
 
-  // Exact 9-Point Match Verification
+  // Exact 9-Point Match Verification with Canonical Aliasing
   const isMatch =
-    normalizeKeyPart(entry.country) === normalizeKeyPart(params.country) &&
-    normalizeKeyPart(entry.examName) === normalizeKeyPart(params.examName) &&
-    normalizeKeyPart(entry.grade) === normalizeKeyPart(params.grade) &&
-    normalizeKeyPart(entry.subject) === normalizeKeyPart(params.subject) &&
-    normalizeKeyPart(entry.chapter) === normalizeKeyPart(params.chapter) &&
-    normalizeKeyPart(entry.subtopic) === normalizeKeyPart(params.subtopic) &&
+    canonicalizeCountry(entry.country) === canonicalizeCountry(params.country) &&
+    canonicalizeExam(entry.examName) === canonicalizeExam(params.examName) &&
+    canonicalizeGrade(entry.grade) === canonicalizeGrade(params.grade) &&
+    canonicalizeSubject(entry.subject) === canonicalizeSubject(params.subject) &&
+    normalizeChapterOrSubtopic(entry.chapter) === normalizeChapterOrSubtopic(params.chapter) &&
+    normalizeChapterOrSubtopic(entry.subtopic) === normalizeChapterOrSubtopic(params.subtopic) &&
     normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) &&
     normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty) &&
     normalizePracticeMode(entry.practiceMode) === normalizePracticeMode(params.practiceMode);

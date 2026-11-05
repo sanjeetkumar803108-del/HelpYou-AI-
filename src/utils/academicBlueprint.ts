@@ -1,4 +1,4 @@
-import { safeGetItem, safeSetItem } from './storage';
+import { safeGetItem, safeSetItem, safeRemoveItem } from './storage';
 import { auth } from '../lib/firebase';
 
 export interface ExamOverview {
@@ -63,8 +63,8 @@ export interface FullAcademicDossier {
  */
 export function getExamOverview(userId?: string): ExamOverview | null {
   const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
-  const raw = (uid ? safeGetItem(`exam_overview_${uid}`) : null) 
-    || (!uid ? safeGetItem('exam_overview') : null);
+  // STRICT USER ISOLATION: When a user ID is present, read ONLY this user's overview!
+  const raw = uid ? safeGetItem(`exam_overview_${uid}`) : safeGetItem('exam_overview');
 
   if (raw) {
     try {
@@ -73,9 +73,8 @@ export function getExamOverview(userId?: string): ExamOverview | null {
     } catch (_) {}
   }
 
-  // Fallback check inside user_exam_blueprint
-  const bpRaw = (uid ? safeGetItem(`user_exam_blueprint_${uid}`) : null)
-    || (!uid ? (safeGetItem('user_exam_blueprint') || safeGetItem('academic_exam_blueprint')) : null);
+  // Fallback check inside user_exam_blueprint for this specific user
+  const bpRaw = uid ? safeGetItem(`user_exam_blueprint_${uid}`) : (safeGetItem('user_exam_blueprint') || safeGetItem('academic_exam_blueprint'));
 
   if (bpRaw) {
     try {
@@ -92,8 +91,9 @@ export function getExamOverview(userId?: string): ExamOverview | null {
  */
 export function getStoredExamBlueprint(userId?: string): ExamBlueprintMap | null {
   const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
-  const raw = (uid ? safeGetItem(`user_exam_blueprint_${uid}`) : null) 
-    || (!uid ? (safeGetItem('user_exam_blueprint') || safeGetItem('academic_exam_blueprint')) : null);
+  // STRICT USER ISOLATION: When a user ID is present, read ONLY this user's blueprint!
+  // NEVER fall back to another user's unscoped blueprint!
+  const raw = uid ? safeGetItem(`user_exam_blueprint_${uid}`) : (safeGetItem('user_exam_blueprint') || safeGetItem('academic_exam_blueprint'));
   
   if (!raw) return null;
   try {
@@ -122,16 +122,23 @@ export function saveStoredExamBlueprint(blueprint: ExamBlueprintMap, userId?: st
     subjectsBlueprint: blueprint
   };
   const jsonStr = JSON.stringify(fullPayload);
-  safeSetItem('user_exam_blueprint', jsonStr);
-  safeSetItem('academic_exam_blueprint', jsonStr);
+  
   if (uid) {
     safeSetItem(`user_exam_blueprint_${uid}`, jsonStr);
+    safeSetItem(`academic_exam_blueprint_${uid}`, jsonStr);
+  }
+
+  // Update unscoped active mirror only if current session belongs to this user
+  const activeUid = auth.currentUser?.uid || safeGetItem('last_logged_in_user');
+  if (!activeUid || activeUid === uid) {
+    safeSetItem('user_exam_blueprint', jsonStr);
+    safeSetItem('academic_exam_blueprint', jsonStr);
   }
 
   if (overview) {
     const ovStr = JSON.stringify(overview);
-    safeSetItem('exam_overview', ovStr);
     if (uid) safeSetItem(`exam_overview_${uid}`, ovStr);
+    if (!activeUid || activeUid === uid) safeSetItem('exam_overview', ovStr);
   }
 
   // Save isolated storage per subject
@@ -153,9 +160,10 @@ export function getSubjectBlueprint(subject: string, userId?: string): SubjectBl
   const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   const cleanSubjKey = subject.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-  // Check dedicated isolated per-subject key first
-  const dedicatedRaw = (uid ? safeGetItem(`exam_subject_blueprint_${cleanSubjKey}_${uid}`) : null)
-    || (!uid ? safeGetItem(`exam_subject_blueprint_${cleanSubjKey}`) : null);
+  // STRICT USER ISOLATION
+  const dedicatedRaw = uid 
+    ? safeGetItem(`exam_subject_blueprint_${cleanSubjKey}_${uid}`) 
+    : safeGetItem(`exam_subject_blueprint_${cleanSubjKey}`);
 
   if (dedicatedRaw) {
     try {
@@ -164,7 +172,7 @@ export function getSubjectBlueprint(subject: string, userId?: string): SubjectBl
     } catch (_) {}
   }
 
-  // Fallback to dictionary lookup
+  // Fallback to user-scoped dictionary lookup
   const map = getStoredExamBlueprint(uid);
   if (!map || typeof map !== 'object') return null;
 
@@ -190,10 +198,46 @@ export function saveDedicatedSubjectBlueprint(subject: string, data: SubjectBlue
   const cleanSubjKey = subject.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
   const jsonStr = JSON.stringify(data);
 
-  safeSetItem(`exam_subject_blueprint_${cleanSubjKey}`, jsonStr);
   if (uid) {
     safeSetItem(`exam_subject_blueprint_${cleanSubjKey}_${uid}`, jsonStr);
   }
+  
+  const activeUid = auth.currentUser?.uid || safeGetItem('last_logged_in_user');
+  if (!activeUid || activeUid === uid) {
+    safeSetItem(`exam_subject_blueprint_${cleanSubjKey}`, jsonStr);
+  }
+}
+
+/**
+ * Completely purges unscoped active session keys when switching users or logging out,
+ * ensuring zero data leakage or contamination between accounts.
+ */
+export function purgeUnscopedAcademicSession(): void {
+  const unscopedKeys = [
+    'academic_country',
+    'academic_custom_country',
+    'academic_region',
+    'academic_exam',
+    'target_exam',
+    'target_exam_short',
+    'academic_grade',
+    'onboarding_grade',
+    'academic_subjects',
+    'academic_subject',
+    'selected_subject',
+    'subject',
+    'academic_stream',
+    'academic_custom_subject',
+    'user_exam_blueprint',
+    'academic_exam_blueprint',
+    'exam_overview',
+    'exam_schedule',
+    'academic_setup_completed',
+    'onboarding_completed',
+    'isOnboardingComplete',
+    'isOnboardingCompleted'
+  ];
+  unscopedKeys.forEach(k => safeRemoveItem(k));
 }
 
 /**
@@ -205,11 +249,10 @@ export function formatBlueprintForAIPrompt(subject: string, userId?: string): st
   const bp = getSubjectBlueprint(subject, uid);
   const overview = getExamOverview(uid);
   const exam = (uid ? (safeGetItem(`academic_exam_${uid}`) || safeGetItem(`target_exam_${uid}`)) : null)
-    || safeGetItem('academic_exam')
-    || safeGetItem('target_exam')
+    || (!uid ? (safeGetItem('academic_exam') || safeGetItem('target_exam')) : '')
     || overview?.examName
     || '';
-  const grade = (uid ? safeGetItem(`academic_grade_${uid}`) : null) || safeGetItem('academic_grade') || '';
+  const grade = (uid ? safeGetItem(`academic_grade_${uid}`) : null) || (!uid ? safeGetItem('academic_grade') : '') || '';
   
   if (!bp && !exam) return '';
 

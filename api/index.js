@@ -5024,83 +5024,72 @@ app.post("/api/verify-and-research-exam", async (req, res) => {
     }
     const trimmedExam = examName.trim();
     const userCountry = sanitizeCountry(country, "Global");
-    const preVerified = findPreVerifiedExam(trimmedExam, userCountry);
-    if (preVerified) {
-      console.log(`[verify-and-research-exam] Fast-path hit for "${trimmedExam}" -> "${preVerified.officialExamName}" (${preVerified.country})`);
-      return res.json({
-        isValid: true,
-        shortName: preVerified.shortName || trimmedExam,
-        officialExamName: preVerified.officialExamName,
-        detectedCountry: preVerified.country,
-        hasElectives: preVerified.hasElectives,
-        grades: preVerified.grades,
-        subjects: preVerified.subjects
-      });
-    }
     const promptText = `
 User Selected Country / Region: "${userCountry}"
 User Entered Exam Name: "${trimmedExam}"
 
 TASK:
-You are an authoritative global educational curriculum verification engine. Your task is to verify if "${trimmedExam}" is a real, recognized academic examination AND research its official subjects and preparation grades.
-MANDATE ON SOURCES: When conducting live research for "${trimmedExam}", consult strictly official examination authority portals, education ministry gazettes, and official board websites (.gov, .nic.in, .ac.in, .org, official testing agencies). Strictly ignore informal coaching blogs, commercial ads, or unverified 3rd-party aggregator websites.
+You are an authoritative global educational curriculum verification and syllabus research engine. Your task is to verify if "${trimmedExam}" is a real, recognized academic examination AND research its official standardized title, authentic syllabus subjects, and preparation grades.
+MANDATE ON SOURCES: When conducting research for "${trimmedExam}", consult strictly official examination authority portals, education ministry gazettes, and official board syllabi. Ignore informal blogs, coaching advertisements, or unverified 3rd-party aggregators.
 
 1. COUNTRY AND JURISDICTION MATCH VALIDATION:
    - The user has explicitly selected their study country as: "${userCountry}".
    - Check if "${trimmedExam}" is an official examination conducted in "${userCountry}", OR if it is an internationally recognized qualification taken globally (such as SAT, ACT, AP Exams, IELTS, TOEFL, GRE, GMAT, Cambridge IGCSE, or International A Levels).
-   - IF "${trimmedExam}" is an official domestic examination belonging strictly to a DIFFERENT country (for example, the user selected "${userCountry}" but entered an exam exclusive to another country, such as NEET/JEE/UPSC/SSC which belong to India; or CSAT/Suneung which belongs to South Korea; or KCET/MHT CET which belong to Indian states):
+   - IF "${trimmedExam}" is an official domestic examination belonging strictly to a DIFFERENT country (for example, the user selected "${userCountry}" but entered an exam exclusive to another country, such as NEET/JEE/UPSC/SSC/MHT CET which belong to India; or CSAT/Suneung which belongs to South Korea; or Gaokao which belongs to China):
      * You MUST set "isValid": false
      * Set "errorMessage": "'${trimmedExam}' is an official examination conducted in [Native Country of Exam], not in ${userCountry}. Please enter an examination conducted in ${userCountry} or change your country in Step 1."
-   - IF "${trimmedExam}" is random gibberish (e.g. "asdfgh", "test1234", "qwerty"), a conversational sentence, or completely non-existent:
+   - IF "${trimmedExam}" is random gibberish (e.g. "asdfgh", "test1234", "qwerty"), a conversational query, or completely non-existent:
      * Set "isValid": false
      * Set "errorMessage": "We could not find an official examination named '${trimmedExam}' for ${userCountry}. Please check the spelling or enter a recognized exam name."
 
 2. OFFICIAL CURRICULUM EXTRACTION (When "isValid": true):
    - Set "isValid": true
+   - Set "officialExamName": "Full Official Standardized Name (e.g. National Eligibility cum Entrance Test)"
+   - Set "shortName": "Clean Short Name (e.g. NEET UG)"
    - Set "detectedCountry": "${userCountry}"
+   - Set "hasElectives": boolean (true if candidate chooses elective streams/papers, false if all listed subjects are mandatory)
 
 3. OFFICIAL SUBJECTS RESEARCH:
-   - If VALID ("isValid": true):
-     * Provide the standardized full title in "officialExamName".
-     * Every subject with its OWN examination paper MUST be an individual separate item.
-     * List 3 to 12 authentic official subjects for this examination.
-     * For each subject:
-       - "id": Clean identifier string without spaces or slashes (e.g. "Physics", "Chemistry", "Mathematics", "Biology")
-       - "title": Clean official subject title
-       - "subtitle": Brief syllabus topic summary
-       - "icon": An appropriate emoji icon (e.g. "\u26A1", "\u{1F9EA}", "\u{1F4D0}", "\u{1F9EC}", "\u{1F4BB}", "\u{1F4DA}", "\u{1F3DB}\uFE0F", "\u{1F4CA}")
+   - Provide ALL authentic official examination subjects/papers examined in this test (list 2 to 12 subjects).
+   - Every subject with its OWN examination paper or syllabus section MUST be an individual separate item.
+   - For each subject:
+     * "id": Clean alphanumeric string without spaces or slashes (e.g., "Physics", "Chemistry", "Mathematics", "Biology", "General_Studies_1")
+     * "title": Full clean official subject title
+     * "subtitle": Brief syllabus topic summary of core units
+     * "icon": A single fitting emoji icon (e.g. \u26A1, \u{1F9EA}, \u{1F4D0}, \u{1F9EC}, \u{1F4BB}, \u{1F4DA}, \u{1F3DB}\uFE0F, \u{1F4CA}, \u2696\uFE0F, \u{1F9E0})
 
 4. OFFICIAL GRADES / PREPARATION CLASSES RESEARCH:
-   - Research 3 to 5 authentic preparation classes, grades, or stages appropriate for "${trimmedExam}".
+   - Research 3 to 5 authentic preparation classes, grades, or candidate stages appropriate for "${trimmedExam}".
    - For each grade item:
-     - "id": Clean identifier string (e.g., "Class 12", "11th Grade", "Dropper / Repeater", "Year 11")
-     - "label": Short display title
-     - "desc": Informative subtitle
-     - "isCollege": boolean
+     * "id": Clean identifier string (e.g. "Class_11", "Class_12", "Dropper_Repeater", "Final_Year_College")
+     * "label": Short display title (e.g. "Class 12", "11th Grade", "Dropper / Repeater")
+     * "desc": Informative subtitle
+     * "isCollege": boolean (true if candidate is in college/university/graduated, false if in school)
 
 OUTPUT REQUIREMENT:
-Output ONLY a single valid JSON object.
+Output ONLY a single valid JSON object. No markdown wrappers or preamble.
 Format:
 {
   "isValid": true,
-  "officialExamName": "Full Official Name",
-  "detectedCountry": "Native Country or Global",
+  "officialExamName": "Full Official Standardized Name",
+  "shortName": "Clean Short Name",
+  "detectedCountry": "${userCountry}",
   "hasElectives": false,
   "grades": [
-    { "id": "Class 12", "label": "Class 12", "desc": "12th Board Appearing & Senior Secondary", "isCollege": false }
+    { "id": "Class_12", "label": "Class 12", "desc": "Senior Secondary Board & Entrance Preparation", "isCollege": false }
   ],
   "subjects": [
     { "id": "Physics", "title": "Physics", "subtitle": "Core curriculum topics", "icon": "\u26A1" }
   ]
 }
-OR if completely non-existent / fake / gibberish:
+OR if invalid/unrecognized/wrong country:
 {
   "isValid": false,
-  "errorMessage": "Helpful error message for user explaining why it could not be found."
+  "errorMessage": "Helpful error message explaining why it could not be found."
 }
 `;
     const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: {
@@ -5108,74 +5097,95 @@ OR if completely non-existent / fake / gibberish:
             text: "You are an elite academic curriculum research engine. You verify standardized examinations globally, accommodate international and national curricula with auto-country detection, and extract exact official curriculum subjects and authentic student preparation classes. Output ONLY valid JSON."
           }]
         },
-        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
         temperature: 0.1,
         maxOutputTokens: 3e3
       }
     });
-    const rawText = response.text || "";
+    const rawText = response?.text || "";
     const parsed = safeParseJSON(rawText, "object");
     if (!parsed || typeof parsed.isValid !== "boolean") {
-      if (rawText.toLowerCase().includes("not exist") || rawText.toLowerCase().includes("invalid")) {
-        return res.json({
-          isValid: false,
-          errorMessage: `We could not verify the exam "${trimmedExam}". Please check the spelling or enter a recognized exam name.`
-        });
-      }
-      if (parsed && Array.isArray(parsed.subjects) && parsed.subjects.length > 0) {
+      const emergencyMatch = findPreVerifiedExam(trimmedExam, userCountry);
+      if (emergencyMatch) {
         return res.json({
           isValid: true,
-          officialExamName: parsed.officialExamName || trimmedExam,
-          detectedCountry: parsed.detectedCountry || userCountry,
-          hasElectives: typeof parsed.hasElectives === "boolean" ? parsed.hasElectives : parsed.subjects.length >= 6,
-          grades: Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades : void 0,
-          subjects: parsed.subjects
+          officialExamName: emergencyMatch.officialExamName,
+          shortName: emergencyMatch.shortName || trimmedExam,
+          detectedCountry: emergencyMatch.country,
+          hasElectives: emergencyMatch.hasElectives,
+          grades: emergencyMatch.grades,
+          subjects: emergencyMatch.subjects
         });
       }
-      const intelligent2 = getIntelligentExamFallback(trimmedExam, userCountry);
+      const intelligent = getIntelligentExamFallback(trimmedExam, userCountry);
       return res.json({
         isValid: true,
         officialExamName: trimmedExam,
+        shortName: trimmedExam,
         detectedCountry: userCountry !== "Global" ? userCountry : "India",
-        hasElectives: intelligent2.subjects.length >= 6,
-        grades: intelligent2.grades,
-        subjects: intelligent2.subjects
-      });
-    }
-    if (!parsed.isValid) {
-      return res.json({
-        isValid: false,
-        errorMessage: parsed.errorMessage || `We could not verify "${trimmedExam}". Please enter a recognized standardized exam name.`
-      });
-    }
-    const intelligent = getIntelligentExamFallback(trimmedExam, userCountry);
-    const subjects = Array.isArray(parsed.subjects) && parsed.subjects.length > 0 ? parsed.subjects : intelligent.subjects;
-    const grades = Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades : intelligent.grades;
-    return res.json({
-      isValid: true,
-      officialExamName: parsed.officialExamName || trimmedExam,
-      detectedCountry: parsed.detectedCountry || userCountry,
-      hasElectives: typeof parsed.hasElectives === "boolean" ? parsed.hasElectives : subjects.length >= 6,
-      grades,
-      subjects
-    });
-  } catch (error) {
-    console.error("[verify-and-research-exam] Error:", error);
-    if (req.body?.examName && typeof req.body.examName === "string" && req.body.examName.trim().length >= 2) {
-      const fallbackExam = req.body.examName.trim();
-      const detectedCountry = sanitizeCountry(req.body.country, "India");
-      const intelligent = getIntelligentExamFallback(fallbackExam, detectedCountry);
-      return res.json({
-        isValid: true,
-        officialExamName: fallbackExam,
-        detectedCountry,
         hasElectives: intelligent.subjects.length >= 6,
         grades: intelligent.grades,
         subjects: intelligent.subjects
       });
     }
-    res.status(500).json({
-      error: "Could not verify exam right now. Please try again."
+    if (!parsed.isValid) {
+      return res.json({
+        isValid: false,
+        errorMessage: parsed.errorMessage || `We could not verify "${trimmedExam}" for ${userCountry}. Please enter a recognized standardized exam name or check your selected country.`
+      });
+    }
+    const researchedSubjects = Array.isArray(parsed.subjects) && parsed.subjects.length > 0 ? parsed.subjects.map((s, idx) => ({
+      id: String(s.id || s.title || `Subject_${idx + 1}`).trim().replace(/[^a-zA-Z0-9_-]/g, "_"),
+      title: String(s.title || s.id || `Subject ${idx + 1}`).trim(),
+      subtitle: String(s.subtitle || "Official exam curriculum unit").trim(),
+      icon: String(s.icon || "\u{1F4DA}").trim()
+    })) : findPreVerifiedExam(trimmedExam, userCountry)?.subjects || getIntelligentExamFallback(trimmedExam, userCountry).subjects;
+    const researchedGrades = Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades.map((g, idx) => ({
+      id: String(g.id || g.label || `Grade_${idx + 1}`).trim().replace(/[^a-zA-Z0-9_-]/g, "_"),
+      label: String(g.label || g.id || `Grade ${idx + 1}`).trim(),
+      desc: String(g.desc || "Exam preparation stage").trim(),
+      isCollege: Boolean(g.isCollege)
+    })) : findPreVerifiedExam(trimmedExam, userCountry)?.grades || getIntelligentExamFallback(trimmedExam, userCountry).grades;
+    return res.json({
+      isValid: true,
+      officialExamName: parsed.officialExamName || trimmedExam,
+      shortName: parsed.shortName || trimmedExam,
+      detectedCountry: parsed.detectedCountry || userCountry,
+      hasElectives: typeof parsed.hasElectives === "boolean" ? parsed.hasElectives : researchedSubjects.length >= 6,
+      grades: researchedGrades,
+      subjects: researchedSubjects
+    });
+  } catch (error) {
+    console.error("[verify-and-research-exam] Error:", error);
+    const trimmedExam = typeof req.body?.examName === "string" ? req.body.examName.trim() : "";
+    const userCountry = sanitizeCountry(req.body?.country, "India");
+    if (trimmedExam.length >= 2) {
+      const emergencyMatch = findPreVerifiedExam(trimmedExam, userCountry);
+      if (emergencyMatch) {
+        return res.json({
+          isValid: true,
+          officialExamName: emergencyMatch.officialExamName,
+          shortName: emergencyMatch.shortName || trimmedExam,
+          detectedCountry: emergencyMatch.country,
+          hasElectives: emergencyMatch.hasElectives,
+          grades: emergencyMatch.grades,
+          subjects: emergencyMatch.subjects
+        });
+      }
+      const intelligent = getIntelligentExamFallback(trimmedExam, userCountry);
+      return res.json({
+        isValid: true,
+        officialExamName: trimmedExam,
+        shortName: trimmedExam,
+        detectedCountry: userCountry,
+        hasElectives: intelligent.subjects.length >= 6,
+        grades: intelligent.grades,
+        subjects: intelligent.subjects
+      });
+    }
+    return res.status(500).json({
+      isValid: false,
+      errorMessage: "Could not verify exam right now. Please try again."
     });
   }
 });

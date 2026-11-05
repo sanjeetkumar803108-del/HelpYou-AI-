@@ -1,4 +1,5 @@
 import { safeGetItem } from './storage';
+import { auth } from '../lib/firebase';
 import { getStoredExamBlueprint } from './academicBlueprint';
 import { getVerifiedChapterSubTopics } from './communityCache';
 
@@ -753,18 +754,17 @@ export function cleanSubjectTitle(rawTitle: string): string {
 // Main dynamic curriculum resolver
 export function getScalableRelevantQuizzes(grade: string, track: string, countryRegion: string = 'USA') {
   // 1. Dynamic Check: Prioritize user's chosen subjects & calibrated exam blueprint 100%!
-  const uid = safeGetItem('last_logged_in_user');
+  const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   const blueprint = getStoredExamBlueprint(uid);
   const targetExam = (uid ? safeGetItem(`academic_exam_${uid}`) : null)
-    || safeGetItem('academic_exam') 
-    || safeGetItem('target_exam') 
+    || (!uid ? (safeGetItem('academic_exam') || safeGetItem('target_exam')) : '')
     || '';
   const nomenclature = getExamNomenclature(targetExam, countryRegion);
 
   // 2. Gather ONLY the subjects the user explicitly chosen in their academic setup / profile
   let chosenSubjects: string[] = [];
 
-  const rawSubjs = (uid ? safeGetItem(`academic_subjects_${uid}`) : null) || safeGetItem('academic_subjects');
+  const rawSubjs = uid ? safeGetItem(`academic_subjects_${uid}`) : safeGetItem('academic_subjects');
   if (rawSubjs) {
     try {
       const parsed = JSON.parse(rawSubjs);
@@ -779,10 +779,9 @@ export function getScalableRelevantQuizzes(grade: string, track: string, country
 
   // Fallback to single subject ONLY if user has no explicit multi-subject list
   if (chosenSubjects.length === 0) {
-    const rawSingle = (uid ? safeGetItem(`academic_subject_${uid}`) : null)
-      || safeGetItem('academic_subject') 
-      || safeGetItem('selected_subject') 
-      || safeGetItem('subject');
+    const rawSingle = uid 
+      ? (safeGetItem(`academic_subject_${uid}`) || safeGetItem(`selected_subject_${uid}`) || safeGetItem(`subject_${uid}`))
+      : (safeGetItem('academic_subject') || safeGetItem('selected_subject') || safeGetItem('subject'));
     if (rawSingle) {
       chosenSubjects = rawSingle.split(',').map(s => s.trim()).filter(Boolean);
     }

@@ -37,7 +37,7 @@ import { billingService } from '../services/BillingService';
 import AcademicSetup, { REGIONAL_TRACKS, DEFAULT_SUBJECTS, COUNTRIES } from './AcademicSetup';
 import { resolveRealCountry } from '../utils/profile';
 import { getApiUrl } from '../utils/api';
-import { getStoredExamBlueprint, saveStoredExamBlueprint, getSubjectBlueprint } from '../utils/academicBlueprint';
+import { getStoredExamBlueprint, saveStoredExamBlueprint, getSubjectBlueprint, purgeUnscopedAcademicSession } from '../utils/academicBlueprint';
 import { cleanSubjectTitle } from '../utils/curriculumMap';
 import { 
   getStudyXP, 
@@ -1203,8 +1203,10 @@ export default function Profile({
     // Sync any unsynced focus time to Firestore before logging out
     await syncUsageToFirestore();
     setIsVip(false);
+    purgeUnscopedAcademicSession();
     safeClearAll();
     safeRemoveItem('helpyou_active_user_session');
+    safeRemoveItem('last_logged_in_user');
     clearLocalSessionId(auth.currentUser?.uid);
     
     // Clear Native Capacitor Google Auth session so that Account Chooser is shown on next login

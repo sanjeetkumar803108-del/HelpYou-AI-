@@ -28,7 +28,7 @@ import { showToast } from './utils/toast';
 import { setupDailyLocalNotifications } from './utils/notifications';
 import confetti from 'canvas-confetti';
 import { resolveRealCountry } from './utils/profile';
-import { saveStoredExamBlueprint } from './utils/academicBlueprint';
+import { saveStoredExamBlueprint, purgeUnscopedAcademicSession } from './utils/academicBlueprint';
 
 import { retryImport } from './utils/resilientLazy';
 import ToolsDashboard from './components/ToolsDashboard';
@@ -511,6 +511,12 @@ export default function App() {
           try { await signOut(auth); } catch (_) { }
           return;
         } else {
+          // Check if switching user account on the same device to prevent any cross-user data leakage
+          const lastUid = safeGetItem('last_logged_in_user');
+          if (lastUid && lastUid !== currentUser.uid) {
+            console.log(`[Auth Guard] User switch detected from ${lastUid} to ${currentUser.uid}. Purging unscoped previous user session data.`);
+            purgeUnscopedAcademicSession();
+          }
           safeSetItem('helpyou_active_user_session', 'true');
           safeSetItem('last_logged_in_user', currentUser.uid);
           safeRemoveItem('helpyou_auth_in_progress');
@@ -611,15 +617,31 @@ export default function App() {
                 }
               }
 
-              const localUpdated = Number(safeGetItem(`academic_profile_updated_at_${currentUser.uid}`) || safeGetItem('academic_profile_updated_at') || '0');
+              // STRICT USER ISOLATION: Check ONLY this authenticated user's isolated local profile
+              const localUpdated = Number(safeGetItem(`academic_profile_updated_at_${currentUser.uid}`) || '0');
               const firestoreUpdated = userData?.updatedAt ? new Date(userData.updatedAt).getTime() : 0;
-              const localCountry = safeGetItem(`academic_country_${currentUser.uid}`) || safeGetItem('academic_country');
-              const localExam = safeGetItem(`academic_exam_${currentUser.uid}`) || safeGetItem('academic_exam') || safeGetItem('target_exam');
+              const localCountry = safeGetItem(`academic_country_${currentUser.uid}`);
+              const localExam = safeGetItem(`academic_exam_${currentUser.uid}`) || safeGetItem(`target_exam_${currentUser.uid}`);
               const isLocalCalibrated = Boolean(localCountry && localExam);
-              const isLocalNewer = isLocalCalibrated || (localUpdated > 0 && (localUpdated >= firestoreUpdated || (Date.now() - localUpdated < 24 * 60 * 60 * 1000)));
+              const isLocalNewer = isLocalCalibrated && (localUpdated > 0 && (localUpdated >= firestoreUpdated || (Date.now() - localUpdated < 24 * 60 * 60 * 1000)));
 
               if (isLocalNewer) {
-                console.log('[App] Local academic profile is active on this device. Preserving local calibrated profile.');
+                console.log('[App] Local academic profile is active for this user. Preserving user calibrated profile.');
+                // Re-sync this user's isolated settings to active working keys
+                safeSetItem('academic_exam', localExam!);
+                safeSetItem('target_exam', localExam!);
+                safeSetItem('academic_country', localCountry!);
+                const uSubjs = safeGetItem(`academic_subjects_${currentUser.uid}`);
+                if (uSubjs) safeSetItem('academic_subjects', uSubjs);
+                const uSubj = safeGetItem(`academic_subject_${currentUser.uid}`);
+                if (uSubj) {
+                  safeSetItem('academic_subject', uSubj);
+                  safeSetItem('subject', uSubj);
+                }
+                const uGrade = safeGetItem(`academic_grade_${currentUser.uid}`);
+                if (uGrade) safeSetItem('academic_grade', uGrade);
+                const uBp = safeGetItem(`user_exam_blueprint_${currentUser.uid}`);
+                if (uBp) safeSetItem('user_exam_blueprint', uBp);
               } else if (userData) {
                 if (userData.targetExam || userData.exam || userData.academic_exam) {
                   const savedExam = userData.targetExam || userData.exam || userData.academic_exam;
@@ -661,8 +683,8 @@ export default function App() {
                   safeSetItem('academic_subjects', subjStr);
                   safeSetItem(`academic_subjects_${currentUser.uid}`, subjStr);
                 }
-                if (userData.examBlueprint || userData.academicBlueprint) {
-                  const savedBp = userData.academicBlueprint || userData.examBlueprint;
+                if (userData.subjectsBlueprint || userData.examBlueprint || userData.academicBlueprint) {
+                  const savedBp = userData.subjectsBlueprint || userData.academicBlueprint || userData.examBlueprint;
                   if (savedBp && typeof savedBp === 'object') {
                     saveStoredExamBlueprint(savedBp, currentUser.uid, userData.examOverview);
                   }

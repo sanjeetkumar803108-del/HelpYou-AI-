@@ -115,23 +115,23 @@ export function resolveRealCountry(rawCountry?: string | null, customCountry?: s
  * Retrieves the comprehensive profile data for the active user.
  * Seamlessly resolves localized cache keys and active user session overrides.
  */
-export function getUserProfileData(): UserProfileData {
-  const uid = auth.currentUser?.uid || '';
+export function getUserProfileData(userId?: string): UserProfileData {
+  const uid = userId || auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
   
-  const gradeLevel = (uid ? safeGetItem(`academic_grade_${uid}`) : null) ||
-    safeGetItem('academic_grade') ||
-    '11th Grade (Junior)';
+  // STRICT USER ISOLATION: When user ID is known, strictly isolate all keys to this user!
+  const gradeLevel = uid 
+    ? (safeGetItem(`academic_grade_${uid}`) || '11th Grade (Junior)')
+    : (safeGetItem('academic_grade') || '11th Grade (Junior)');
 
-  const subject = (uid ? safeGetItem(`academic_subject_${uid}`) : null) ||
-    safeGetItem('academic_subject') ||
-    safeGetItem('selected_subject') ||
-    safeGetItem('subject') ||
-    (uid ? safeGetItem(`academic_stream_${uid}`) : null) ||
-    safeGetItem('academic_stream') ||
-    'Mathematics';
+  const subject = uid 
+    ? (safeGetItem(`academic_subject_${uid}`) || safeGetItem(`academic_stream_${uid}`) || safeGetItem(`subject_${uid}`) || 'Mathematics')
+    : (safeGetItem('academic_subject') || safeGetItem('selected_subject') || safeGetItem('subject') || safeGetItem('academic_stream') || 'Mathematics');
 
   let subjects: string[] = [];
-  const rawSubjects = (uid ? safeGetItem(`academic_subjects_${uid}`) : null) || safeGetItem('academic_subjects');
+  const rawSubjects = uid 
+    ? safeGetItem(`academic_subjects_${uid}`) 
+    : safeGetItem('academic_subjects');
+
   if (rawSubjects) {
     try {
       const parsed = JSON.parse(rawSubjects);
@@ -146,34 +146,36 @@ export function getUserProfileData(): UserProfileData {
 
   const stream = subject;
 
-  const targetExam = (uid ? safeGetItem(`academic_exam_${uid}`) : null) ||
-    (uid ? safeGetItem(`target_exam_${uid}`) : null) ||
-    safeGetItem('academic_exam') ||
-    safeGetItem('target_exam') ||
-    '';
+  const targetExam = uid 
+    ? (safeGetItem(`academic_exam_${uid}`) || safeGetItem(`target_exam_${uid}`) || '')
+    : (safeGetItem('academic_exam') || safeGetItem('target_exam') || '');
 
-  const rawCountry = (uid ? safeGetItem(`academic_country_${uid}`) : null) ||
-    safeGetItem('academic_country');
+  const rawCountry = uid 
+    ? safeGetItem(`academic_country_${uid}`)
+    : safeGetItem('academic_country');
 
-  const customCountry = (uid ? safeGetItem(`academic_custom_country_${uid}`) : null) ||
-    safeGetItem('academic_custom_country') ||
-    (uid ? safeGetItem(`custom_country_${uid}`) : null) ||
-    safeGetItem('custom_country');
+  const customCountry = uid 
+    ? (safeGetItem(`academic_custom_country_${uid}`) || safeGetItem(`custom_country_${uid}`))
+    : (safeGetItem('academic_custom_country') || safeGetItem('custom_country'));
 
   const country = resolveRealCountry(rawCountry, customCountry, targetExam);
 
   // If local storage has 'Others', auto-repair it so future accesses are clean
   if (rawCountry === 'Others' || rawCountry === 'Other') {
-    safeSetItem('academic_country', country);
-    safeSetItem('academic_custom_country', country);
     if (uid) {
       safeSetItem(`academic_country_${uid}`, country);
       safeSetItem(`academic_custom_country_${uid}`, country);
     }
+    const activeUid = auth.currentUser?.uid || safeGetItem('last_logged_in_user');
+    if (!activeUid || activeUid === uid) {
+      safeSetItem('academic_country', country);
+      safeSetItem('academic_custom_country', country);
+    }
   }
 
-  let region = (uid ? safeGetItem(`academic_region_${uid}`) : null) ||
-    safeGetItem('academic_region');
+  let region = uid 
+    ? safeGetItem(`academic_region_${uid}`)
+    : safeGetItem('academic_region');
   
   if (!region || region === 'Global') {
     if (country === 'India') region = 'India';
@@ -185,9 +187,9 @@ export function getUserProfileData(): UserProfileData {
   }
 
   const role = safeGetItem('onboarding_role') || 'High School Student';
-  const studyLevel = (uid ? safeGetItem(`onboarding_grade_${uid}`) : null) ||
-    safeGetItem('onboarding_grade') ||
-    (gradeLevel.toLowerCase().includes('college') ? 'College' : 'High School');
+  const studyLevel = uid 
+    ? (safeGetItem(`onboarding_grade_${uid}`) || (gradeLevel.toLowerCase().includes('college') ? 'College' : 'High School'))
+    : (safeGetItem('onboarding_grade') || (gradeLevel.toLowerCase().includes('college') ? 'College' : 'High School'));
 
   const isVisualLearner = safeGetItem('pref_visual_learner') === 'true';
   const isDeepFocus = safeGetItem('pref_deep_focus') === 'true';
@@ -204,7 +206,8 @@ export function getUserProfileData(): UserProfileData {
     customNotes.push('Deep Focus mode is enabled: provide direct, distraction-free, high-yield academic answers.');
   }
 
-  const profileContext = `Student: ${userName} | Grade: ${gradeLevel} | Target Exam: ${targetExam || 'General'} | Subject: ${subject} | Region: ${country} (${region}) | Level: ${studyLevel}${customNotes.length > 0 ? ' | ' + customNotes.join(' | ') : ''}`;
+  const blueprintPrompt = formatBlueprintForAIPrompt(subject, uid);
+  const profileContext = `Student: ${userName} | Grade: ${gradeLevel} | Target Exam: ${targetExam || 'General'} | Subject: ${subject} | Region: ${country} (${region}) | Level: ${studyLevel}${customNotes.length > 0 ? ' | ' + customNotes.join(' | ') : ''}${blueprintPrompt ? '\n' + blueprintPrompt : ''}`;
 
   return {
     gradeLevel,

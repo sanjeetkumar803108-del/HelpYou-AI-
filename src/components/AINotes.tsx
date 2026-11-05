@@ -10,7 +10,7 @@ import { collection, addDoc, getDocs, deleteDoc, doc, query, where, serverTimest
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getStoredExamBlueprint, SubjectBlueprint } from '../utils/academicBlueprint';
 import { getScalableRelevantQuizzes } from '../utils/curriculumMap';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
+import { parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 import { triggerVibration } from '../utils/vibrate';
 import { deductCoins, getCoins, isProUser } from '../utils/coins';
 import { trackQuestProgress } from '../utils/gamification';
@@ -326,31 +326,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
     triggerVibration(15);
 
     try {
-      // Check Global Community Cache first (Instant 0ms / 0 API cost)
-      const hierarchy = parseTopicHierarchy(chapterName, selectedSubject);
-      const targetExamStr = targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
-      const cachedHit = await getCachedCurriculumContent<AINotesData>({
-        country,
-        exam: targetExamStr,
-        grade: gradeLevel,
-        subject: selectedSubject,
-        chapter: hierarchy.chapter,
-        subTopic: hierarchy.subTopic,
-        feature: 'notes'
-      });
-
-      if (cachedHit && cachedHit.content && Array.isArray(cachedHit.content.pages) && cachedHit.content.pages.length > 0) {
-        setLoadingProgress(100);
-        setNotesData(cachedHit.content);
-        setLoading(false);
-        try { trackQuestProgress('notes', 1); } catch (_) {}
-        triggerVibration(30);
-        if (!isVip) {
-          deductCoins(2, "AI Topper Handwritten Notes");
-        }
-        return;
-      }
-
       const response = await fetch(getApiUrl('/api/generate-ai-notes'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -378,17 +353,6 @@ export default function AINotes({ onBack, isVip = false }: AINotesProps) {
       setLoadingProgress(100);
       setNotesData(data);
       try { trackQuestProgress('notes', 1); } catch (_) {}
-
-      // Save newly generated notes into Global Community Cache
-      saveCachedCurriculumContent({
-        country,
-        exam: targetExamStr,
-        grade: gradeLevel,
-        subject: selectedSubject,
-        chapter: hierarchy.chapter,
-        subTopic: hierarchy.subTopic,
-        feature: 'notes'
-      }, data, { depth: noteDepth });
 
       setLoading(false);
       triggerVibration(30);

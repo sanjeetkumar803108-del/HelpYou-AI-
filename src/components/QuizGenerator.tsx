@@ -43,7 +43,7 @@ import {
 
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
+import { parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 
 interface Question {
   question: string;
@@ -1820,31 +1820,8 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
       });
       const uniqueAvoid = Array.from(new Set(seenQuizPool)).slice(0, 30);
 
-      // 1. Check Global Community Cache first (Instant 0ms / 0 API Cost)
       const hierarchy = parseTopicHierarchy(activeTopic, profile.subject || profile.stream);
       const targetExamStr = profile.exam || profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
-      const cachedHit = await getCachedCurriculumContent({
-        country: profile.country,
-        exam: targetExamStr,
-        grade: profile.gradeLevel,
-        subject: hierarchy.subject,
-        chapter: hierarchy.chapter,
-        subTopic: hierarchy.subTopic,
-        feature: 'quiz'
-      });
-
-      if (cachedHit && Array.isArray(cachedHit.content) && cachedHit.content.length > 0) {
-        setLoadingProgress(100);
-        await new Promise(r => setTimeout(r, 150));
-        deductCoins(2, "AI Quizzes");
-        setQuiz(cachedHit.content);
-        setQuizState('playing');
-        setCurrentIndex(0);
-        setQuestionStartTime(Date.now());
-        saveInitialQuizToHistory(cachedHit.content, activeTopic);
-        setLoading(false);
-        return;
-      }
 
       const response = await fetch(getApiUrl('/api/generate-quiz'), {
         method: 'POST',
@@ -1886,17 +1863,6 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
         setCurrentIndex(0);
         setQuestionStartTime(Date.now());
         saveInitialQuizToHistory(data.quiz, activeTopic);
-
-        // Save newly generated quiz into Global Community Cache for all future users
-        saveCachedCurriculumContent({
-          country: profile.country,
-          exam: targetExamStr,
-          grade: profile.gradeLevel,
-          subject: hierarchy.subject,
-          chapter: hierarchy.chapter,
-          subTopic: hierarchy.subTopic,
-          feature: 'quiz'
-        }, data.quiz, { count: data.quiz.length });
       } else {
         throw new Error('Invalid quiz response from server');
       }
@@ -2846,12 +2812,6 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                                                     {/* Sub-Topics Pills */}
                                                     <div className="grid grid-cols-1 gap-1.5 pt-1">
                                                       {subTopicsList.map((sub, sIdx) => {
-                                                        const isSaved = isCurriculumContentCached({
-                                                          subject: cleanSubjectTitle(subject.title),
-                                                          chapter: topicItem,
-                                                          subTopic: sub,
-                                                          feature: 'quiz'
-                                                        });
                                                         const verifiedCustoms = getVerifiedChapterSubTopics(cleanSubjectTitle(subject.title), topicItem);
                                                         const isUserAdded = verifiedCustoms.some(vc => vc.toLowerCase().trim() === sub.toLowerCase().trim());
 
@@ -2869,20 +2829,12 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                                                               disabled={loading}
                                                               className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer text-left"
                                                             >
-                                                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 group-hover/sub:scale-125 transition-transform ${
-                                                                isSaved ? 'bg-emerald-500' : 'bg-indigo-500'
-                                                              }`} />
+                                                              <span className="w-1.5 h-1.5 rounded-full shrink-0 group-hover/sub:scale-125 transition-transform bg-indigo-500" />
                                                               <span className="text-xs font-medium text-zinc-700 group-hover/sub:text-indigo-600 transition-colors truncate">
                                                                 {sub}
                                                               </span>
                                                             </button>
                                                             <div className="flex items-center gap-1.5 shrink-0">
-                                                              {isSaved && (
-                                                                <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs">
-                                                                  <Check className="w-2.5 h-2.5" />
-                                                                  <span>Saved</span>
-                                                                </span>
-                                                              )}
                                                               <button
                                                                 type="button"
                                                                 onClick={() => {

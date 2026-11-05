@@ -621,26 +621,30 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     const gradeObj = [...verifiedExamGrades, ...GRADES].find(g => g.id === selectedGrade);
     const studyLevel = gradeObj?.isCollege ? 'College' : 'High School';
 
-    // Start 5-Stage Live Deep Research
+    // Start 11-Stage Comprehensive Deep Research
     setIsDeepResearching(true);
     setResearchStage(1);
-    setResearchMessage(`Connecting to Official ${finalExam} Examination Registry...`);
+    setResearchMessage(`Verifying official conducting authority & jurisdiction for ${finalExam}...`);
 
-    // Dynamic stage progression timer while waiting for API
-    const stageTimer1 = setTimeout(() => {
-      setResearchStage(2);
-      setResearchMessage(`Curating official syllabus & core units for ${finalSubjectsList.length} subjects...`);
-    }, 1100);
+    const stageTimers: NodeJS.Timeout[] = [];
+    const researchSchedule = [
+      { stage: 2, delay: 650, msg: `Accessing official curriculum repository for Grade ${selectedGrade}...` },
+      { stage: 3, delay: 1350, msg: `Analyzing official paper structure, question formats & test mode...` },
+      { stage: 4, delay: 2150, msg: `Curating authentic chapters for ${finalSubjectsList[0] || 'primary subject'}...` },
+      { stage: 5, delay: 3000, msg: `Deep-indexing micro-topics & concept hierarchy for ${finalSubjectsList[0] || 'primary subject'}...` },
+      { stage: 6, delay: 4000, msg: `Extracting authentic chapters across all ${finalSubjectsList.length} chosen subjects...` },
+      { stage: 7, delay: 5100, msg: `Cataloging micro-subtopics & concept hierarchy across all subjects...` },
+      { stage: 8, delay: 6300, msg: `Formulating exact scoring scheme, weightage & negative marking rules...` },
+      { stage: 9, delay: 7600, msg: `Researching official testing window, upcoming exam dates & countdown...` },
+      { stage: 10, delay: 9000, msg: `Enforcing zero generic fillers; verifying authentic textbook chapter names...` }
+    ];
 
-    const stageTimer2 = setTimeout(() => {
-      setResearchStage(3);
-      setResearchMessage(`Analyzing official marks weightage & negative marking rules...`);
-    }, 2400);
-
-    const stageTimer3 = setTimeout(() => {
-      setResearchStage(4);
-      setResearchMessage(`Researching official examination schedule, start date & countdown...`);
-    }, 3800);
+    researchSchedule.forEach(({ stage, delay, msg }) => {
+      stageTimers.push(setTimeout(() => {
+        setResearchStage(prev => Math.max(prev, stage));
+        setResearchMessage(msg);
+      }, delay));
+    });
 
     let researchedBlueprint: any = null;
     let researchedOverview: any = null;
@@ -674,14 +678,13 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       console.warn("[AcademicSetup] Deep research network fallback:", apiErr);
     }
 
-    clearTimeout(stageTimer1);
-    clearTimeout(stageTimer2);
-    clearTimeout(stageTimer3);
+    stageTimers.forEach(t => clearTimeout(t));
 
-    // Stage 5: Finalizing & Securing
-    setResearchStage(5);
-    setResearchMessage('Permanently calibrating and securing your Academic DNA! ✓');
-    triggerVibration(30);
+    // Stage 11: Finalizing & Securing
+    setResearchStage(11);
+    setResearchMessage('100% Calibrated: Your authentic Academic DNA is secured! ✓');
+    triggerVibration(40);
+    await new Promise(r => setTimeout(r, 650));
 
     // Save selections locally
     safeSetItem('academic_country', finalCountry);
@@ -1366,52 +1369,74 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               <div className="absolute -bottom-12 -left-12 w-36 h-36 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
 
               {/* Central Pulsing Radar Orb */}
-              <div className="flex flex-col items-center text-center mb-3 sm:mb-3.5 relative shrink-0">
-                <div className="relative mb-2.5">
+              <div className="flex flex-col items-center text-center mb-2.5 relative shrink-0">
+                <div className="relative mb-2">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 p-0.5 shadow-lg shadow-purple-500/25 flex items-center justify-center animate-pulse">
                     <div className="w-full h-full bg-white rounded-[0.9rem] flex items-center justify-center">
-                      {researchStage === 5 ? (
+                      {researchStage === 11 ? (
                         <Check className="w-6 h-6 text-emerald-600 stroke-[3]" />
                       ) : (
                         <Sparkles className="w-6 h-6 text-purple-600 animate-spin" style={{ animationDuration: '4s' }} />
                       )}
                     </div>
                   </div>
-                  {researchStage < 5 && (
+                  {researchStage < 11 && (
                     <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-black shadow-md">
                       <Loader2 className="w-3 h-3 animate-spin" />
                     </div>
                   )}
                 </div>
 
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-1.5 text-[9px] font-extrabold uppercase tracking-wider">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-1 text-[9px] font-extrabold uppercase tracking-wider">
                   <ShieldCheck className="w-3 h-3 text-purple-600" />
                   Official Exam Intelligence Engine
                 </div>
-                <h3 className="text-lg font-black text-zinc-950 tracking-tight leading-tight">
+                <h3 className="text-base font-black text-zinc-950 tracking-tight leading-tight">
                   Calibrating Academic DNA
                 </h3>
-                <p className="text-[11px] text-zinc-500 font-semibold mt-0.5 max-w-[270px] leading-snug line-clamp-2">
-                  Deep web research on official guidelines for <span className="font-extrabold text-zinc-900">{targetExam}</span>
+                <p className="text-[11px] text-zinc-500 font-semibold mt-0.5 max-w-[270px] leading-snug line-clamp-1">
+                  Deep web research for <span className="font-extrabold text-zinc-900">{targetExam}</span>
                 </p>
+
+                {/* 11-Step Progress Bar Indicator */}
+                <div className="w-full max-w-[270px] mt-2 mb-0.5">
+                  <div className="flex justify-between items-center text-[10px] font-black text-purple-700 mb-1 px-0.5">
+                    <span>Live Deep Research</span>
+                    <span>Step {researchStage} of 11 ({Math.round((researchStage / 11) * 100)}%)</span>
+                  </div>
+                  <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden border border-zinc-200/50">
+                    <motion.div 
+                      className="bg-gradient-to-r from-purple-600 to-indigo-600 h-full rounded-full"
+                      initial={{ width: '9%' }}
+                      animate={{ width: `${Math.round((researchStage / 11) * 100)}%` }}
+                      transition={{ duration: 0.35, ease: "easeOut" }}
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* 5 Progress Stages Checklist */}
-              <div className="space-y-1.5 mb-3 sm:mb-3.5 flex-1 min-h-0">
+              {/* 11 Progress Stages Checklist (Scrollable on Mobile) */}
+              <div className="space-y-1.5 mb-2.5 flex-1 min-h-0 overflow-y-auto max-h-[210px] pr-1 scrollbar-thin">
                 {[
-                  { num: 1, label: `Connect to ${targetExam || 'Exam'} Registry`, desc: 'Official testing authority handshake' },
-                  { num: 2, label: 'Curate Official Syllabus & Units', desc: 'Isolating chapters for each subject' },
-                  { num: 3, label: 'Analyze Marking Scheme & Weightage', desc: 'Formulating exact marks & negative marking' },
-                  { num: 4, label: 'Extract Real Exam Question Patterns', desc: 'Calibrating question styles & difficulty' },
-                  { num: 5, label: 'Lock Permanent Academic DNA', desc: 'Permanently secured to your personal profile' }
+                  { num: 1, label: '1. Official Authority & Jurisdiction', desc: `Handshake with official authority for ${targetExam}` },
+                  { num: 2, label: '2. Official Syllabus Repository', desc: 'Connecting to accredited board syllabus standards' },
+                  { num: 3, label: '3. Exam Format & Paper Structure', desc: 'Analyzing CBT/OMR modes, duration & total marks' },
+                  { num: 4, label: '4. Primary Subject Curriculum', desc: `Extracting authentic chapters for ${selectedSubjects[0] || 'primary subject'}` },
+                  { num: 5, label: '5. Deep-Index Concept Hierarchy', desc: `Mapping core units & sub-topics for ${selectedSubjects[0] || 'primary subject'}` },
+                  { num: 6, label: '6. Extract All Chosen Subjects', desc: `Curating syllabus for all ${selectedSubjects.length} selected subjects` },
+                  { num: 7, label: '7. Micro-Topics & Subtopics Index', desc: 'Cataloging micro-concept breakdown and textbook alignments' },
+                  { num: 8, label: '8. Scoring Scheme & Penalties', desc: 'Formulating exact marks-per-question & negative rules' },
+                  { num: 9, label: '9. Official Examination Schedule', desc: 'Resolving official start dates, cycle & countdown' },
+                  { num: 10, label: '10. Zero-Generic Verification', desc: 'Verifying authentic textbook chapter names; zero placeholders' },
+                  { num: 11, label: '11. Lock Permanent Academic DNA', desc: 'Permanently secured to your personal student workspace' }
                 ].map((st) => {
-                  const isDone = researchStage > st.num || (researchStage === 5 && st.num === 5);
-                  const isCurrent = researchStage === st.num && researchStage < 5;
+                  const isDone = researchStage > st.num || (researchStage === 11 && st.num === 11);
+                  const isCurrent = researchStage === st.num && researchStage < 11;
 
                   return (
                     <div 
                       key={st.num}
-                      className={`px-3 py-2 rounded-xl border transition-all flex items-center gap-2.5 ${
+                      className={`px-3 py-1.5 rounded-xl border transition-all flex items-center gap-2.5 ${
                         isDone 
                           ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
                           : isCurrent
@@ -1451,9 +1476,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               </div>
 
               {/* Dynamic Status Ticker (Guaranteed 100% Legible & Visible on All Mobile Screens) */}
-              <div className="w-full px-3.5 py-2.5 bg-zinc-950 text-white rounded-2xl shadow-xl border border-zinc-800 shrink-0 flex items-center gap-3 min-h-[48px]">
+              <div className="w-full px-3.5 py-2.5 bg-zinc-950 text-white rounded-2xl shadow-xl border border-zinc-800 shrink-0 flex items-center gap-3 min-h-[46px]">
                 <div className="w-7 h-7 rounded-xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center shrink-0">
-                  {researchStage < 5 ? (
+                  {researchStage < 11 ? (
                     <Loader2 className="w-4 h-4 animate-spin text-purple-400 shrink-0" />
                   ) : (
                     <Check className="w-4 h-4 text-emerald-400 shrink-0 stroke-[3]" />

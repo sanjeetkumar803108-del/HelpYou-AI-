@@ -3,34 +3,6 @@ import { db } from '../lib/firebase';
 import { safeGetItem, safeSetItem } from './storage';
 import { getApiUrl } from './api';
 
-export type FeatureType = 'quiz' | 'subjective_questions' | 'notes' | 'flashcards';
-
-export interface CacheKeyParams {
-  country?: string;
-  exam?: string;
-  grade?: string;
-  subject: string;
-  chapter?: string;
-  subTopic?: string;
-  feature: FeatureType;
-}
-
-export interface CachedDocument<T = any> {
-  cacheKey: string;
-  country: string;
-  exam: string;
-  grade: string;
-  subject: string;
-  chapter: string;
-  subTopic: string;
-  feature: FeatureType;
-  content: T;
-  createdAt: string;
-  accessCount?: number;
-  model?: string;
-  metadata?: Record<string, any>;
-}
-
 /**
  * Sanitizes an arbitrary string into a deterministic, filesystem/URL safe slug.
  */
@@ -43,56 +15,6 @@ function slugify(text: string | undefined, fallback: string = 'general'): string
     .replace(/[\s_-]+/g, '_') // collapse spaces and dashes to underscore
     .replace(/^_+|_+$/g, ''); // trim leading/trailing underscores
   return slug || fallback;
-}
-
-/**
- * Resolves active user profile details from localStorage with safe fallbacks.
- */
-export function resolveActiveProfileParams(overrides?: Partial<CacheKeyParams>): CacheKeyParams {
-  const uid = safeGetItem('last_logged_in_user') || '';
-
-  const country = overrides?.country
-    || (uid ? safeGetItem(`academic_country_${uid}`) : null)
-    || safeGetItem('academic_country')
-    || safeGetItem('country')
-    || 'India';
-
-  const exam = overrides?.exam
-    || (uid ? safeGetItem(`academic_exam_${uid}`) : null)
-    || safeGetItem('academic_exam')
-    || safeGetItem('target_exam')
-    || 'NEET';
-
-  const grade = overrides?.grade
-    || (uid ? safeGetItem(`academic_grade_${uid}`) : null)
-    || safeGetItem('academic_grade')
-    || safeGetItem('gradeLevel')
-    || 'Class 11';
-
-  return {
-    country,
-    exam,
-    grade,
-    subject: overrides?.subject || 'Physics',
-    chapter: overrides?.chapter || 'General',
-    subTopic: overrides?.subTopic || 'General',
-    feature: overrides?.feature || 'quiz'
-  };
-}
-
-/**
- * Constructs deterministic slug string for logging or tracking.
- */
-export function buildDeterministicCacheKey(params: CacheKeyParams): string {
-  const c = slugify(params.country, 'india');
-  const e = slugify(params.exam, 'general_exam');
-  const g = slugify(params.grade, 'senior');
-  const s = slugify(params.subject, 'general_subject');
-  const ch = slugify(params.chapter, 'ch_all');
-  const st = slugify(params.subTopic, 'st_all');
-  const f = slugify(params.feature, 'quiz');
-
-  return `${c}__${e}__${g}__${s}__${ch}__${st}__${f}`;
 }
 
 const COMMON_NON_ACADEMIC_PATTERNS = [
@@ -293,26 +215,6 @@ export function parseTopicHierarchy(rawTopic: string, fallbackSubject?: string):
 }
 
 /**
- * DATABASE CACHING COMPLETELY PERMANENTLY REMOVED:
- * Every feature now generates 100% fresh, live, personalized AI content every single time.
- * Always returns null so no stale database or memory cache is ever served to the user.
- */
-export async function getCachedCurriculumContent<T = any>(
-  _rawParams: CacheKeyParams
-): Promise<{ content: T; isCached: true; source: 'memory' | 'local' | 'cloud' } | null> {
-  // Always return null: No database caching. Fresh AI generation guaranteed.
-  return null;
-}
-
-/**
- * Synchronous local check to see if content is already cached.
- * Always returns false since database caching is completely removed.
- */
-export function isCurriculumContentCached(_rawParams: CacheKeyParams): boolean {
-  return false;
-}
-
-/**
  * Retrieves list of verified custom sub-topics for a given subject and chapter.
  * Automatically sanitizes and prunes any stale or invalid entries.
  */
@@ -403,35 +305,4 @@ export function registerVerifiedChapterSubTopic(subject: string, chapter: string
   } catch (err) {
     console.warn('[communityCache] Error registering subtopic:', err);
   }
-}
-
-/**
- * DATABASE CACHE SAVING COMPLETELY REMOVED:
- * No AI responses or generated content are saved to database or local cache.
- * Every user request generates pure, live, fresh AI content.
- */
-export async function saveCachedCurriculumContent<T = any>(
-  rawParams: CacheKeyParams,
-  _content: T,
-  _extraMetadata?: Record<string, any>
-): Promise<boolean> {
-  // If user entered a custom subtopic, register it into chapter units list
-  if (rawParams.subTopic && rawParams.subTopic !== 'All') {
-    registerVerifiedChapterSubTopic(rawParams.subject, rawParams.chapter || 'All', rawParams.subTopic);
-  }
-  return true;
-}
-
-// Purge any stale legacy cache items from localStorage on initial script execution
-if (typeof window !== 'undefined') {
-  try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith('comm_cache_')) {
-        keysToRemove.push(k);
-      }
-    }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-  } catch (_) {}
 }

@@ -15,7 +15,7 @@ import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
+import { parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
 import { savePDFMobile, sharePDFMobile, shareTextMobile } from '../utils/mobileSaver';
@@ -748,33 +748,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         }
       }
 
-      // Check Community Learning Cache (0ms instant response & 0 API cost)
-      const targetExamStr = profile.exam || profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
-      const cachedHit = await getCachedCurriculumContent({
-        country: profile.country || country,
-        exam: targetExamStr,
-        grade: profile.gradeLevel || gradeLevel,
-        subject: hierarchy.subject,
-        chapter: hierarchy.chapter,
-        subTopic: hierarchy.subTopic,
-        feature: 'subjective_questions'
-      });
-
-      if (cachedHit && Array.isArray(cachedHit.content) && cachedHit.content.length > 0) {
-        const hasTemplate = cachedHit.content.some((q: any) => {
-          const t = (q.question || q.title || '').toLowerCase();
-          return t.includes('concept #') || t.includes('fundamental mechanisms and significance');
-        });
-        if (!hasTemplate && cachedHit.content.length >= questionCount) {
-          setLoadingProgress(100);
-          deductCoins(2, "AI Subjective Questions");
-          setQuestions(cachedHit.content.slice(0, questionCount));
-          setLoading(false);
-          saveToHistory(cachedHit.content.slice(0, questionCount)).catch(e => console.error("History save failed:", e));
-          return;
-        }
-      }
-
       const response = await fetch(getApiUrl('/api/generate-questions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -818,18 +791,6 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
         } catch (_) {}
 
         setQuestions(data.questions);
-
-        // Save newly generated questions into Global Community Cache for future learners
-        saveCachedCurriculumContent({
-          country: profile.country || country,
-          exam: targetExamStr,
-          grade: profile.gradeLevel || gradeLevel,
-          subject: hierarchy.subject,
-          chapter: hierarchy.chapter,
-          subTopic: hierarchy.subTopic,
-          feature: 'subjective_questions'
-        }, data.questions, { count: data.questions.length });
-
         setLoading(false);
         // Automatically save the set to history in background
         saveToHistory(data.questions).catch(e => console.error("History save failed:", e));

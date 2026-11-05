@@ -33,7 +33,7 @@ import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem, safeJsonParse } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
-import { getCachedCurriculumContent, saveCachedCurriculumContent, parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, isCurriculumContentCached, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
+import { parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 import { deductCoins, getCoins } from '../utils/coins';
 import GlobalMarkdown, { formatNotesMath } from './GlobalMarkdown';
 import FeatureAILoader from './FeatureAILoader';
@@ -42,22 +42,6 @@ interface Flashcard {
   question: string;
   answer: string;
 }
-
-const getCurriculumCacheKey = (subjectTitle: string, topicName: string): string => {
-  const cleanSubject = (subjectTitle || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-  const cleanTopic = (topicName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-  const uid = auth.currentUser?.uid || 'guest';
-  return `cached_ch_flashcards_${uid}_${cleanSubject}_${cleanTopic}`;
-};
-
-const getCachedCurriculumDeck = (_subjectTitle: string, _topicName: string): Flashcard[] | null => {
-  // Database caching completely removed: always generate fresh live flashcards
-  return null;
-};
-
-const saveCachedCurriculumDeck = (_subjectTitle: string, _topicName: string, _cards: Flashcard[]): void => {
-  // Caching removed: no-op
-};
 
 const parseFlashcardsFromText = (text: string): Flashcard[] => {
   const cards: Flashcard[] = [];
@@ -202,8 +186,6 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     setExpandedSubject(prev => prev === subjectId ? null : subjectId);
   };
 
-  const [cacheVersion, setCacheVersion] = useState(0);
-
   const handleTopicClick = (subjectTitle: string, topicName: string) => {
     triggerVibration(15);
     const fullTopic = topicName.includes(subjectTitle) ? topicName : `${subjectTitle} - ${topicName}`;
@@ -211,21 +193,7 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     setPendingFile(null);
     setShowConfig(false);
 
-    // Instant open if already generated previously!
-    const cachedDeck = getCachedCurriculumDeck(subjectTitle, topicName);
-    if (cachedDeck && cachedDeck.length > 0) {
-      triggerVibration(20);
-      setFlashcards(cachedDeck);
-      setCurrentIndex(0);
-      setFlipped(false);
-      setSaved(false);
-      setGrades({});
-      setError(null);
-      setIsDeckCompleted(false);
-      return;
-    }
-
-    // First time generation for this chapter
+    // Generate fresh flashcards for this topic
     handleGenerateReal(fullTopic, undefined, { isCurriculum: true, subjectTitle, topicName });
   };
 
@@ -563,27 +531,6 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     let generatedCards: Flashcard[] = [];
     let lastErrorMsg = '';
 
-    // Check Global Community Cache first (Instant 0ms / 0 API Cost)
-    const hierarchy = parseTopicHierarchy(topicToUse, profile.subject || profile.stream);
-    const targetExamStr = profile.exam || profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
-    const cachedHit = await getCachedCurriculumContent<Flashcard[]>({
-      country: profile.country,
-      exam: targetExamStr,
-      grade: profile.gradeLevel,
-      subject: hierarchy.subject,
-      chapter: hierarchy.chapter,
-      subTopic: hierarchy.subTopic,
-      feature: 'flashcards'
-    });
-
-    if (cachedHit && Array.isArray(cachedHit.content) && cachedHit.content.length > 0) {
-      setFlashcards(cachedHit.content);
-      deductCoins(2, "AI Flashcards");
-      setLoading(false);
-      triggerVibration([30, 50, 30]);
-      return;
-    }
-
     // =========================================================================
     // LAYER 1: Ultra-Fast Primary Endpoint (/api/generate-flashcards) (35s timeout)
     // =========================================================================
@@ -709,24 +656,9 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
       setLoadingProgress(100);
       deductCoins(2, "AI Flashcards");
       setFlashcards(generatedCards);
-      // Save newly generated flashcard deck to Global Community Cache
-      saveCachedCurriculumContent({
-        country: profile.country,
-        exam: targetExamStr,
-        grade: profile.gradeLevel,
-        subject: hierarchy.subject,
-        chapter: hierarchy.chapter,
-        subTopic: hierarchy.subTopic,
-        feature: 'flashcards'
-      }, generatedCards, { count: generatedCards.length });
       setLoading(false);
-      if (curriculumMeta?.isCurriculum) {
-        saveCachedCurriculumDeck(curriculumMeta.subjectTitle, curriculumMeta.topicName, generatedCards);
-        setCacheVersion(prev => prev + 1);
-      } else {
-        autoSaveFlashcardsToPocket(generatedCards, topicToUse.length < 35 ? topicToUse : 'Flashcards', 'custom')
-          .catch(e => console.error("Flashcard save failed:", e));
-      }
+      autoSaveFlashcardsToPocket(generatedCards, topicToUse.length < 35 ? topicToUse : 'Flashcards', curriculumMeta?.isCurriculum ? 'curriculum' : 'custom')
+        .catch(e => console.error("Flashcard save failed:", e));
       triggerVibration([30, 50, 30]);
     } else {
       const isConnectionIssue = lastErrorMsg.includes("Failed to fetch") || 

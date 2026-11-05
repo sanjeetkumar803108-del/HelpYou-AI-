@@ -12,441 +12,6 @@ var ALLOWED_ORIGINS = /* @__PURE__ */ new Set([
   "http://127.0.0.1:3001"
 ]);
 
-// src/utils/examSyllabusCatalog.ts
-var EXAM_SYLLABUS_CATALOG = {
-  // 1. SSC CGL
-  "ssc_cgl": {
-    examOverview: {
-      examName: "Staff Selection Commission Combined Graduate Level (SSC CGL)",
-      country: "India",
-      officialAuthority: "Staff Selection Commission (ssc.gov.in)",
-      examType: "National Central Government Recruitment (Group B & C)",
-      examFormat: "Computer Based Examination (CBT) Tier 1 & Tier 2",
-      totalExamMarks: 200,
-      totalQuestions: 100,
-      hasSubjective: false,
-      hasNegativeMarking: true,
-      negativeFormula: "+2 for correct, -0.50 for incorrect in Tier 1; +3 correct, -1 incorrect in Tier 2"
-    },
-    subjects: {
-      "Quantitative Aptitude": {
-        subjectName: "Quantitative Aptitude",
-        totalMarks: 50,
-        totalQuestions: 25,
-        attemptRequired: 25,
-        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
-        negativeMarking: -0.5,
-        marksPerCorrect: 2,
-        questionFormats: ["Single Choice Objective MCQ", "Data Interpretation Tables & Graphs", "Speed Calculation Problems"],
-        mcqStyle: {
-          optionsCount: 4,
-          style: "High speed, multi-step arithmetic calculation, advanced geometry & algebraic traps",
-          negativePenalty: "-0.50 marks"
-        },
-        subjectiveStyle: {
-          hasSubjective: false,
-          format: "N/A - Objective CBT Only",
-          wordLimits: "N/A",
-          markingRubric: "N/A"
-        },
-        nomenclature: "Chapters",
-        coreUnits: [
-          "Number System & Divisibility",
-          "HCF and LCM",
-          "Simplification & Square Roots",
-          "Percentages",
-          "Ratio, Proportion & Variation",
-          "Average",
-          "Simple Interest & Compound Interest",
-          "Profit, Loss and Discount",
-          "Time and Work & Efficiency",
-          "Pipes and Cisterns",
-          "Speed, Time and Distance",
-          "Boats and Streams",
-          "Mixtures and Alligations",
-          "Partnership",
-          "Basic Algebraic Identities & Polynomials",
-          "Linear Equations & Graphs",
-          "Geometry (Lines, Angles, Triangles)",
-          "Circles, Chords & Tangents",
-          "Mensuration 2D (Perimeter & Area)",
-          "Mensuration 3D (Surface Area & Volume)",
-          "Trigonometric Ratios & Identities",
-          "Heights and Distances",
-          "Data Interpretation (Bar, Pie, Line, Table & Histograms)"
-        ],
-        subTopics: {
-          "Number System & Divisibility": ["Divisibility Rules of 7, 11, 13, 72, 88", "Unit Digit & Last Two Digits", "Remainder Theorems", "Number of Zeroes & Factors"],
-          "Percentages": ["Fraction to Percentage Equivalents", "Successive Percentage Changes", "Expenditure, Price & Consumption Models", "Election & Voting Problems"],
-          "Profit, Loss and Discount": ["Marked Price vs Cost Price Relations", "Dishonest Dealer Traps", "Successive Discounts", "Free Article Schemes"],
-          "Geometry (Lines, Angles, Triangles)": ["Congruence & Similarity of Triangles", "Centroid, Incentre, Circumcentre, Orthocentre", "Pythagoras & Apollonius Theorems", "Angle Bisector Properties"],
-          "Circles, Chords & Tangents": ["Intersecting Chord Theorem", "Direct and Transverse Common Tangents", "Cyclic Quadrilaterals", "Angles in Alternate Segments"],
-          "Trigonometric Ratios & Identities": ["Complementary Angle Identities", "Standard Value Substitutions (0\xB0, 30\xB0, 45\xB0, 60\xB0, 90\xB0)", "Maxima and Minima of Trigonometric Functions", "Algebraic Reductions"]
-        },
-        detailedNotesGuidelines: "Provide step-by-step mathematical proofs, derivation of shortcut tricks, standard identification templates, and highlight common arithmetic calculation traps.",
-        revisionGuidelines: "Ultra-condensed formula sheets, standard geometric identity tables, shortcut factor tables, and high-frequency algebraic expansions.",
-        essayTone: null,
-        examTone: "Competitive high speed and arithmetic accuracy, advanced geometry theorems, algebraic value putting",
-        officialSource: "Staff Selection Commission Examination Bulletin (ssc.gov.in)"
-      },
-      "General Intelligence & Reasoning": {
-        subjectName: "General Intelligence & Reasoning",
-        totalMarks: 50,
-        totalQuestions: 25,
-        attemptRequired: 25,
-        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
-        negativeMarking: -0.5,
-        marksPerCorrect: 2,
-        questionFormats: ["Single Choice Objective MCQ", "Verbal Logic", "Non-Verbal Visual Pattern Puzzles"],
-        mcqStyle: {
-          optionsCount: 4,
-          style: "Pattern recognition, logical deduction, visual spatial rotation, mathematical operator traps",
-          negativePenalty: "-0.50 marks"
-        },
-        subjectiveStyle: {
-          hasSubjective: false,
-          format: "N/A - Objective CBT Only",
-          wordLimits: "N/A",
-          markingRubric: "N/A"
-        },
-        nomenclature: "Chapters",
-        coreUnits: [
-          "Semantic & Number Analogies",
-          "Classification & Odd One Out",
-          "Coding-Decoding & Letter Shifting",
-          "Number Series, Alphabet Series & Mixed Series",
-          "Missing Number in Matrix / Figures",
-          "Blood Relations",
-          "Direction and Distance Sense",
-          "Order and Ranking",
-          "Syllogisms & Logical Deductions",
-          "Venn Diagrams",
-          "Mathematical Operations & Sign Interchange",
-          "Clock and Calendar",
-          "Dice and Cube Problems",
-          "Paper Folding and Cutting",
-          "Mirror and Water Images",
-          "Embedded Figures & Completion of Patterns",
-          "Counting of Figures (Triangles, Squares, Rectangles)",
-          "Statement and Conclusions / Assumptions"
-        ],
-        subTopics: {
-          "Coding-Decoding & Letter Shifting": ["Direct Alphabet Position Numbers (1-26)", "Reverse Alphabet Equivalents (A-Z, B-Y)", "Cross Pattern Shift", "Vowel-Consonant Specific Operations"],
-          "Syllogisms & Logical Deductions": ["All A are B & Some A are B", "No A is B & Some Not", "Possibility Cases", "Either-Or Conditions"],
-          "Blood Relations": ["Pointed Picture / Dialogue Relations", "Coded Blood Relations (A+B means father)", "Family Tree Diagramming"],
-          "Dice and Cube Problems": ["Standard vs General Dice", "Opposite Face Determination with 2 Positions", "Open Dice Folding"]
-        },
-        detailedNotesGuidelines: "Visual logic matrices, systematic tree diagrams, rule-of-elimination techniques, and pattern catalogues.",
-        revisionGuidelines: "Quick rules of opposite dice faces, alphabet rank memory sheet (EJOTY & Reverse), and syllogism Venn rules.",
-        essayTone: null,
-        examTone: "Instant pattern recognition, visual dexterity, eliminate misleading distractor options",
-        officialSource: "Staff Selection Commission Examination Bulletin (ssc.gov.in)"
-      },
-      "English Comprehension": {
-        subjectName: "English Comprehension",
-        totalMarks: 50,
-        totalQuestions: 25,
-        attemptRequired: 25,
-        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
-        negativeMarking: -0.5,
-        marksPerCorrect: 2,
-        questionFormats: ["Single Choice Objective MCQ", "Cloze Test", "Sentence Improvement", "Reading Comprehension"],
-        mcqStyle: {
-          optionsCount: 4,
-          style: "Grammar rule exceptions, vocabulary nuance, context clue extraction, idiom definitions",
-          negativePenalty: "-0.50 marks"
-        },
-        subjectiveStyle: {
-          hasSubjective: false,
-          format: "N/A - Objective CBT Only",
-          wordLimits: "N/A",
-          markingRubric: "N/A"
-        },
-        nomenclature: "Chapters",
-        coreUnits: [
-          "Spotting the Error (Grammar Foundations)",
-          "Sentence Improvement & Phrase Replacement",
-          "Fill in the Blanks (Prepositions & Collocations)",
-          "Synonyms and Antonyms",
-          "Idioms and Phrases",
-          "One Word Substitution",
-          "Spelling Errors & Misspelt Words",
-          "Active and Passive Voice Transformations",
-          "Direct and Indirect Speech (Narration)",
-          "Sentence Rearrangement (Para Jumbles / PQRS)",
-          "Cloze Test (Passage Blank Completion)",
-          "Reading Comprehension (Factual & Inferential)"
-        ],
-        subTopics: {
-          "Spotting the Error (Grammar Foundations)": ["Subject-Verb Agreement Rules", "Tense Consistency & Conditionals", "Prepositional Placement & Phrasal Verbs", "Pronoun Antecedent Agreement", "Modifiers & Inversion Rules"],
-          "Active and Passive Voice Transformations": ["Simple, Continuous & Perfect Tense Changes", "Imperative Sentence Transformations", "Interrogative Voice Change", "Preposition Retaining Passive"],
-          "Direct and Indirect Speech (Narration)": ["Reporting Verb Changes", "Tense Backshifting Rules", "Pronoun Changes", "Exclamatory & Imperative Narration"]
-        },
-        detailedNotesGuidelines: "Comprehensive 100 Golden Rules of Grammar with authentic exam examples, root-word etymology, and contextual sentence application.",
-        revisionGuidelines: "High-frequency idiom glossary, repeating one-word substitutions list, and active/passive shortcut table.",
-        essayTone: "Grammatically rigorous, formal academic standard English, precise register, correct prepositional usage, no informal colloquialisms.",
-        examTone: "Strict grammatical precision, nuanced vocabulary usage, reading speed and inference",
-        officialSource: "Staff Selection Commission Official Guidelines (ssc.gov.in)"
-      },
-      "General Awareness": {
-        subjectName: "General Awareness",
-        totalMarks: 50,
-        totalQuestions: 25,
-        attemptRequired: 25,
-        markingScheme: "+2 for correct, -0.50 for incorrect, 0 for unattempted",
-        negativeMarking: -0.5,
-        marksPerCorrect: 2,
-        questionFormats: ["Single Choice Objective MCQ", "Statement I & II Verification", "Chronological Matching"],
-        mcqStyle: {
-          optionsCount: 4,
-          style: "Direct factual recall, historical timeline sequence, constitutional articles, static GK",
-          negativePenalty: "-0.50 marks"
-        },
-        subjectiveStyle: {
-          hasSubjective: false,
-          format: "N/A - Objective CBT Only",
-          wordLimits: "N/A",
-          markingRubric: "N/A"
-        },
-        nomenclature: "Chapters",
-        coreUnits: [
-          "Ancient Indian History (Harappan to Guptas)",
-          "Medieval Indian History (Delhi Sultanate & Mughals)",
-          "Modern Indian History & Freedom Struggle",
-          "Indian Constitution & Polity (Articles & Amendments)",
-          "Physical & Indian Geography (Rivers, Mountains, Minerals)",
-          "Indian Economy, Planning & Fiscal Policy",
-          "General Science: Physics in Everyday Life",
-          "General Science: Chemistry in Everyday Life",
-          "General Science: Biology & Human Health",
-          "Static GK: Classical Dances, Music & Festivals",
-          "Static GK: National Parks, Wildlife & Ramsar Sites",
-          "Static GK: Important Books, Awards & Honors",
-          "Current Affairs & Government Welfare Schemes"
-        ],
-        subTopics: {
-          "Indian Constitution & Polity (Articles & Amendments)": ["Preamble & Fundamental Rights (Art 12-35)", "Directive Principles & Fundamental Duties", "President, Governor & Emergency Powers", "Supreme Court & High Courts", "Important Constitutional Amendments (42nd, 44th, 73rd, 86th, 101st)"],
-          "Physical & Indian Geography (Rivers, Mountains, Minerals)": ["Himalayan and Peninsular Drainage Systems", "Monsoon Mechanism & Soil Types of India", "National Parks & Biosphere Reserves", "Mineral Belts & Multipurpose River Valley Projects"]
-        },
-        detailedNotesGuidelines: "Chronological tables, constitutional article charts, geographical maps breakdown, and verified factual summaries.",
-        revisionGuidelines: "High-yield one-liner memory sheet, articles summary table, major national festivals and dances matrix.",
-        essayTone: null,
-        examTone: "Broad factual memory, conceptual clarity in general sciences, constitutional awareness",
-        officialSource: "Staff Selection Commission Official Guidelines (ssc.gov.in)"
-      }
-    }
-  },
-  // 2. NEET UG
-  "neet_ug": {
-    examOverview: {
-      examName: "NEET UG (National Eligibility cum Entrance Test)",
-      country: "India",
-      officialAuthority: "National Testing Agency (NTA) & National Medical Commission (NMC)",
-      examType: "National Pre-Medical Entrance Examination",
-      examFormat: "Pen and Paper Mode (OMR Based)",
-      totalExamMarks: 720,
-      totalQuestions: 200,
-      hasSubjective: false,
-      hasNegativeMarking: true,
-      negativeFormula: "+4 for correct, -1 for incorrect, 0 for unattempted"
-    },
-    subjects: {
-      "Physics": {
-        subjectName: "Physics",
-        totalMarks: 180,
-        totalQuestions: 50,
-        attemptRequired: 45,
-        markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
-        negativeMarking: -1,
-        marksPerCorrect: 4,
-        questionFormats: ["Single Choice Objective MCQ", "Assertion-Reason", "Match The Columns", "Numerical Value MCQ"],
-        mcqStyle: {
-          optionsCount: 4,
-          style: "Direct NCERT line-by-line formula application, diagrammatic ray tracing, dimensional analysis, sign convention traps",
-          negativePenalty: "-1 mark"
-        },
-        subjectiveStyle: {
-          hasSubjective: false,
-          format: "N/A - OMR MCQ Only",
-          wordLimits: "N/A",
-          markingRubric: "N/A"
-        },
-        nomenclature: "Chapters",
-        coreUnits: [
-          "Units and Measurements",
-          "Motion in a Straight Line",
-          "Motion in a Plane & Vectors",
-          "Laws of Motion & Friction",
-          "Work, Energy and Power",
-          "System of Particles & Rotational Motion",
-          "Gravitation",
-          "Mechanical Properties of Solids",
-          "Mechanical Properties of Fluids",
-          "Thermal Properties of Matter",
-          "Thermodynamics",
-          "Kinetic Theory of Gases",
-          "Oscillations (Simple Harmonic Motion)",
-          "Waves & Acoustics",
-          "Electrostatics (Charges & Fields)",
-          "Electrostatic Potential & Capacitance",
-          "Current Electricity",
-          "Moving Charges and Magnetism",
-          "Magnetism and Matter",
-          "Electromagnetic Induction",
-          "Alternating Current",
-          "Electromagnetic Waves",
-          "Ray Optics and Optical Instruments",
-          "Wave Optics",
-          "Dual Nature of Radiation and Matter",
-          "Atoms",
-          "Nuclei",
-          "Semiconductor Electronics: Materials, Devices & Simple Circuits"
-        ],
-        subTopics: {
-          "Work, Energy and Power": ["Work-Energy Theorem", "Conservative vs Non-Conservative Forces", "Potential Energy Curve & Equilibrium", "Elastic & Inelastic Collisions in 1D and 2D"],
-          "Current Electricity": ["Ohm's Law & Drift Velocity", "Kirchhoff's Laws & Circuit Analysis", "Wheatstone Bridge Principle", "Temperature Dependence of Resistance"],
-          "Ray Optics and Optical Instruments": ["Lens Maker's Formula & Combinations", "Total Internal Reflection & Prisms", "Compound Microscope & Astronomical Telescope Magnification"]
-        },
-        detailedNotesGuidelines: "Clear formula derivations, free-body diagram tutorials, sign convention reminders, and NCERT-exemplar numerical illustrations.",
-        revisionGuidelines: "High-yield formula sheet with SI units, dimensional formula reference table, and standard circuit shortcut formulas.",
-        essayTone: null,
-        examTone: "Rigorous NCERT conceptual grounding with standard numerical problem-solving",
-        officialSource: "National Medical Commission (NMC) & NTA Information Bulletin"
-      },
-      "Chemistry": {
-        subjectName: "Chemistry",
-        totalMarks: 180,
-        totalQuestions: 50,
-        attemptRequired: 45,
-        markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
-        negativeMarking: -1,
-        marksPerCorrect: 4,
-        questionFormats: ["Single Choice Objective MCQ", "Assertion-Reason", "Match The Columns", "Statement I & II Verification"],
-        mcqStyle: {
-          optionsCount: 4,
-          style: "Strict NCERT textbook facts, reagent selectivity in Organic, periodic trends in Inorganic, stoichiometric calculations in Physical",
-          negativePenalty: "-1 mark"
-        },
-        subjectiveStyle: {
-          hasSubjective: false,
-          format: "N/A - OMR MCQ Only",
-          wordLimits: "N/A",
-          markingRubric: "N/A"
-        },
-        nomenclature: "Chapters",
-        coreUnits: [
-          "Some Basic Concepts of Chemistry (Mole Concept)",
-          "Structure of Atom",
-          "Classification of Elements & Periodicity in Properties",
-          "Chemical Bonding and Molecular Structure",
-          "Chemical Thermodynamics",
-          "Chemical and Ionic Equilibrium",
-          "Redox Reactions",
-          "Solutions & Colligative Properties",
-          "Electrochemistry",
-          "Chemical Kinetics",
-          "p-Block Elements",
-          "d- and f-Block Elements",
-          "Coordination Compounds",
-          "Organic Chemistry: Basic Principles and Techniques (GOC)",
-          "Hydrocarbons (Alkanes, Alkenes, Alkynes, Aromatic)",
-          "Haloalkanes and Haloarenes",
-          "Alcohols, Phenols and Ethers",
-          "Aldehydes, Ketones and Carboxylic Acids",
-          "Organic Compounds Containing Nitrogen (Amines)",
-          "Biomolecules (Carbohydrates, Proteins, Nucleic Acids)"
-        ],
-        subTopics: {
-          "Chemical Bonding and Molecular Structure": ["VSEPR Theory & Molecular Shapes", "Hybridization (sp, sp2, sp3, sp3d, sp3d2)", "Molecular Orbital Theory & Bond Order", "Hydrogen Bonding"],
-          "Coordination Compounds": ["Werner's Theory", "IUPAC Nomenclature of Coordination Complexes", "Isomerism (Structural & Stereoisomerism)", "Crystal Field Theory & Magnetic Moments"],
-          "Aldehydes, Ketones and Carboxylic Acids": ["Nucleophilic Addition Reactions", "Aldol Condensation & Cannizzaro Reaction", "Tollens' & Fehling's Test", "Acidic Strength of Carboxylic Acids"]
-        },
-        detailedNotesGuidelines: "Organic named reaction mechanisms with reagents, Inorganic periodic trend charts with exceptions, and Physical chemistry formula derivations.",
-        revisionGuidelines: "Organic reaction roadmap, coordinate complex color & magnetic moment sheet, and electrochemistry Nernst cheat sheet.",
-        essayTone: null,
-        examTone: "100% faithful to NCERT textbook lines, reaction conditions, and quantitative calculations",
-        officialSource: "National Medical Commission (NMC) & NTA Information Bulletin"
-      },
-      "Biology": {
-        subjectName: "Biology",
-        totalMarks: 360,
-        totalQuestions: 100,
-        attemptRequired: 90,
-        markingScheme: "+4 for correct, -1 for incorrect, 0 for unattempted",
-        negativeMarking: -1,
-        marksPerCorrect: 4,
-        questionFormats: ["Single Choice Objective MCQ", "Assertion-Reason", "Match The Columns", "Statement I & II Verification", "Diagram-based Questions"],
-        mcqStyle: {
-          optionsCount: 4,
-          style: "Every single option derived strictly from NCERT textbook lines, morphological anatomical terminology, genetic probability ratios",
-          negativePenalty: "-1 mark"
-        },
-        subjectiveStyle: {
-          hasSubjective: false,
-          format: "N/A - OMR MCQ Only",
-          wordLimits: "N/A",
-          markingRubric: "N/A"
-        },
-        nomenclature: "Chapters",
-        coreUnits: [
-          "The Living World",
-          "Biological Classification",
-          "Plant Kingdom",
-          "Animal Kingdom",
-          "Morphology of Flowering Plants",
-          "Anatomy of Flowering Plants",
-          "Structural Organisation in Animals (Frog & Tissue Types)",
-          "Cell: The Unit of Life",
-          "Biomolecules",
-          "Cell Cycle and Cell Division",
-          "Photosynthesis in Higher Plants",
-          "Respiration in Plants",
-          "Plant Growth and Development",
-          "Breathing and Exchange of Gases",
-          "Body Fluids and Circulation",
-          "Excretory Products and their Elimination",
-          "Locomotion and Movement",
-          "Neural Control and Coordination",
-          "Chemical Coordination and Integration",
-          "Sexual Reproduction in Flowering Plants",
-          "Human Reproduction",
-          "Reproductive Health",
-          "Principles of Inheritance and Variation (Genetics I)",
-          "Molecular Basis of Inheritance (Genetics II)",
-          "Evolution",
-          "Human Health and Disease",
-          "Microbes in Human Welfare",
-          "Biotechnology: Principles and Processes",
-          "Biotechnology and its Applications",
-          "Organisms and Populations",
-          "Ecosystem",
-          "Biodiversity and Conservation"
-        ],
-        subTopics: {
-          "Principles of Inheritance and Variation (Genetics I)": ["Mendel's Monohybrid & Dihybrid Crosses", "Incomplete Dominance & Co-dominance", "Chromosomal Theory of Inheritance", "Linkage and Recombination Ratios", "Pedigree Analysis & Genetic Disorders"],
-          "Molecular Basis of Inheritance (Genetics II)": ["Structure of DNA Double Helix", "Meselson and Stahl Experiment", "Transcription in Prokaryotes & Eukaryotes", "Genetic Code Properties & Translation Mechanism", "Lac Operon Model"],
-          "Biotechnology: Principles and Processes": ["Restriction Endonucleases & Ligases", "pBR322 Cloning Vector Features", "Polymerase Chain Reaction (PCR) Steps", "Bioreactors & Downstream Processing"]
-        },
-        detailedNotesGuidelines: "Verbatim NCERT line explanations, histological and physiological flowcharts, anatomical tables, and genetic cross diagrams.",
-        revisionGuidelines: "High-yield scientist discoveries list, dates and percentages table, biological examples index, and hormone origin-target matrix.",
-        essayTone: null,
-        examTone: "Exhaustive NCERT line verification, botanical zoological exact terminologies, and diagrams",
-        officialSource: "National Medical Commission (NMC) & NTA Information Bulletin"
-      }
-    }
-  }
-};
-function findCatalogExamBlueprint(examName, country) {
-  const norm = (examName || "").toLowerCase().trim();
-  if (norm.includes("cgl") || norm.includes("ssc") && !norm.includes("chsl") && !norm.includes("mts")) {
-    return EXAM_SYLLABUS_CATALOG["ssc_cgl"];
-  }
-  if (norm.includes("neet")) {
-    return EXAM_SYLLABUS_CATALOG["neet_ug"];
-  }
-  return null;
-}
-
 // src/utils/examSchedule.ts
 function computeDaysRemaining(dateStr) {
   if (!dateStr || typeof dateStr !== "string") {
@@ -493,7 +58,7 @@ function resolveUpcomingExamDate(monthIndex, day) {
 }
 function resolveCatalogExamSchedule(examName, country = "") {
   const clean = (examName || "").trim().toLowerCase();
-  const normCountry = (country || "").trim().toLowerCase();
+  const normCountry2 = (country || "").trim().toLowerCase();
   if (clean.includes("ssc") && clean.includes("cgl")) {
     const info = resolveUpcomingExamDate(8, 9);
     return {
@@ -693,893 +258,6 @@ function resolveCatalogExamSchedule(examName, country = "") {
   };
 }
 
-// src/utils/preVerifiedExams.ts
-var PRE_VERIFIED_EXAMS = [
-  // 1. SSC CGL
-  {
-    aliases: ["ssc cgl", "ssc cgl exam", "ssc-cgl", "cgl", "staff selection commission cgl", "ssc cgl 2025", "ssc cgl 2026", "ssc combined graduate level"],
-    shortName: "SSC CGL",
-    officialExamName: "Staff Selection Commission Combined Graduate Level (SSC CGL)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Graduate_Final_Year", label: "Final Year Undergraduate", desc: "Appearing in final year of Graduation", isCollege: true },
-      { id: "Graduate_Full_Time", label: "Graduate Aspirant (Full-Time)", desc: "Dedicated full-time SSC CGL preparation", isCollege: true },
-      { id: "Working_Professional", label: "Working Professional", desc: "Preparing along with employment", isCollege: true }
-    ],
-    subjects: [
-      { id: "Quantitative_Aptitude", title: "Quantitative Aptitude (Math)", subtitle: "Arithmetic, Advanced Math, Algebra & Geometry", icon: "\u{1F4D0}" },
-      { id: "General_Intelligence_Reasoning", title: "General Intelligence & Reasoning", subtitle: "Analogies, Syllogisms, Coding-Decoding & Puzzles", icon: "\u{1F9E0}" },
-      { id: "English_Comprehension", title: "English Comprehension & Grammar", subtitle: "Vocabulary, Grammar, Error Spotting & Reading Comprehension", icon: "\u{1F4DA}" },
-      { id: "General_Awareness", title: "General Awareness (GK & GS)", subtitle: "History, Polity, Geography, Economy & Current Affairs", icon: "\u{1F3DB}\uFE0F" }
-    ]
-  },
-  // 2. SSC CHSL
-  {
-    aliases: ["ssc chsl", "ssc chsl exam", "ssc-chsl", "chsl", "ssc 10+2", "combined higher secondary level"],
-    shortName: "SSC CHSL",
-    officialExamName: "Staff Selection Commission Combined Higher Secondary Level (SSC CHSL)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class_12", label: "Class 12 / 10+2 Passed", desc: "12th Appearing or Completed Aspirant", isCollege: false },
-      { id: "Full_Time_Aspirant", label: "Full-Time CHSL Aspirant", desc: "Dedicated Government Exam Preparation", isCollege: false }
-    ],
-    subjects: [
-      { id: "Quantitative_Aptitude", title: "Quantitative Aptitude", subtitle: "Basic Arithmetic & Number Systems", icon: "\u{1F4D0}" },
-      { id: "General_Intelligence", title: "General Intelligence & Reasoning", subtitle: "Verbal & Non-Verbal Reasoning", icon: "\u{1F9E0}" },
-      { id: "English_Language", title: "English Language", subtitle: "Grammar, Vocab & Comprehension", icon: "\u{1F4DA}" },
-      { id: "General_Awareness", title: "General Awareness", subtitle: "Current Affairs & Static GK", icon: "\u{1F3DB}\uFE0F" }
-    ]
-  },
-  // 3. SSC MTS & Havaldar
-  {
-    aliases: ["ssc mts", "mts", "ssc multi tasking", "havaldar", "ssc mts havaldar"],
-    shortName: "SSC MTS",
-    officialExamName: "Staff Selection Commission Multi-Tasking Staff (SSC MTS & Havaldar)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class_10_Passed", label: "Class 10 Matriculation Passed", desc: "Matric Pass Aspirant", isCollege: false },
-      { id: "Dedicated_Aspirant", label: "Dedicated Full-Time Aspirant", desc: "Early Govt Career Preparation", isCollege: false }
-    ],
-    subjects: [
-      { id: "Numerical_Mathematical_Ability", title: "Numerical & Mathematical Ability", subtitle: "Integers, Whole Numbers, LCM, HCF & Percentage", icon: "\u{1F4D0}" },
-      { id: "Reasoning_Problem_Solving", title: "Reasoning Ability & Problem Solving", subtitle: "Alpha-numeric series, Coding, Analogies & Directions", icon: "\u{1F9E0}" },
-      { id: "General_Awareness", title: "General Awareness", subtitle: "Social Studies, General Science & Environmental Studies", icon: "\u{1F3DB}\uFE0F" },
-      { id: "English_Language_Comprehension", title: "English Language and Comprehension", subtitle: "Vocabulary, Grammar, Sentence structure & Reading", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 4. SSC GD Constable
-  {
-    aliases: ["ssc gd", "ssc gd constable", "gd constable", "capf gd"],
-    shortName: "SSC GD",
-    officialExamName: "Staff Selection Commission General Duty Constable (SSC GD)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class_10_Matric", label: "Class 10 Matric Passed", desc: "Defence / Paramilitary Aspirant", isCollege: false },
-      { id: "Dedicated_Constable_Prep", label: "Full-Time GD Aspirant", desc: "Paramilitary Force Preparation", isCollege: false }
-    ],
-    subjects: [
-      { id: "General_Intelligence_Reasoning", title: "General Intelligence & Reasoning", subtitle: "Visual memory, Spatial orientation & Analogies", icon: "\u{1F9E0}" },
-      { id: "General_Knowledge_Awareness", title: "General Knowledge & General Awareness", subtitle: "India & neighboring countries, History & Geography", icon: "\u{1F3DB}\uFE0F" },
-      { id: "Elementary_Mathematics", title: "Elementary Mathematics", subtitle: "Number systems, Averages, Ratio & Time-Work", icon: "\u{1F4D0}" },
-      { id: "English_Hindi", title: "English / Hindi Language", subtitle: "Basic comprehension, Grammar & Vocabulary", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 5. Banking (IBPS, SBI PO & Clerk)
-  {
-    aliases: ["banking", "bank po", "bank clerk", "ibps po", "sbi po", "ibps clerk", "sbi clerk", "bank exam", "rbi grade b", "rrb po", "rrb clerk"],
-    shortName: "Banking Exams",
-    officialExamName: "Banking Recruitment Examinations (IBPS / SBI PO & Clerk)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Graduate_Aspirant", label: "Graduate Aspirant", desc: "Full-time Banking Preparation", isCollege: true },
-      { id: "Final_Year_Student", label: "Final Year Student", desc: "Pre-Banking College Preparation", isCollege: true }
-    ],
-    subjects: [
-      { id: "Quantitative_Aptitude", title: "Quantitative Aptitude", subtitle: "Data Interpretation, Arithmetic & Series", icon: "\u{1F4D0}" },
-      { id: "Reasoning_Ability", title: "Reasoning Ability", subtitle: "Puzzles, Seating Arrangements & Logic", icon: "\u{1F9E0}" },
-      { id: "English_Language", title: "English Language", subtitle: "Reading Comprehension, Cloze Test & Grammar", icon: "\u{1F4DA}" },
-      { id: "Banking_Awareness", title: "Banking & Financial Awareness", subtitle: "Economy, RBI Guidelines & Current Affairs", icon: "\u{1F3E6}" }
-    ]
-  },
-  // 6. Railway RRB NTPC & Group D
-  {
-    aliases: ["rrb ntpc", "railway exam", "rrb", "ntpc", "rrb group d", "railway recruitment", "rrb alp"],
-    shortName: "RRB NTPC",
-    officialExamName: "Railway Recruitment Board NTPC (RRB NTPC)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Graduate_Level", label: "Graduate Level NTPC", desc: "Station Master, Goods Guard, etc.", isCollege: true },
-      { id: "Undergraduate_Level", label: "Undergraduate Level (10+2)", desc: "Junior Clerk, Trains Clerk, etc.", isCollege: false }
-    ],
-    subjects: [
-      { id: "Mathematics", title: "Mathematics", subtitle: "Number System, Decimals, Fractions, LCM & Ratio", icon: "\u{1F4D0}" },
-      { id: "General_Intelligence_Reasoning", title: "General Intelligence and Reasoning", subtitle: "Analogies, Syllogisms, Coding & Venn Diagrams", icon: "\u{1F9E0}" },
-      { id: "General_Awareness", title: "General Awareness & General Science", subtitle: "Current Events, Science, History & Polity", icon: "\u{1F30D}" }
-    ]
-  },
-  // 7. NEET UG
-  {
-    aliases: ["neet", "neet ug", "neet 2025", "neet 2026", "neet exam", "neet ug national eligibility", "national eligibility cum entrance test"],
-    shortName: "NEET UG",
-    officialExamName: "NEET UG (National Eligibility cum Entrance Test)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & Senior Secondary", isCollege: false },
-      { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Entrance Prep", isCollege: false },
-      { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time Preparation / Gap Year", isCollege: false },
-      { id: "Class 10", label: "Class 10", desc: "Pre-Foundation & Early Prep", isCollege: false }
-    ],
-    subjects: [
-      { id: "Physics", title: "Physics", subtitle: "Mechanics, Electrodynamics, Modern Physics, Optics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Organic & Inorganic Chemistry", icon: "\u{1F9EA}" },
-      { id: "Biology", title: "Biology", subtitle: "Botany & Zoology, Human Physiology, Genetics", icon: "\u{1F9EC}" }
-    ]
-  },
-  // 8. JEE Main
-  {
-    aliases: ["jee", "jee main", "jee mains", "iit jee", "jee main 2025", "jee main 2026", "iit jee main", "joint entrance examination"],
-    shortName: "JEE Main",
-    officialExamName: "JEE Main (Joint Entrance Examination)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & JEE Aspirant", isCollege: false },
-      { id: "Class 11", label: "Class 11", desc: "11th Grade / 1st Year Entrance Prep", isCollege: false },
-      { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Full-Time Dedicated JEE Preparation", isCollege: false },
-      { id: "Class 10", label: "Class 10", desc: "Pre-Foundation & Early Prep", isCollege: false }
-    ],
-    subjects: [
-      { id: "Physics", title: "Physics", subtitle: "Mechanics, Thermodynamics, Electromagnetism, Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Inorganic, and Organic Chemistry", icon: "\u{1F9EA}" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Calculus, Algebra, Coordinate Geometry, Vectors", icon: "\u{1F4D0}" }
-    ]
-  },
-  // 9. JEE Advanced
-  {
-    aliases: ["jee adv", "jee advanced", "iit jee advanced"],
-    shortName: "JEE Advanced",
-    officialExamName: "JEE Advanced (Joint Entrance Examination Advanced)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class 12", label: "Class 12", desc: "12th Board Appearing & JEE Advanced Prep", isCollege: false },
-      { id: "Class 11", label: "Class 11", desc: "11th Grade Foundation", isCollege: false },
-      { id: "Dropper / Repeater", label: "Dropper / Repeater", desc: "Dedicated Full-Time JEE Advanced Aspirant", isCollege: false }
-    ],
-    subjects: [
-      { id: "Physics", title: "Physics", subtitle: "Advanced Mechanics, Waves, Electrodynamics & Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry", subtitle: "Advanced Physical, Organic Synthesis & Coordination", icon: "\u{1F9EA}" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Advanced Calculus, Complex Numbers, Vectors & 3D", icon: "\u{1F4D0}" }
-    ]
-  },
-  // 10. UPSC Civil Services Examination
-  {
-    aliases: ["upsc", "upsc cse", "civil services", "ias", "ips", "ias exam", "upsc prelims", "upsc mains"],
-    shortName: "UPSC CSE",
-    officialExamName: "UPSC Civil Services Examination (CSE)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Full-Time Aspirant", label: "Full-Time Aspirant", desc: "Dedicated CSE Preparation", isCollege: true },
-      { id: "College Final Year", label: "College Final Year", desc: "Undergraduate Aspirant", isCollege: true },
-      { id: "Working Professional", label: "Working Professional", desc: "Preparing along with employment", isCollege: true }
-    ],
-    subjects: [
-      { id: "General Studies I", title: "General Studies I", subtitle: "Indian Heritage, History, Geography & Society", icon: "\u{1F3DB}\uFE0F" },
-      { id: "General Studies II", title: "General Studies II (CSAT & Polity)", subtitle: "Constitution, Governance, Polity & Reasoning", icon: "\u2696\uFE0F" },
-      { id: "General Studies III", title: "General Studies III", subtitle: "Economy, Agriculture, Science & Security", icon: "\u{1F4CA}" },
-      { id: "General Studies IV", title: "General Studies IV (Ethics)", subtitle: "Ethics, Integrity & Aptitude Case Studies", icon: "\u{1F9E0}" },
-      { id: "Essay", title: "Essay Paper", subtitle: "Philosophical, Social & Governance Essays", icon: "\u270D\uFE0F" }
-    ]
-  },
-  // 11. BPSC (Bihar Public Service Commission)
-  {
-    aliases: ["bpsc", "bpsc cce", "bihar psc", "bpsc prelims", "bpsc mains", "bpsc 70th", "bpsc 71st"],
-    shortName: "BPSC",
-    officialExamName: "Bihar Public Service Commission Combined Competitive Examination (BPSC CCE)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Graduate_Final_Year", label: "Final Year Undergraduate", desc: "Graduation Year Candidate", isCollege: true },
-      { id: "Fresh_Graduate", label: "Graduate Full-Time Aspirant", desc: "Full-Time BPSC Civil Services Prep", isCollege: true },
-      { id: "Working_Professional", label: "Working Professional", desc: "Preparing alongside Job", isCollege: true }
-    ],
-    subjects: [
-      { id: "General_Studies_Paper_I", title: "General Studies Paper I", subtitle: "Modern History of India, Bihar Culture, Current Events & Statistical Analysis", icon: "\u{1F4DC}" },
-      { id: "General_Studies_Paper_II", title: "General Studies Paper II", subtitle: "Indian Polity, Economy, Geography & Role of Science and Technology", icon: "\u{1F310}" },
-      { id: "General_Hindi", title: "General Hindi", subtitle: "Qualifying Essay, Grammar, Syntax & Summarization", icon: "\u{1F4D6}" },
-      { id: "Essay", title: "Essay Paper", subtitle: "Socio-economic, philosophical & Bihar-specific cultural themes", icon: "\u270D\uFE0F" },
-      { id: "General_Studies_Prelims", title: "General Studies (Prelims)", subtitle: "Objective General Science, History, Bihar GK, Polity & Mental Ability", icon: "\u{1F4CA}" }
-    ]
-  },
-  // 12. UPPSC (Uttar Pradesh Public Service Commission)
-  {
-    aliases: ["uppsc", "uppcs", "up psc", "uppsc pcs", "up civil services", "uppsc prelims", "uppsc mains"],
-    shortName: "UPPSC",
-    officialExamName: "Uttar Pradesh Combined State / Upper Subordinate Services (UPPSC PCS)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Graduate_Aspirant", label: "Graduate Full-Time Aspirant", desc: "Full-Time UP PCS Preparation", isCollege: true },
-      { id: "Final_Year_Student", label: "Final Year Undergrad", desc: "College Pre-PCS Aspirant", isCollege: true },
-      { id: "Working_Professional", label: "Working Professional", desc: "Employed Civil Service Aspirant", isCollege: true }
-    ],
-    subjects: [
-      { id: "General_Studies_I", title: "General Studies Paper I", subtitle: "Indian History, Heritage, Geography & World History", icon: "\u{1F3DB}\uFE0F" },
-      { id: "General_Studies_II", title: "General Studies Paper II", subtitle: "Constitution, Governance, Social Justice & International Relations", icon: "\u2696\uFE0F" },
-      { id: "General_Studies_III", title: "General Studies Paper III", subtitle: "Economy, Environment, Security, Science & Disaster Management", icon: "\u{1F4CA}" },
-      { id: "General_Studies_V_VI_UP_Special", title: "General Studies V & VI (UP Special)", subtitle: "Comprehensive History, Geography, Polity & Economy of Uttar Pradesh", icon: "\u{1F5FA}\uFE0F" },
-      { id: "General_Hindi_Essay", title: "General Hindi & Essay", subtitle: "Conventions, Comprehension & Thematic Essay Papers", icon: "\u270D\uFE0F" }
-    ]
-  },
-  // 13. MPPSC (Madhya Pradesh Public Service Commission)
-  {
-    aliases: ["mppsc", "mp psc", "mppsc prelims", "mppsc mains"],
-    shortName: "MPPSC",
-    officialExamName: "Madhya Pradesh Public Service Commission State Service Examination (MPPSC)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Graduate_Aspirant", label: "Graduate Full-Time Aspirant", desc: "Full-Time MPPSC Prep", isCollege: true },
-      { id: "Final_Year_Student", label: "Final Year Undergrad", desc: "College Pre-MPPSC Aspirant", isCollege: true }
-    ],
-    subjects: [
-      { id: "General_Studies_I", title: "General Studies I (History & Geography)", subtitle: "History of India & MP, World & Indian Geography", icon: "\u{1F3DB}\uFE0F" },
-      { id: "General_Studies_II", title: "General Studies II (Polity & Economics)", subtitle: "Constitution, Governance, Economics & Sociology", icon: "\u2696\uFE0F" },
-      { id: "General_Studies_III", title: "General Studies III (Science & Technology)", subtitle: "General Science, Mathematics, Technology & Environment", icon: "\u{1F52C}" },
-      { id: "General_Hindi_Drafting", title: "General Hindi & Grammar", subtitle: "Hindi Grammar, Translations & Administrative Drafting", icon: "\u{1F4D6}" }
-    ]
-  },
-  // 14. Bihar Board Class 12 (BSEB Inter)
-  {
-    aliases: ["bihar board 12th", "bihar board 12", "bseb 12th", "bseb 12", "bseb inter", "bihar board inter", "bihar board intermediate", "bihar board"],
-    shortName: "Bihar Board 12th",
-    officialExamName: "Bihar School Examination Board Intermediate (BSEB Class 12)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Class_12_Inter", label: "Class 12 (Intermediate)", desc: "BSEB Board Appearing Candidate", isCollege: false },
-      { id: "Class_11_Inter", label: "Class 11 (Intermediate 1st Year)", desc: "11th Grade Foundation", isCollege: false }
-    ],
-    subjects: [
-      { id: "Physics", title: "Physics (\u092D\u094C\u0924\u093F\u0915\u0940)", subtitle: "Electrostatics, Magnetism, Optics, Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry (\u0930\u0938\u093E\u092F\u0928 \u0936\u093E\u0938\u094D\u0924\u094D\u0930)", subtitle: "Physical, Inorganic, Organic Chemistry", icon: "\u{1F9EA}" },
-      { id: "Mathematics", title: "Mathematics (\u0917\u0923\u093F\u0924)", subtitle: "Calculus, Vectors, 3D Geometry, Linear Programming", icon: "\u{1F4D0}" },
-      { id: "Biology", title: "Biology (\u091C\u0940\u0935 \u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "Genetics, Ecology, Physiology, Reproduction", icon: "\u{1F9EC}" },
-      { id: "Hindi", title: "Hindi (\u0939\u093F\u0902\u0926\u0940 100 Marks)", subtitle: "\u0926\u093F\u0917\u0902\u0924 \u092D\u093E\u0917 2 - \u0917\u0926\u094D\u092F, \u092A\u0926\u094D\u092F \u090F\u0935\u0902 \u0935\u094D\u092F\u093E\u0915\u0930\u0923", icon: "\u{1F4D6}" },
-      { id: "English", title: "English (English 100 Marks)", subtitle: "Rainbow Part 2 - Prose, Poetry, Grammar & Story of English", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 15. Bihar Board Class 10 (BSEB Matric)
-  {
-    aliases: ["bihar board 10th", "bihar board 10", "bseb 10th", "bseb 10", "bseb matric", "bihar board matric"],
-    shortName: "Bihar Board 10th",
-    officialExamName: "Bihar School Examination Board Matriculation (BSEB Class 10)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class_10_Matric", label: "Class 10 (Matriculation)", desc: "BSEB 10th Board Candidate", isCollege: false },
-      { id: "Class_9_PreMatric", label: "Class 9 Foundation", desc: "Pre-Matriculation Prep", isCollege: false }
-    ],
-    subjects: [
-      { id: "Mathematics", title: "Mathematics (\u0917\u0923\u093F\u0924)", subtitle: "Real numbers, Trigonometry, Geometry, Mensuration", icon: "\u{1F4D0}" },
-      { id: "Science", title: "Science (\u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "Physics, Chemistry & Biology", icon: "\u{1F52C}" },
-      { id: "Social_Science", title: "Social Science (\u0938\u093E\u092E\u093E\u091C\u093F\u0915 \u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "History, Geography, Political Science, Economics", icon: "\u{1F30D}" },
-      { id: "Hindi", title: "Hindi (\u0939\u093F\u0902\u0926\u0940 - \u0917\u094B\u0927\u0942\u0932\u093F)", subtitle: "\u0917\u094B\u0927\u0942\u0932\u093F \u092D\u093E\u0917 2, \u0935\u0930\u094D\u0923\u093F\u0915\u093E \u092D\u093E\u0917 2 \u090F\u0935\u0902 \u0935\u094D\u092F\u093E\u0915\u0930\u0923", icon: "\u{1F4D6}" },
-      { id: "Sanskrit", title: "Sanskrit (\u0938\u0902\u0938\u094D\u0915\u0943\u0924 - \u092A\u0940\u092F\u0942\u0937\u092E)", subtitle: "\u092A\u0940\u092F\u0942\u0937\u092E \u092D\u093E\u0917 2 \u090F\u0935\u0902 \u0938\u0902\u0938\u094D\u0915\u0943\u0924 \u0935\u094D\u092F\u093E\u0915\u0930\u0923", icon: "\u{1F4DC}" },
-      { id: "English", title: "English (Panorama Part 2)", subtitle: "Prose, Poetry, Vocabulary & Grammar", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 16. UP Board Class 12 (UPMSP Inter)
-  {
-    aliases: ["up board 12th", "up board 12", "upmsp 12th", "upmsp 12", "up board inter", "up board intermediate", "up board"],
-    shortName: "UP Board 12th",
-    officialExamName: "Uttar Pradesh Madhyamik Shiksha Parishad Intermediate (UPMSP Class 12)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Class_12_Inter", label: "Class 12 (Intermediate)", desc: "UP Board Appearing Senior Secondary", isCollege: false },
-      { id: "Class_11_Inter", label: "Class 11 (Intermediate 1st Year)", desc: "11th Grade Foundation", isCollege: false }
-    ],
-    subjects: [
-      { id: "General_Hindi", title: "General Hindi (\u0938\u093E\u092E\u093E\u0928\u094D\u092F \u0939\u093F\u0928\u094D\u0926\u0940)", subtitle: "\u0915\u093E\u0935\u094D\u092F, \u0917\u0926\u094D\u092F, \u0938\u0902\u0938\u094D\u0915\u0943\u0924 \u0916\u0923\u094D\u0921 \u090F\u0935\u0902 \u0935\u094D\u092F\u093E\u0915\u0930\u0923", icon: "\u{1F4D6}" },
-      { id: "Physics", title: "Physics (\u092D\u094C\u0924\u093F\u0915 \u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "Electrostatics, Optics, Current Electricity & Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry (\u0930\u0938\u093E\u092F\u0928 \u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "Physical, Organic, Coordination & Inorganic Chemistry", icon: "\u{1F9EA}" },
-      { id: "Mathematics", title: "Mathematics (\u0917\u0923\u093F\u0924)", subtitle: "Calculus, Vectors, Matrices, Determinants & Probability", icon: "\u{1F4D0}" },
-      { id: "Biology", title: "Biology (\u091C\u0940\u0935 \u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "Botany, Zoology, Genetics & Ecology", icon: "\u{1F9EC}" },
-      { id: "English", title: "English (General English)", subtitle: "Flamingo, Vistas, Grammar & Composition", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 17. UP Board Class 10 (UPMSP High School)
-  {
-    aliases: ["up board 10th", "up board 10", "upmsp 10th", "upmsp 10", "up board high school"],
-    shortName: "UP Board 10th",
-    officialExamName: "Uttar Pradesh Madhyamik Shiksha Parishad High School (UPMSP Class 10)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class_10_HighSchool", label: "Class 10 (High School)", desc: "UPMSP 10th Board Candidate", isCollege: false },
-      { id: "Class_9_HighSchool", label: "Class 9 Foundation", desc: "Pre-High School Prep", isCollege: false }
-    ],
-    subjects: [
-      { id: "Hindi", title: "Hindi (\u0939\u093F\u0928\u094D\u0926\u0940)", subtitle: "\u0917\u0926\u094D\u092F, \u0915\u093E\u0935\u094D\u092F, \u0938\u0902\u0938\u094D\u0915\u0943\u0924 \u092A\u0930\u093F\u091A\u092F\u093F\u0915\u093E \u090F\u0935\u0902 \u0935\u094D\u092F\u093E\u0915\u0930\u0923", icon: "\u{1F4D6}" },
-      { id: "Mathematics", title: "Mathematics (\u0917\u0923\u093F\u0924)", subtitle: "Algebra, Geometry, Trigonometry, Coordinate & Mensuration", icon: "\u{1F4D0}" },
-      { id: "Science", title: "Science (\u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "Chemical substances, World of living, Natural phenomena & Effects of current", icon: "\u{1F52C}" },
-      { id: "Social_Science", title: "Social Science (\u0938\u093E\u092E\u093E\u091C\u093F\u0915 \u0935\u093F\u091C\u094D\u091E\u093E\u0928)", subtitle: "India & the Contemporary World, Contemporary India, Democratic Politics", icon: "\u{1F30D}" },
-      { id: "English", title: "English", subtitle: "First Flight, Footprints without Feet, Grammar & Writing", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 18. CBSE Class 12
-  {
-    aliases: ["cbse 12", "cbse 12th", "cbse class 12", "cbse board 12", "class 12 cbse", "cbse boards", "cbse"],
-    shortName: "CBSE Class 12",
-    officialExamName: "CBSE Class 12 Senior School Certificate Examination",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Class 12", label: "Class 12", desc: "12th Senior Secondary Board Year", isCollege: false },
-      { id: "Class 11", label: "Class 11", desc: "11th Senior Secondary Foundation", isCollege: false }
-    ],
-    subjects: [
-      { id: "Physics", title: "Physics", subtitle: "Electrostatics, Optics, Magnetism & Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry", subtitle: "Solutions, Electrochemistry, Organic & Coordination", icon: "\u{1F9EA}" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Calculus, Relations & Functions, Vectors & 3D", icon: "\u{1F4D0}" },
-      { id: "Biology", title: "Biology", subtitle: "Reproduction, Genetics, Evolution & Biotechnology", icon: "\u{1F9EC}" },
-      { id: "Computer Science", title: "Computer Science", subtitle: "Python, Computational Thinking, SQL & Networks", icon: "\u{1F4BB}" },
-      { id: "English Core", title: "English Core", subtitle: "Reading Comprehension, Creative Writing & Literature", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 19. CBSE Class 10
-  {
-    aliases: ["cbse 10", "cbse 10th", "cbse class 10", "class 10 cbse", "cbse board 10"],
-    shortName: "CBSE Class 10",
-    officialExamName: "CBSE Class 10 Secondary School Examination",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Class 10", label: "Class 10", desc: "10th Secondary Board Exam Year", isCollege: false },
-      { id: "Class 9", label: "Class 9", desc: "9th Pre-Board Secondary Foundation", isCollege: false }
-    ],
-    subjects: [
-      { id: "Mathematics", title: "Mathematics", subtitle: "Real Numbers, Polynomials, Trigonometry & Geometry", icon: "\u{1F4D0}" },
-      { id: "Science", title: "Science", subtitle: "Chemical Reactions, Life Processes, Light & Electricity", icon: "\u{1F52C}" },
-      { id: "Social Science", title: "Social Science", subtitle: "History, Geography, Political Science & Economics", icon: "\u{1F30D}" },
-      { id: "English Language & Literature", title: "English Language & Literature", subtitle: "Reading, Writing & Literature Textbooks", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 20. ICSE Class 10
-  {
-    aliases: ["icse", "icse class 10", "icse 10th", "icse board", "cisce 10th"],
-    shortName: "ICSE Class 10",
-    officialExamName: "ICSE Class 10 (Indian Certificate of Secondary Education)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Class 10", label: "Class 10", desc: "ICSE Class 10 Board Year", isCollege: false },
-      { id: "Class 9", label: "Class 9", desc: "Class 9 Foundation Prep", isCollege: false }
-    ],
-    subjects: [
-      { id: "English", title: "English Language & Literature", subtitle: "Grammar, Essay & Drama Analysis", icon: "\u{1F4DA}" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Commercial Math, Algebra, Geometry & Mensuration", icon: "\u{1F4D0}" },
-      { id: "Physics", title: "Physics", subtitle: "Force, Work, Light, Sound & Electricity", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry", subtitle: "Periodic Properties, Chemical Bonding & Acids", icon: "\u{1F9EA}" },
-      { id: "Biology", title: "Biology", subtitle: "Basic Biology, Plant & Human Physiology", icon: "\u{1F9EC}" },
-      { id: "History_Civics", title: "History & Civics", subtitle: "Union Legislature, Indian National Movement & World Wars", icon: "\u{1F3DB}\uFE0F" },
-      { id: "Geography", title: "Geography", subtitle: "Topographical Maps, Climate, Soil, Water & Minerals", icon: "\u{1F5FA}\uFE0F" }
-    ]
-  },
-  // 21. ISC Class 12
-  {
-    aliases: ["isc", "isc class 12", "isc 12th", "isc board", "cisce 12th"],
-    shortName: "ISC Class 12",
-    officialExamName: "ISC Class 12 (Indian School Certificate)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Class 12", label: "Class 12", desc: "ISC Senior Secondary Board Year", isCollege: false },
-      { id: "Class 11", label: "Class 11", desc: "ISC Grade 11 Foundation", isCollege: false }
-    ],
-    subjects: [
-      { id: "English", title: "English (Language & Literature)", subtitle: "Macbeth, Prose, Poetry & Advanced Grammar", icon: "\u{1F4DA}" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Calculus, Vectors, Probability & Algebra", icon: "\u{1F4D0}" },
-      { id: "Physics", title: "Physics", subtitle: "Electrostatics, Magnetism, Optics & Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Inorganic, Coordination & Organic Chemistry", icon: "\u{1F9EA}" },
-      { id: "Biology", title: "Biology", subtitle: "Reproduction, Genetics, Biotechnology & Ecology", icon: "\u{1F9EC}" }
-    ]
-  },
-  // 22. NDA (National Defence Academy)
-  {
-    aliases: ["nda", "national defence academy", "nda exam", "nda na"],
-    shortName: "NDA",
-    officialExamName: "NDA (National Defence Academy Examination)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class 12", label: "Class 12", desc: "12th Appearing Defence Aspirant", isCollege: false },
-      { id: "Class 11", label: "Class 11", desc: "Early NDA Foundation", isCollege: false }
-    ],
-    subjects: [
-      { id: "Mathematics", title: "Mathematics", subtitle: "Algebra, Trigonometry, Calculus, Vectors & Statistics", icon: "\u{1F4D0}" },
-      { id: "General Ability Test", title: "General Ability Test (GAT)", subtitle: "English Grammar, Physics, Chemistry, History & Current Affairs", icon: "\u{1F6E1}\uFE0F" }
-    ]
-  },
-  // 23. CDS (Combined Defence Services)
-  {
-    aliases: ["cds", "cds exam", "combined defence services", "ima", "ota"],
-    shortName: "CDS",
-    officialExamName: "UPSC Combined Defence Services Examination (CDS)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Graduation_Final_Year", label: "Final Year Graduate", desc: "Appearing Undergrad Candidate", isCollege: true },
-      { id: "Graduate_Aspirant", label: "Graduate Defence Aspirant", desc: "IMA / OTA / INA / AFA Prep", isCollege: true }
-    ],
-    subjects: [
-      { id: "English", title: "English Language", subtitle: "Reading Comprehension, Spotting Errors & Vocabulary", icon: "\u{1F4DA}" },
-      { id: "General_Knowledge", title: "General Knowledge", subtitle: "Current Affairs, Indian History, Geography & General Science", icon: "\u{1F30D}" },
-      { id: "Elementary_Mathematics", title: "Elementary Mathematics", subtitle: "Arithmetic, Algebra, Trigonometry, Geometry & Mensuration", icon: "\u{1F4D0}" }
-    ]
-  },
-  // 24. CUET UG
-  {
-    aliases: ["cuet", "cuet ug", "cuet exam", "common university entrance test"],
-    shortName: "CUET UG",
-    officialExamName: "Common University Entrance Test Undergraduate (CUET UG)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "Class_12_Candidate", label: "Class 12 Appearing", desc: "Undergraduate College Entrance Candidate", isCollege: false },
-      { id: "Dropper_Aspirant", label: "Gap Year / Full-Time CUET Aspirant", desc: "Central University Entrance Prep", isCollege: false }
-    ],
-    subjects: [
-      { id: "English_Language", title: "English (Language Section 1A)", subtitle: "Reading Comprehension, Literary Aptitude & Vocabulary", icon: "\u{1F4DA}" },
-      { id: "General_Test", title: "General Test (Section 3)", subtitle: "General Knowledge, Current Affairs, Mental Ability & Numerical Logic", icon: "\u{1F9E0}" },
-      { id: "Physics", title: "Physics (Domain Subject)", subtitle: "NCERT Class 12 Physics Syllabus", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry (Domain Subject)", subtitle: "NCERT Class 12 Chemistry Syllabus", icon: "\u{1F9EA}" },
-      { id: "Mathematics", title: "Mathematics (Domain Subject)", subtitle: "NCERT Class 12 Mathematics Syllabus", icon: "\u{1F4D0}" },
-      { id: "Biology", title: "Biology (Domain Subject)", subtitle: "NCERT Class 12 Biology Syllabus", icon: "\u{1F9EC}" }
-    ]
-  },
-  // 25. CLAT (Law)
-  {
-    aliases: ["clat", "clat exam", "common law admission test", "clat ug", "law entrance"],
-    shortName: "CLAT",
-    officialExamName: "Common Law Admission Test (CLAT UG)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Class_12_Law", label: "Class 12 (Pre-Law)", desc: "12th Appearing NLU Aspirant", isCollege: false },
-      { id: "Dropper_Law", label: "Dedicated Law Aspirant", desc: "Full-Time CLAT NLU Preparation", isCollege: false }
-    ],
-    subjects: [
-      { id: "English_Language", title: "English Language", subtitle: "Comprehension passages, Vocabulary & Inference", icon: "\u{1F4DA}" },
-      { id: "Current_Affairs_GK", title: "Current Affairs & General Knowledge", subtitle: "Contemporary events, International affairs & Arts/Culture", icon: "\u{1F3DB}\uFE0F" },
-      { id: "Legal_Reasoning", title: "Legal Reasoning", subtitle: "Legal principles, Fact scenarios & Constitutional questions", icon: "\u2696\uFE0F" },
-      { id: "Logical_Reasoning", title: "Logical Reasoning", subtitle: "Arguments, Premises, Conclusions & Deductive analysis", icon: "\u{1F9E0}" },
-      { id: "Quantitative_Techniques", title: "Quantitative Techniques", subtitle: "Data interpretation, Ratios, Percentages & Basic arithmetic", icon: "\u{1F4D0}" }
-    ]
-  },
-  // 26. CAT (MBA)
-  {
-    aliases: ["cat", "cat exam", "iim cat", "common admission test"],
-    shortName: "CAT",
-    officialExamName: "CAT (Common Admission Test for MBA)",
-    country: "India",
-    hasElectives: false,
-    grades: [
-      { id: "Final Year Undergrad", label: "Final Year Undergrad", desc: "College Pre-MBA Aspirant", isCollege: true },
-      { id: "Dedicated Gap Year", label: "Dedicated Gap Year", desc: "Full-Time MBA Prep", isCollege: true },
-      { id: "Working_Professional", label: "Working Professional", desc: "Corporate MBA Aspirant", isCollege: true }
-    ],
-    subjects: [
-      { id: "VARC", title: "Verbal Ability & Reading Comprehension (VARC)", subtitle: "RC Passages, Parajumbles, Summary & Sentence Completion", icon: "\u{1F4DA}" },
-      { id: "DILR", title: "Data Interpretation & Logical Reasoning (DILR)", subtitle: "Caselets, Tables, Graphs, Puzzles & Seating Arrangements", icon: "\u{1F4CA}" },
-      { id: "QA", title: "Quantitative Ability (QA)", subtitle: "Arithmetic, Algebra, Geometry & Modern Math", icon: "\u{1F4D0}" }
-    ]
-  },
-  // 27. GATE (Engineering)
-  {
-    aliases: ["gate", "gate exam", "graduate aptitude test in engineering"],
-    shortName: "GATE",
-    officialExamName: "GATE (Graduate Aptitude Test in Engineering)",
-    country: "India",
-    hasElectives: true,
-    grades: [
-      { id: "B.Tech / B.E. Final Year", label: "B.Tech / B.E. Final Year", desc: "Graduation Year Aspirant", isCollege: true },
-      { id: "College Graduate", label: "College Graduate", desc: "Full-Time GATE Aspirant", isCollege: true }
-    ],
-    subjects: [
-      { id: "Engineering Mathematics", title: "Engineering Mathematics & Aptitude", subtitle: "Discrete Math, Linear Algebra, Calculus & Aptitude", icon: "\u{1F4D0}" },
-      { id: "Core Engineering Discipline", title: "Core Engineering Discipline", subtitle: "Subject-specific specialization papers", icon: "\u2699\uFE0F" }
-    ]
-  },
-  // 28. South Korea - College Scholastic Ability Test (CSAT / Suneung / 대학수학능력시험)
-  {
-    aliases: ["csat", "korean csat", "suneung", "suneung exam", "csat exam", "college scholastic ability test", "\uB300\uD559\uC218\uD559\uB2A5\uB825\uC2DC\uD5D8", "\uC218\uB2A5", "south korea csat"],
-    shortName: "CSAT (Suneung)",
-    officialExamName: "College Scholastic Ability Test (CSAT / \uC218\uB2A5 - Suneung)",
-    country: "South Korea",
-    hasElectives: true,
-    grades: [
-      { id: "High School 3rd Year (Senior / 12th Grade)", label: "High School 3rd Year (Senior / 12th Grade)", desc: "Final Suneung Examination Year (\uACE03)", isCollege: false },
-      { id: "High School 2nd Year (Junior / 11th Grade)", label: "High School 2nd Year (Junior / 11th Grade)", desc: "Core CSAT Preparation & Mock Exams (\uACE02)", isCollege: false },
-      { id: "High School 1st Year (Sophomore / 10th Grade)", label: "High School 1st Year (Sophomore / 10th Grade)", desc: "Foundational Curriculum & Elective Selection (\uACE01)", isCollege: false },
-      { id: "N-su-saeng (CSAT Retaker)", label: "CSAT Retaker (Jaesusaeng)", desc: "Dedicated Full-Time CSAT Aspirant", isCollege: false }
-    ],
-    subjects: [
-      { id: "Korean Language", title: "Korean Language (\uAD6D\uC5B4)", subtitle: "Reading Comprehension, Literature, Speech & Writing / Grammar", icon: "\u{1F1F0}\u{1F1F7}" },
-      { id: "Mathematics", title: "Mathematics (\uC218\uD559)", subtitle: "Math I, Math II, Calculus / Probability & Statistics / Geometry", icon: "\u{1F4D0}" },
-      { id: "English", title: "English (\uC601\uC5B4)", subtitle: "Reading Comprehension, Vocabulary & Listening Comprehension", icon: "\u{1F4DA}" },
-      { id: "Korean History", title: "Korean History (\uD55C\uAD6D\uC0AC)", subtitle: "Mandatory National Korean History Curriculum", icon: "\u{1F3DB}\uFE0F" },
-      { id: "Inquiry - Science / Social Studies", title: "Inquiry: Science / Social Studies (\uD0D0\uAD6C\uC601\uC5ED)", subtitle: "Physics, Chemistry, Biology, Earth Science / Ethics, Geography, Politics", icon: "\u{1F52C}" },
-      { id: "Second Foreign Language", title: "Second Foreign Language / Hanja (\uC81C2\uC678\uAD6D\uC5B4/\uD55C\uBB38)", subtitle: "Chinese, Japanese, German, French, Spanish, Arabic, Vietnamese, Russian, Hanja", icon: "\u{1F310}" }
-    ]
-  },
-  // 29. SAT (College Board Digital SAT)
-  {
-    aliases: ["sat", "digital sat", "psat", "scholastic assessment test", "sat exam"],
-    shortName: "SAT",
-    officialExamName: "SAT (Digital Scholastic Assessment Test)",
-    country: "United States",
-    isGlobal: true,
-    hasElectives: false,
-    grades: [
-      { id: "11th Grade (Junior)", label: "11th Grade (Junior)", desc: "Prime SAT Testing Year", isCollege: false },
-      { id: "12th Grade (Senior)", label: "12th Grade (Senior)", desc: "Final Fall SAT Attempts", isCollege: false },
-      { id: "10th Grade (Sophomore)", label: "10th Grade (Sophomore)", desc: "Early PSAT / SAT Foundation", isCollege: false }
-    ],
-    subjects: [
-      { id: "Reading and Writing", title: "Reading and Writing", subtitle: "Craft and Structure, Information and Ideas, Expression of Ideas", icon: "\u{1F4D6}" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Algebra, Advanced Math, Problem-Solving & Geometry", icon: "\u{1F4D0}" }
-    ]
-  },
-  // 29. ACT
-  {
-    aliases: ["act", "act exam", "american college testing"],
-    shortName: "ACT",
-    officialExamName: "ACT (American College Testing)",
-    country: "United States",
-    isGlobal: true,
-    hasElectives: false,
-    grades: [
-      { id: "11th Grade (Junior)", label: "11th Grade (Junior)", desc: "Prime ACT Testing Year", isCollege: false },
-      { id: "12th Grade (Senior)", label: "12th Grade (Senior)", desc: "Final ACT Attempts", isCollege: false }
-    ],
-    subjects: [
-      { id: "English", title: "English", subtitle: "Usage, Mechanics & Rhetorical Skills", icon: "\u270D\uFE0F" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Pre-Algebra, Algebra, Coordinate Geometry", icon: "\u{1F4D0}" },
-      { id: "Reading", title: "Reading", subtitle: "Prose Fiction, Social Studies, Humanities", icon: "\u{1F4D6}" },
-      { id: "Science", title: "Science", subtitle: "Data Representation, Research Summaries", icon: "\u{1F52C}" }
-    ]
-  },
-  // 30. AP Exams (Advanced Placement)
-  {
-    aliases: ["ap", "ap exams", "advanced placement", "ap calculus", "ap physics", "ap chemistry", "ap biology", "ap comp sci"],
-    shortName: "AP Exams",
-    officialExamName: "Advanced Placement (AP) Examinations",
-    country: "United States",
-    isGlobal: true,
-    hasElectives: true,
-    grades: [
-      { id: "11th Grade (Junior)", label: "11th Grade", desc: "Prime AP Course Year", isCollege: false },
-      { id: "12th Grade (Senior)", label: "12th Grade", desc: "Senior AP Courses & College Credit", isCollege: false },
-      { id: "10th Grade (Sophomore)", label: "10th Grade", desc: "Introductory AP Courses", isCollege: false }
-    ],
-    subjects: [
-      { id: "AP_Calculus_BC", title: "AP Calculus BC", subtitle: "Limits, Derivatives, Integrals, Series & Parametrics", icon: "\u{1F4D0}" },
-      { id: "AP_Physics_C", title: "AP Physics C: Mechanics", subtitle: "Calculus-based Newtonian Mechanics & Kinematics", icon: "\u26A1" },
-      { id: "AP_Chemistry", title: "AP Chemistry", subtitle: "Atomic Structure, Chemical Bonding, Kinetics & Thermodynamics", icon: "\u{1F9EA}" },
-      { id: "AP_Biology", title: "AP Biology", subtitle: "Cellular Energetics, Genetics, Heredity & Ecology", icon: "\u{1F9EC}" },
-      { id: "AP_Computer_Science_A", title: "AP Computer Science A", subtitle: "Java Programming, Algorithms & Object-Oriented Design", icon: "\u{1F4BB}" },
-      { id: "AP_English_Language", title: "AP English Language and Composition", subtitle: "Rhetorical Analysis, Evidence-based Argument & Synthesis", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 31. GRE
-  {
-    aliases: ["gre", "gre general", "gre exam", "graduate record examination"],
-    shortName: "GRE",
-    officialExamName: "GRE (Graduate Record Examination)",
-    country: "United States",
-    isGlobal: true,
-    hasElectives: false,
-    grades: [
-      { id: "Undergraduate_Senior", label: "College Senior / Final Year", desc: "Preparing for Graduate / MS Admissions", isCollege: true },
-      { id: "Working_Professional", label: "Working Professional Aspirant", desc: "Grad School / MS / MBA Prep", isCollege: true }
-    ],
-    subjects: [
-      { id: "Verbal_Reasoning", title: "Verbal Reasoning", subtitle: "Text Completion, Sentence Equivalence & Reading Comprehension", icon: "\u{1F4DA}" },
-      { id: "Quantitative_Reasoning", title: "Quantitative Reasoning", subtitle: "Arithmetic, Algebra, Geometry & Data Analysis", icon: "\u{1F4D0}" },
-      { id: "Analytical_Writing", title: "Analytical Writing (AWA)", subtitle: "Analyze an Issue Task & Critical Persuasive Essay", icon: "\u270D\uFE0F" }
-    ]
-  },
-  // 32. GMAT
-  {
-    aliases: ["gmat", "gmat focus", "gmat exam"],
-    shortName: "GMAT",
-    officialExamName: "GMAT Focus Edition (Graduate Management Admission Test)",
-    country: "United States",
-    isGlobal: true,
-    hasElectives: false,
-    grades: [
-      { id: "MBA_Applicant", label: "MBA Applicant", desc: "Business School Candidate", isCollege: true },
-      { id: "College_Senior", label: "Undergraduate Senior", desc: "Pre-MBA Candidate", isCollege: true }
-    ],
-    subjects: [
-      { id: "Quantitative_Reasoning", title: "Quantitative Reasoning", subtitle: "Problem Solving & Pure Mathematical Concepts", icon: "\u{1F4D0}" },
-      { id: "Verbal_Reasoning", title: "Verbal Reasoning", subtitle: "Critical Reasoning & Reading Comprehension", icon: "\u{1F4DA}" },
-      { id: "Data_Insights", title: "Data Insights", subtitle: "Multi-Source Reasoning, Table Analysis & Graphics", icon: "\u{1F4CA}" }
-    ]
-  },
-  // 33. IELTS
-  {
-    aliases: ["ielts", "ielts academic", "ielts exam"],
-    shortName: "IELTS",
-    officialExamName: "IELTS Academic (International English Language Testing System)",
-    country: "United Kingdom",
-    isGlobal: true,
-    hasElectives: false,
-    grades: [
-      { id: "University_Applicant", label: "University / Study Abroad Aspirant", desc: "Academic Admission Requirement", isCollege: true },
-      { id: "Immigration_Applicant", label: "Global Immigration / Work Candidate", desc: "Language Proficiency Certification", isCollege: true }
-    ],
-    subjects: [
-      { id: "Listening", title: "Listening", subtitle: "4 recorded audio monologues and conversations", icon: "\u{1F3A7}" },
-      { id: "Reading", title: "Reading", subtitle: "3 long academic passages with descriptive & analytical texts", icon: "\u{1F4D6}" },
-      { id: "Writing", title: "Writing", subtitle: "Task 1 Graph/Diagram Report & Task 2 Argumentative Essay", icon: "\u270D\uFE0F" },
-      { id: "Speaking", title: "Speaking", subtitle: "Face-to-face oral interview, short speech & discussion", icon: "\u{1F5E3}\uFE0F" }
-    ]
-  },
-  // 34. TOEFL
-  {
-    aliases: ["toefl", "toefl ibt", "toefl exam"],
-    shortName: "TOEFL",
-    officialExamName: "TOEFL iBT (Test of English as a Foreign Language)",
-    country: "United States",
-    isGlobal: true,
-    hasElectives: false,
-    grades: [
-      { id: "Study_Abroad_Student", label: "Study Abroad / University Candidate", desc: "Undergraduate or Graduate Admissions", isCollege: true }
-    ],
-    subjects: [
-      { id: "Reading", title: "Reading Section", subtitle: "2 academic reading passages and comprehension questions", icon: "\u{1F4D6}" },
-      { id: "Listening", title: "Listening Section", subtitle: "Brief lectures and campus classroom discussions", icon: "\u{1F3A7}" },
-      { id: "Speaking", title: "Speaking Section", subtitle: "Independent and integrated academic tasks", icon: "\u{1F5E3}\uFE0F" },
-      { id: "Writing", title: "Writing Section", subtitle: "Integrated essay and Academic Discussion task", icon: "\u270D\uFE0F" }
-    ]
-  },
-  // 35. Cambridge IGCSE / GCSE
-  {
-    aliases: ["igcse", "gcse", "cambridge igcse", "edexcel gcse"],
-    shortName: "IGCSE",
-    officialExamName: "Cambridge International General Certificate of Secondary Education (IGCSE)",
-    country: "United Kingdom",
-    isGlobal: true,
-    hasElectives: true,
-    grades: [
-      { id: "Year_11", label: "Year 11 / Grade 10", desc: "Final GCSE / IGCSE Examination Year", isCollege: false },
-      { id: "Year_10", label: "Year 10 / Grade 9", desc: "Year 1 of GCSE Curriculum", isCollege: false }
-    ],
-    subjects: [
-      { id: "Mathematics", title: "Mathematics (0580)", subtitle: "Number, Algebra, Shape & Space, Probability & Statistics", icon: "\u{1F4D0}" },
-      { id: "Physics", title: "Physics (0625)", subtitle: "Motion, Thermal Physics, Waves, Electricity & Space", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry (0620)", subtitle: "States of Matter, Stoichiometry, Organic & Periodic Table", icon: "\u{1F9EA}" },
-      { id: "Biology", title: "Biology (0610)", subtitle: "Characteristics of Living Organisms, Human Nutrition & Genetics", icon: "\u{1F9EC}" },
-      { id: "English_First_Language", title: "English as a First Language (0500)", subtitle: "Reading Comprehension, Directed Writing & Composition", icon: "\u{1F4DA}" }
-    ]
-  },
-  // 36. Cambridge / Edexcel A Levels
-  {
-    aliases: ["a levels", "a level", "cambridge a level", "gce a level", "as level"],
-    shortName: "A Levels",
-    officialExamName: "GCE Advanced Level (A Levels)",
-    country: "United Kingdom",
-    isGlobal: true,
-    hasElectives: true,
-    grades: [
-      { id: "Year_13_A2", label: "Year 13 (A2 Level)", desc: "Final Year Advanced Level Candidate", isCollege: false },
-      { id: "Year_12_AS", label: "Year 12 (AS Level)", desc: "Advanced Subsidiary Foundation Year", isCollege: false }
-    ],
-    subjects: [
-      { id: "Mathematics", title: "Mathematics (9709)", subtitle: "Pure Mathematics, Mechanics & Probability/Statistics", icon: "\u{1F4D0}" },
-      { id: "Physics", title: "Physics (9702)", subtitle: "Mechanics, Fields, Oscillations, Thermal & Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry (9701)", subtitle: "Physical, Inorganic & Organic Synthesis Chemistry", icon: "\u{1F9EA}" },
-      { id: "Biology", title: "Biology (9700)", subtitle: "Cell Structure, Physiology, Genetics, Evolution & Ecology", icon: "\u{1F9EC}" },
-      { id: "Economics", title: "Economics (9708)", subtitle: "Microeconomic Principles, Macroeconomic Policies & Markets", icon: "\u{1F4CA}" }
-    ]
-  }
-];
-function isCountryMatch(entryCountry, userCountry, isGlobal) {
-  if (!userCountry || userCountry.toLowerCase() === "global" || userCountry.toLowerCase() === "all") {
-    return true;
-  }
-  if (isGlobal) {
-    return true;
-  }
-  const e = entryCountry.toLowerCase().trim();
-  const u = userCountry.toLowerCase().trim();
-  if (e === u) return true;
-  const isIndia = (c) => c === "india" || c === "in" || c === "ind" || c === "bharat";
-  const isUSA = (c) => c === "united states" || c === "usa" || c === "us" || c === "united states of america";
-  const isUK = (c) => c === "united kingdom" || c === "uk" || c === "gb" || c === "great britain" || c === "england";
-  const isSouthKorea = (c) => c === "south korea" || c === "korea" || c === "kr" || c === "republic of korea" || c === "\uD55C\uAD6D" || c === "\uB300\uD55C\uBBFC\uAD6D";
-  const isCanada = (c) => c === "canada" || c === "ca";
-  const isAustralia = (c) => c === "australia" || c === "au";
-  if (isIndia(e) && isIndia(u)) return true;
-  if (isUSA(e) && isUSA(u)) return true;
-  if (isUK(e) && isUK(u)) return true;
-  if (isSouthKorea(e) && isSouthKorea(u)) return true;
-  if (isCanada(e) && isCanada(u)) return true;
-  if (isAustralia(e) && isAustralia(u)) return true;
-  return false;
-}
-function findPreVerifiedExam(inputExam, userCountry) {
-  if (!inputExam || typeof inputExam !== "string") return null;
-  const clean = inputExam.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
-  const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return null;
-  for (const entry of PRE_VERIFIED_EXAMS) {
-    if (userCountry && !isCountryMatch(entry.country, userCountry, entry.isGlobal)) {
-      continue;
-    }
-    for (const alias of entry.aliases) {
-      const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
-      if (clean === cleanAlias) {
-        return entry;
-      }
-    }
-  }
-  for (const entry of PRE_VERIFIED_EXAMS) {
-    if (userCountry && !isCountryMatch(entry.country, userCountry, entry.isGlobal)) {
-      continue;
-    }
-    for (const alias of entry.aliases) {
-      const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
-      if (words.includes(cleanAlias)) {
-        return entry;
-      }
-    }
-  }
-  if (clean.length >= 4) {
-    for (const entry of PRE_VERIFIED_EXAMS) {
-      if (userCountry && !isCountryMatch(entry.country, userCountry, entry.isGlobal)) {
-        continue;
-      }
-      for (const alias of entry.aliases) {
-        const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
-        if (cleanAlias.length >= 4) {
-          if (clean.startsWith(cleanAlias) || cleanAlias.startsWith(clean) || clean.includes(cleanAlias)) {
-            return entry;
-          }
-        }
-      }
-    }
-  }
-  const getCandidateIfCountryMatches = (shortName) => {
-    const found = PRE_VERIFIED_EXAMS.find((e) => e.shortName === shortName);
-    if (!found) return null;
-    if (userCountry && !isCountryMatch(found.country, userCountry, found.isGlobal)) {
-      return null;
-    }
-    return found;
-  };
-  if (words.includes("csat") || words.includes("suneung") || clean.includes("\uC218\uB2A5") || clean.includes("\uB300\uD559\uC218\uD559\uB2A5\uB825\uC2DC\uD5D8")) {
-    return getCandidateIfCountryMatches("CSAT (Suneung)");
-  }
-  if (words.includes("cgl")) {
-    return getCandidateIfCountryMatches("SSC CGL");
-  }
-  if (words.includes("chsl")) {
-    return getCandidateIfCountryMatches("SSC CHSL");
-  }
-  if (words.includes("mts")) {
-    return getCandidateIfCountryMatches("SSC MTS");
-  }
-  if (words.includes("gd")) {
-    return getCandidateIfCountryMatches("SSC GD");
-  }
-  if (words.includes("ssc")) {
-    return getCandidateIfCountryMatches("SSC CGL");
-  }
-  if (words.includes("bpsc")) {
-    return getCandidateIfCountryMatches("BPSC");
-  }
-  if (words.includes("uppsc") || words.includes("uppcs")) {
-    return getCandidateIfCountryMatches("UPPSC");
-  }
-  if (words.includes("mppsc")) {
-    return getCandidateIfCountryMatches("MPPSC");
-  }
-  if (clean.includes("bihar board") || clean.includes("bseb")) {
-    if (words.includes("10") || words.includes("10th") || words.includes("matric")) {
-      return getCandidateIfCountryMatches("Bihar Board 10th");
-    }
-    return getCandidateIfCountryMatches("Bihar Board 12th");
-  }
-  if (clean.includes("up board") || clean.includes("upmsp")) {
-    if (words.includes("10") || words.includes("10th") || words.includes("highschool")) {
-      return getCandidateIfCountryMatches("UP Board 10th");
-    }
-    return getCandidateIfCountryMatches("UP Board 12th");
-  }
-  if (words.includes("neet")) {
-    return getCandidateIfCountryMatches("NEET UG");
-  }
-  if (words.includes("jee")) {
-    if (words.includes("advanced") || words.includes("adv")) {
-      return getCandidateIfCountryMatches("JEE Advanced");
-    }
-    return getCandidateIfCountryMatches("JEE Main");
-  }
-  if (words.includes("cbse")) {
-    if (words.includes("10") || words.includes("10th") || words.includes("x")) {
-      return getCandidateIfCountryMatches("CBSE Class 10");
-    }
-    return getCandidateIfCountryMatches("CBSE Class 12");
-  }
-  if (words.includes("icse")) {
-    return getCandidateIfCountryMatches("ICSE Class 10");
-  }
-  if (words.includes("isc")) {
-    return getCandidateIfCountryMatches("ISC Class 12");
-  }
-  if (words.includes("upsc") || words.includes("ias")) {
-    return getCandidateIfCountryMatches("UPSC CSE");
-  }
-  if (words.includes("sat")) {
-    return getCandidateIfCountryMatches("SAT");
-  }
-  if (words.includes("act")) {
-    return getCandidateIfCountryMatches("ACT");
-  }
-  if (words.includes("cat")) {
-    return getCandidateIfCountryMatches("CAT");
-  }
-  if (words.includes("gate")) {
-    return getCandidateIfCountryMatches("GATE");
-  }
-  if (words.includes("nda")) {
-    return getCandidateIfCountryMatches("NDA");
-  }
-  if (words.includes("cds")) {
-    return getCandidateIfCountryMatches("CDS");
-  }
-  if (words.includes("cuet")) {
-    return getCandidateIfCountryMatches("CUET UG");
-  }
-  if (words.includes("clat")) {
-    return getCandidateIfCountryMatches("CLAT");
-  }
-  if (words.includes("bank") || words.includes("ibps") || words.includes("sbi")) {
-    return getCandidateIfCountryMatches("Banking Exams");
-  }
-  if (words.includes("rrb") || words.includes("railway") || words.includes("ntpc")) {
-    return getCandidateIfCountryMatches("RRB NTPC");
-  }
-  if (words.includes("ap") && (clean.includes("advanced placement") || clean.includes("ap "))) {
-    return getCandidateIfCountryMatches("AP Exams");
-  }
-  if (words.includes("gre")) {
-    return getCandidateIfCountryMatches("GRE");
-  }
-  if (words.includes("gmat")) {
-    return getCandidateIfCountryMatches("GMAT");
-  }
-  if (words.includes("ielts")) {
-    return getCandidateIfCountryMatches("IELTS");
-  }
-  if (words.includes("toefl")) {
-    return getCandidateIfCountryMatches("TOEFL");
-  }
-  return null;
-}
-
 // server.ts
 import dotenv from "dotenv";
 import express from "express";
@@ -1588,8 +266,6 @@ import fs from "fs";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
-import crypto from "crypto";
-import { YoutubeTranscript } from "youtube-transcript";
 import rateLimit from "express-rate-limit";
 import xss from "xss";
 dotenv.config();
@@ -1927,14 +603,6 @@ function sanitizeLaTeXInJSON(raw) {
     out += "\\\\";
   }
   return out;
-}
-function repairJsonString(raw) {
-  if (!raw) return "";
-  let str = raw.trim();
-  str = str.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  str = sanitizeLaTeXInJSON(str);
-  str = str.replace(/,\s*([}\]])/g, "$1");
-  return str;
 }
 function safeParseJSON(text, forceType = "none") {
   if (!text) return forceType === "array" ? [] : forceType === "object" ? {} : null;
@@ -3389,8 +2057,6 @@ ${examDirective}
     if (req.file && (!req.file.buffer || req.file.buffer.length === 0)) {
       return res.status(400).json({ error: "The uploaded file is empty. Please select a valid document." });
     }
-    const fileHash = req.file ? crypto.createHash("sha256").update(req.file.buffer).digest("hex") : crypto.createHash("sha256").update(Buffer.from(textInput)).digest("hex");
-    const cacheKey = `${fileHash}_${action}_${format}_${gradeLevel || "std"}_${stream || ""}`;
     const aiClient = getAI();
     let extractedText = "";
     let useRawFile = false;
@@ -3476,14 +2142,14 @@ ${middleSamples}
 --- [FINAL CHAPTERS & CONCLUSION] ---
 ${conclusionSlice}`;
     }
-    let promptText = "";
+    let promptText2 = "";
     let responseMimeType = "text/plain";
     if (action === "audio") {
-      promptText = "You are an engaging, expert study podcast host. Your job is to convert the provided document into a 4-5 minute study audio script (approx 500-700 words). CRITICAL RULE: DO NOT copy and paste the text verbatim. You must extract the high-yield concepts, definitions, and frameworks, and explain them in your own words using a conversational, easy-to-understand tone. Use relatable analogies. Strike a balance between being concise and highly educational. Never sound like you are just reading a textbook. Use the following strict rules:\n1. TONE & STYLE: Conversational, warm, and highly engaging. Speak directly to the listener using 'you', 'we', and 'let's explore this'.\n2. SIMPLICITY & ANALOGIES: Demystify complex terms, explaining them immediately using clear language. Use relatable analogies, but ensure technical definitions, important rules, and key examples are NOT skipped.\n3. PACING & STRUCTURE: Start with an attention-grabbing podcast-style hook or intro (e.g., 'Welcome to your deep study revision briefing...'). Include clear transitions between different chapters or sections. Cover all critical topics from the text sequentially. End with a complete revision summary and an encouraging sign-off.\n4. AUDIO-FRIENDLY FORMATTING: Since this will be spoken aloud, DO NOT use any markdown formatting such as bold (**), italics (*), hashtags (#), or bullet points (-). Write in clean, conversational plain text and paragraphs. Keep sentences clear and punchy for natural breathing pauses.\nDo not include any intro or outro text confirming you understand the instructions. Just output the podcast script directly.";
+      promptText2 = "You are an engaging, expert study podcast host. Your job is to convert the provided document into a 4-5 minute study audio script (approx 500-700 words). CRITICAL RULE: DO NOT copy and paste the text verbatim. You must extract the high-yield concepts, definitions, and frameworks, and explain them in your own words using a conversational, easy-to-understand tone. Use relatable analogies. Strike a balance between being concise and highly educational. Never sound like you are just reading a textbook. Use the following strict rules:\n1. TONE & STYLE: Conversational, warm, and highly engaging. Speak directly to the listener using 'you', 'we', and 'let's explore this'.\n2. SIMPLICITY & ANALOGIES: Demystify complex terms, explaining them immediately using clear language. Use relatable analogies, but ensure technical definitions, important rules, and key examples are NOT skipped.\n3. PACING & STRUCTURE: Start with an attention-grabbing podcast-style hook or intro (e.g., 'Welcome to your deep study revision briefing...'). Include clear transitions between different chapters or sections. Cover all critical topics from the text sequentially. End with a complete revision summary and an encouraging sign-off.\n4. AUDIO-FRIENDLY FORMATTING: Since this will be spoken aloud, DO NOT use any markdown formatting such as bold (**), italics (*), hashtags (#), or bullet points (-). Write in clean, conversational plain text and paragraphs. Keep sentences clear and punchy for natural breathing pauses.\nDo not include any intro or outro text confirming you understand the instructions. Just output the podcast script directly.";
     } else if (action === "flashcards" || action === "flashcards-json") {
       if (action === "flashcards-json") {
         responseMimeType = "application/json";
-        promptText = `Act as an Elite Cognitive Scientist and Active Recall Specialist. Extract the top 10 to 15 most critical high-yield concepts from the provided document into revision flashcards.
+        promptText2 = `Act as an Elite Cognitive Scientist and Active Recall Specialist. Extract the top 10 to 15 most critical high-yield concepts from the provided document into revision flashcards.
         Strict Rules for Flashcards:
         1. ACTIVE RECALL QUESTION: The 'question' must be direct, crisp, and test a single conceptual takeaway.
         2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise and between 15 to 25 words max for rapid active recall. NEVER output long paragraphs.
@@ -3496,10 +2162,10 @@ ${conclusionSlice}`;
           {"question": "What is ...?", "answer": "..."}
         ]`;
       } else {
-        promptText = "Extract the most important facts and concepts from the provided document and format them into 10 high-quality flashcards. Format exactly like this for each:\n\n**Q: [Question]**\n*A: [Answer]*\n\nCRITICAL: If the document contains code tags, HTML, or web development terms (like <div>, <header>, etc.), ALWAYS wrap them in markdown backticks (e.g., `<div>`) so they render as plain text and not formatting. Always provide complete, self-contained sentences for answers.";
+        promptText2 = "Extract the most important facts and concepts from the provided document and format them into 10 high-quality flashcards. Format exactly like this for each:\n\n**Q: [Question]**\n*A: [Answer]*\n\nCRITICAL: If the document contains code tags, HTML, or web development terms (like <div>, <header>, etc.), ALWAYS wrap them in markdown backticks (e.g., `<div>`) so they render as plain text and not formatting. Always provide complete, self-contained sentences for answers.";
       }
     } else if (action === "quiz") {
-      promptText = `You are an expert tutor. Create a 5-question multiple choice quiz based on the provided document.
+      promptText2 = `You are an expert tutor. Create a 5-question multiple choice quiz based on the provided document.
 For each question, provide:
 1. The question text starting with 'Question [N]:'
 2. 4 options labeled A), B), C), D).
@@ -3528,7 +2194,7 @@ At the very end, provide a clear Answer Key. Format strictly using Markdown. If 
       } else if (format === "eli5") {
         selectedFormatName = "Explain Like I'm 5";
       }
-      promptText = `SYSTEM INSTRUCTION: EXPERT SUMMARISER
+      promptText2 = `SYSTEM INSTRUCTION: EXPERT SUMMARISER
 
 You are an expert academic and professional summarizer. Your task is to extract key information from the provided text/document and format it STRICTLY according to the user's requested mode. 
 
@@ -3573,13 +2239,13 @@ IF FORMAT IS "Explain Like I'm 5":
 4. Use short paragraphs to make it visually friendly for beginners.`;
     }
     if (action !== "audio") {
-      promptText += "\n\nOUTPUT QUALITY RULES:\n1. Use ONLY standard markdown: ## headings, ### subheadings, - bullet lists, **bold**, *italic*.\n2. Each bullet point MUST be on its OWN separate line. Never put multiple points on the same line.\n3. MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX): When content includes mathematical equations, scientific notation, or formulas, ALWAYS format them using standard LaTeX: '$...$' for inline (e.g., $E = mc^2$, $F = ma$) or '$$...$$' on their own lines for display equations so they render beautifully with KaTeX.\n4. Ensure there is a blank line before and after every heading and before and after every list.";
+      promptText2 += "\n\nOUTPUT QUALITY RULES:\n1. Use ONLY standard markdown: ## headings, ### subheadings, - bullet lists, **bold**, *italic*.\n2. Each bullet point MUST be on its OWN separate line. Never put multiple points on the same line.\n3. MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX): When content includes mathematical equations, scientific notation, or formulas, ALWAYS format them using standard LaTeX: '$...$' for inline (e.g., $E = mc^2$, $F = ma$) or '$$...$$' on their own lines for display equations so they render beautifully with KaTeX.\n4. Ensure there is a blank line before and after every heading and before and after every list.";
     } else {
-      promptText += "\n\nCRITICAL FORMATTING INSTRUCTIONS: Output ONLY standard, plain ASCII-compatible conversational text. You are STRICTLY FORBIDDEN from using emojis, LaTeX math blocks, special characters, or markdown formatting (like bold, italics, bullet points, or hashtags) as they interfere with text-to-speech rendering.";
+      promptText2 += "\n\nCRITICAL FORMATTING INSTRUCTIONS: Output ONLY standard, plain ASCII-compatible conversational text. You are STRICTLY FORBIDDEN from using emojis, LaTeX math blocks, special characters, or markdown formatting (like bold, italics, bullet points, or hashtags) as they interfere with text-to-speech rendering.";
     }
     const textPart = { text: `${pedagogicalDirective}
 
-${promptText}` };
+${promptText2}` };
     let contentsPayload;
     if (useRawFile && req.file) {
       if (req.file.buffer.length > 14 * 1024 * 1024 && extractedText && extractedText.trim().length > 10) {
@@ -4105,1400 +2771,362 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
       }
     };
     const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
-      contents: [
-        {
-          parts: [
-            imagePart,
-            { text: "Transcribe the handwritten text from this essay image perfectly. Return ONLY the transcribed text. Do not add any conversational filler, intro, outro, or formatting annotations. Keep paragraphs intact as written." }
-          ]
-        }
-      ]
-    });
-    const text = response.text || "";
-    res.json({ text: text.trim() });
-  } catch (error) {
-    console.error("OCR Error:", error);
-    res.status(500).json({ error: error.message || "Failed to transcribe image" });
-  }
-});
-app.post("/api/grade-frq", upload.single("image"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No image provided. Please capture or upload an FRQ answer photo." });
-    }
-    const imagePart = {
-      inlineData: {
-        mimeType: req.file.mimetype,
-        data: req.file.buffer.toString("base64")
-      }
-    };
-    const systemPrompt = `You are a Senior College Board AP Chief Reader, Lead Exam Table Leader, and Master Academic Auditor.
-Your job is to rigorously evaluate uploaded photos for AP Free Response Questions (FRQ) and student handwritten STEM/academic solutions with the authoritative standards of an official AP exam table leader.
-
-=======================================================
-MANDATORY STEP 1: STRICT OPTICAL VERIFICATION (VERIFY FIRST!)
-=======================================================
-Before awarding ANY scores or generating rubrics, carefully examine the physical content of the image.
-
-REJECTION RULE (CRITICAL):
-You MUST immediately REJECT the image if:
-1. NON-ACADEMIC / IRRELEVANT: The photo contains people, selfies, faces, rooms, furniture, vehicles, animals/pets, food, plants, memes, app screenshots, UI graphics, logos, blank paper, or non-educational objects.
-2. MULTIPLE CHOICE QUESTION (MCQ): The photo depicts an objective multiple-choice question with answer options (A, B, C, D) or bubble answer sheets.
-
-IF REJECTED:
-Set:
-- "isValidAcademicAnswer": false
-- "verificationVerdict": "REJECT_NOT_AN_ANSWER" (or "REJECT_MCQ_NOT_ALLOWED" if MCQ)
-- "errorCode": "NO_ACADEMIC_CONTENT" (or "MCQ_DETECTED")
-- "errorMessage": "No valid academic question or student answer was detected in this photo." (or "Multiple Choice Question (MCQ) detected. FRQ Grader strictly evaluates subjective Free Response Questions only.")
-- "detectionReason": Provide a direct, concise description of what was physically identified in the photo (e.g. "The uploaded photo depicts a person / room / non-academic item rather than academic exam work.").
-- "suggestion": "Please take a clear photo of an academic exam question (FRQ) or your handwritten student answer sheet."
-- Set: "totalPointsEarned": 0, "totalPointsPossible": 0, "predictedAPScale": 0, "evaluationSteps": []
-
-ACCEPTANCE CRITERIA:
-Accept the image ONLY if it contains:
-1. "subjective_frq_solution": An authentic handwritten (or typed) student response solving an academic problem with equations, formulas, calculations, or explanatory text.
-2. "subjective_frq_question": A genuine printed or written academic exam problem statement from a textbook, workbook, or past AP exam paper (without student answer).
-3. "question_and_answer": A printed question with student's handwritten work below it.
-
-=======================================================
-EVALUATION PROTOCOL FOR VALID SUBMISSIONS:
-=======================================================
-- Grade strictly according to official College Board AP Scoring Guidelines with the "NO WORK, NO CREDIT" rule.
-- All mathematical expressions, formulas, variables ($x$, $y$, $t$), derivatives, integrals, limits, equations, and units MUST be wrapped in KaTeX math delimiters ($...$ for inline or $$...$$ for display).
-- Break down grading into official rubric parts/steps: Part (a), Part (b), etc.
-- Award pointsEarned (0 to pointsPossible) for each step with clear rubric criteria, student work evaluated, and reader feedback.
-- If it is a question prompt (textbook question without student work): award 0 points earned, show total points possible, provide full model solutions for each step, and Chief Reader advice.
-- Provide professional, concise Chief Reader diagnostic commentary without boilerplate or filler text.
-
-Return ONLY valid raw JSON conforming strictly to this schema:
-{
-  "opticalInspection": {
-    "visibleTextSummary": "Summary of all text/symbols physically visible in image",
-    "imageMedium": "printed_book_or_test_paper" | "notebook_page" | "hybrid_exam_sheet" | "digital_screen_or_graphic" | "non_educational_object",
-    "questionType": "subjective_frq_question" | "subjective_frq_solution" | "mcq_or_objective_question" | "non_academic",
-    "isHandwrittenExamSolution": boolean,
-    "verdict": "GENUINE_EXAM_QUESTION" | "GENUINE_EXAM_ANSWER" | "REJECT_MCQ_NOT_ALLOWED" | "REJECT_NOT_AN_ANSWER",
-    "verdictReason": "Clear explanation of classification"
-  },
-  "verificationVerdict": "GENUINE_EXAM_QUESTION" | "GENUINE_EXAM_ANSWER" | "REJECT_MCQ_NOT_ALLOWED" | "REJECT_NOT_AN_ANSWER",
-  "submissionMode": "question_prompt" | "student_answer" | "question_and_answer" | "mcq_question" | "non_academic",
-  "questionType": "subjective_frq_question" | "subjective_frq_solution" | "mcq_or_objective_question" | "non_academic",
-  "isValidAcademicAnswer": boolean,
-  "detectedContentType": "printed_frq_question" | "handwritten_student_work" | "mcq_or_objective_question" | "app_logo_or_graphic" | "random_object" | "blank_or_unreadable",
-  "hasStudentHandwriting": boolean,
-  "errorCode": "MCQ_DETECTED" | "NO_ACADEMIC_CONTENT" | "NO_STUDENT_WORK_DETECTED",
-  "errorMessage": "Clear message if rejected",
-  "detectionReason": "Detailed explanation of what was detected",
-  "suggestion": "Actionable next step",
-  
-  // Populated when isValidAcademicAnswer is true:
-  "subjectDetected": "AP Course Name (e.g. AP Calculus AB, AP Physics 1)",
-  "questionStatement": "Transcribed question text with KaTeX math ($...$)",
-  "questionTopic": "Official AP CED Topic Name",
-  "transcribedHandwriting": "Transcribed student work with KaTeX math (if student answer)",
-  "totalPointsEarned": 0,
-  "totalPointsPossible": 9,
-  "predictedAPScale": 5,
-  "predictedAPScaleLabel": "AP Score 5" | "Official AP Rubric & Model Solution Benchmark",
-  "evaluationSteps": [
-    {
-      "stepTitle": "Part (a): Derivative / Equation (2 Points)",
-      "pointsEarned": 2,
-      "pointsPossible": 2,
-      "criteria": "Official College Board scoring criteria with KaTeX math",
-      "workEvaluated": "Official Model Solution or Student Work Evaluated with KaTeX math",
-      "feedback": "Chief Reader feedback with KaTeX math",
-      "status": "full" | "partial" | "zero"
-    }
-  ],
-  "chiefReaderSummary": "High-level Chief Reader diagnostic summary and exam strategy",
-  "keyStrengths": [
-    "Key conceptual technique demonstrated"
-  ],
-  "keyMissedOpportunities": [
-    "Common student pitfall or trap on this question type"
-  ],
-  "howToGetFullPoints": [
-    "Actionable exam day tip to secure maximum points"
-  ]
-}`;
-    const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
-      contents: [
-        {
-          parts: [
-            imagePart,
-            { text: systemPrompt }
-          ]
-        }
-      ],
-      config: {
-        responseMimeType: "application/json"
-      },
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
-    });
-    const rawText = response.text || "{}";
-    let parsed;
-    try {
-      parsed = JSON.parse(repairJsonString(rawText));
-    } catch (parseErr) {
-      console.warn("[/api/grade-frq] Direct JSON parse failed, extracting bracketed JSON:", parseErr);
-      const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) {
-        parsed = JSON.parse(repairJsonString(match[0]));
-      } else {
-        throw new Error("Invalid grading format received from AI evaluation engine.");
-      }
-    }
-    const isMCQ = parsed.detectedContentType === "mcq_or_objective_question" || parsed.detectedContentType === "mcq_or_objective_test" || parsed.submissionMode === "mcq_question" || parsed.questionType === "mcq_or_objective_question" || parsed.opticalInspection?.questionType === "mcq_or_objective_question" || parsed.verificationVerdict === "REJECT_MCQ_NOT_ALLOWED" || parsed.errorCode === "MCQ_DETECTED";
-    const isNonAcademic = parsed.detectedContentType === "app_logo_or_graphic" || parsed.detectedContentType === "random_object" || parsed.detectedContentType === "blank_or_unreadable" || parsed.submissionMode === "non_academic" || parsed.questionType === "non_academic" || parsed.opticalInspection?.questionType === "non_academic" || parsed.verificationVerdict === "REJECT_NOT_AN_ANSWER" || parsed.errorCode === "NO_ACADEMIC_CONTENT";
-    if (isMCQ) {
-      parsed.isValidAcademicAnswer = false;
-      parsed.hasStudentHandwriting = false;
-      parsed.totalPointsEarned = 0;
-      parsed.totalPointsPossible = 0;
-      parsed.predictedAPScale = 0;
-      parsed.predictedAPScaleLabel = "Not Scored (MCQ)";
-      parsed.evaluationSteps = [];
-      parsed.parts = [];
-      parsed.errorCode = "MCQ_DETECTED";
-      parsed.errorMessage = "Multiple Choice Question (MCQ) detected. The FRQ Grader strictly evaluates subjective Free Response Questions only.";
-      parsed.detectionReason = parsed.detectionReason || "The uploaded image contains multiple choice questions or options (A, B, C, D) rather than subjective problem solving.";
-      parsed.suggestion = "For multiple-choice questions, please use the Quiz / Practice feature. The FRQ Grader is exclusively for subjective free-response questions and solutions.";
-    } else if (isNonAcademic || parsed.isValidAcademicAnswer === false) {
-      parsed.isValidAcademicAnswer = false;
-      parsed.hasStudentHandwriting = false;
-      parsed.totalPointsEarned = 0;
-      parsed.totalPointsPossible = 0;
-      parsed.predictedAPScale = 0;
-      parsed.predictedAPScaleLabel = "Not Scored";
-      parsed.evaluationSteps = [];
-      parsed.parts = [];
-      parsed.errorCode = parsed.errorCode || "NO_ACADEMIC_CONTENT";
-      parsed.errorMessage = parsed.errorMessage || "No valid academic question or student answer was detected in this photo.";
-      parsed.detectionReason = parsed.detectionReason || parsed.opticalInspection?.verdictReason || "The image does not contain an authentic academic exam question or student solution.";
-      parsed.suggestion = parsed.suggestion || "Please take a clear photo of an academic exam question (FRQ) or your handwritten student answer sheet.";
-    } else {
-      parsed.isValidAcademicAnswer = true;
-      const isQuestionPrompt = parsed.submissionMode === "question_prompt" || parsed.questionType === "subjective_frq_question" || parsed.detectedContentType === "printed_frq_question" || parsed.verificationVerdict === "GENUINE_EXAM_QUESTION";
-      if (isQuestionPrompt) {
-        parsed.submissionMode = "question_prompt";
-        if (!parsed.predictedAPScaleLabel) {
-          parsed.predictedAPScaleLabel = "Official AP Rubric & Model Solution Benchmark";
-        }
-      } else {
-        parsed.submissionMode = parsed.submissionMode || "student_answer";
-      }
-      if (parsed.evaluationSteps && Array.isArray(parsed.evaluationSteps)) {
-        parsed.parts = parsed.evaluationSteps.map((s) => ({
-          ...s,
-          part: s.stepTitle || s.part || "Evaluation Step"
-        }));
-      } else if (parsed.parts && Array.isArray(parsed.parts)) {
-        parsed.evaluationSteps = parsed.parts.map((p) => ({
-          ...p,
-          stepTitle: p.part || p.stepTitle || "Evaluation Step"
-        }));
-      }
-    }
-    res.json(parsed);
-  } catch (error) {
-    console.error("[/api/grade-frq] Error:", error);
-    res.status(500).json({ error: error.message || "Failed to grade FRQ response" });
-  }
-});
-app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
-  try {
-    const files = req.files;
-    if (!files || files.length === 0) {
-      return res.status(400).json({ error: "No images provided" });
-    }
-    const imageParts = files.map((file) => ({
-      inlineData: {
-        mimeType: file.mimetype,
-        data: file.buffer.toString("base64")
-      }
-    }));
-    const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
-      contents: [
-        {
-          parts: [
-            ...imageParts,
-            { text: "Transcribe the handwritten and printed text from these images perfectly, preserving their chronological page order. Return ONLY the combined transcribed text. Do not add any conversational filler, intro, outro, or formatting annotations. Keep paragraphs intact as written." }
-          ]
-        }
-      ]
-    });
-    const text = response.text || "";
-    res.json({ text: text.trim() });
-  } catch (error) {
-    console.error("Multimodal OCR Error:", error);
-    res.status(500).json({ error: error.message || "Failed to transcribe images" });
-  }
-});
-app.post("/api/generate-flashcards", async (req, res) => {
-  try {
-    const text = req.body.text || req.body.topic || req.body.content || "";
-    const topic = req.body.topic || text || "";
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const stream = req.body.stream || req.body.academic_stream;
-    const country = req.body.country || req.body.academic_country;
-    const count = req.body.count;
-    if (!text || !text.trim()) {
-      return res.status(400).json({ error: "Missing text or topic" });
-    }
-    const topicGuard = isOffTopicOrChatter(text);
-    if (topicGuard.isInvalid) {
-      return res.status(400).json({ error: "INVALID_TOPIC", message: topicGuard.reason });
-    }
-    const hasExplicitCount = count !== void 0 && count !== null && count !== "" && !isNaN(parseInt(count));
-    const requestedCount = hasExplicitCount ? Math.min(Math.max(parseInt(count) || 10, 1), 30) : null;
-    const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
-    const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
-    const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream || text);
-    const aiClient = getAI();
-    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
-    const isAllChapters = /all (chapter|unit|domain|topic)|comprehensive|full syllabus/i.test(topic);
-    const allChaptersDirective = isAllChapters ? `
-CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
-- The user has chosen an "ALL CHAPTERS / FULL SYLLABUS" mock assessment specifically for this subject.
-- You MUST systematically distribute the flashcards evenly across ALL the chapters/domains listed in the topic.
-- ABSOLUTELY STRICT SUBJECT ISOLATION: ALL flashcards MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
-` : "";
-    const countDirective = requestedCount ? `
-Your mission is to generate exactly ${requestedCount} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || "Standard"}.
-
-CRITICAL COUNT MANDATE:
-The output JSON array MUST contain EXACTLY ${requestedCount} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount} cards, and never omit questions. The output array length MUST be ${requestedCount}.
-` : `
-Your mission is to generate a comprehensive, high-yield active recall flashcard revision deck calibrated for a student in Grade: ${gradeLevel || "Standard"}.
-
-CRITICAL COMPREHENSIVE CHAPTER / UNIT COVERAGE MANDATE:
-- NO FIXED CARD COUNT: Do NOT restrict yourself to an arbitrary number of flashcards.
-- DYNAMIC FULL-CHAPTER COVERAGE: Thoroughly analyze the selected chapter/unit/topic. Generate as many flashcards as are needed to comprehensively master every foundational definition, core mechanism, governing law/theorem, essential formula, real-world application, common misconception, and key exam takeaway for this chapter/unit without redundancy.
-- Typically, thoroughly covering a chapter or unit requires between 10 to 25+ comprehensive flashcards. Generate as many as required to cover all key subtopics completely.
-`;
-    const systemInstruction = `${gradeDirective}
-${examBlueprintDirective ? `
-OFFICIAL EXAM CALIBRATION DIRECTIVE:
-${examBlueprintDirective}
-` : ""}
-${allChaptersDirective}
-
-Act as an Elite Cognitive Scientist and Active Recall Specialist.
-${countDirective}
-
-CRITICAL ACTIVE RECALL & CONCISE LENGTH RULES:
-1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept appropriate to their grade level.
-2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise, punchy, and between 15 to 25 words max. It must be an active recall mnemonic, definition, or key formula concept designed for rapid revision. NEVER output long multi-sentence paragraphs.
-3. 100% COMPLETE THOUGHTS: The 15-25 word answer must be grammatically complete and self-contained (no trailing '...', no chopped clauses).
-4. LATEX & CODE: If there are formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in backticks (\`<div>\`).
-
-CRITICAL OUTPUT FORMAT:
-You must output ONLY a valid JSON array of objects. Do not wrap in markdown quotes.
-
-Format:
-[
-  {
-    "question": "What is the primary function of mitochondria in eukaryotic cells?",
-    "answer": "Mitochondria generate cellular energy by converting glucose and oxygen into ATP through oxidative phosphorylation and cellular respiration."
-  },
-  {
-    "question": "What is the key principle of Newton's Third Law of Motion?",
-    "answer": "Every interacting force creates an equal and opposite reaction acting simultaneously on two distinct interacting physical objects."
-  }
-]`;
-    const userPromptText = requestedCount ? `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount} cards:
-
-${text}` : `Generate a comprehensive high-yield active recall flashcard deck covering all key concepts, definitions, formulas, and mechanisms for this chapter/topic for a student in Grade: ${gradeLevel || "Standard"}. Generate as many flashcards as needed to master this entire chapter/unit thoroughly without any fixed limit:
-
-${text}`;
-    const response = await safeGenerateContent({
-      gradeLevel,
-      stream,
-      country,
-      targetExam: targetExam2,
-      examBlueprint: examBlueprint2,
-      model: "gemini-flash-lite-latest",
-      contents: [{
-        role: "user",
-        parts: [{ text: userPromptText }]
-      }],
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json",
-        maxOutputTokens: 8192,
-        temperature: 0.2
-      }
-    });
-    let outputText = response.text || "[]";
-    let cards = safeParseJSON(outputText, "array");
-    if (!Array.isArray(cards) || cards.length === 0) {
-      const objParsed = safeParseJSON(outputText, "object");
-      if (objParsed && Array.isArray(objParsed.flashcards)) {
-        cards = objParsed.flashcards;
-      }
-    }
-    if (!Array.isArray(cards) || cards.length === 0) {
-      const match = outputText.match(/\[\s*\{[\s\S]*\}\s*\]/);
-      if (match) {
-        try {
-          cards = JSON.parse(match[0]);
-        } catch (_) {
-        }
-      }
-    }
-    res.json({ flashcards: Array.isArray(cards) ? cards : [] });
-  } catch (error) {
-    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      console.warn("Flashcards quota exceeded:", error.message);
-      return res.json({
-        flashcards: [
-          {
-            question: "\u26A0\uFE0F AI Tutor Notice: Rate Limit / Quota Exceeded",
-            answer: "The Gemini API has exceeded its rate limit. Please wait 60 seconds and try again, or check your API key in settings."
-          }
-        ]
-      });
-    }
-    console.error("Flashcards error:", error);
-    res.status(500).json({ error: error.message || "Failed to generate flashcards" });
-  }
-});
-app.post("/api/generate-pdf-flashcards", upload.single("pdf"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No PDF file uploaded" });
-    }
-    if (req.file.size > 35 * 1024 * 1024) {
-      return res.status(400).json({ error: "File too large. Maximum PDF size is 35MB." });
-    }
-    const count = req.body.count || 15;
-    const gradeLevel = req.body.gradeLevel || req.body.userGrade;
-    const stream = req.body.stream || req.body.academic_stream;
-    const country = req.body.country || req.body.academic_country;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 15, 5), 30);
-    const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
-    const cacheKey = crypto.createHash("sha256").update(req.file.buffer).digest("hex") + `_pdf_flashcards_${requestedCount}`;
-    const systemInstruction = `${gradeDirective}
-
-Act as an Elite Cognitive Scientist and Active Recall Specialist.
-Your mission is to thoroughly read, analyze, and comprehend the attached complete PDF document across all its pages, chapters, diagrams, formulas, tables, and sections.
-Generate exactly ${requestedCount} high-yield, comprehensive active recall revision flashcards covering the most critical concepts throughout the ENTIRE document calibrated for a student in Grade: ${gradeLevel || "Standard"}.
-
-CRITICAL ACTIVE RECALL RULES:
-1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept from the document appropriate to their grade level.
-2. STRICT 15 TO 25 WORDS ANSWER CONSTRAINT: Every 'answer' MUST be strictly concise, punchy, and between 15 to 25 words max. It must be an active recall mnemonic, definition, or key formula concept designed for rapid revision. NEVER output long multi-sentence paragraphs.
-3. 100% COMPLETE THOUGHTS: The 15-25 word answer must be grammatically complete and self-contained (no trailing '...', no chopped clauses).
-4. LATEX & CODE: If there are mathematical formulas, wrap in LaTeX ($...$). If coding/HTML tags, wrap in backticks (\`<div>\`).
-5. FULL DOCUMENT COVERAGE: Distribute questions across the entire document (beginning, middle, and end), not just the first few pages.
-
-CRITICAL OUTPUT FORMAT:
-Output ONLY a valid JSON array of objects directly parseable by JSON.parse.
-
-Format:
-[
-  {
-    "question": "What is ...?",
-    "answer": "..."
-  }
-]`;
-    const pdfPart = {
-      inlineData: {
-        mimeType: req.file.mimetype || "application/pdf",
-        data: req.file.buffer.toString("base64")
-      }
-    };
-    const response = await safeGenerateContent({
-      gradeLevel,
-      stream,
-      country,
-      targetExam,
-      examBlueprint,
-      model: "gemini-flash-lite-latest",
-      contents: [{
-        parts: [
-          pdfPart,
-          { text: `Thoroughly analyze all pages of this complete attached PDF document and generate exactly ${requestedCount} high-yield active recall flashcards in the specified JSON array format for a student in Grade: ${gradeLevel || "Standard"}.` }
-        ]
-      }],
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        responseMimeType: "application/json",
-        maxOutputTokens: 8192,
-        temperature: 0.2
-      }
-    });
-    const outputText = response.text || "[]";
-    let cards = safeParseJSON(outputText, "array");
-    if (!Array.isArray(cards) || cards.length === 0) {
-      const objParsed = safeParseJSON(outputText, "object");
-      if (objParsed && Array.isArray(objParsed.flashcards)) {
-        cards = objParsed.flashcards;
-      }
-    }
-    if (!Array.isArray(cards) || cards.length === 0) {
-      return res.status(500).json({ error: "Failed to parse flashcards from PDF content." });
-    }
-    return res.json({ flashcards: cards });
-  } catch (error) {
-    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      console.warn("PDF Flashcards quota exceeded:", error.message);
-      return res.status(429).json({ error: "API quota limit exceeded. Please try again in 60 seconds." });
-    }
-    console.error("PDF Flashcards Error:", error);
-    return res.status(500).json({ error: error.message || "Failed to generate flashcards from PDF" });
-  }
-});
-async function robustFetchYoutubeTranscript(videoId) {
-  console.log(`[robustFetchYoutubeTranscript] Fetching transcript for video: ${videoId}`);
-  const userAgents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-  ];
-  const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
-  let captionTracks = [];
-  let lastError = null;
-  const innerTubeClients = [
-    {
-      name: "ANDROID",
-      context: {
-        client: {
-          clientName: "ANDROID",
-          clientVersion: "20.10.38"
-        }
-      },
-      userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 14)"
-    },
-    {
-      name: "WEB",
-      context: {
-        client: {
-          clientName: "WEB",
-          clientVersion: "2.20240228.01.00",
-          hl: "en",
-          gl: "US"
-        }
-      },
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    },
-    {
-      name: "IOS",
-      context: {
-        client: {
-          clientName: "IOS",
-          clientVersion: "19.29.1",
-          deviceModel: "iPhone16,2",
-          osName: "iPhone",
-          osVersion: "17.5.1",
-          hl: "en",
-          gl: "US"
-        }
-      },
-      userAgent: "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iPhone OS 17_5_1 like Mac OS X; en_US)"
-    },
-    {
-      name: "TVHTML5",
-      context: {
-        client: {
-          clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-          clientVersion: "1.0",
-          hl: "en",
-          gl: "US"
-        }
-      },
-      userAgent: "Mozilla/5.0 (Chromecast; PlaybackEngine) AppleWebKit/537.36 (KHTML, like Gecko) Kit/6.0.211116.14 Chrome/94.0.4606.111 Safari/537.36"
-    }
-  ];
-  for (const clientConfig of innerTubeClients) {
-    try {
-      const INNERTUBE_API_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
-      console.log(`[robustFetch] Trying InnerTube API (${clientConfig.name} client) for videoId: ${videoId}...`);
-      const resp = await fetchWithTimeout(INNERTUBE_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": clientConfig.userAgent
-        },
-        body: JSON.stringify({
-          context: clientConfig.context,
-          videoId
-        })
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-        if (Array.isArray(tracks) && tracks.length > 0) {
-          captionTracks = tracks;
-          console.log(`[robustFetch] Successfully fetched ${captionTracks.length} caption tracks from InnerTube API (${clientConfig.name})`);
-          break;
-        } else {
-          console.warn(`[robustFetch] InnerTube API (${clientConfig.name}) response lacked captionTracks. Playability:`, data?.playabilityStatus?.status);
-        }
-      } else {
-        console.warn(`[robustFetch] InnerTube API (${clientConfig.name}) returned status: ${resp.status}`);
-      }
-    } catch (err) {
-      console.error(`[robustFetch] InnerTube API (${clientConfig.name}) failed:`, err.message || err);
-      lastError = err;
-    }
-  }
-  if (captionTracks.length === 0) {
-    try {
-      console.log(`[robustFetch] Trying Web Page HTML scraping for videoId: ${videoId}...`);
-      const url = `https://www.youtube.com/watch?v=${videoId}`;
-      const resp = await fetchWithTimeout(url, {
-        headers: {
-          "User-Agent": randomUserAgent,
-          "Accept-Language": "en-US,en;q=0.9"
-        }
-      });
-      if (!resp.ok) {
-        throw new Error(`Web page request failed with status: ${resp.status}`);
-      }
-      const body = await resp.text();
-      if (body.includes('class="g-recaptcha"')) {
-        throw new Error("YouTube blocks request with Recaptcha (Too Many Requests / 429)");
-      }
-      let playerResponse = null;
-      const prefixes = [
-        "var ytInitialPlayerResponse = ",
-        "window['ytInitialPlayerResponse'] = ",
-        "window.ytInitialPlayerResponse = ",
-        "ytInitialPlayerResponse = "
-      ];
-      for (const prefix of prefixes) {
-        const startIndex = body.indexOf(prefix);
-        if (startIndex !== -1) {
-          const jsonStart = startIndex + prefix.length;
-          let depth = 0;
-          for (let i = jsonStart; i < body.length; i++) {
-            if (body[i] === "{") depth++;
-            else if (body[i] === "}") {
-              depth--;
-              if (depth === 0) {
-                try {
-                  playerResponse = JSON.parse(body.slice(jsonStart, i + 1));
-                  break;
-                } catch (_) {
-                }
-              }
-            }
-          }
-          if (playerResponse) break;
-        }
-      }
-      const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-      if (Array.isArray(tracks) && tracks.length > 0) {
-        captionTracks = tracks;
-        console.log(`[robustFetch] Successfully fetched ${captionTracks.length} caption tracks from Web Page`);
-      } else {
-        console.warn(`[robustFetch] No caption tracks found in ytInitialPlayerResponse. Playability:`, playerResponse?.playabilityStatus?.status);
-      }
-    } catch (err) {
-      console.error(`[robustFetch] Web Page scraping failed with error:`, err);
-      lastError = err;
-    }
-  }
-  if (captionTracks.length === 0) {
-    throw lastError || new Error("No caption tracks found or available on this video. Please ensure Closed Captions (CC) are enabled.");
-  }
-  let selectedTrack = captionTracks.find((t) => t.languageCode === "en");
-  if (!selectedTrack) {
-    selectedTrack = captionTracks.find((t) => t.languageCode && t.languageCode.startsWith("en"));
-  }
-  if (!selectedTrack) {
-    selectedTrack = captionTracks[0];
-    console.log(`[robustFetch] English transcript not found. Falling back to first available language: ${selectedTrack.languageCode}`);
-  } else {
-    console.log(`[robustFetch] Selected language track: ${selectedTrack.languageCode}`);
-  }
-  const transcriptURL = selectedTrack.baseUrl;
-  if (!transcriptURL) {
-    throw new Error("Selected caption track has no baseUrl");
-  }
-  console.log(`[robustFetch] Fetching transcript XML from: ${transcriptURL}`);
-  const transcriptResponse = await fetchWithTimeout(transcriptURL, {
-    headers: {
-      "User-Agent": randomUserAgent
-    }
-  });
-  if (!transcriptResponse.ok) {
-    throw new Error(`Failed to fetch transcript XML, status: ${transcriptResponse.status}`);
-  }
-  const xmlText = await transcriptResponse.text();
-  try {
-    const results2 = YoutubeTranscript.parseTranscriptXml(xmlText, selectedTrack.languageCode);
-    if (results2 && results2.length > 0) {
-      return results2;
-    }
-  } catch (parseErr) {
-    console.error("[robustFetch] YoutubeTranscript.parseTranscriptXml failed, using local fallback parser:", parseErr);
-  }
-  const results = [];
-  const RE_XML_TRANSCRIPT = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
-  const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
-  let match;
-  while ((match = pRegex.exec(xmlText)) !== null) {
-    const startMs = parseInt(match[1], 10);
-    const durMs = parseInt(match[2], 10);
-    const inner = match[3];
-    let text = "";
-    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
-    let sMatch;
-    while ((sMatch = sRegex.exec(inner)) !== null) {
-      text += sMatch[1];
-    }
-    if (!text) {
-      text = inner.replace(/<[^>]+>/g, "");
-    }
-    text = decodeEntities(text).trim();
-    if (text) {
-      results.push({
-        text,
-        duration: durMs,
-        offset: startMs,
-        lang: selectedTrack.languageCode
-      });
-    }
-  }
-  if (results.length > 0) return results;
-  const classicResults = [...xmlText.matchAll(RE_XML_TRANSCRIPT)];
-  return classicResults.map((res) => ({
-    text: decodeEntities(res[3]),
-    duration: parseFloat(res[2]) * 1e3,
-    offset: parseFloat(res[1]) * 1e3,
-    lang: selectedTrack.languageCode
-  }));
-}
-function decodeEntities(text) {
-  return text.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16))).replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
-}
-app.post("/api/youtube-summary", async (req, res) => {
-  try {
-    const { url, followUp, previousSummary, gradeLevel } = req.body;
-    if (!url) {
-      return res.status(400).json({ error: "Missing YouTube URL" });
-    }
-    let videoId = "";
-    try {
-      const parsedUrl = new URL(url);
-      if (parsedUrl.hostname === "youtu.be") {
-        videoId = parsedUrl.pathname.slice(1);
-      } else if (parsedUrl.hostname.includes("youtube.com")) {
-        if (parsedUrl.pathname.startsWith("/shorts/")) {
-          videoId = parsedUrl.pathname.split("/")[2];
-        } else {
-          videoId = parsedUrl.searchParams.get("v") || "";
-        }
-      }
-    } catch (e) {
-    }
-    if (!videoId) {
-      const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
-      videoId = match ? match[1] : url;
-    }
-    let title = "";
-    let authorName = "";
-    try {
-      const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`;
-      const oembedRes = await fetchWithTimeout(oembedUrl);
-      if (oembedRes.ok) {
-        const oembedData = await oembedRes.json();
-        title = oembedData.title || "";
-        authorName = oembedData.author_name || "";
-      }
-    } catch (err) {
-      console.error("Failed to fetch oembed details", err);
-    }
-    const fileHash = crypto.createHash("sha256").update(url).digest("hex");
-    if (followUp) {
-      const systemInstruction2 = `You are an expert study coach. The student is asking a follow-up question or requesting an interactive study enhancement based on a previous YouTube video summary.
-Your task is to fulfill the request in a highly informative, educational, and engaging way.
-Keep your response concise, structured with headings, bullet points, and highlight key terms using markdown.
-
-1. TIMESTAMPS INTEGRATION:
-If any specific parts of the video are mentioned, or if referring to specific events, include relevant timestamps formatted exactly as **\u23F1\uFE0F MM:SS** (e.g. **\u23F1\uFE0F 04:20**).
-
-2. INTERACTIVE STUDY SUGGESTIONS:
-At the very end of your response, you MUST output 2-3 new interactive follow-up study suggestions formatted exactly as \`[SUGGESTION: ...]\`, e.g.:
-\`[SUGGESTION: Explain key concepts simpler]\`
-\`[SUGGESTION: Test me with 3 practice questions]\`
-\`[SUGGESTION: Generate a list of key terms]\``;
-      const promptText = `Previous Summary:
-${previousSummary}
-
-Student's Request: "${followUp}"`;
-      const response2 = await safeGenerateContent({
-        gradeLevel,
-        model: "gemini-flash-lite-latest",
-        contents: { parts: [{ text: promptText }] },
-        config: {
-          systemInstruction: { parts: [{ text: systemInstruction2 }] }
-        }
-      });
-      const outputText2 = response2.text || "No response generated.";
-      return res.json({
-        text: outputText2,
-        title: title || "YouTube Video",
-        authorName: authorName || "",
-        videoId
-      });
-    }
-    let transcriptText = "";
-    try {
-      console.log(`Attempting to fetch transcript for video: ${videoId}`);
-      const transcript = await robustFetchYoutubeTranscript(videoId);
-      if (!transcript || transcript.length === 0) {
-        throw new Error("No transcript data returned");
-      }
-      console.log(`Successfully fetched transcript for ${videoId} using robust fetcher`);
-      transcriptText = transcript.map((t) => {
-        const totalSec = Math.floor((t.offset || 0) / 1e3);
-        const min = Math.floor(totalSec / 60);
-        const sec = totalSec % 60;
-        const timestampStr = `[${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}]`;
-        return `${timestampStr} ${t.text}`;
-      }).join(" ");
-      if (transcriptText.length > 25e4) {
-        transcriptText = transcriptText.substring(0, 25e4) + "... [transcript truncated for length]";
-      }
-      if (transcriptText.trim().split(/\s+/).length < 20) {
-        throw new Error("Transcript too short for meaningful summary");
-      }
-    } catch (e) {
-      console.warn("YouTube transcript extraction unavailable, returning strict fallback:", e.message || e);
-      return res.status(400).json({
-        error: "\u26A0\uFE0F I couldn't read the subtitles for this video. Please try pasting the video's transcript directly into the Text Note-Maker."
-      });
-    }
-    const transcriptWordCount = transcriptText.trim().split(/\s+/).filter((w) => w.length > 0).length;
-    if (transcriptWordCount < 50) {
-      return res.status(400).json({
-        error: "\u26A0\uFE0F I couldn't read the subtitles for this video. Please try pasting the video's transcript directly into the Text Note-Maker."
-      });
-    }
-    const systemInstruction = `You are an AI assistant tasked with creating high-yield study notes from YouTube videos. Once you have the transcript, create a structured summary with clear headings, bullet points, and key takeaways.
-    
-1. TIMESTAMPS INTEGRATION:
-For each major bullet point, key concept, or important takeaway, locate the closest timestamp in the provided text (formatted as [MM:SS]) and prepend it to the bullet point styled exactly as **\u23F1\uFE0F MM:SS** (e.g., **\u23F1\uFE0F 04:20**). Do not guess timestamps if none are in the transcript, but if they are, use them.
-
-2. INTERACTIVE STUDY SUGGESTIONS:
-At the very end of your notes, always include 3 helpful interactive study suggestions wrapped in brackets like \`[SUGGESTION: ...]\`, for example:
-\`[SUGGESTION: Explain key concepts simpler]\`
-\`[SUGGESTION: Give me a quick 3-question quiz]\`
-\`[SUGGESTION: Deep dive into the first half]\``;
-    const response = await safeGenerateContent({
-      gradeLevel,
-      model: "gemini-flash-lite-latest",
-      contents: { parts: [{ text: transcriptText }] },
-      config: {
-        systemInstruction: { parts: [{ text: systemInstruction }] }
-      }
-    });
-    const outputText = response.text || "No summary generated.";
-    res.json({
-      text: outputText,
-      title: title || "YouTube Video",
-      authorName: authorName || "",
-      videoId
-    });
-  } catch (error) {
-    if (error.isRateLimit || error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      console.warn("YouTube summary quota exceeded:", error.message);
-      return res.status(200).json({
-        text: "The YouTube video analysis is currently experiencing high demand. Please try summarizing again in a few moments."
-      });
-    }
-    console.error("YouTube summary error:", error);
-    res.status(500).json({ error: error.message || "Failed to generate summary" });
-  }
-});
-function getIntelligentExamFallback(examName, country) {
-  const lower = (examName || "").toLowerCase();
-  const cLower = (country || "").toLowerCase();
-  if (cLower.includes("korea") || lower.includes("csat") || lower.includes("suneung") || lower.includes("\uC218\uB2A5") || lower.includes("\uB300\uD559\uC218\uD559\uB2A5\uB825\uC2DC\uD5D8")) {
-    return {
-      subjects: [
-        { id: "Korean_Language", title: "Korean Language (\uAD6D\uC5B4)", subtitle: "Reading, Literature, Speech & Writing (\uD654\uBC95\uACFC \uC791\uBB38) or Language & Media (\uC5B8\uC5B4\uC640 \uB9E4\uCCB4)", icon: "\u{1F4D6}" },
-        { id: "Mathematics", title: "Mathematics (\uC218\uD559)", subtitle: "Common Math I/II + Calculus (\uBBF8\uC801\uBD84) / Probability & Stats (\uD655\uD1B5) / Geometry (\uAE30\uD558)", icon: "\u{1F4D0}" },
-        { id: "English", title: "English (\uC601\uC5B4)", subtitle: "Listening & Reading Comprehension (Criterion-Referenced)", icon: "\u{1F310}" },
-        { id: "Korean_History", title: "Korean History (\uD55C\uAD6D\uC0AC)", subtitle: "Mandatory National Korean History Evaluation", icon: "\u{1F3DB}\uFE0F" },
-        { id: "Inquiry_Studies", title: "Inquiry Studies (\uD0D0\uAD6C - Science & Social Studies)", subtitle: "Physics, Chemistry, Life Science, Earth Science / Ethics, History, Geography", icon: "\u{1F52C}" }
-      ],
-      grades: [
-        { id: "Grade_12_Senior", label: "High School Senior (Grade 12 / \uACE03)", desc: "Official CSAT / Suneung Candidate Year", isCollege: false },
-        { id: "Jaesusaeng_Repeater", label: "Jaesusaeng (Repeater / \uC7AC\uC218\uC0DD)", desc: "Dedicated Full-Time Suneung Preparation", isCollege: false },
-        { id: "Grade_11_Junior", label: "High School Junior (Grade 11 / \uACE02)", desc: "Pre-CSAT Core Foundation Year", isCollege: false }
-      ]
-    };
-  }
-  if (lower.includes("psc") || lower.includes("civil") || lower.includes("public") || lower.includes("daroga") || lower.includes("si") || lower.includes("constable") || lower.includes("police") || lower.includes("ssc") || lower.includes("clerk") || lower.includes("recruitment") || lower.includes("defence") || lower.includes("army") || lower.includes("navy") || lower.includes("air force") || lower.includes("patwari") || lower.includes("lekhpal") || lower.includes("bpsc") || lower.includes("uppsc") || lower.includes("mppsc") || lower.includes("ras") || lower.includes("rpsc") || lower.includes("wbpsc") || lower.includes("jpsc")) {
-    return {
-      subjects: [
-        { id: "General_Studies", title: "General Studies (GS)", subtitle: "Indian History, Polity, Geography, Economy & Environment", icon: "\u{1F3DB}\uFE0F" },
-        { id: "Quantitative_Aptitude_Math", title: "Quantitative Aptitude & Mathematics", subtitle: "Arithmetic, Number Systems, Algebra & Data Interpretation", icon: "\u{1F4D0}" },
-        { id: "General_Intelligence_Reasoning", title: "General Intelligence & Reasoning", subtitle: "Verbal, Non-Verbal & Analytical Reasoning", icon: "\u{1F9E0}" },
-        { id: "Language_Hindi_English", title: "Language (General Hindi & English)", subtitle: "Grammar, Comprehension, Vocabulary & Error Spotting", icon: "\u{1F4DA}" },
-        { id: "Current_Affairs_General_Science", title: "Current Affairs & Everyday Science", subtitle: "National/International Events & General Science", icon: "\u{1F30D}" }
-      ],
-      grades: [
-        { id: "Graduate_Aspirant", label: "Graduate Full-Time Aspirant", desc: "Dedicated Full-Time Preparation", isCollege: true },
-        { id: "Final_Year_Student", label: "Final Year Undergrad", desc: "College Graduation Year Candidate", isCollege: true },
-        { id: "Working_Professional", label: "Working Professional", desc: "Preparing along with employment", isCollege: true }
-      ]
-    };
-  }
-  if (lower.includes("commerce") || lower.includes("ca") || lower.includes("cma") || lower.includes("cs") || lower.includes("account") || lower.includes("finance") || lower.includes("b.com") || lower.includes("m.com") || lower.includes("tax")) {
-    return {
-      subjects: [
-        { id: "Accountancy", title: "Accountancy & Financial Statements", subtitle: "Accounting Principles, Partnership & Company Accounts", icon: "\u{1F4CA}" },
-        { id: "Business_Studies", title: "Business Studies & Management", subtitle: "Principles of Management, Marketing, Planning & Finance", icon: "\u{1F4BC}" },
-        { id: "Economics", title: "Economics (Micro & Macro)", subtitle: "National Income, Demand, Supply, Banking & Indian Economy", icon: "\u{1F4C8}" },
-        { id: "Business_Mathematics", title: "Business Mathematics & Statistics", subtitle: "Financial Mathematics, Matrices & Probability", icon: "\u{1F4D0}" }
-      ],
-      grades: [
-        { id: "Class_12_Commerce", label: "Class 12 Commerce", desc: "Senior Secondary Commerce Board Year", isCollege: false },
-        { id: "Undergraduate_Commerce", label: "B.Com / BBA Undergrad", desc: "Commerce Degree Candidate", isCollege: true },
-        { id: "Professional_Aspirant", label: "Professional Aspirant", desc: "Full-Time Financial Course Prep", isCollege: true }
-      ]
-    };
-  }
-  if (lower.includes("law") || lower.includes("clat") || lower.includes("judiciary") || lower.includes("llb") || lower.includes("ll.b") || lower.includes("bar") || lower.includes("legal")) {
-    return {
-      subjects: [
-        { id: "Legal_Reasoning", title: "Legal Reasoning & Constitutional Law", subtitle: "Legal Principles, Constitutional Articles, Torts & Contracts", icon: "\u2696\uFE0F" },
-        { id: "Current_Affairs_GK", title: "Current Affairs & Static GK", subtitle: "Contemporary National & Global Events, Legal News", icon: "\u{1F3DB}\uFE0F" },
-        { id: "Logical_Reasoning", title: "Logical & Analytical Reasoning", subtitle: "Arguments, Premises, Deductions & Syllogisms", icon: "\u{1F9E0}" },
-        { id: "English_Language", title: "English Language & Comprehension", subtitle: "Vocabulary, Passage Comprehension & Grammar", icon: "\u{1F4DA}" }
-      ],
-      grades: [
-        { id: "Class_12_Law", label: "Class 12 (Pre-Law)", desc: "12th Appearing NLU Aspirant", isCollege: false },
-        { id: "Law_Graduate", label: "Law Graduate (LL.B)", desc: "Judiciary / PG Law Candidate", isCollege: true }
-      ]
-    };
-  }
-  if (lower.includes("arts") || lower.includes("humanities") || lower.includes("history") || lower.includes("polity") || lower.includes("sociology") || lower.includes("geography") || lower.includes("b.a")) {
-    return {
-      subjects: [
-        { id: "History", title: "History (Ancient, Medieval, Modern & World)", subtitle: "Civilizations, Freedom Struggles & World Events", icon: "\u{1F3DB}\uFE0F" },
-        { id: "Political_Science", title: "Political Science & Civics", subtitle: "Political Theory, Constitutions & Governance", icon: "\u{1F310}" },
-        { id: "Geography", title: "Geography (Physical & Human)", subtitle: "Landforms, Climate, Resources & Demographics", icon: "\u{1F5FA}\uFE0F" },
-        { id: "Economics_Development", title: "Economics & Development", subtitle: "Indian Economic Development & Global Trends", icon: "\u{1F4CA}" }
-      ],
-      grades: [
-        { id: "Class_12_Arts", label: "Class 12 Humanities", desc: "Senior Secondary Arts / Humanities", isCollege: false },
-        { id: "Undergraduate_Arts", label: "B.A. Undergrad Aspirant", desc: "College Humanities Candidate", isCollege: true }
-      ]
-    };
-  }
-  return {
-    subjects: [
-      { id: "Physics", title: "Physics", subtitle: "Mechanics, Optics, Electromagnetism & Modern Physics", icon: "\u26A1" },
-      { id: "Chemistry", title: "Chemistry", subtitle: "Physical, Inorganic, Coordination & Organic Chemistry", icon: "\u{1F9EA}" },
-      { id: "Mathematics", title: "Mathematics", subtitle: "Calculus, Algebra, Geometry & Vectors", icon: "\u{1F4D0}" },
-      { id: "Biology", title: "Biology & Life Sciences", subtitle: "Genetics, Cell Biology, Physiology & Ecology", icon: "\u{1F9EC}" },
-      { id: "English", title: "English Language & Literature", subtitle: "Reading Comprehension, Writing & Grammar", icon: "\u{1F4DA}" }
-    ],
-    grades: [
-      { id: "Class 12", label: "Class 12 / Senior Secondary", desc: "12th Board / Entrance Prep Year", isCollege: false },
-      { id: "Class 11", label: "Class 11 / 1st Year", desc: "11th Grade Early Foundation", isCollege: false },
-      { id: "Dropper / Repeater", label: "Dedicated Full-Time Aspirant", desc: "Comprehensive Prep / Gap Year", isCollege: false }
-    ]
-  };
-}
-app.post("/api/verify-and-research-exam", async (req, res) => {
-  try {
-    const { country, examName } = req.body;
-    if (!examName || typeof examName !== "string" || !examName.trim()) {
-      return res.status(400).json({
-        isValid: false,
-        errorMessage: "Please enter an exam name."
-      });
-    }
-    const trimmedExam = examName.trim();
-    const userCountry = sanitizeCountry(country, "Global");
-    const preVerified = findPreVerifiedExam(trimmedExam, userCountry);
-    if (preVerified) {
-      console.log(`[verify-and-research-exam] Fast-path hit for "${trimmedExam}" -> "${preVerified.officialExamName}" (${preVerified.country})`);
-      return res.json({
-        isValid: true,
-        shortName: preVerified.shortName || trimmedExam,
-        officialExamName: preVerified.officialExamName,
-        detectedCountry: preVerified.country,
-        hasElectives: preVerified.hasElectives,
-        grades: preVerified.grades,
-        subjects: preVerified.subjects
-      });
-    }
-    const promptText = `
-User Selected Country / Region: "${userCountry}"
-User Entered Exam Name: "${trimmedExam}"
-
-TASK:
-You are an authoritative global educational curriculum verification engine. Your task is to verify if "${trimmedExam}" is a real, recognized academic examination AND research its official subjects and preparation grades.
-MANDATE ON SOURCES: When conducting live research for "${trimmedExam}", consult strictly official examination authority portals, education ministry gazettes, and official board websites (.gov, .nic.in, .ac.in, .org, official testing agencies). Strictly ignore informal coaching blogs, commercial ads, or unverified 3rd-party aggregator websites.
-
-1. COUNTRY AND JURISDICTION MATCH VALIDATION:
-   - The user has explicitly selected their study country as: "${userCountry}".
-   - Check if "${trimmedExam}" is an official examination conducted in "${userCountry}", OR if it is an internationally recognized qualification taken globally (such as SAT, ACT, AP Exams, IELTS, TOEFL, GRE, GMAT, Cambridge IGCSE, or International A Levels).
-   - IF "${trimmedExam}" is an official domestic examination belonging strictly to a DIFFERENT country (for example, the user selected "${userCountry}" but entered an exam exclusive to another country, such as NEET/JEE/UPSC/SSC which belong to India; or CSAT/Suneung which belongs to South Korea; or KCET/MHT CET which belong to Indian states):
-     * You MUST set "isValid": false
-     * Set "errorMessage": "'${trimmedExam}' is an official examination conducted in [Native Country of Exam], not in ${userCountry}. Please enter an examination conducted in ${userCountry} or change your country in Step 1."
-   - IF "${trimmedExam}" is random gibberish (e.g. "asdfgh", "test1234", "qwerty"), a conversational sentence, or completely non-existent:
-     * Set "isValid": false
-     * Set "errorMessage": "We could not find an official examination named '${trimmedExam}' for ${userCountry}. Please check the spelling or enter a recognized exam name."
-
-2. OFFICIAL CURRICULUM EXTRACTION (When "isValid": true):
-   - Set "isValid": true
-   - Set "detectedCountry": "${userCountry}"
-
-3. OFFICIAL SUBJECTS RESEARCH:
-   - If VALID ("isValid": true):
-     * Provide the standardized full title in "officialExamName".
-     * Every subject with its OWN examination paper MUST be an individual separate item.
-     * List 3 to 12 authentic official subjects for this examination.
-     * For each subject:
-       - "id": Clean identifier string without spaces or slashes (e.g. "Physics", "Chemistry", "Mathematics", "Biology")
-       - "title": Clean official subject title
-       - "subtitle": Brief syllabus topic summary
-       - "icon": An appropriate emoji icon (e.g. "\u26A1", "\u{1F9EA}", "\u{1F4D0}", "\u{1F9EC}", "\u{1F4BB}", "\u{1F4DA}", "\u{1F3DB}\uFE0F", "\u{1F4CA}")
-
-4. OFFICIAL GRADES / PREPARATION CLASSES RESEARCH:
-   - Research 3 to 5 authentic preparation classes, grades, or stages appropriate for "${trimmedExam}".
-   - For each grade item:
-     - "id": Clean identifier string (e.g., "Class 12", "11th Grade", "Dropper / Repeater", "Year 11")
-     - "label": Short display title
-     - "desc": Informative subtitle
-     - "isCollege": boolean
-
-OUTPUT REQUIREMENT:
-Output ONLY a single valid JSON object.
-Format:
-{
-  "isValid": true,
-  "officialExamName": "Full Official Name",
-  "detectedCountry": "Native Country or Global",
-  "hasElectives": false,
-  "grades": [
-    { "id": "Class 12", "label": "Class 12", "desc": "12th Board Appearing & Senior Secondary", "isCollege": false }
-  ],
-  "subjects": [
-    { "id": "Physics", "title": "Physics", "subtitle": "Core curriculum topics", "icon": "\u26A1" }
-  ]
-}
-OR if completely non-existent / fake / gibberish:
-{
-  "isValid": false,
-  "errorMessage": "Helpful error message for user explaining why it could not be found."
-}
-`;
-    const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
+      model: "gemini-2.5-flash",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: {
           parts: [{
-            text: "You are an elite academic curriculum research engine. You verify standardized examinations globally, accommodate international and national curricula with auto-country detection, and extract exact official curriculum subjects and authentic student preparation classes. Output ONLY valid JSON."
+            text: `You are an authoritative global educational assessment and curriculum researcher.
+CRITICAL MANDATE: Research and extract STRICTLY the official syllabus and curriculum of "${normExam}" in "${normCountry}" for Grade "${normGrade}".
+STRICTLY NEVER contaminate with or inject syllabus from other examinations or countries (e.g., if researching SAT/ACT/AP, NEVER include Indian SSC/NEET topics like "Pipes and Cisterns" or "Indian Constitution"; if researching Korean CSAT, provide authentic CSAT domains; if researching NEET/JEE/SSC, provide authentic NTA/SSC syllabus).
+Every chapter and every subtopic MUST be 100% authentic to "${normExam}".
+Output ONLY a single valid JSON object.`
           }]
         },
         tools: [{ googleSearch: {} }],
         temperature: 0.1,
-        maxOutputTokens: 3e3
+        maxOutputTokens: 8192
       }
     });
-    const rawText = response.text || "";
-    const parsed = safeParseJSON(rawText, "object");
-    if (!parsed || typeof parsed.isValid !== "boolean") {
-      if (rawText.toLowerCase().includes("not exist") || rawText.toLowerCase().includes("invalid")) {
-        return res.json({
-          isValid: false,
-          errorMessage: `We could not verify the exam "${trimmedExam}". Please check the spelling or enter a recognized exam name.`
-        });
-      }
-      if (parsed && Array.isArray(parsed.subjects) && parsed.subjects.length > 0) {
-        return res.json({
-          isValid: true,
-          officialExamName: parsed.officialExamName || trimmedExam,
-          detectedCountry: parsed.detectedCountry || userCountry,
-          hasElectives: typeof parsed.hasElectives === "boolean" ? parsed.hasElectives : parsed.subjects.length >= 6,
-          grades: Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades : void 0,
-          subjects: parsed.subjects
-        });
-      }
-      const intelligent2 = getIntelligentExamFallback(trimmedExam, userCountry);
-      return res.json({
-        isValid: true,
-        officialExamName: trimmedExam,
-        detectedCountry: userCountry !== "Global" ? userCountry : "India",
-        hasElectives: intelligent2.subjects.length >= 6,
-        grades: intelligent2.grades,
-        subjects: intelligent2.subjects
-      });
-    }
-    if (!parsed.isValid) {
-      return res.json({
-        isValid: false,
-        errorMessage: parsed.errorMessage || `We could not verify "${trimmedExam}". Please enter a recognized standardized exam name.`
-      });
-    }
-    const intelligent = getIntelligentExamFallback(trimmedExam, userCountry);
-    const subjects = Array.isArray(parsed.subjects) && parsed.subjects.length > 0 ? parsed.subjects : intelligent.subjects;
-    const grades = Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades : intelligent.grades;
-    return res.json({
-      isValid: true,
-      officialExamName: parsed.officialExamName || trimmedExam,
-      detectedCountry: parsed.detectedCountry || userCountry,
-      hasElectives: typeof parsed.hasElectives === "boolean" ? parsed.hasElectives : subjects.length >= 6,
-      grades,
-      subjects
-    });
-  } catch (error) {
-    console.error("[verify-and-research-exam] Error:", error);
-    if (req.body?.examName && typeof req.body.examName === "string" && req.body.examName.trim().length >= 2) {
-      const fallbackExam = req.body.examName.trim();
-      const detectedCountry = sanitizeCountry(req.body.country, "India");
-      const intelligent = getIntelligentExamFallback(fallbackExam, detectedCountry);
-      return res.json({
-        isValid: true,
-        officialExamName: fallbackExam,
-        detectedCountry,
-        hasElectives: intelligent.subjects.length >= 6,
-        grades: intelligent.grades,
-        subjects: intelligent.subjects
-      });
-    }
-    res.status(500).json({
-      error: "Could not verify exam right now. Please try again."
-    });
-  }
-});
-app.post("/api/deep-research-exam-blueprint", async (req, res) => {
-  try {
-    const { country, examName, grade, subjects } = req.body;
-    if (!examName || !subjects || !Array.isArray(subjects) || subjects.length === 0) {
-      return res.status(400).json({ error: "Missing exam name or subjects" });
-    }
-    const normCountry = sanitizeCountry(country, "Global");
-    const normExam = (examName || "Standardized Examination").trim();
-    const normGrade = (grade || "Senior Secondary").trim();
-    const cleanSubjects = subjects.map((s) => String(s).trim()).filter(Boolean);
-    const cacheKey = `${normCountry.toLowerCase()}__${normExam.toLowerCase()}__${normGrade.toLowerCase()}__${cleanSubjects.slice().sort().join("+").toLowerCase()}`;
-    const catalogMatch = findCatalogExamBlueprint(normExam, normCountry);
-    const promptText = `
-User Selected Country: "${normCountry}"
-Target Examination: "${normExam}"
-Student Grade / Level: "${normGrade}"
-Selected Subjects: ${JSON.stringify(cleanSubjects)}
-
-TASK:
-You are an authoritative global educational curriculum and assessment research engine.
-Conduct deep web research strictly using official examination authority guidelines (e.g. NTA, NMC, SSC, UPSC, CBSE, NCERT, CollegeBoard, ACT, Ofqual, Cambridge Assessment, etc.).
-STRICTLY IGNORE informal coaching blogs, commercial ads, or outdated SEO aggregator pages.
-
-You MUST research and return two major sections:
-1. "examOverview":
-   - "examName": Full standardized official examination name.
-   - "country": Official native country or educational jurisdiction.
-   - "officialAuthority": Official conducting authority (e.g., "Staff Selection Commission", "National Testing Agency", "CBSE").
-   - "examType": Real exam classification (e.g., "National Central Government Recruitment", "Pre-Medical Entrance", "Senior Secondary Board").
-   - "examFormat": Real test mode (e.g., "Computer Based Examination (CBT)", "Pen and Paper Mode (OMR Based)", "Descriptive Written").
-   - "totalExamMarks": Aggregate total marks of the full paper across all sections (e.g. 200, 720, 300, 100).
-   - "totalQuestions": Aggregate total questions in the full examination.
-   - "hasSubjective": boolean (true if subjective/essay papers exist, false if strictly objective MCQ).
-   - "hasNegativeMarking": boolean (true if negative marking exists).
-   - "negativeFormula": Concise description of negative marking formula (e.g. "+2 correct, -0.50 incorrect" or "+4 correct, -1 incorrect").
-   - "examSchedule": {
-       "examStartDate": "Official or officially expected start date for the upcoming cycle (e.g. 'September 9, 2027', 'May 3, 2027', 'April 4, 2027', 'December 6, 2026'). Must be in clean English.",
-       "examEndDate": "Official end date if exam has a multi-day testing window (or same as start date)",
-       "daysRemaining": integer days remaining until exam start date from today,
-       "scheduleStatus": "Official Confirmed" | "Annual Schedule Announced" | "Tentative Notification Window",
-       "cycleLabel": "Clean label of upcoming cycle, e.g. '2027 Annual Cycle' or 'Tier 1 Examination Window'",
-       "officialSourceNote": "Official conducting authority notification / calendar source"
-     }
-
-2. "subjectsBlueprint":
-   For EACH subject in ${JSON.stringify(cleanSubjects)}, extract and curate:
-   - "subjectName": Clean subject name matching ${JSON.stringify(cleanSubjects)}.
-   - "totalMarks": Official total marks allocated for this subject in ${normExam} (e.g. 50 in SSC CGL, 180 in NEET, 100 in JEE/CBSE).
-   - "totalQuestions": Official total questions presented for this subject in the paper.
-   - "attemptRequired": Exact number of questions the student must attempt (e.g. 25, 45 out of 50).
-   - "markingScheme": Exact official marking formula (e.g. "+2 correct, -0.50 incorrect, 0 unattempted" or "+4 correct, -1 incorrect").
-   - "negativeMarking": Exact numerical negative penalty (e.g. -0.50, -1, -0.25, or 0).
-   - "marksPerCorrect": Exact numerical positive marks (e.g. 2, 4, 1).
-   - "questionFormats": Array of authentic question formats in this subject (e.g. ["Single Choice Objective MCQ", "Data Interpretation", "Assertion-Reason"]).
-   - "mcqStyle": {
-       "optionsCount": 4 or 5,
-       "style": "Concise description of how MCQs are asked in this exam for this subject (e.g. speed calculation, conceptual NCERT line verification, grammar exception traps)",
-       "negativePenalty": "e.g. -0.50 marks"
-     }
-   - "subjectiveStyle": {
-       "hasSubjective": boolean,
-       "format": "e.g. Short answer, Long derivation, Essay, or N/A - Objective CBT Only",
-       "wordLimits": "e.g. 150-200 words, or N/A",
-       "markingRubric": "Step marking, concept definition, diagram rubric, or N/A"
-     }
-   - "nomenclature": "Chapters" | "Units" | "Domains" | "Topics".
-   - "coreUnits": Array containing the 100% COMPLETE, EXHAUSTIVE, AUTHENTIC official chapters / units for this subject as prescribed in the official exam syllabus!
-     *** CRITICAL MANDATE ON ALL CHAPTERS (ZERO GENERIC FILLERS) ***:
-     - DO NOT clamp or fix the list to 4 or 6 generic items!
-     - List ALL official chapters that exist in this subject (e.g. all 19-23 chapters for SSC CGL Quant; all 28-32 chapters for NEET Biology; all 14-16 chapters for CBSE).
-     - STRICTLY PROHIBITED: NEVER invent generic filler names like 'Theoretical Frameworks', 'Core Foundations & Principles', 'Unit 1'. Every chapter MUST be the real, recognized chapter name taught by educators and tested by the authority.
-   - "subTopics": Object where EVERY key is an exact chapter name from "coreUnits", mapping to 3 to 6 authentic micro-concepts.
-   - "detailedNotesGuidelines": Actionable instructions for generating full detailed study notes for this subject (e.g. formulas, proofs, named reactions, constitutional articles).
-   - "revisionGuidelines": Actionable instructions for generating short revision cheat sheets, formula summaries, and mnemonics for this subject.
-   - "essayTone": IF this subject is English, Reading, Writing, or a Language paper, provide the official essay tone and academic format (e.g. "Formal, structured thesis, standard academic prose, precise grammatical register, no slang"). If NOT a language subject, set to null.
-   - "examTone": Concise description of real exam difficulty and question style.
-   - "officialSource": Official authority or bulletin name.
-
-OUTPUT REQUIREMENT:
-Output ONLY a single valid JSON object. No explanation text or markdown outside JSON.
-Format:
-{
-  "examOverview": {
-    "examName": "${normExam}",
-    "country": "${normCountry}",
-    "officialAuthority": "Official Testing Board",
-    "examType": "National Competitive / Board",
-    "examFormat": "CBT / OMR / Descriptive",
-    "totalExamMarks": 200,
-    "totalQuestions": 100,
-    "hasSubjective": false,
-    "hasNegativeMarking": true,
-    "negativeFormula": "+2 correct, -0.50 incorrect",
-    "examSchedule": {
-      "examStartDate": "September 9, 2027",
-      "examEndDate": "September 26, 2027",
-      "daysRemaining": 309,
-      "scheduleStatus": "Official Confirmed",
-      "cycleLabel": "2027 Official Examination Cycle",
-      "officialSourceNote": "Official Examination Calendar"
-    }
-  },
-  "subjectsBlueprint": {
-    "${cleanSubjects[0]}": {
-      "subjectName": "${cleanSubjects[0]}",
-      "totalMarks": 50,
-      "totalQuestions": 25,
-      "attemptRequired": 25,
-      "markingScheme": "+2 correct, -0.50 incorrect, 0 unattempted",
-      "negativeMarking": -0.50,
-      "marksPerCorrect": 2,
-      "questionFormats": ["Single Choice Objective MCQ", "Data Interpretation"],
-      "mcqStyle": {
-        "optionsCount": 4,
-        "style": "Fast calculation, multi-step word problems",
-        "negativePenalty": "-0.50"
-      },
-      "subjectiveStyle": {
-        "hasSubjective": false,
-        "format": "N/A - Objective only",
-        "wordLimits": "N/A",
-        "markingRubric": "N/A"
-      },
-      "nomenclature": "Chapters",
-      "coreUnits": ["Real Chapter 1", "Real Chapter 2"],
-      "subTopics": {
-        "Real Chapter 1": ["Micro Topic 1", "Micro Topic 2"]
-      },
-      "detailedNotesGuidelines": "Proofs, standard formulas, step-by-step problem templates",
-      "revisionGuidelines": "Formula cheat sheets, shortcuts, identity tables",
-      "essayTone": null,
-      "examTone": "Competitive speed and accuracy",
-      "officialSource": "Official Guidelines"
-    }
-  }
-}
-`;
-    const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
-      contents: { parts: [{ text: promptText }] },
-      config: {
-        systemInstruction: {
-          parts: [{
-            text: "You are an elite educational assessment and testing agency researcher. You research official exam blueprints, marking schemes, and question patterns with absolute precision. Output ONLY valid JSON."
-          }]
-        },
-        tools: [{ googleSearch: {} }],
-        temperature: 0.1,
-        maxOutputTokens: 4e3
-      }
-    });
-    const rawText = response.text || "";
+    let rawText = (response.text || "").trim();
+    if (rawText.startsWith("```json")) rawText = rawText.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+    else if (rawText.startsWith("```")) rawText = rawText.replace(/^```\s*/i, "").replace(/```$/i, "").trim();
     let parsed = safeParseJSON(rawText, "object");
     const isDutch = normExam.toLowerCase().includes("colloquium") || normCountry.toLowerCase().includes("netherland");
     const defaultNomenclature = isDutch ? "Domains" : normExam.toLowerCase().includes("ap") ? "Units" : "Chapters";
-    const getAuthenticFallbackUnits = (subj) => {
-      const lower = subj.toLowerCase();
+    const getExamAwareUnitsAndSubtopics = (subj, exam, country) => {
+      const lowerSubj = subj.toLowerCase();
+      const lowerExam = exam.toLowerCase();
+      const lowerCountry = country.toLowerCase();
       if (catalogMatch && catalogMatch.subjects[subj]) {
-        return catalogMatch.subjects[subj].coreUnits;
+        const cat = catalogMatch.subjects[subj];
+        const units2 = Array.isArray(cat.coreUnits) ? cat.coreUnits : [];
+        const subTopics2 = cat.subTopics ? { ...cat.subTopics } : {};
+        units2.forEach((u) => {
+          if (!subTopics2[u] || subTopics2[u].length === 0) {
+            subTopics2[u] = [`${u} Core Theory & Concepts`, `${u} Analytical Methods`, `${u} Examination Practice Problems`];
+          }
+        });
+        return { units: units2, subTopics: subTopics2 };
       }
-      if (lower.includes("quant") || lower.includes("math") || lower.includes("calc")) {
-        return [
-          "Number System & Divisibility",
-          "HCF and LCM",
-          "Simplification & Square Roots",
-          "Percentages",
-          "Ratio, Proportion & Variation",
-          "Average",
-          "Simple & Compound Interest",
-          "Profit, Loss and Discount",
-          "Time and Work & Efficiency",
-          "Pipes and Cisterns",
-          "Speed, Time and Distance",
-          "Boats and Streams",
-          "Algebraic Identities & Polynomials",
-          "Linear Equations & Inequalities",
-          "Geometry (Triangles, Polygons, Lines)",
-          "Circles, Chords & Tangents",
-          "Mensuration 2D (Area & Perimeter)",
-          "Mensuration 3D (Surface Area & Volume)",
-          "Trigonometric Ratios & Identities",
-          "Heights and Distances",
-          "Data Interpretation (Bar, Pie, Table & Line Charts)"
-        ];
+      if (lowerExam.includes("sat") && !lowerExam.includes("state") && !lowerExam.includes("saturday")) {
+        if (lowerSubj.includes("math") || lowerSubj.includes("calc") || lowerSubj.includes("quant")) {
+          const units2 = [
+            "Algebra",
+            "Advanced Math",
+            "Problem-Solving and Data Analysis",
+            "Geometry and Trigonometry"
+          ];
+          const subTopics2 = {
+            "Algebra": [
+              "Linear equations in one variable & systems of linear equations",
+              "Linear equations in two variables & linear inequalities",
+              "Linear functions and graph interpretation"
+            ],
+            "Advanced Math": [
+              "Equivalent expressions and polynomial operations",
+              "Nonlinear equations in one variable & quadratic formulas",
+              "Nonlinear functions (exponential, quadratic, polynomial models)"
+            ],
+            "Problem-Solving and Data Analysis": [
+              "Ratios, rates, proportional relationships & unit conversions",
+              "Percentages & single/two-variable data distributions",
+              "Probability, conditional probability & statistical inferences"
+            ],
+            "Geometry and Trigonometry": [
+              "Area, volume and angle relationships",
+              "Right triangles, trigonometry & unit circle ratios",
+              "Circles (theorems, arc length, sector area, radian measure)"
+            ]
+          };
+          return { units: units2, subTopics: subTopics2 };
+        }
+        if (lowerSubj.includes("read") || lowerSubj.includes("writ") || lowerSubj.includes("eng") || lowerSubj.includes("verbal")) {
+          const units2 = [
+            "Information and Ideas",
+            "Craft and Structure",
+            "Expression of Ideas",
+            "Standard English Conventions"
+          ];
+          const subTopics2 = {
+            "Information and Ideas": [
+              "Central Ideas and Details",
+              "Command of Evidence (Textual & Quantitative)",
+              "Inferences from academic passages"
+            ],
+            "Craft and Structure": [
+              "Words and Phrases in Context",
+              "Text Structure, Purpose and Rhetorical Strategies",
+              "Cross-Text Connections and Comparative Synthesis"
+            ],
+            "Expression of Ideas": [
+              "Rhetorical Synthesis & Goal-Oriented Revisions",
+              "Transitions and Logical Flow Connectors"
+            ],
+            "Standard English Conventions": [
+              "Sentence Boundaries (Run-ons, Comma Splices, Fragments)",
+              "Form, Structure, and Sense (Subject-Verb, Pronoun Agreement, Modifiers)"
+            ]
+          };
+          return { units: units2, subTopics: subTopics2 };
+        }
       }
-      if (lower.includes("reason") || lower.includes("intel") || lower.includes("logic")) {
-        return [
-          "Analogies & Semantic Relationships",
-          "Classification & Odd One Out",
-          "Coding-Decoding & Letter Shifting",
-          "Number Series & Alphabet Series",
-          "Missing Numbers in Figures & Matrix",
-          "Blood Relations",
-          "Direction and Distance Sense",
-          "Order and Ranking",
-          "Syllogisms & Logical Deductions",
-          "Venn Diagrams",
-          "Mathematical Operations & Sign Interchange",
-          "Clock and Calendar",
-          "Dice and Cube Problems",
-          "Paper Folding and Cutting",
-          "Mirror and Water Images",
-          "Counting of Figures (Triangles & Squares)",
-          "Statement and Assumptions / Conclusions"
-        ];
+      if (lowerExam.includes("act")) {
+        if (lowerSubj.includes("math")) {
+          const units2 = [
+            "Preparing for Higher Math: Number & Quantity",
+            "Preparing for Higher Math: Algebra & Functions",
+            "Preparing for Higher Math: Geometry",
+            "Preparing for Higher Math: Statistics & Probability",
+            "Integrating Essential Skills",
+            "Modeling"
+          ];
+          const subTopics2 = {
+            "Preparing for Higher Math: Number & Quantity": ["Real and complex number systems", "Vectors and matrices", "Numerical representations"],
+            "Preparing for Higher Math: Algebra & Functions": ["Linear, polynomial, radical, and exponential expressions", "Equations and inequalities", "Function notation and graphs"],
+            "Preparing for Higher Math: Geometry": ["Congruence, similarity, and transformations", "Right triangle trigonometry", "Conic sections and circles"],
+            "Preparing for Higher Math: Statistics & Probability": ["Measures of center and spread", "Data representations and scatterplots", "Probability and sampling"],
+            "Integrating Essential Skills": ["Rates, percentages, and proportions", "Area, surface area, and perimeter", "Average and median multi-step problems"],
+            "Modeling": ["Producing and interpreting mathematical models", "Real-world scenario problem formulation"]
+          };
+          return { units: units2, subTopics: subTopics2 };
+        }
+        if (lowerSubj.includes("sci")) {
+          const units2 = [
+            "Interpretation of Data",
+            "Scientific Investigation",
+            "Evaluation of Models, Inferences & Experimental Results"
+          ];
+          const subTopics2 = {
+            "Interpretation of Data": ["Manipulating and analyzing scientific data tables", "Interpreting graphs and scatter plots", "Extrapolating and interpolating trends"],
+            "Scientific Investigation": ["Understanding experimental tools and procedures", "Identifying independent and dependent variables", "Evaluating experimental design controls"],
+            "Evaluation of Models, Inferences & Experimental Results": ["Assessing the validity of scientific hypotheses", "Comparing conflicting scientific viewpoints", "Predicting outcomes based on alternate models"]
+          };
+          return { units: units2, subTopics: subTopics2 };
+        }
       }
-      if (lower.includes("eng") || lower.includes("comprehension") || lower.includes("verbal")) {
-        return [
-          "Spotting the Error (Subject-Verb, Tenses, Prepositions)",
-          "Sentence Improvement & Phrase Replacement",
-          "Fill in the Blanks (Collocations & Connectors)",
-          "Synonyms and Antonyms",
-          "Idioms and Phrases",
-          "One Word Substitution",
-          "Spelling Check & Misspelt Words",
-          "Active and Passive Voice Transformations",
-          "Direct and Indirect Speech (Narration)",
-          "Para Jumbles & Sentence Rearrangement",
-          "Cloze Test (Passage Completion)",
-          "Reading Comprehension (Inference & Tone)"
-        ];
+      if (lowerExam.includes("csat") || lowerExam.includes("suneung") || lowerCountry.includes("korea")) {
+        if (lowerSubj.includes("math")) {
+          const units2 = [
+            "Mathematics I: Exponents & Logarithms",
+            "Mathematics I: Trigonometric Functions",
+            "Mathematics I: Sequences & Series",
+            "Mathematics II: Limits of Functions & Continuity",
+            "Mathematics II: Polynomial Differentiation",
+            "Mathematics II: Polynomial Integration",
+            "Calculus: Advanced Differentiation & Integration"
+          ];
+          const subTopics2 = {
+            "Mathematics I: Exponents & Logarithms": ["Exponential and logarithmic functions", "Logarithmic equations and inequalities"],
+            "Mathematics I: Trigonometric Functions": ["Trigonometric definitions and graphs", "Sine and cosine laws"],
+            "Mathematics I: Sequences & Series": ["Arithmetic and geometric sequences", "Mathematical induction"],
+            "Mathematics II: Limits of Functions & Continuity": ["Limits of polynomial functions", "Intermediate value theorem"],
+            "Mathematics II: Polynomial Differentiation": ["Derivatives and tangent lines", "Local extrema and graphing"],
+            "Mathematics II: Polynomial Integration": ["Indefinite and definite integrals", "Area between curves and velocity"],
+            "Calculus: Advanced Differentiation & Integration": ["Differentiation of transcendental functions", "Integration techniques and applications"]
+          };
+          return { units: units2, subTopics: subTopics2 };
+        }
       }
-      if (lower.includes("aware") || lower.includes("gk") || lower.includes("gs") || lower.includes("general knowledge")) {
-        return [
-          "Ancient Indian History (Harappan, Vedic, Mauryas, Guptas)",
-          "Medieval Indian History (Delhi Sultanate, Mughals, Marathas)",
-          "Modern Indian History & National Movement",
-          "Indian Constitution & Polity (Articles, Amendments, Judiciary)",
-          "Physical & Indian Geography (Rivers, Mountains, Climate, Soils)",
-          "Indian Economy, Fiscal Policy & Budgetary System",
-          "General Science: Everyday Physics & Mechanics",
-          "General Science: Chemistry & Industrial Compounds",
-          "General Science: Human Biology, Diseases & Nutrition",
-          "Static GK: Classical Dances, Music & Festivals of India",
-          "Static GK: National Parks, Wildlife Sanctuaries & Ramsar Sites",
-          "Current Affairs, Sports & Government Welfare Schemes"
-        ];
+      if (lowerExam.includes("ap") || lowerExam.includes("advanced placement")) {
+        if (lowerSubj.includes("calc")) {
+          const units2 = [
+            "Limits and Continuity",
+            "Differentiation: Definition and Fundamental Properties",
+            "Differentiation: Composite, Implicit, and Inverse Functions",
+            "Contextual Applications of Differentiation",
+            "Analytical Applications of Differentiation",
+            "Integration and Accumulation of Change",
+            "Differential Equations",
+            "Applications of Integration"
+          ];
+          const subTopics2 = {};
+          units2.forEach((u) => {
+            subTopics2[u] = [`${u} Foundational Theorems`, `${u} Analytical Techniques`, `${u} AP Free Response & MCQ Problem Solving`];
+          });
+          return { units: units2, subTopics: subTopics2 };
+        }
       }
-      if (lower.includes("phys")) {
-        return [
+      const isIndianGovtExam = lowerExam.includes("ssc") || lowerExam.includes("cgl") || lowerExam.includes("chsl") || lowerExam.includes("railway") || lowerExam.includes("rrb") || lowerExam.includes("upsc") || lowerExam.includes("nda") || lowerExam.includes("cds");
+      if (isIndianGovtExam || lowerCountry.includes("india")) {
+        if (lowerSubj.includes("quant") || isIndianGovtExam && lowerSubj.includes("math")) {
+          const units2 = [
+            "Number System & Divisibility",
+            "HCF and LCM",
+            "Percentages",
+            "Ratio, Proportion & Variation",
+            "Average",
+            "Simple & Compound Interest",
+            "Profit, Loss and Discount",
+            "Time and Work & Efficiency",
+            "Pipes and Cisterns",
+            "Speed, Time and Distance",
+            "Boats and Streams",
+            "Algebraic Identities & Polynomials",
+            "Linear Equations & Inequalities",
+            "Geometry (Triangles, Polygons, Lines)",
+            "Circles, Chords & Tangents",
+            "Mensuration 2D & 3D",
+            "Trigonometric Ratios & Heights-Distances",
+            "Data Interpretation (Bar, Pie, Table Charts)"
+          ];
+          const subTopics2 = {};
+          units2.forEach((u) => {
+            subTopics2[u] = [`${u} Core Formulas & Shortcuts`, `${u} Type-wise Practice Questions`, `${u} Previous Year Exam Traps`];
+          });
+          return { units: units2, subTopics: subTopics2 };
+        }
+        if (lowerSubj.includes("reason") || lowerSubj.includes("intel") || lowerSubj.includes("logic")) {
+          const units2 = [
+            "Analogies & Semantic Relationships",
+            "Classification & Odd One Out",
+            "Coding-Decoding & Letter Shifting",
+            "Number Series & Alphabet Series",
+            "Blood Relations",
+            "Direction and Distance Sense",
+            "Order and Ranking",
+            "Syllogisms & Logical Deductions",
+            "Venn Diagrams",
+            "Mathematical Operations & Sign Interchange",
+            "Clock and Calendar",
+            "Dice and Cube Problems",
+            "Paper Folding, Cutting & Mirror Images",
+            "Counting of Figures"
+          ];
+          const subTopics2 = {};
+          units2.forEach((u) => {
+            subTopics2[u] = [`${u} Rules & Pattern Recognition`, `${u} Step-by-Step Logic`, `${u} Speed Solving Tricks`];
+          });
+          return { units: units2, subTopics: subTopics2 };
+        }
+        if (lowerSubj.includes("aware") || lowerSubj.includes("gk") || lowerSubj.includes("gs") || lowerSubj.includes("general knowledge")) {
+          const units2 = [
+            "Ancient & Medieval Indian History",
+            "Modern Indian History & National Movement",
+            "Indian Constitution & Polity (Articles & Judiciary)",
+            "Physical & Indian Geography",
+            "Indian Economy & Union Budget",
+            "General Science: Physics & Mechanics",
+            "General Science: Chemistry in Everyday Life",
+            "General Science: Human Biology & Diseases",
+            "Static GK: Art, Culture, National Parks & Awards",
+            "Current Affairs & Government Schemes"
+          ];
+          const subTopics2 = {};
+          units2.forEach((u) => {
+            subTopics2[u] = [`${u} High-Yield Facts`, `${u} Key Conceptual Timeline`, `${u} Exam-Oriented PYQs`];
+          });
+          return { units: units2, subTopics: subTopics2 };
+        }
+      }
+      if (lowerSubj.includes("phys")) {
+        const units2 = [
           "Units and Measurements",
-          "Motion in a Straight Line",
-          "Motion in a Plane & Vectors",
-          "Laws of Motion & Friction",
-          "Work, Energy and Power",
-          "System of Particles & Rotational Dynamics",
-          "Gravitation",
-          "Mechanical Properties of Solids & Fluids",
-          "Thermodynamics & Kinetic Theory",
-          "Oscillations & Waves",
-          "Electrostatics & Capacitance",
-          "Current Electricity",
-          "Magnetic Effects of Current & Magnetism",
-          "Electromagnetic Induction & Alternating Current",
+          "Kinematics: Motion in One and Two Dimensions",
+          "Laws of Motion and Friction",
+          "Work, Energy, and Power",
+          "Rotational Motion and System of Particles",
+          "Gravitation and Planetary Motion",
+          "Mechanical Properties of Matter and Fluids",
+          "Thermodynamics and Kinetic Theory",
+          "Oscillations and Wave Optics",
+          "Electrostatics and Electric Potential",
+          "Current Electricity and Circuits",
+          "Magnetism and Magnetic Effects of Current",
+          "Electromagnetic Induction and AC Circuits",
           "Ray Optics and Optical Instruments",
-          "Wave Optics",
-          "Dual Nature of Radiation and Matter",
-          "Atoms & Nuclei",
-          "Semiconductor Electronics"
+          "Modern Physics, Atoms, and Nuclei"
         ];
+        const subTopics2 = {};
+        units2.forEach((u) => {
+          subTopics2[u] = [`${u} Fundamental Laws & Equations`, `${u} Conceptual Derivations`, `${u} Numerical Applications & Graphs`];
+        });
+        return { units: units2, subTopics: subTopics2 };
       }
-      if (lower.includes("chem")) {
-        return [
-          "Some Basic Concepts of Chemistry (Mole Concept)",
-          "Structure of Atom",
-          "Classification of Elements & Periodicity",
-          "Chemical Bonding and Molecular Structure",
-          "Chemical Thermodynamics",
-          "Equilibrium (Chemical & Ionic)",
-          "Redox Reactions & Electrochemistry",
-          "Chemical Kinetics",
-          "Solutions & Colligative Properties",
-          "Coordination Compounds",
-          "d- and f-Block Elements",
-          "p-Block Elements",
-          "Organic Chemistry: Basic Principles (GOC)",
-          "Hydrocarbons",
-          "Haloalkanes and Haloarenes",
-          "Alcohols, Phenols and Ethers",
-          "Aldehydes, Ketones and Carboxylic Acids",
-          "Organic Compounds Containing Nitrogen (Amines)",
-          "Biomolecules"
+      if (lowerSubj.includes("chem")) {
+        const units2 = [
+          "Atomic Structure and Periodic Properties",
+          "Chemical Bonding and Molecular Geometry",
+          "States of Matter and Solutions",
+          "Chemical Thermodynamics and Energetics",
+          "Chemical and Ionic Equilibrium",
+          "Redox Reactions and Electrochemistry",
+          "Chemical Kinetics and Reaction Rates",
+          "Inorganic Chemistry: Coordination Compounds",
+          "Inorganic Chemistry: Periodic Trends and Transition Metals",
+          "Organic Chemistry: Structure, Bonding and Isomerism",
+          "Organic Chemistry: Functional Groups and Reaction Mechanisms",
+          "Biomolecules and Environmental Chemistry"
         ];
+        const subTopics2 = {};
+        units2.forEach((u) => {
+          subTopics2[u] = [`${u} Core Principles & Theory`, `${u} Formulas & Reaction Mechanisms`, `${u} Problem Solving & Practice Problems`];
+        });
+        return { units: units2, subTopics: subTopics2 };
       }
-      if (lower.includes("bio")) {
-        return [
-          "The Living World & Biological Classification",
-          "Plant Kingdom",
-          "Animal Kingdom",
-          "Morphology & Anatomy of Flowering Plants",
-          "Structural Organisation in Animals",
-          "Cell: The Unit of Life & Cell Cycle",
-          "Biomolecules",
-          "Photosynthesis & Respiration in Plants",
-          "Plant Growth and Development",
-          "Breathing and Exchange of Gases",
-          "Body Fluids and Circulation",
-          "Excretory Products and Elimination",
-          "Locomotion and Movement",
-          "Neural & Chemical Coordination",
-          "Reproduction in Organisms & Flowering Plants",
-          "Human Reproduction & Reproductive Health",
-          "Principles of Inheritance and Variation (Genetics)",
-          "Molecular Basis of Inheritance",
-          "Evolution",
-          "Human Health and Disease",
-          "Biotechnology: Principles and Processes",
-          "Biotechnology and its Applications",
-          "Organisms and Populations",
-          "Ecosystem, Biodiversity and Conservation"
+      if (lowerSubj.includes("bio")) {
+        const units2 = [
+          "Cell Structure and Function",
+          "Biomolecules and Cellular Energetics",
+          "Cell Division and Cell Cycle",
+          "Genetics and Molecular Biology",
+          "Gene Expression and Regulation",
+          "Evolutionary Biology and Natural Selection",
+          "Plant Physiology and Photosynthesis",
+          "Human Anatomy and Physiology",
+          "Ecology, Biodiversity, and Ecosystems",
+          "Biotechnology and Its Applications"
         ];
+        const subTopics2 = {};
+        units2.forEach((u) => {
+          subTopics2[u] = [`${u} Key Anatomical & Molecular Structures`, `${u} Biochemical Mechanisms & Processes`, `${u} Experimental Evidence & Diagrams`];
+        });
+        return { units: units2, subTopics: subTopics2 };
       }
-      return [
-        "Core Syllabus Principles & Definitions",
-        "Key Historical Developments & Models",
-        "Fundamental Methodologies & Frameworks",
-        "Applied Analytical Techniques",
-        "Comparative Perspectives & Evaluation",
-        "Contemporary Problems & Case Studies"
+      if (lowerSubj.includes("math") || lowerSubj.includes("algebra") || lowerSubj.includes("geometry") || lowerSubj.includes("calculus")) {
+        const units2 = [
+          "Algebraic Expressions, Polynomials & Functions",
+          "Linear and Quadratic Equations",
+          "Coordinate Geometry & Analytic Graphing",
+          "Trigonometry & Ratios",
+          "Differential Calculus & Rates of Change",
+          "Integral Calculus & Area Applications",
+          "Probability & Statistical Distributions",
+          "Matrices and Vectors"
+        ];
+        const subTopics2 = {};
+        units2.forEach((u) => {
+          subTopics2[u] = [`${u} Definitions & Formulas`, `${u} Step-by-Step Proofs & Methods`, `${u} Solved Examples & Exam Traps`];
+        });
+        return { units: units2, subTopics: subTopics2 };
+      }
+      if (lowerSubj.includes("eng") || lowerSubj.includes("reading") || lowerSubj.includes("writing") || lowerSubj.includes("literature")) {
+        const units2 = [
+          "Reading Comprehension: Main Ideas & Inferences",
+          "Vocabulary in Context & Lexical Nuances",
+          "Grammar, Sentence Structure & Syntax",
+          "Rhetorical Analysis & Text Structure",
+          "Academic Essay Writing & Argumentation",
+          "Literary Devices & Figurative Language"
+        ];
+        const subTopics2 = {};
+        units2.forEach((u) => {
+          subTopics2[u] = [`${u} Core Rules & Conventions`, `${u} Passage Analysis`, `${u} Error Identification & Polishing`];
+        });
+        return { units: units2, subTopics: subTopics2 };
+      }
+      const units = [
+        `${subj} Core Concepts & Terminology`,
+        `${subj} Principles, Theories & Frameworks`,
+        `${subj} Methodologies & Analytical Procedures`,
+        `${subj} Practical Applications & Problem Solving`,
+        `${subj} Evaluation, Critical Review & Case Studies`
       ];
+      const subTopics = {};
+      units.forEach((u) => {
+        subTopics[u] = [`${u} Foundations & Rules`, `${u} Real-World Case Studies`, `${u} Review Exercises & Assessments`];
+      });
+      return { units, subTopics };
     };
     if (!parsed || !parsed.subjectsBlueprint || typeof parsed.subjectsBlueprint !== "object" || Object.keys(parsed.subjectsBlueprint).length === 0) {
       console.warn("[deep-research-exam-blueprint] Empty or invalid AI response, generating robust catalog-grounded blueprint");
@@ -5506,6 +3134,7 @@ Format:
       cleanSubjects.forEach((subj) => {
         const catalogSubject = catalogMatch?.subjects[subj];
         const isEnglish = /english|language|reading|verbal|literature/i.test(subj);
+        const examAware = getExamAwareUnitsAndSubtopics(subj, normExam, normCountry);
         fallbackBlueprint[subj] = catalogSubject || {
           subjectName: subj,
           totalMarks: catalogMatch?.examOverview?.totalExamMarks ? Math.round(catalogMatch.examOverview.totalExamMarks / cleanSubjects.length) : 50,
@@ -5527,7 +3156,8 @@ Format:
             markingRubric: "N/A"
           },
           nomenclature: defaultNomenclature,
-          coreUnits: getAuthenticFallbackUnits(subj),
+          coreUnits: examAware.units,
+          subTopics: examAware.subTopics,
           detailedNotesGuidelines: "Comprehensive theorems, standard formulas, solved examples, and exam traps.",
           revisionGuidelines: "High-yield formula cheat sheet, shortcut tables, and quick identity sheets.",
           essayTone: isEnglish ? "Formal, structured thesis, standard academic prose, precise grammatical register, no slang" : null,
@@ -5603,8 +3233,23 @@ Format:
           const hasGenericPlaceholders = subjData.coreUnits.some(
             (u) => /core foundations|theoretical frameworks|applied systems|critical evaluation|high-yield examination traps/i.test(u)
           );
-          if (hasGenericPlaceholders || subjData.coreUnits.length <= 4) {
-            subjData.coreUnits = getAuthenticFallbackUnits(cleanKey || rawKey);
+          if (hasGenericPlaceholders || subjData.coreUnits.length === 0) {
+            const fallback = getExamAwareUnitsAndSubtopics(cleanKey || rawKey, normExam, normCountry);
+            subjData.coreUnits = fallback.units;
+            subjData.subTopics = fallback.subTopics;
+          } else {
+            if (!subjData.subTopics || typeof subjData.subTopics !== "object") {
+              subjData.subTopics = {};
+            }
+            subjData.coreUnits.forEach((unit) => {
+              if (!Array.isArray(subjData.subTopics[unit]) || subjData.subTopics[unit].length === 0) {
+                subjData.subTopics[unit] = [
+                  `${unit} Core Theory & Key Concepts`,
+                  `${unit} Fundamental Principles & Formulas`,
+                  `${unit} Problem Solving & Practical Applications`
+                ];
+              }
+            });
           }
         }
         normalizedBlueprint[cleanKey || rawKey] = subjData;
@@ -5615,6 +3260,7 @@ Format:
       const match = Object.keys(parsed.subjectsBlueprint).find((k) => k.toLowerCase() === subj.toLowerCase());
       if (!match) {
         const isEnglish = /english|language|reading|verbal|literature/i.test(subj);
+        const examAware = getExamAwareUnitsAndSubtopics(subj, normExam, normCountry);
         parsed.subjectsBlueprint[subj] = catalogMatch?.subjects[subj] || {
           subjectName: subj,
           totalMarks: 50,
@@ -5636,7 +3282,8 @@ Format:
             markingRubric: "N/A"
           },
           nomenclature: defaultNomenclature,
-          coreUnits: getAuthenticFallbackUnits(subj),
+          coreUnits: examAware.units,
+          subTopics: examAware.subTopics,
           detailedNotesGuidelines: "Formulas, theorems, solved problems, and traps.",
           revisionGuidelines: "Formula sheet and summary notes.",
           essayTone: isEnglish ? "Formal, structured thesis, standard academic prose, precise grammatical register, no slang" : null,
@@ -5648,9 +3295,9 @@ Format:
     return res.json(parsed);
   } catch (error) {
     console.error("[deep-research-exam-blueprint] Error:", error);
-    const cleanSubjects = Array.isArray(req.body?.subjects) ? req.body.subjects : ["General Studies"];
+    const cleanSubjects2 = Array.isArray(req.body?.subjects) ? req.body.subjects : ["General Studies"];
     const fallbackBlueprint = {};
-    cleanSubjects.forEach((subj) => {
+    cleanSubjects2.forEach((subj) => {
       fallbackBlueprint[String(subj)] = {
         subjectName: String(subj),
         totalMarks: 50,
@@ -5681,8 +3328,8 @@ Format:
         officialAuthority: "Official Examination Authority",
         examType: "Standardized Academic Assessment",
         examFormat: "Computer Based Examination (CBT)",
-        totalExamMarks: 50 * cleanSubjects.length,
-        totalQuestions: 25 * cleanSubjects.length,
+        totalExamMarks: 50 * cleanSubjects2.length,
+        totalQuestions: 25 * cleanSubjects2.length,
         hasSubjective: false,
         hasNegativeMarking: true,
         negativeFormula: "+2 correct, -0.50 incorrect"
@@ -5701,9 +3348,9 @@ app.post("/api/verify-and-research-subject", async (req, res) => {
       return res.status(400).json({ isValid: false, errorMessage: "Please enter a subject name." });
     }
     const normSubject = subjectName.trim();
-    const normExam = (examName || "Standardized Examination").trim();
-    const normCountry = sanitizeCountry(country, "Global");
-    const normGrade = (grade || "Senior Secondary").trim();
+    const normExam2 = (examName || "Standardized Examination").trim();
+    const normCountry2 = sanitizeCountry(country, "Global");
+    const normGrade2 = (grade || "Senior Secondary").trim();
     const cleanExisting = Array.isArray(existingSubjects) ? existingSubjects.map((s) => String(s).trim()) : [];
     const isDuplicate = cleanExisting.some(
       (s) => s.toLowerCase() === normSubject.toLowerCase() || s.toLowerCase().replace(/[^a-z0-9]/g, "") === normSubject.toLowerCase().replace(/[^a-z0-9]/g, "")
@@ -5714,16 +3361,16 @@ app.post("/api/verify-and-research-subject", async (req, res) => {
         errorMessage: `"${normSubject}" is already in your subjects list.`
       });
     }
-    const promptText = `
-User Selected Country / Region: "${normCountry}"
-User Target Examination: "${normExam}"
-Student Grade / Level: "${normGrade}"
+    const promptText2 = `
+User Selected Country / Region: "${normCountry2}"
+User Target Examination: "${normExam2}"
+Student Grade / Level: "${normGrade2}"
 Subject to Add: "${normSubject}"
 Current Existing Subjects: ${JSON.stringify(cleanExisting)}
 
 TASK:
 You are an authoritative global educational curriculum and examination verification engine.
-Verify if "${normSubject}" is an authentic, valid subject or paper officially offered in "${normExam}" (${normCountry}).
+Verify if "${normSubject}" is an authentic, valid subject or paper officially offered in "${normExam2}" (${normCountry2}).
 
 1. STRICT EXAMINATION SUBJECT COMPATIBILITY VERIFICATION:
    - Check A: Fake / Gibberish Check:
@@ -5752,11 +3399,11 @@ Verify if "${normSubject}" is an authentic, valid subject or paper officially of
    - "standardizedTitle": Clean official subject title (e.g., "Computer Science", "AP Statistics", "Biology").
    - "icon": An appropriate single emoji icon.
    - "subtitle": Brief syllabus topic summary (e.g., "Python, MySQL, Computer Networks & Cybersecurity").
-   - "totalMarks": Official total marks for this subject in ${normExam} (e.g., 100, 70, 80).
+   - "totalMarks": Official total marks for this subject in ${normExam2} (e.g., 100, 70, 80).
    - "totalQuestions": Official total questions in the paper.
    - "attemptRequired": Required questions to attempt.
    - "markingScheme": Exact marking formula (e.g., "+4 correct, -1 incorrect" or "+1 / 0").
-   - "questionTypes": Array of 3-5 authentic question types used in ${normExam}.
+   - "questionTypes": Array of 3-5 authentic question types used in ${normExam2}.
    - "coreUnits": Array of 6 to 16 authentic official syllabus units/chapters as prescribed by the official examination board. NEVER clamp to fewer than 6 units!
    - "nomenclature": "Chapters" | "Units" | "Domains" | "Topics".
    - "examTone": Concise description of official exam difficulty and style.
@@ -5790,7 +3437,7 @@ Format when invalid:
 `;
     const response = await safeGenerateContent({
       model: "gemini-flash-lite-latest",
-      contents: { parts: [{ text: promptText }] },
+      contents: { parts: [{ text: promptText2 }] },
       config: {
         systemInstruction: {
           parts: [{
@@ -5828,8 +3475,8 @@ app.post("/api/verify-subtopic", async (req, res) => {
     const normSubTopic = subTopic.trim();
     const normSubject = (subject || "General Subject").trim();
     const normChapter = (chapter || "General Chapter").trim();
-    const normExam = (examName || "Standardized Examination").trim();
-    const normCountry = sanitizeCountry(country, "Global");
+    const normExam2 = (examName || "Standardized Examination").trim();
+    const normCountry2 = sanitizeCountry(country, "Global");
     if (normSubTopic.length < 3) {
       return res.json({ isValid: false, errorMessage: "Topic name is too short. Please enter a full concept name." });
     }
@@ -5855,10 +3502,10 @@ app.post("/api/verify-subtopic", async (req, res) => {
         }
       }
     }
-    const promptText = `
+    const promptText2 = `
 Subject: "${normSubject}"
 Chapter: "${normChapter}"
-Exam / Curriculum: "${normExam}" (${normCountry})
+Exam / Curriculum: "${normExam2}" (${normCountry2})
 Candidate Subtopic / Concept to Verify: "${normSubTopic}"
 
 TASK:
@@ -5894,7 +3541,7 @@ or when invalid:
 `;
     const response = await safeGenerateContent({
       model: "gemini-flash-lite-latest",
-      contents: { parts: [{ text: promptText }] },
+      contents: { parts: [{ text: promptText2 }] },
       config: {
         systemInstruction: {
           parts: [{
@@ -6147,7 +3794,7 @@ ${toneSpecificRules}`;
       stream ? `Track/Stream: ${stream}` : "",
       country ? `Curriculum: ${country}` : ""
     ].filter(Boolean).join(" | ");
-    const promptText = `TASK: Generate a high-quality ${type} on the topic below.
+    const promptText2 = `TASK: Generate a high-quality ${type} on the topic below.
 TOPIC: ${topic}
 STUDENT PROFILE: ${studentContext || "Standard Academic Profile"}
 CONTENT TYPE: ${type}
@@ -6164,7 +3811,7 @@ CRITICAL EXECUTION:
       targetExam: targetExam2,
       examBlueprint: examBlueprint2,
       model: "gemini-flash-lite-latest",
-      contents: { parts: [{ text: promptText }] },
+      contents: { parts: [{ text: promptText2 }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         maxOutputTokens: 2500,
@@ -10057,7 +7704,7 @@ STRICT SUBJECT MODEL:
     let finalBooster = null;
     while (attempts < 2) {
       attempts++;
-      const promptText = `You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
+      const promptText2 = `You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
 Target: High-Yield Micro-Assessment focusing on "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
 Curricular Subject Breakdown:
 ${subjectCurriculumGuidance}
@@ -10104,7 +7751,7 @@ Return strictly a valid JSON object matching the requested schema with exactly $
         stream: studentStream,
         country: studentCountry,
         model: "gemini-flash-lite-latest",
-        contents: [{ parts: [{ text: promptText }] }],
+        contents: [{ parts: [{ text: promptText2 }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json"

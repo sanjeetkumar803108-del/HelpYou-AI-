@@ -93,7 +93,7 @@ function FullPageSkeleton() {
 }
 
 export default function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  const [splashMinTimePassed, setSplashMinTimePassed] = useState(false);
   const [activeTab, setActiveTab] = useState('notes');
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
@@ -211,7 +211,7 @@ export default function App() {
       safeGetItem('helpyou_active_user_session') === 'true' ||
       Boolean(safeGetItem('last_logged_in_user'));
     const timer = setTimeout(() => {
-      setShowSplash(false);
+      setSplashMinTimePassed(true);
     }, hasCached ? 800 : 500);
     return () => clearTimeout(timer);
   }, []);
@@ -334,6 +334,20 @@ export default function App() {
     }, 3500);
     return () => clearTimeout(safetyTimer);
   }, []);
+
+  const hasCachedUser = Boolean(
+    safeGetItem('last_logged_in_user') ||
+    safeGetItem('helpyou_active_user_session') === 'true'
+  );
+  // Seamless Splash Screen: Stays visible until min timer passes, AND if returning user, until auth resolves
+  const showSplash = !splashMinTimePassed || (hasCachedUser && authLoading);
+
+  // Auto-dismiss login modal if user is active
+  useEffect(() => {
+    if ((user || auth.currentUser) && showLoginModal) {
+      setShowLoginModal(false);
+    }
+  }, [user, showLoginModal]);
   const [pocketItems, setPocketItems] = useState<any[]>(() => {
     const lastUser = safeGetItem('last_logged_in_user');
     const cached = lastUser ? safeGetItem(`stale_pocket_items_${lastUser}`) : null;
@@ -397,8 +411,9 @@ export default function App() {
       setShowPaywallModal(true);
     };
     const handleOpenLogin = () => {
-      if (auth.currentUser || user) {
-        console.log('[App] User is already authenticated, ignoring open-login-modal');
+      const hasCached = Boolean(safeGetItem('last_logged_in_user'));
+      if (auth.currentUser || user || hasCached) {
+        console.log('[App] User is already authenticated or session restoring, ignoring open-login-modal');
         return;
       }
       console.log('Received open-login-modal event');
@@ -888,15 +903,34 @@ export default function App() {
           });
       } else {
         // Guest user state: reset VIP without wiping guest storage
-        safeRemoveItem('helpyou_active_user_session');
-        setIsVip(false);
-        setAuthLoading(false);
+        const hasCachedUserInStorage = Boolean(safeGetItem('last_logged_in_user'));
+        if (!hasCachedUserInStorage) {
+          safeRemoveItem('helpyou_active_user_session');
+          setIsVip(false);
+          setAuthLoading(false);
 
-        // Log out from RevenueCat
-        if (Capacitor.isNativePlatform()) {
-          Purchases.logOut().catch(err => {
-            console.warn('RevenueCat logOut error on logout:', err);
-          });
+          // Log out from RevenueCat
+          if (Capacitor.isNativePlatform()) {
+            Purchases.logOut().catch(err => {
+              console.warn('RevenueCat logOut error on logout:', err);
+            });
+          }
+        } else {
+          // If a cached user ID exists in storage, do not instantly wipe session on transient startup ticks.
+          // Give Firebase a 1500ms grace window to complete reading IndexedDB/tokens.
+          setTimeout(() => {
+            if (!auth.currentUser) {
+              console.log('[Auth Guard] Confirmed unauthenticated after startup grace window. Resetting session.');
+              safeRemoveItem('helpyou_active_user_session');
+              setIsVip(false);
+              setAuthLoading(false);
+              if (Capacitor.isNativePlatform()) {
+                Purchases.logOut().catch(err => {
+                  console.warn('RevenueCat logOut error on logout:', err);
+                });
+              }
+            }
+          }, 1500);
         }
       }
     });
@@ -1260,7 +1294,7 @@ export default function App() {
   }, []);
 
   const handleOpenLoginFromDashboard = useCallback(() => {
-    if (auth.currentUser || user) {
+    if (auth.currentUser || user || safeGetItem('last_logged_in_user')) {
       setActiveTab('profile');
       return;
     }

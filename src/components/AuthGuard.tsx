@@ -65,7 +65,7 @@ export default function AuthGuard({
   // Active User: check React state or immediate Firebase auth object
   const activeUser = user || auth.currentUser;
   const hasCachedSession = Boolean(
-    safeGetItem('last_logged_in_user') && 
+    safeGetItem('last_logged_in_user') || 
     safeGetItem('helpyou_active_user_session') === 'true'
   );
 

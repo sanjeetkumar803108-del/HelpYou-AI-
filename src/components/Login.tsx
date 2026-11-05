@@ -296,9 +296,10 @@ export default function Login({ onClose, onLoginSuccess, hideClose = false }: { 
     const clearStaleSession = async () => {
       try {
         const hasActiveSession = safeGetItem('helpyou_active_user_session') === 'true';
+        const hasCachedUser = Boolean(safeGetItem('last_logged_in_user'));
         const isAuthInProgress = safeGetItem('helpyou_auth_in_progress') === 'true';
-        if (hasActiveSession || isAuthInProgress || userInitiatedAuth.current) {
-          console.log('[Login Mount] Active session exists, skipping stale session wipe.');
+        if (hasActiveSession || hasCachedUser || isAuthInProgress || userInitiatedAuth.current) {
+          console.log('[Login Mount] Active/cached user session exists, skipping stale session wipe.');
           return;
         }
         if (Capacitor.isNativePlatform()) {

@@ -411,7 +411,8 @@ function ToolsDashboard({
           <button 
             onClick={() => {
               triggerVibration(15);
-              if (user) {
+              const isAuthed = Boolean(user || auth.currentUser || safeGetItem('last_logged_in_user'));
+              if (isAuthed) {
                 if (onOpenProfile) {
                   onOpenProfile();
                 } else {

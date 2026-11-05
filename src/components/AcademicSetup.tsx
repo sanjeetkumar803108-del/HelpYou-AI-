@@ -1428,13 +1428,10 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                       </div>
 
                       <div className="min-w-0 flex-1 text-left">
-                        <p className={`text-[11px] font-extrabold truncate ${
+                        <p className={`text-xs font-bold truncate ${
                           isDone ? 'text-emerald-900' : isCurrent ? 'text-purple-900' : 'text-zinc-600'
                         }`}>
                           {st.label}
-                        </p>
-                        <p className="text-[9px] font-medium text-zinc-400 truncate">
-                          {st.desc}
                         </p>
                       </div>
                     </div>
@@ -1443,7 +1440,7 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               </div>
 
               {/* Dynamic Status Ticker (Guaranteed 100% Legible & Visible on All Mobile Screens) */}
-              <div className="w-full px-3.5 py-2.5 bg-zinc-950 text-white rounded-2xl shadow-xl border border-zinc-800 shrink-0 flex items-center gap-3 min-h-[46px]">
+              <div className="w-full px-3.5 py-2.5 bg-zinc-950 text-white rounded-2xl shadow-xl border border-zinc-800 shrink-0 flex items-center gap-3 min-h-[48px]">
                 <div className="w-7 h-7 rounded-xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center shrink-0">
                   {researchStage < 11 ? (
                     <Loader2 className="w-4 h-4 animate-spin text-purple-400 shrink-0" />
@@ -1452,11 +1449,14 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
                   )}
                 </div>
                 <div className="flex-1 min-w-0 text-left">
+                  <p className="text-[10px] font-extrabold text-purple-400 uppercase tracking-wider leading-none mb-1">
+                    Live AI Engine
+                  </p>
                   <p
-                    className="text-[11px] font-extrabold text-white tracking-wide leading-snug line-clamp-2 break-words"
+                    className="text-xs font-bold text-white tracking-wide leading-tight truncate"
                     title={researchMessage}
                   >
-                    {researchMessage || 'Calibrating Academic DNA...'}
+                    {researchMessage || 'Calibrating official syllabus & micro-topics...'}
                   </p>
                 </div>
               </div>

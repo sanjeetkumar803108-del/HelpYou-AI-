@@ -1592,6 +1592,12 @@ function normalizeKeyPart(str, fallback = "general") {
   const slug = trimmed.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
   return slug || fallback;
 }
+function normalizePracticeMode(mode) {
+  if (mode === true || mode === "true" || mode === "more_questions_to_practice" || mode === "more_practice") {
+    return "more_questions_to_practice";
+  }
+  return "standard";
+}
 function generateQuestionBankKey(params) {
   const c = normalizeKeyPart(params.country, "global");
   const e = normalizeKeyPart(params.examName, "exam");
@@ -1601,7 +1607,8 @@ function generateQuestionBankKey(params) {
   const sub = normalizeKeyPart(params.subtopic, "all_subjects_all_topics");
   const f = normalizeKeyPart(params.feature, "quiz");
   const d = normalizeKeyPart(params.difficulty, "medium");
-  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}`;
+  const p = normalizePracticeMode(params.practiceMode);
+  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}__${p}`;
 }
 function extractQuestionHierarchy(body) {
   const rawCountry = (body.country || body.academic_country || "Global").trim();
@@ -1610,6 +1617,7 @@ function extractQuestionHierarchy(body) {
   const grade = (body.gradeLevel || body.grade || body.userGrade || "Senior Secondary").trim();
   const rawDifficulty = (body.difficulty || body.difficultyLevel || "Medium").trim();
   const difficulty = rawDifficulty ? rawDifficulty.charAt(0).toUpperCase() + rawDifficulty.slice(1).toLowerCase() : "Medium";
+  const practiceMode = normalizePracticeMode(body.practiceMode ?? body.isMorePractice);
   const rawTopic = (body.topic || body.prompt || body.text || "").trim();
   let subject = (body.subject || body.stream || "").trim();
   let chapter = (body.chapter || "").trim();
@@ -1649,7 +1657,8 @@ function extractQuestionHierarchy(body) {
     subject,
     chapter,
     subtopic,
-    difficulty
+    difficulty,
+    practiceMode
   };
 }
 var QUESTIONS_FILE_PATH = path.join(process.cwd(), "questions.json");
@@ -1696,7 +1705,7 @@ function findInQuestionBank(params) {
   if (!entry || !Array.isArray(entry.questions) || entry.questions.length === 0) {
     return null;
   }
-  const isMatch = normalizeKeyPart(entry.country) === normalizeKeyPart(params.country) && normalizeKeyPart(entry.examName) === normalizeKeyPart(params.examName) && normalizeKeyPart(entry.grade) === normalizeKeyPart(params.grade) && normalizeKeyPart(entry.subject) === normalizeKeyPart(params.subject) && normalizeKeyPart(entry.chapter) === normalizeKeyPart(params.chapter) && normalizeKeyPart(entry.subtopic) === normalizeKeyPart(params.subtopic) && normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) && normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty);
+  const isMatch = normalizeKeyPart(entry.country) === normalizeKeyPart(params.country) && normalizeKeyPart(entry.examName) === normalizeKeyPart(params.examName) && normalizeKeyPart(entry.grade) === normalizeKeyPart(params.grade) && normalizeKeyPart(entry.subject) === normalizeKeyPart(params.subject) && normalizeKeyPart(entry.chapter) === normalizeKeyPart(params.chapter) && normalizeKeyPart(entry.subtopic) === normalizeKeyPart(params.subtopic) && normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) && normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty) && normalizePracticeMode(entry.practiceMode) === normalizePracticeMode(params.practiceMode);
   if (!isMatch) {
     return null;
   }
@@ -1739,6 +1748,7 @@ function saveToQuestionBank(params) {
   } else {
     mergedQuestions = [...params.questions];
   }
+  const finalPracticeMode = normalizePracticeMode(params.practiceMode);
   bank[key] = {
     country: params.country,
     examName: params.examName,
@@ -1748,6 +1758,7 @@ function saveToQuestionBank(params) {
     subtopic: params.subtopic,
     feature: params.feature,
     difficulty: params.difficulty,
+    practiceMode: finalPracticeMode,
     totalQuestions: mergedQuestions.length,
     questions: mergedQuestions,
     createdAt: existing?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
@@ -1755,14 +1766,184 @@ function saveToQuestionBank(params) {
     hitCount: (existing?.hitCount || 0) + 1
   };
   saveQuestionsBank(bank);
-  console.log(`[QuestionsBank] Saved ${mergedQuestions.length} questions for [${params.country} > ${params.examName} > ${params.subject} > ${params.chapter} > ${params.subtopic} (${params.feature})]. Key: ${key}`);
+  console.log(`[QuestionsBank] Saved ${mergedQuestions.length} questions for [${params.country} > ${params.examName} > ${params.subject} > ${params.chapter} > ${params.subtopic} (${params.feature} | mode: ${finalPracticeMode})]. Key: ${key}`);
+}
+
+// src/utils/flashcardsBank.ts
+import path2 from "path";
+import fs2 from "fs";
+function normalizeFlashcardKeyPart(str, fallback = "general") {
+  if (!str || typeof str !== "string") return fallback;
+  const trimmed = str.trim();
+  if (/^(?:all\s*topics?\s*cards?|all\s*topics?|all\s*cards?|practice\s*full\s*chapter\s*deck|full\s*chapter\s*deck|entire\s*chapter|full\s*syllabus|all)$/i.test(trimmed)) {
+    return "all_topics_card";
+  }
+  const slug = trimmed.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
+  return slug || fallback;
+}
+function generateFlashcardsBankKey(params) {
+  const c = normalizeFlashcardKeyPart(params.country, "global");
+  const e = normalizeFlashcardKeyPart(params.exam, "general");
+  const g = normalizeFlashcardKeyPart(params.grade, "standard");
+  const s = normalizeFlashcardKeyPart(params.subject, "general");
+  const ch = normalizeFlashcardKeyPart(params.chapter, "all");
+  const sub = normalizeFlashcardKeyPart(params.subtopic, "all_topics_card");
+  const f = normalizeFlashcardKeyPart(params.feature, "ai_flashcards");
+  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}`;
+}
+function extractFlashcardsHierarchy(body) {
+  const rawCountry = (body.country || body.academic_country || "Global").trim();
+  const country = rawCountry.toLowerCase() === "others" || rawCountry.toLowerCase() === "other" ? body.customCountry || "Global" : rawCountry;
+  const exam = (body.exam || body.targetExam || body.target_exam || body.academic_exam || "General").trim();
+  const grade = (body.grade || body.gradeLevel || body.userGrade || "Standard").trim();
+  const rawTopic = (body.topic || body.prompt || body.text || "").trim();
+  let subject = (body.subject || body.stream || "").trim();
+  let chapter = (body.chapter || "").trim();
+  let subtopic = (body.subtopic || "").trim();
+  const isFullChapterMatch = /^(?:all|all\s*topics?|all\s*cards?|practice\s*full\s*chapter\s*deck|full\s*chapter\s*deck|entire\s*chapter|full\s*syllabus)$/i.test(subtopic) || /all\s*topics?\s*cards?|practice\s*full\s*chapter\s*deck|full\s*chapter\s*deck/i.test(rawTopic);
+  if ((!subject || !chapter || !subtopic) && rawTopic) {
+    const parts = rawTopic.split(/\s*[-–—:]\s*/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[1];
+      if (!subtopic) subtopic = parts.slice(2).join(" - ");
+    } else if (parts.length === 2) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[1];
+      if (!subtopic) subtopic = "All Topics Card";
+    } else if (parts.length === 1) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[0];
+      if (!subtopic) subtopic = "All Topics Card";
+    }
+  }
+  if (isFullChapterMatch || !subtopic || subtopic.toLowerCase() === "all") {
+    subtopic = "All Topics Card";
+  }
+  if (!subject) subject = "General Studies";
+  if (!chapter) chapter = "Core Curriculum";
+  return {
+    country,
+    exam,
+    grade,
+    subject,
+    chapter,
+    subtopic,
+    feature: "AI Flashcards"
+  };
+}
+var FLASHCARDS_FILE_PATH = path2.join(process.cwd(), "flashcards.json");
+var TMP_FLASHCARDS_FILE_PATH = path2.join("/tmp", "flashcards.json");
+var memoryFlashcardsBank = null;
+function loadFlashcardsBank() {
+  if (memoryFlashcardsBank) {
+    return memoryFlashcardsBank;
+  }
+  try {
+    const targetFile = fs2.existsSync(TMP_FLASHCARDS_FILE_PATH) ? TMP_FLASHCARDS_FILE_PATH : fs2.existsSync(FLASHCARDS_FILE_PATH) ? FLASHCARDS_FILE_PATH : null;
+    if (targetFile) {
+      const content = fs2.readFileSync(targetFile, "utf-8");
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        memoryFlashcardsBank = {};
+        for (const item of parsed) {
+          const key = generateFlashcardsBankKey(item);
+          memoryFlashcardsBank[key] = item;
+        }
+        return memoryFlashcardsBank;
+      } else if (parsed && typeof parsed === "object") {
+        memoryFlashcardsBank = parsed;
+        return memoryFlashcardsBank || {};
+      }
+    }
+  } catch (err) {
+    console.warn("[FlashcardsBank] Notice reading flashcards.json:", err);
+  }
+  memoryFlashcardsBank = {};
+  return memoryFlashcardsBank;
+}
+function saveFlashcardsBank(bank) {
+  memoryFlashcardsBank = bank;
+  const content = JSON.stringify(bank, null, 2);
+  try {
+    fs2.writeFileSync(FLASHCARDS_FILE_PATH, content, "utf-8");
+  } catch (err) {
+    try {
+      fs2.writeFileSync(TMP_FLASHCARDS_FILE_PATH, content, "utf-8");
+    } catch (tmpErr) {
+      console.warn("[FlashcardsBank] Warning writing flashcards to /tmp:", tmpErr);
+    }
+  }
+}
+function findInFlashcardsBank(params) {
+  const bank = loadFlashcardsBank();
+  const key = generateFlashcardsBankKey({
+    ...params,
+    feature: params.feature || "AI Flashcards"
+  });
+  const entry = bank[key];
+  if (!entry || !Array.isArray(entry.flashcards) || entry.flashcards.length === 0) {
+    return null;
+  }
+  const isMatch = normalizeFlashcardKeyPart(entry.country) === normalizeFlashcardKeyPart(params.country) && normalizeFlashcardKeyPart(entry.exam) === normalizeFlashcardKeyPart(params.exam) && normalizeFlashcardKeyPart(entry.grade) === normalizeFlashcardKeyPart(params.grade) && normalizeFlashcardKeyPart(entry.subject) === normalizeFlashcardKeyPart(params.subject) && normalizeFlashcardKeyPart(entry.chapter) === normalizeFlashcardKeyPart(params.chapter) && normalizeFlashcardKeyPart(entry.subtopic) === normalizeFlashcardKeyPart(params.subtopic) && normalizeFlashcardKeyPart(entry.feature) === normalizeFlashcardKeyPart(params.feature || "AI Flashcards");
+  if (!isMatch) {
+    return null;
+  }
+  const count = params.requestedCount || entry.flashcards.length;
+  if (entry.flashcards.length < count) {
+    return null;
+  }
+  entry.hitCount = (entry.hitCount || 0) + 1;
+  entry.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  saveFlashcardsBank(bank);
+  return entry.flashcards.slice(0, count);
+}
+function saveToFlashcardsBank(params) {
+  if (!Array.isArray(params.flashcards) || params.flashcards.length === 0) return;
+  const bank = loadFlashcardsBank();
+  const key = generateFlashcardsBankKey({
+    ...params,
+    feature: params.feature || "AI Flashcards"
+  });
+  const existing = bank[key];
+  let mergedCards = [];
+  if (existing && Array.isArray(existing.flashcards)) {
+    const existingQuestions = new Set(existing.flashcards.map((c) => (c.question || "").toLowerCase().trim()));
+    mergedCards = [...existing.flashcards];
+    for (const card of params.flashcards) {
+      const qText = (card.question || "").toLowerCase().trim();
+      if (!existingQuestions.has(qText)) {
+        existingQuestions.add(qText);
+        mergedCards.push(card);
+      }
+    }
+  } else {
+    mergedCards = [...params.flashcards];
+  }
+  const normalizedSubtopic = /^(?:all|all\s*topics?|all\s*cards?|practice\s*full\s*chapter\s*deck|full\s*chapter\s*deck|entire\s*chapter|full\s*syllabus)$/i.test(params.subtopic) || !params.subtopic || params.subtopic.trim() === "" ? "All Topics Card" : params.subtopic;
+  bank[key] = {
+    country: params.country,
+    exam: params.exam,
+    grade: params.grade,
+    subject: params.subject,
+    chapter: params.chapter,
+    subtopic: normalizedSubtopic,
+    feature: "AI Flashcards",
+    totalCards: mergedCards.length,
+    flashcards: mergedCards,
+    createdAt: existing?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    hitCount: (existing?.hitCount || 0) + 1
+  };
+  saveFlashcardsBank(bank);
+  console.log(`[FlashcardBank] Saved ${mergedCards.length} flashcards for [${params.country} > ${params.exam} > ${params.subject} > ${params.chapter} > ${normalizedSubtopic}]. Key: ${key}`);
 }
 
 // server.ts
 import dotenv from "dotenv";
 import express from "express";
-import path2 from "path";
-import fs2 from "fs";
+import path3 from "path";
+import fs3 from "fs";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -1816,11 +1997,11 @@ var apiLimiter = rateLimit({
   validate: { xForwardedForHeader: false, default: false }
 });
 app.use("/api/", apiLimiter);
-var SUBS_FILE_PATH = path2.join(process.cwd(), "subscriptions.json");
+var SUBS_FILE_PATH = path3.join(process.cwd(), "subscriptions.json");
 function getStoredSubscriptions() {
   try {
-    if (fs2.existsSync(SUBS_FILE_PATH)) {
-      return JSON.parse(fs2.readFileSync(SUBS_FILE_PATH, "utf-8"));
+    if (fs3.existsSync(SUBS_FILE_PATH)) {
+      return JSON.parse(fs3.readFileSync(SUBS_FILE_PATH, "utf-8"));
     }
   } catch (error) {
     console.error("Error reading subscriptions from file:", error);
@@ -1829,7 +2010,7 @@ function getStoredSubscriptions() {
 }
 function writeStoredSubscriptions(subs) {
   try {
-    fs2.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
+    fs3.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
   } catch (error) {
     console.error("Error saving subscriptions to file:", error);
   }
@@ -1849,12 +2030,12 @@ function isClientPro(clientId, req) {
 }
 var DAILY_LIMIT_PRO = 150;
 var DAILY_LIMIT_MAX = 100;
-var DAILY_USAGE_FILE_PATH = process.env.VERCEL ? path2.join("/tmp", "ai_daily_usage.json") : path2.join(process.cwd(), "ai_daily_usage.json");
+var DAILY_USAGE_FILE_PATH = process.env.VERCEL ? path3.join("/tmp", "ai_daily_usage.json") : path3.join(process.cwd(), "ai_daily_usage.json");
 var dailyUsageStore = /* @__PURE__ */ new Map();
 function loadDailyUsageStore() {
   try {
-    if (fs2.existsSync(DAILY_USAGE_FILE_PATH)) {
-      const raw = fs2.readFileSync(DAILY_USAGE_FILE_PATH, "utf-8");
+    if (fs3.existsSync(DAILY_USAGE_FILE_PATH)) {
+      const raw = fs3.readFileSync(DAILY_USAGE_FILE_PATH, "utf-8");
       const data = JSON.parse(raw);
       const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       for (const [key, record] of Object.entries(data)) {
@@ -1882,7 +2063,7 @@ function scheduleSaveDailyUsage() {
           data[key] = record;
         }
       }
-      fs2.writeFileSync(DAILY_USAGE_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+      fs3.writeFileSync(DAILY_USAGE_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
     } catch (err) {
       console.error("[DailyLimit] Error saving daily usage to disk:", err);
     }
@@ -2877,6 +3058,26 @@ app.post("/api/scan", upload.single("image"), async (req, res) => {
     const stream = req.body.stream || req.body.academic_stream;
     const country = req.body.country || req.body.academic_country;
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
+    const hierarchyFlashcards2 = extractFlashcardsHierarchy(req.body);
+    const cachedFlashcards = findInFlashcardsBank({
+      country: hierarchyFlashcards2.country,
+      exam: hierarchyFlashcards2.exam,
+      grade: hierarchyFlashcards2.grade,
+      subject: hierarchyFlashcards2.subject,
+      chapter: hierarchyFlashcards2.chapter,
+      subtopic: hierarchyFlashcards2.subtopic,
+      feature: "AI Flashcards",
+      requestedCount: requestedCount || void 0
+    });
+    if (cachedFlashcards && cachedFlashcards.length > 0) {
+      console.log(`[FlashcardBank] HIT! Serving ${cachedFlashcards.length} cached flashcards for [${hierarchyFlashcards2.country} > ${hierarchyFlashcards2.exam} > ${hierarchyFlashcards2.grade} > ${hierarchyFlashcards2.subject} > ${hierarchyFlashcards2.chapter} > ${hierarchyFlashcards2.subtopic}] ($0 AI cost)`);
+      return res.json({
+        flashcards: cachedFlashcards,
+        cached: true,
+        source: "flashcards_bank"
+      });
+    }
+    console.log(`[FlashcardBank] MISS for [${hierarchyFlashcards2.country} > ${hierarchyFlashcards2.exam} > ${hierarchyFlashcards2.grade} > ${hierarchyFlashcards2.subject} > ${hierarchyFlashcards2.chapter} > ${hierarchyFlashcards2.subtopic}]. Generating via Gemini AI...`);
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
     const pedagogicalDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const examDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream);
@@ -4463,7 +4664,7 @@ app.post("/api/generate-flashcards", async (req, res) => {
       return res.status(400).json({ error: "INVALID_TOPIC", message: topicGuard.reason });
     }
     const hasExplicitCount = count !== void 0 && count !== null && count !== "" && !isNaN(parseInt(count));
-    const requestedCount = hasExplicitCount ? Math.min(Math.max(parseInt(count) || 10, 1), 30) : null;
+    const requestedCount2 = hasExplicitCount ? Math.min(Math.max(parseInt(count) || 10, 1), 30) : null;
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream || text);
@@ -4476,11 +4677,11 @@ CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - You MUST systematically distribute the flashcards evenly across ALL the chapters/domains listed in the topic.
 - ABSOLUTELY STRICT SUBJECT ISOLATION: ALL flashcards MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
 ` : "";
-    const countDirective = requestedCount ? `
-Your mission is to generate exactly ${requestedCount} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || "Standard"}.
+    const countDirective = requestedCount2 ? `
+Your mission is to generate exactly ${requestedCount2} high-yield revision flashcards calibrated for a student in Grade: ${gradeLevel || "Standard"}.
 
 CRITICAL COUNT MANDATE:
-The output JSON array MUST contain EXACTLY ${requestedCount} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount} cards, and never omit questions. The output array length MUST be ${requestedCount}.
+The output JSON array MUST contain EXACTLY ${requestedCount2} distinct flashcard objects. Never stop early, never output fewer than ${requestedCount2} cards, and never omit questions. The output array length MUST be ${requestedCount2}.
 ` : `
 Your mission is to generate a comprehensive, high-yield active recall flashcard revision deck calibrated for a student in Grade: ${gradeLevel || "Standard"}.
 
@@ -4515,7 +4716,7 @@ Format:
     "answer": "Every interacting force creates an equal and opposite reaction acting simultaneously on two distinct interacting physical objects."
   }
 ]`;
-    const userPromptText = requestedCount ? `Generate EXACTLY ${requestedCount} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount} cards:
+    const userPromptText = requestedCount2 ? `Generate EXACTLY ${requestedCount2} high-yield active recall flashcards with answers strictly between 15 and 25 words from this text or topic for a student in Grade: ${gradeLevel || "Standard"}. You must provide all ${requestedCount2} cards:
 
 ${text}` : `Generate a comprehensive high-yield active recall flashcard deck covering all key concepts, definitions, formulas, and mechanisms for this chapter/topic for a student in Grade: ${gradeLevel || "Standard"}. Generate as many flashcards as needed to master this entire chapter/unit thoroughly without any fixed limit:
 
@@ -4555,7 +4756,19 @@ ${text}`;
         }
       }
     }
-    res.json({ flashcards: Array.isArray(cards) ? cards : [] });
+    if (Array.isArray(cards) && cards.length > 0) {
+      saveToFlashcardsBank({
+        country: hierarchyFlashcards.country,
+        exam: hierarchyFlashcards.exam,
+        grade: hierarchyFlashcards.grade,
+        subject: hierarchyFlashcards.subject,
+        chapter: hierarchyFlashcards.chapter,
+        subtopic: hierarchyFlashcards.subtopic,
+        feature: "AI Flashcards",
+        flashcards: cards
+      });
+    }
+    res.json({ flashcards: Array.isArray(cards) ? cards : [], cached: false });
   } catch (error) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Flashcards quota exceeded:", error.message);
@@ -4572,6 +4785,28 @@ ${text}`;
     res.status(500).json({ error: error.message || "Failed to generate flashcards" });
   }
 });
+app.post("/api/save-flashcard-bank", async (req, res) => {
+  try {
+    const hierarchy = extractFlashcardsHierarchy(req.body);
+    const flashcards = req.body.flashcards;
+    if (Array.isArray(flashcards) && flashcards.length > 0) {
+      saveToFlashcardsBank({
+        country: hierarchy.country,
+        exam: hierarchy.exam,
+        grade: hierarchy.grade,
+        subject: hierarchy.subject,
+        chapter: hierarchy.chapter,
+        subtopic: hierarchy.subtopic,
+        feature: "AI Flashcards",
+        flashcards
+      });
+      return res.json({ success: true, message: "Flashcards saved to bank successfully" });
+    }
+    res.status(400).json({ error: "Missing or invalid flashcards array" });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to save flashcards to bank" });
+  }
+});
 app.post("/api/generate-pdf-flashcards", upload.single("pdf"), async (req, res) => {
   try {
     if (!req.file) {
@@ -4584,14 +4819,14 @@ app.post("/api/generate-pdf-flashcards", upload.single("pdf"), async (req, res) 
     const gradeLevel = req.body.gradeLevel || req.body.userGrade;
     const stream = req.body.stream || req.body.academic_stream;
     const country = req.body.country || req.body.academic_country;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 15, 5), 30);
+    const requestedCount2 = Math.min(Math.max(parseInt(count) || 15, 5), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
-    const cacheKey = crypto.createHash("sha256").update(req.file.buffer).digest("hex") + `_pdf_flashcards_${requestedCount}`;
+    const cacheKey = crypto.createHash("sha256").update(req.file.buffer).digest("hex") + `_pdf_flashcards_${requestedCount2}`;
     const systemInstruction = `${gradeDirective}
 
 Act as an Elite Cognitive Scientist and Active Recall Specialist.
 Your mission is to thoroughly read, analyze, and comprehend the attached complete PDF document across all its pages, chapters, diagrams, formulas, tables, and sections.
-Generate exactly ${requestedCount} high-yield, comprehensive active recall revision flashcards covering the most critical concepts throughout the ENTIRE document calibrated for a student in Grade: ${gradeLevel || "Standard"}.
+Generate exactly ${requestedCount2} high-yield, comprehensive active recall revision flashcards covering the most critical concepts throughout the ENTIRE document calibrated for a student in Grade: ${gradeLevel || "Standard"}.
 
 CRITICAL ACTIVE RECALL RULES:
 1. PUNCHY ACTIVE RECALL QUESTIONS: The 'question' must be direct, crisp, and test a single core mechanism, formula, definition, historical milestone, or concept from the document appropriate to their grade level.
@@ -4626,7 +4861,7 @@ Format:
       contents: [{
         parts: [
           pdfPart,
-          { text: `Thoroughly analyze all pages of this complete attached PDF document and generate exactly ${requestedCount} high-yield active recall flashcards in the specified JSON array format for a student in Grade: ${gradeLevel || "Standard"}.` }
+          { text: `Thoroughly analyze all pages of this complete attached PDF document and generate exactly ${requestedCount2} high-yield active recall flashcards in the specified JSON array format for a student in Grade: ${gradeLevel || "Standard"}.` }
         ]
       }],
       config: {
@@ -7668,7 +7903,7 @@ app.post("/api/generate-questions", async (req, res) => {
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream);
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
+    const requestedCount2 = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || "academic curriculum"}`;
     const hierarchyQ = extractQuestionHierarchy({
       ...req.body,
@@ -7680,13 +7915,13 @@ app.post("/api/generate-questions", async (req, res) => {
       ...hierarchyQ,
       feature: "ai_questions",
       difficulty,
-      requestedCount,
+      requestedCount: requestedCount2,
       avoidTexts: avoidTextsQ
     });
-    if (cachedQuestions && cachedQuestions.length >= requestedCount) {
-      console.log(`[QuestionsBank] HIT! Serving ${cachedQuestions.length} cached Subjective Questions for [${hierarchyQ.country} > ${hierarchyQ.examName} > ${hierarchyQ.subject} > ${hierarchyQ.chapter} > ${hierarchyQ.subtopic}] ($0 AI cost)`);
+    if (cachedQuestions && cachedQuestions.length >= requestedCount2) {
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuestions.length} cached Subjective Questions for [${hierarchyQ.country} > ${hierarchyQ.examName} > ${hierarchyQ.subject} > ${hierarchyQ.chapter} > ${hierarchyQ.subtopic} | mode: ${hierarchyQ.practiceMode}] ($0 AI cost)`);
       return res.json({
-        questions: sanitizeQuestions(cachedQuestions.slice(0, requestedCount)),
+        questions: sanitizeQuestions(cachedQuestions.slice(0, requestedCount2)),
         cached: true,
         source: "questions_bank"
       });
@@ -7695,7 +7930,7 @@ app.post("/api/generate-questions", async (req, res) => {
     const allChaptersDirectiveQ = isAllChaptersQ ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - The user has chosen an "ALL CHAPTERS / FULL SYLLABUS" subjective assessment specifically for this subject (${topicText}).
-- You MUST systematically distribute the ${requestedCount} questions evenly across all core chapters/topics of THIS subject.
+- You MUST systematically distribute the ${requestedCount2} questions evenly across all core chapters/topics of THIS subject.
 - ABSOLUTELY STRICT SUBJECT ISOLATION: ALL questions MUST be strictly and exclusively from THIS subject. DO NOT mix or introduce concepts from any other unrelated subject!
 ` : "";
     const isExplicitProgrammingCourse = /^(python|c\+\+|java|javascript|typescript|c programming|sql database)\s*(course|language|programming)?$/i.test(topicText.trim()) || /^(python|c\+\+|java|javascript|c programming)\s*(course|language|programming)?$/i.test((stream || "").trim());
@@ -7747,9 +7982,9 @@ CRITICAL ARCHITECTURE RULES:
    - Use clean LaTeX for all formulas ($F = ma$, $	ext{H}_2	ext{O}$, $V = IR$).
 
 2. REAL EXAM QUESTION VARIETY & INTRA-BATCH UNIQUENESS:
-   - Every single question in the generated ${requestedCount} questions MUST be 100% unique and test a completely distinct concept, law, equation, mechanism, or scenario.
+   - Every single question in the generated ${requestedCount2} questions MUST be 100% unique and test a completely distinct concept, law, equation, mechanism, or scenario.
    - ABSOLUTELY ZERO redundancy or near-duplicate questions within the set. Do not ask for the same explanation under slightly different wording.
-   - Provide a realistic, diverse blend across the ${requestedCount} questions:
+   - Provide a realistic, diverse blend across the ${requestedCount2} questions:
      * Standalone Short/Medium Conceptual Questions (2\u20133 Marks).
      * Standalone Long Analytical / Evaluative Questions (5\u20136 Marks).
      * Multi-part questions ((a) and (b)) only when naturally appropriate.
@@ -7827,8 +8062,8 @@ ${userStreamDirective}
 ${userCountryDirective}
 Pedagogical Exploration Angle: Focus on ${dynamicAngle}.
 Entropy Variation Seed: ${randomEntropySeed}
-Directive: Generate exactly ${requestedCount} authentic, high-yield subjective practice questions tailored to this topic, grade, and strictly matching ${difficulty} difficulty level.
-CRITICAL COUNT MANDATE: The output array MUST contain EXACTLY ${requestedCount} question objects. Never stop early or generate fewer than ${requestedCount}.
+Directive: Generate exactly ${requestedCount2} authentic, high-yield subjective practice questions tailored to this topic, grade, and strictly matching ${difficulty} difficulty level.
+CRITICAL COUNT MANDATE: The output array MUST contain EXACTLY ${requestedCount2} question objects. Never stop early or generate fewer than ${requestedCount2}.
 CRITICAL ANTI-REPETITION MANDATE: Every question must be 100% distinct. Do NOT repeat any concept or previously tested question.
 ${multiModalUserPrompt}
 For each question, provide:
@@ -7861,7 +8096,7 @@ For each question, provide:
       console.warn("[generate-questions] Primary model did not complete, executing rapid fallback model...");
       try {
         const rapidPrompt = `Subject: ${stream || "Science / Academic"}. Chapter/Topic: "${topicText}". Grade: "${gradeLevel}". Difficulty: "${difficulty}".
-Generate ${requestedCount} authentic, realistic descriptive exam questions testing distinct real concepts from this chapter/topic.
+Generate ${requestedCount2} authentic, realistic descriptive exam questions testing distinct real concepts from this chapter/topic.
 CRITICAL MANDATE:
 Generate 100% real, authentic, subject-matter specific questions. Do NOT use placeholder templates. Use LaTeX ($...$) for mathematical formulas. Provide a step-by-step model answer and marking rubric.
 Return ONLY valid JSON:
@@ -7976,8 +8211,8 @@ Return ONLY valid JSON:
           console.log(`[Anti-Repetition] Filtered out duplicate/repeating question: "${qText.slice(0, 60)}..."`);
         }
       }
-      if (uniqueBatch.length < requestedCount) {
-        const diff = requestedCount - uniqueBatch.length;
+      if (uniqueBatch.length < requestedCount2) {
+        const diff = requestedCount2 - uniqueBatch.length;
         const subtopicVariations = [
           `critical limitations and real-world boundary conditions of ${topicText}`,
           `mathematical derivation and dimensional analysis of key formulas in ${topicText}`,
@@ -8176,7 +8411,7 @@ Return ONLY valid JSON:
           stream,
           country,
           targetExam: targetExam2,
-          requestedCount
+          requestedCount: requestedCount2
         });
         const sanitized = sanitizeQuestions(verified);
         saveToQuestionBank({
@@ -8188,7 +8423,7 @@ Return ONLY valid JSON:
         return res.json({ questions: sanitized, cached: false, source: "ai_generated" });
       }
     }
-    return res.json({ questions: fallbackQuestions2(topicText, requestedCount) });
+    return res.json({ questions: fallbackQuestions2(topicText, requestedCount2) });
   } catch (error) {
     console.error("Question generation endpoint error:", error);
     const countNum = Math.min(Math.max(parseInt(req.body.count) || 5, 1), 10);
@@ -8623,18 +8858,18 @@ app.post("/api/generate-ap-questions", async (req, res) => {
       return res.status(400).json({ error: "Missing AP Subject" });
     }
     const type = questionType === "subjective" ? "subjective" : "objective";
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
+    const requestedCount2 = Math.min(Math.max(parseInt(count) || 5, 1), 20);
     const targetTopic = [topic, unit, subject].filter(Boolean).join(" - ");
     const subjectGuidelines = getCollegeBoardSubjectGuidelines(subject, type);
     const s = (subject || "").toLowerCase();
     const g = (gradeLevel || "").toLowerCase();
-    const dynamicArchetypePlan = getDynamicTopicVariation(subject, targetTopic, requestedCount);
+    const dynamicArchetypePlan = getDynamicTopicVariation(subject, targetTopic, requestedCount2);
     let antiRepetitionDirective = `
 CRITICAL QUESTION DIVERSITY & NO-REPEAT DIRECTIVE:
 - EVERY QUESTION MUST BE COMPLETELY UNIQUE, NOVEL, AND ORIGINAL.
 - DO NOT repeat classic stock textbook examples (e.g. do NOT use standard functions like (x^2-4)/(x-2), (sin(3x)tan(2x))/x^2, or standard textbook table values).
 - Invent fresh scenarios, diverse function types (rational, radical, trigonometric, exponential, piecewise, logarithmic), distinct variables, and varied real-world/experimental contexts.
-- Each of the ${requestedCount} questions must target a DIFFERENT sub-topic or analytical skill from the AP Course and Exam Description (CED).
+- Each of the ${requestedCount2} questions must target a DIFFERENT sub-topic or analytical skill from the AP Course and Exam Description (CED).
 
 MANDATORY QUESTION VARIATION BLUEPRINT FOR THIS SESSION:
 ${dynamicArchetypePlan}
@@ -8686,13 +8921,13 @@ OFFICIAL GRADE-LEVEL PEDAGOGICAL CALIBRATION: ADVANCED PLACEMENT (HIGH SCHOOL TO
 - Explanations: Clear, authoritative step-by-step breakdown according to official College Board scoring rubrics.`;
     }
     const batchSizes = [];
-    let remaining = requestedCount;
+    let remaining = requestedCount2;
     while (remaining > 0) {
       const take = Math.min(remaining, 10);
       batchSizes.push(take);
       remaining -= take;
     }
-    const allArchetypes = getGranularSubjectArchetypes(subject, targetTopic, requestedCount);
+    const allArchetypes = getGranularSubjectArchetypes(subject, targetTopic, requestedCount2);
     if (type === "objective") {
       const generateObjectiveBatch = async (batchCount, bIdx, extraAvoid = []) => {
         const batchOffset = bIdx >= 80 ? 0 : batchSizes.slice(0, bIdx).reduce((a, b) => a + b, 0);
@@ -8839,10 +9074,10 @@ If this is AP Calculus, AP Physics, AP Chemistry, AP Biology, AP Economics, or A
         }
       }
       let backfillAttempts = 0;
-      while (combinedQuestions.length < requestedCount && backfillAttempts < 2) {
+      while (combinedQuestions.length < requestedCount2 && backfillAttempts < 2) {
         backfillAttempts++;
-        const missingCount = requestedCount - combinedQuestions.length;
-        console.warn(`[generate-ap-questions] Objective questions deficit: got ${combinedQuestions.length}/${requestedCount}. Backfilling ${missingCount} questions (attempt ${backfillAttempts})...`);
+        const missingCount = requestedCount2 - combinedQuestions.length;
+        console.warn(`[generate-ap-questions] Objective questions deficit: got ${combinedQuestions.length}/${requestedCount2}. Backfilling ${missingCount} questions (attempt ${backfillAttempts})...`);
         try {
           const existingPrompts = combinedQuestions.map(
             (q) => (typeof q === "string" ? q : q.prompt || q.question || "").slice(0, 140)
@@ -8857,7 +9092,7 @@ If this is AP Calculus, AP Physics, AP Chemistry, AP Biology, AP Economics, or A
       }
       if (combinedQuestions.length > 0) {
         const letters = ["A", "B", "C", "D"];
-        const questionsList = combinedQuestions.slice(0, requestedCount).map((q, idx) => {
+        const questionsList = combinedQuestions.slice(0, requestedCount2).map((q, idx) => {
           if (typeof q === "string") {
             return {
               id: idx + 1,
@@ -9058,10 +9293,10 @@ If this is AP Calculus, AP Physics, AP Chemistry, AP Biology, AP Economics, or A
         }
       }
       let backfillAttempts = 0;
-      while (combinedQuestions.length < requestedCount && backfillAttempts < 2) {
+      while (combinedQuestions.length < requestedCount2 && backfillAttempts < 2) {
         backfillAttempts++;
-        const missingCount = requestedCount - combinedQuestions.length;
-        console.warn(`[generate-ap-questions] Subjective questions deficit: got ${combinedQuestions.length}/${requestedCount}. Backfilling ${missingCount} questions (attempt ${backfillAttempts})...`);
+        const missingCount = requestedCount2 - combinedQuestions.length;
+        console.warn(`[generate-ap-questions] Subjective questions deficit: got ${combinedQuestions.length}/${requestedCount2}. Backfilling ${missingCount} questions (attempt ${backfillAttempts})...`);
         try {
           const existingPrompts = combinedQuestions.map(
             (q) => (typeof q === "string" ? q : q.prompt || q.question || q.title || "").slice(0, 140)
@@ -9075,7 +9310,7 @@ If this is AP Calculus, AP Physics, AP Chemistry, AP Biology, AP Economics, or A
         }
       }
       if (combinedQuestions.length > 0) {
-        const questionsList = combinedQuestions.slice(0, requestedCount).map((q, idx) => {
+        const questionsList = combinedQuestions.slice(0, requestedCount2).map((q, idx) => {
           if (typeof q === "string") {
             return {
               id: idx + 1,
@@ -9269,10 +9504,10 @@ STRICT JSON OUTPUT FORMAT (WHEN VALID):
     }
     const targetTopic = [topic, unit, subject].filter(Boolean).join(" - ");
     if (format === "subjective") {
-      const requestedCount2 = Math.min(Math.max(parseInt(count) || 3, 1), 5);
+      const requestedCount3 = Math.min(Math.max(parseInt(count) || 3, 1), 5);
       const subjectiveSystemInstruction = `You are an elite Senior College Board AP Exam Chief Reader, Lead Item Writer, and Free-Response (FRQ) Scoring Director.
 The student is training with the "AP TRAP RADAR\u2122" to achieve a Score 5 in AP ${subject} on Section II (Free Response Questions / FRQs).
-Your mission: Generate exactly ${requestedCount2} ultra-authentic, high-caliber College Board AP Exam Free Response Questions (FRQ) for "${targetTopic}" embedded with REAL CHIEF READER RUBRIC TRAPS where 40%-70% of AP students forfeit critical rubric points.
+Your mission: Generate exactly ${requestedCount3} ultra-authentic, high-caliber College Board AP Exam Free Response Questions (FRQ) for "${targetTopic}" embedded with REAL CHIEF READER RUBRIC TRAPS where 40%-70% of AP students forfeit critical rubric points.
 
 RAPID GENERATION & HIGH-YIELD CONCISENESS DIRECTIVE:
 - Generate high-yield, punchy, and academically rigorous questions WITHOUT verbose filler or conversational padding.
@@ -9354,7 +9589,7 @@ Step 4 (Interpretation): This value represents the total path length traveled by
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
         model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Generate ${requestedCount2} authentic AP ${subject} Free Response Trap Radar questions for ${targetTopic}.` }] },
+        contents: { parts: [{ text: `Generate ${requestedCount3} authentic AP ${subject} Free Response Trap Radar questions for ${targetTopic}.` }] },
         config: {
           systemInstruction: { parts: [{ text: subjectiveSystemInstruction }] },
           responseMimeType: "application/json",
@@ -9382,10 +9617,10 @@ Step 4 (Interpretation): This value represents the total path length traveled by
       }
       throw new Error("Failed to generate valid Subjective Trap Radar questions.");
     }
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 10);
+    const requestedCount2 = Math.min(Math.max(parseInt(count) || 5, 1), 10);
     const systemInstruction = `You are a Senior College Board AP Exam Chief Psychometrician, Lead Item Writer, and Master Distractor Architect.
 The student is training with the "AP TRAP RADAR\u2122" to achieve a Score 5 in AP ${subject}.
-Your mission: Generate exactly ${requestedCount} ultra-authentic, high-caliber College Board AP Exam Multiple Choice Questions for "${targetTopic}" with DECEPTIVELY ENGINEERED PSYCHOMETRIC DISTRACTOR TRAPS.
+Your mission: Generate exactly ${requestedCount2} ultra-authentic, high-caliber College Board AP Exam Multiple Choice Questions for "${targetTopic}" with DECEPTIVELY ENGINEERED PSYCHOMETRIC DISTRACTOR TRAPS.
 
 RAPID HIGH-SPEED GENERATION RULES:
 - Generate with ultra-high speed and razor-sharp clarity. Keep each trapDescription to 1 crisp, direct sentence.
@@ -9479,7 +9714,7 @@ Return ONLY a valid JSON array of question objects:
     const response = await safeGenerateContent({
       gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
       model: "gemini-3.5-flash-lite",
-      contents: { parts: [{ text: `Generate ${requestedCount} authentic AP ${subject} Trap Radar questions for ${targetTopic}.` }] },
+      contents: { parts: [{ text: `Generate ${requestedCount2} authentic AP ${subject} Trap Radar questions for ${targetTopic}.` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json",
@@ -9947,13 +10182,13 @@ app.post("/api/generate-quiz", async (req, res) => {
       ...hierarchyQuiz,
       feature: "ai_quizzes",
       difficulty,
-      requestedCount,
+      requestedCount: requestedCount2,
       avoidTexts: avoidTextsQuiz
     });
-    if (cachedQuiz && cachedQuiz.length >= requestedCount) {
-      console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic}] ($0 AI cost)`);
+    if (cachedQuiz && cachedQuiz.length >= requestedCount2) {
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic} | mode: ${hierarchyQuiz.practiceMode}] ($0 AI cost)`);
       return res.json({
-        quiz: sanitizeQuizItems(cachedQuiz.slice(0, requestedCount)),
+        quiz: sanitizeQuizItems(cachedQuiz.slice(0, requestedCount2)),
         cached: true,
         source: "questions_bank"
       });
@@ -9975,15 +10210,15 @@ CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: MEDIUM (STANDARD BOARD / CURRICULU
 - Combines direct conceptual understanding with moderate application (1 to 2 steps of reasoning or calculation).
 - Distractors should reflect standard student misconceptions.
 `;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
+    const requestedCount2 = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const isAllChapters = /all (chapter|unit|domain|topic)|comprehensive|full syllabus/i.test(topic);
     const allChaptersDirective = isAllChapters ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - The user has chosen an "ALL CHAPTERS / FULL SYLLABUS" mock assessment specifically for this subject.
-- You MUST systematically distribute the ${requestedCount} questions evenly across ALL the chapters/domains listed in the topic.
-- ABSOLUTELY STRICT SUBJECT ISOLATION: ALL ${requestedCount} questions MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
+- You MUST systematically distribute the ${requestedCount2} questions evenly across ALL the chapters/domains listed in the topic.
+- ABSOLUTELY STRICT SUBJECT ISOLATION: ALL ${requestedCount2} questions MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
 ` : "";
     const systemInstruction = `${gradeDirective}
 ${difficultyDirective}
@@ -9998,7 +10233,7 @@ Your ONLY job is to generate a highly accurate, exam-level Multiple Choice Quiz 
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount2} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array. Do not return an array of multiple correct answers.
 4. OPTION LENGTH SYMMETRY & DISTRACTOR BALANCE MANDATE (ANTI-LENGTH BIAS):
    - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within \xB115% of each other).
@@ -10014,7 +10249,7 @@ CRITICAL RULES:
    - For chemistry and subscripts, write $H_2O$, $CO_2$, $x_1$, $x_2$.
    - NEVER wrap non-mathematical English abbreviations, college degrees, acronyms, or proper nouns (such as B.Tech, M.Tech, Ph.D., NIT, IIT, NASA, CBSE) in dollar signs ($). Dollar signs are strictly and exclusively for mathematical and chemical formulas.
 7. STRICT ZERO-REPETITION & ANTI-DUPLICATION MANDATE:
-   - Every single question in the generated ${requestedCount} questions MUST test a completely unique concept, formula, mechanism, or scenario.
+   - Every single question in the generated ${requestedCount2} questions MUST test a completely unique concept, formula, mechanism, or scenario.
    - ABSOLUTELY ZERO redundancy or duplicate questions within the quiz.
    - If an EXCLUDED QUESTIONS list is provided, you are STRICTLY FORBIDDEN from generating questions that repeat, duplicate, or rephrase those questions. Explore distinct, fresh curriculum subtopics.
 8. STRICT ANTI-TRUTH-BENDING & ZERO-THINKING-LEAKAGE MANDATE:
@@ -10051,11 +10286,11 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
         targetExam: targetExam2,
         examBlueprint: examBlueprint2,
         model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Topic: ${topic}. DIFFICULTY LEVEL: ${difficulty}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions strictly matching ${difficulty} difficulty in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
+        contents: { parts: [{ text: `Topic: ${topic}. DIFFICULTY LEVEL: ${difficulty}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount2} multiple choice questions strictly matching ${difficulty} difficulty in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
-          maxOutputTokens: Math.min(requestedCount * 400, 8192),
+          maxOutputTokens: Math.min(requestedCount2 * 400, 8192),
           temperature: 0.82
         }
       });
@@ -10152,10 +10387,10 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
         return res.json({ quiz: sanitized, cached: false, source: "ai_generated" });
       }
     }
-    return res.json({ quiz: sanitizeQuizItems(fallbackQuiz(topic, requestedCount)) });
+    return res.json({ quiz: sanitizeQuizItems(fallbackQuiz(topic, requestedCount2)) });
   } catch (error) {
     console.error("Quiz generation endpoint error:", error);
-    const requestedCount = Math.min(Math.max(parseInt(req.body.count) || 3, 1), 10);
+    const requestedCount2 = Math.min(Math.max(parseInt(req.body.count) || 3, 1), 10);
     res.json({
       quiz: [
         {
@@ -10358,18 +10593,18 @@ CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: HARD (ADVANCED / COMPETITIVE & ANA
 CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: MEDIUM (STANDARD CURRICULUM LEVEL):
 - Balanced standard curriculum exam difficulty.
 `;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
+    const requestedCount2 = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const rawCleanName = req.file?.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "";
     const detectedTopic = extractTopicFromPdfText(extractedText, topic || rawCleanName);
     const systemInstruction = `${gradeDirective}
 ${difficultyDirective}
 
-You are an expert curriculum exam creator. Analyze the provided study material and extract the most high-yield concepts across the document. Generate exactly ${requestedCount} multiple choice questions based strictly on this text/document, calibrated for a student in Grade: ${gradeLevel || "Standard"}. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
+You are an expert curriculum exam creator. Analyze the provided study material and extract the most high-yield concepts across the document. Generate exactly ${requestedCount2} multiple choice questions based strictly on this text/document, calibrated for a student in Grade: ${gradeLevel || "Standard"}. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
 
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount2} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
 4. OPTION LENGTH SYMMETRY & DISTRACTOR BALANCE MANDATE (ANTI-LENGTH BIAS):
    - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within \xB115% of each other).
@@ -10408,12 +10643,12 @@ ${distilledText}
 
 DOCUMENT CONTEXT/TOPIC: "${detectedTopic}"
 
-Generate exactly ${requestedCount} comprehensive multiple-choice practice questions in valid JSON based strictly on the concepts in this study material for Grade: ${gradeLevel || "Standard"}.` }]
+Generate exactly ${requestedCount2} comprehensive multiple-choice practice questions in valid JSON based strictly on the concepts in this study material for Grade: ${gradeLevel || "Standard"}.` }]
           }],
           config: {
             systemInstruction: { parts: [{ text: systemInstruction }] },
             responseMimeType: "application/json",
-            maxOutputTokens: Math.min(requestedCount * 450, 8192)
+            maxOutputTokens: Math.min(requestedCount2 * 450, 8192)
           }
         });
         quizText = response?.text || "";
@@ -10430,12 +10665,12 @@ Generate exactly ${requestedCount} comprehensive multiple-choice practice questi
               parts: [{ text: `DOCUMENT CORE CONCEPTS:
 ${distilledText.slice(0, 12e3)}
 
-Generate ${requestedCount} multiple choice questions in JSON array based on this material for Grade: ${gradeLevel || "Standard"}.` }]
+Generate ${requestedCount2} multiple choice questions in JSON array based on this material for Grade: ${gradeLevel || "Standard"}.` }]
             }],
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
               responseMimeType: "application/json",
-              maxOutputTokens: Math.min(requestedCount * 400, 8192)
+              maxOutputTokens: Math.min(requestedCount2 * 400, 8192)
             }
           });
           quizText = fallbackResp?.text || "";
@@ -10461,13 +10696,13 @@ Generate ${requestedCount} multiple choice questions in JSON array based on this
           contents: [{
             parts: [
               pdfPart,
-              { text: `Analyze the attached PDF document and generate ${requestedCount} multiple choice practice questions in valid JSON based strictly on its academic concepts for Grade: ${gradeLevel || "Standard"}.` }
+              { text: `Analyze the attached PDF document and generate ${requestedCount2} multiple choice practice questions in valid JSON based strictly on its academic concepts for Grade: ${gradeLevel || "Standard"}.` }
             ]
           }],
           config: {
             systemInstruction: { parts: [{ text: systemInstruction }] },
             responseMimeType: "application/json",
-            maxOutputTokens: Math.min(requestedCount * 450, 8192)
+            maxOutputTokens: Math.min(requestedCount2 * 450, 8192)
           }
         });
         quizText = response?.text || "";
@@ -10543,7 +10778,7 @@ Generate ${requestedCount} multiple choice questions in JSON array based on this
       }
       return out;
     };
-    const resilientQuiz = fallbackQuizQuestions(detectedTopic, requestedCount);
+    const resilientQuiz = fallbackQuizQuestions(detectedTopic, requestedCount2);
     return res.json({ quiz: sanitizeQuizItems(resilientQuiz) });
   } catch (error) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
@@ -10583,16 +10818,16 @@ CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: HARD (ADVANCED / COMPETITIVE & ANA
 CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: MEDIUM (STANDARD CURRICULUM LEVEL):
 - Balanced standard curriculum exam difficulty.
 `;
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
+    const requestedCount2 = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const systemInstruction = `${gradeDirective}
 ${difficultyDirective}
 
-You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate exactly ${requestedCount} multiple choice questions based strictly on the content of that textbook page, calibrated for a student in Grade: ${gradeLevel || "Standard"}.
+You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate exactly ${requestedCount2} multiple choice questions based strictly on the content of that textbook page, calibrated for a student in Grade: ${gradeLevel || "Standard"}.
     
 CRITICAL RULES:
 1. STRICT JSON OUTPUT: You must output ONLY a valid JSON array. Do not wrap it in markdown blockquotes like \`\`\`json. Absolutely ZERO conversational text before or after the JSON.
-2. FORMAT: Generate exactly ${requestedCount} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
+2. FORMAT: Generate exactly ${requestedCount2} questions. Each question must have exactly 4 options (prefixed with "A) ", "B) ", "C) ", "D) ") and a short explanation.
 3. CORRECT ANSWER: The "correctAnswer" field MUST be a single string that EXACTLY matches one of the strings in the "options" array.
 4. OPTION LENGTH SYMMETRY & DISTRACTOR BALANCE MANDATE (ANTI-LENGTH BIAS):
    - All 4 options (A, B, C, D) MUST have balanced lengths and approximately the SAME word count (within \xB115% of each other).
@@ -10624,7 +10859,7 @@ Use this exact JSON structure:
       targetExam,
       examBlueprint,
       model: "gemini-3.5-flash-lite",
-      contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions for a student in Grade: ${gradeLevel || "Standard"}.` }] }],
+      contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount2} multiple choice questions for a student in Grade: ${gradeLevel || "Standard"}.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
         responseMimeType: "application/json",
@@ -11026,7 +11261,7 @@ function pickUnseenFallbackQuestions(streamKey, count, excludeQuestions) {
 app.all(["/api/generate-trivia", "/api/daily-trivia"], async (req, res) => {
   try {
     const { gradeLevel, academicStream, studyLevel, topic, excludeQuestions, country, isBonus, count, dateKey } = req.body;
-    const requestedCount = Math.max(3, Math.min(10, Number(count) || 3));
+    const requestedCount2 = Math.max(3, Math.min(10, Number(count) || 3));
     const currentDateKey = dateKey || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const isBonusSession = isBonus === true || isBonus === "true";
     if (!isBonusSession) {
@@ -11121,7 +11356,7 @@ ${studentCountry ? `Curricular Context: Aligned with standard national/competiti
 ${excludeQuestions && Array.isArray(excludeQuestions) && excludeQuestions.length > 0 ? `FORBIDDEN QUESTIONS (DO NOT REPEAT OR PARAPHRASE ANY OF THESE): ${JSON.stringify(excludeQuestions.slice(-60))}` : ""}
 
 CRITICAL ZERO-REPETITION MANDATE:
-- Generate EXACTLY ${requestedCount} multiple-choice micro-questions.
+- Generate EXACTLY ${requestedCount2} multiple-choice micro-questions.
 - Do NOT repeat ANY question from the forbidden list above.
 - NEVER use generic textbook clich\xE9 questions (do NOT use Earth radius contraction by 1.5%, do NOT use Chlorine vs Fluorine electron gain enthalpy, do NOT use Krebs cycle NADH vs NADPH).
 - Formulate completely novel, creative, curriculum-authentic questions calibrated specifically for ${studentGrade} (${studentStream}).
@@ -11152,8 +11387,8 @@ STRICT OUTPUT JSON FORMAT:
       const systemInstruction = `${gradeDirective}
 
 You are the Daily Trivia Engine for HelpYou AI, calibrated for ${studentGrade} (${studentStream}) students.
-Generate exactly ${requestedCount} multiple-choice micro-questions targeting "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
-Return strictly a valid JSON object matching the requested schema with exactly ${requestedCount} items in the "questions" array.`;
+Generate exactly ${requestedCount2} multiple-choice micro-questions targeting "Exam Traps" (negative-marking traps where 80%+ students make careless errors).
+Return strictly a valid JSON object matching the requested schema with exactly ${requestedCount2} items in the "questions" array.`;
       const response = await safeGenerateContent({
         gradeLevel: studentGrade,
         stream: studentStream,
@@ -11181,33 +11416,33 @@ Return strictly a valid JSON object matching the requested schema with exactly $
             }
           }
         }
-        if (validQuestions.length >= requestedCount) {
+        if (validQuestions.length >= requestedCount2) {
           finalBooster = {
             dayNumber: parsed.dayNumber || currentDayOfYear,
             theme: parsed.theme || "Personalized Exam Trap Practice",
-            questions: validQuestions.slice(0, requestedCount)
+            questions: validQuestions.slice(0, requestedCount2)
           };
           break;
         } else if (validQuestions.length > 0) {
-          const needed = requestedCount - validQuestions.length;
+          const needed = requestedCount2 - validQuestions.length;
           const supplement = pickUnseenFallbackQuestions(targetStreamKey, needed, excludeQuestions);
           finalBooster = {
             dayNumber: parsed.dayNumber || currentDayOfYear,
             theme: parsed.theme || "Personalized Exam Trap Practice",
-            questions: [...validQuestions, ...supplement].slice(0, requestedCount)
+            questions: [...validQuestions, ...supplement].slice(0, requestedCount2)
           };
           break;
         }
       }
     }
-    if (finalBooster && finalBooster.questions.length >= requestedCount) {
+    if (finalBooster && finalBooster.questions.length >= requestedCount2) {
       return res.json({
         booster: finalBooster,
         questions: finalBooster.questions,
         trivia: finalBooster.questions[0]
       });
     }
-    const fallbackList = pickUnseenFallbackQuestions(targetStreamKey, requestedCount, excludeQuestions);
+    const fallbackList = pickUnseenFallbackQuestions(targetStreamKey, requestedCount2, excludeQuestions);
     return res.json({
       booster: {
         dayNumber: currentDayOfYear,
@@ -11229,8 +11464,8 @@ Return strictly a valid JSON object matching the requested schema with exactly $
     if (isCommerce) targetStreamKey = "commerce";
     else if (isHumanities) targetStreamKey = "humanities";
     else if (isMiddleSchool) targetStreamKey = "middleSchool";
-    const requestedCount = Math.max(3, Math.min(10, Number(req.body.count) || 3));
-    const fallbackList = pickUnseenFallbackQuestions(targetStreamKey, requestedCount, req.body.excludeQuestions);
+    const requestedCount2 = Math.max(3, Math.min(10, Number(req.body.count) || 3));
+    const fallbackList = pickUnseenFallbackQuestions(targetStreamKey, requestedCount2, req.body.excludeQuestions);
     res.json({
       booster: {
         dayNumber: 1,
@@ -11820,28 +12055,28 @@ app.post("/api/revenuecat-webhook", async (req, res) => {
   }
 });
 async function startServer() {
-  const distPath = path2.join(process.cwd(), "dist");
-  const hasDist = fs2.existsSync(path2.join(distPath, "index.html"));
+  const distPath = path3.join(process.cwd(), "dist");
+  const hasDist = fs3.existsSync(path3.join(distPath, "index.html"));
   const isDevExplicit = (process.env.NODE_ENV || "").toLowerCase() === "development";
   if (hasDist && !isDevExplicit) {
     console.log("[Server] Serving production static frontend from:", distPath);
     app.use("/assets", (req, res, next) => {
-      const assetDir = path2.join(distPath, "assets");
+      const assetDir = path3.join(distPath, "assets");
       const cleanPath = req.path.replace(/^\//, "");
-      const requestedFile = path2.join(assetDir, cleanPath);
-      if (fs2.existsSync(requestedFile)) {
+      const requestedFile = path3.join(assetDir, cleanPath);
+      if (fs3.existsSync(requestedFile)) {
         return next();
       }
-      const filename = path2.basename(req.path);
+      const filename = path3.basename(req.path);
       const match = filename.match(/^([A-Za-z0-9_-]+?)-[A-Za-z0-9_-]+\.(js|css|map)$/);
-      if (match && fs2.existsSync(assetDir)) {
+      if (match && fs3.existsSync(assetDir)) {
         const prefix = match[1];
         const ext = match[2];
         try {
-          const files = fs2.readdirSync(assetDir);
+          const files = fs3.readdirSync(assetDir);
           const matchingFiles = files.filter((f) => f.startsWith(`${prefix}-`) && f.endsWith(`.${ext}`)).map((f) => {
             try {
-              return { name: f, time: fs2.statSync(path2.join(assetDir, f)).mtimeMs };
+              return { name: f, time: fs3.statSync(path3.join(assetDir, f)).mtimeMs };
             } catch (_) {
               return { name: f, time: 0 };
             }
@@ -11857,7 +12092,7 @@ async function startServer() {
       }
       next();
     });
-    app.use("/assets", express.static(path2.join(distPath, "assets"), {
+    app.use("/assets", express.static(path3.join(distPath, "assets"), {
       maxAge: "1y",
       immutable: true
     }));
@@ -11869,12 +12104,12 @@ async function startServer() {
       }
     }));
     app.get("*", (req, res) => {
-      const ext = path2.extname(req.path);
+      const ext = path3.extname(req.path);
       if (ext || req.path.startsWith("/src") || req.path.startsWith("/api")) {
         return res.status(404).send("Not Found");
       }
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.sendFile(path2.join(distPath, "index.html"));
+      res.sendFile(path3.join(distPath, "index.html"));
     });
   } else {
     try {

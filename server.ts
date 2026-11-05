@@ -8,6 +8,12 @@ import {
   saveToQuestionBank,
   loadQuestionsBank
 } from "./src/utils/questionsBank";
+import {
+  extractFlashcardsHierarchy,
+  findInFlashcardsBank,
+  saveToFlashcardsBank,
+  loadFlashcardsBank
+} from "./src/utils/flashcardsBank";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -1466,6 +1472,28 @@ app.post("/api/scan", upload.single("image"), async (req, res) => {
     const stream = req.body.stream || req.body.academic_stream;
     const country = req.body.country || req.body.academic_country;
     const targetExam = req.body.targetExam || req.body.target_exam || req.body.exam;
+    const hierarchyFlashcards = extractFlashcardsHierarchy(req.body);
+    const cachedFlashcards = findInFlashcardsBank({
+      country: hierarchyFlashcards.country,
+      exam: hierarchyFlashcards.exam,
+      grade: hierarchyFlashcards.grade,
+      subject: hierarchyFlashcards.subject,
+      chapter: hierarchyFlashcards.chapter,
+      subtopic: hierarchyFlashcards.subtopic,
+      feature: 'AI Flashcards',
+      requestedCount: requestedCount || undefined
+    });
+
+    if (cachedFlashcards && cachedFlashcards.length > 0) {
+      console.log(`[FlashcardBank] HIT! Serving ${cachedFlashcards.length} cached flashcards for [${hierarchyFlashcards.country} > ${hierarchyFlashcards.exam} > ${hierarchyFlashcards.grade} > ${hierarchyFlashcards.subject} > ${hierarchyFlashcards.chapter} > ${hierarchyFlashcards.subtopic}] ($0 AI cost)`);
+      return res.json({
+        flashcards: cachedFlashcards,
+        cached: true,
+        source: "flashcards_bank"
+      });
+    }
+
+    console.log(`[FlashcardBank] MISS for [${hierarchyFlashcards.country} > ${hierarchyFlashcards.exam} > ${hierarchyFlashcards.grade} > ${hierarchyFlashcards.subject} > ${hierarchyFlashcards.chapter} > ${hierarchyFlashcards.subtopic}]. Generating via Gemini AI...`);
     const examBlueprint = req.body.examBlueprint || req.body.blueprint;
 
     const pedagogicalDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
@@ -3279,7 +3307,19 @@ Format:
         } catch (_) {}
       }
     }
-    res.json({ flashcards: Array.isArray(cards) ? cards : [] });
+    if (Array.isArray(cards) && cards.length > 0) {
+      saveToFlashcardsBank({
+        country: hierarchyFlashcards.country,
+        exam: hierarchyFlashcards.exam,
+        grade: hierarchyFlashcards.grade,
+        subject: hierarchyFlashcards.subject,
+        chapter: hierarchyFlashcards.chapter,
+        subtopic: hierarchyFlashcards.subtopic,
+        feature: 'AI Flashcards',
+        flashcards: cards
+      });
+    }
+    res.json({ flashcards: Array.isArray(cards) ? cards : [], cached: false });
   } catch (error: any) {
     if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
       console.warn("Flashcards quota exceeded:", error.message);
@@ -3294,6 +3334,29 @@ Format:
     }
     console.error("Flashcards error:", error);
     res.status(500).json({ error: error.message || "Failed to generate flashcards" });
+  }
+});
+
+app.post("/api/save-flashcard-bank", async (req, res) => {
+  try {
+    const hierarchy = extractFlashcardsHierarchy(req.body);
+    const flashcards = req.body.flashcards;
+    if (Array.isArray(flashcards) && flashcards.length > 0) {
+      saveToFlashcardsBank({
+        country: hierarchy.country,
+        exam: hierarchy.exam,
+        grade: hierarchy.grade,
+        subject: hierarchy.subject,
+        chapter: hierarchy.chapter,
+        subtopic: hierarchy.subtopic,
+        feature: 'AI Flashcards',
+        flashcards
+      });
+      return res.json({ success: true, message: "Flashcards saved to bank successfully" });
+    }
+    res.status(400).json({ error: "Missing or invalid flashcards array" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to save flashcards to bank" });
   }
 });
 
@@ -6766,7 +6829,7 @@ app.post("/api/generate-questions", async (req, res) => {
       avoidTexts: avoidTextsQ
     });
     if (cachedQuestions && cachedQuestions.length >= requestedCount) {
-      console.log(`[QuestionsBank] HIT! Serving ${cachedQuestions.length} cached Subjective Questions for [${hierarchyQ.country} > ${hierarchyQ.examName} > ${hierarchyQ.subject} > ${hierarchyQ.chapter} > ${hierarchyQ.subtopic}] ($0 AI cost)`);
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuestions.length} cached Subjective Questions for [${hierarchyQ.country} > ${hierarchyQ.examName} > ${hierarchyQ.subject} > ${hierarchyQ.chapter} > ${hierarchyQ.subtopic} | mode: ${hierarchyQ.practiceMode}] ($0 AI cost)`);
       return res.json({
         questions: sanitizeQuestions(cachedQuestions.slice(0, requestedCount)),
         cached: true,
@@ -9138,7 +9201,7 @@ app.post("/api/generate-quiz", async (req, res) => {
       avoidTexts: avoidTextsQuiz
     });
     if (cachedQuiz && cachedQuiz.length >= requestedCount) {
-      console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic}] ($0 AI cost)`);
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic} | mode: ${hierarchyQuiz.practiceMode}] ($0 AI cost)`);
       return res.json({
         quiz: sanitizeQuizItems(cachedQuiz.slice(0, requestedCount)),
         cached: true,

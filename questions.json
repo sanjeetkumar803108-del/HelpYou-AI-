@@ -1,5 +1,5 @@
 {
-  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium": {
+  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium__standard": {
     "country": "Norway",
     "examName": "Norwegian Upper Secondary Exit Examinations",
     "grade": "11th Grade",
@@ -8,6 +8,7 @@
     "subtopic": "Normale verdeling berekeningen",
     "feature": "ai_quizzes",
     "difficulty": "Medium",
+    "practiceMode": "standard",
     "totalQuestions": 2,
     "questions": [
       {
@@ -36,10 +37,10 @@
       }
     ],
     "createdAt": "2026-11-05T10:29:21.591Z",
-    "updatedAt": "2026-11-05T10:29:21.594Z",
-    "hitCount": 2
+    "updatedAt": "2026-11-05T10:57:12.740Z",
+    "hitCount": 3
   },
-  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__all_subjects_all_topics__all_subjects_all_topics__all_subjects_all_topics__ai_quizzes__hard": {
+  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__all_subjects_all_topics__all_subjects_all_topics__all_subjects_all_topics__ai_quizzes__hard__standard": {
     "country": "Norway",
     "examName": "Norwegian Upper Secondary Exit Examinations",
     "grade": "11th Grade",
@@ -48,6 +49,7 @@
     "subtopic": "All Subjects / All Topics",
     "feature": "ai_quizzes",
     "difficulty": "Hard",
+    "practiceMode": "standard",
     "totalQuestions": 1,
     "questions": [
       {
@@ -65,6 +67,47 @@
     ],
     "createdAt": "2026-11-05T10:33:20.590Z",
     "updatedAt": "2026-11-05T10:33:20.592Z",
+    "hitCount": 2
+  },
+  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium__more_questions_to_practice": {
+    "country": "Norway",
+    "examName": "Norwegian Upper Secondary Exit Examinations",
+    "grade": "11th Grade",
+    "subject": "Mathematics A",
+    "chapter": "Statistiek",
+    "subtopic": "Normale verdeling berekeningen",
+    "feature": "ai_quizzes",
+    "difficulty": "Medium",
+    "practiceMode": "more_questions_to_practice",
+    "totalQuestions": 2,
+    "questions": [
+      {
+        "id": 101,
+        "question": "More Practice Q1: Wat is de kans P(X < 50) voor een normale verdeling met μ = 50?",
+        "options": [
+          "A) 0.50",
+          "B) 0.25",
+          "C) 0.75",
+          "D) 1.00"
+        ],
+        "correctAnswer": "A) 0.50",
+        "explanation": "Omdat de verdeling symmetrisch is rond het gemiddelde μ = 50."
+      },
+      {
+        "id": 102,
+        "question": "More Practice Q2: Welke eigenschap heeft de standaardnormale verdeling?",
+        "options": [
+          "A) μ = 0 en σ = 1",
+          "B) μ = 1 en σ = 0",
+          "C) μ = 50 en σ = 5",
+          "D) μ = 100 en σ = 15"
+        ],
+        "correctAnswer": "A) μ = 0 en σ = 1",
+        "explanation": "Een standaardnormale verdeling heeft per definitie μ = 0 en σ = 1."
+      }
+    ],
+    "createdAt": "2026-11-05T10:57:12.743Z",
+    "updatedAt": "2026-11-05T10:57:12.762Z",
     "hitCount": 2
   }
 }

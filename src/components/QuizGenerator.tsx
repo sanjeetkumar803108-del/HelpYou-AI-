@@ -1831,7 +1831,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     }
   };
 
-  const handleGenerateReal = async (selectedTopic: string, selectedCount: number, selectedDifficulty: 'Easy' | 'Medium' | 'Hard' = difficulty) => {
+  const handleGenerateReal = async (selectedTopic: string, selectedCount: number, selectedDifficulty: 'Easy' | 'Medium' | 'Hard' = difficulty, isMorePractice: boolean = false) => {
     const activeTopic = selectedTopic.trim();
     if (!activeTopic) return;
     lastTestedTopicRef.current = activeTopic;
@@ -1902,6 +1902,8 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
           subject: hierarchy.subject,
           chapter: hierarchy.chapter,
           subtopic: hierarchy.subTopic,
+          isMorePractice,
+          practiceMode: isMorePractice ? 'more_questions_to_practice' : 'standard',
           avoidPrompts: uniqueAvoid,
           avoidQuestions: uniqueAvoid,
           randomSeed: `${Date.now()}_${Math.random().toString(36).substring(7)}`
@@ -2331,7 +2333,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     }
 
     const countToUse = quiz.length > 0 ? quiz.length : 10;
-    handleGenerateReal(targetTopic, countToUse, difficulty);
+    handleGenerateReal(targetTopic, countToUse, difficulty, true);
   };
 
   const safeHistory = Array.isArray(history) ? history : [];

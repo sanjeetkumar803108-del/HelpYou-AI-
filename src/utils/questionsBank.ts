@@ -21,6 +21,7 @@ export interface QuestionBankEntry {
   subtopic: string;
   feature: 'ai_quizzes' | 'ai_questions';
   difficulty: string;
+  practiceMode: 'standard' | 'more_questions_to_practice' | string;
   totalQuestions: number;
   questions: QuestionBankItem[];
   createdAt: string;
@@ -45,6 +46,25 @@ export function normalizeKeyPart(str: string | undefined, fallback: string = 'ge
   return slug || fallback;
 }
 
+export function normalizePracticeMode(mode: string | boolean | undefined): 'standard' | 'more_questions_to_practice' {
+  if (mode === true || mode === 'true' || mode === 'more_questions_to_practice' || mode === 'more_practice') {
+    return 'more_questions_to_practice';
+  }
+  return 'standard';
+}
+
+/**
+ * Generates strict 9-point composite cache key:
+ * 1. country
+ * 2. examName
+ * 3. grade
+ * 4. subject
+ * 5. chapter
+ * 6. subtopic (supports "All Subjects / All Topics")
+ * 7. feature (ai_quizzes vs ai_questions)
+ * 8. difficulty
+ * 9. practiceMode (standard vs more_questions_to_practice)
+ */
 export function generateQuestionBankKey(params: {
   country?: string;
   examName?: string;
@@ -54,6 +74,7 @@ export function generateQuestionBankKey(params: {
   subtopic?: string;
   feature: 'ai_quizzes' | 'ai_questions';
   difficulty?: string;
+  practiceMode?: string | boolean;
 }): string {
   const c = normalizeKeyPart(params.country, 'global');
   const e = normalizeKeyPart(params.examName, 'exam');
@@ -63,8 +84,9 @@ export function generateQuestionBankKey(params: {
   const sub = normalizeKeyPart(params.subtopic, 'all_subjects_all_topics');
   const f = normalizeKeyPart(params.feature, 'quiz');
   const d = normalizeKeyPart(params.difficulty, 'medium');
+  const p = normalizePracticeMode(params.practiceMode);
 
-  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}`;
+  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}__${p}`;
 }
 
 export function extractQuestionHierarchy(body: any): {
@@ -75,6 +97,7 @@ export function extractQuestionHierarchy(body: any): {
   chapter: string;
   subtopic: string;
   difficulty: string;
+  practiceMode: 'standard' | 'more_questions_to_practice';
 } {
   const rawCountry = (body.country || body.academic_country || 'Global').trim();
   const country = rawCountry.toLowerCase() === 'others' || rawCountry.toLowerCase() === 'other'
@@ -85,6 +108,7 @@ export function extractQuestionHierarchy(body: any): {
   const grade = (body.gradeLevel || body.grade || body.userGrade || 'Senior Secondary').trim();
   const rawDifficulty = (body.difficulty || body.difficultyLevel || 'Medium').trim();
   const difficulty = rawDifficulty ? (rawDifficulty.charAt(0).toUpperCase() + rawDifficulty.slice(1).toLowerCase()) : 'Medium';
+  const practiceMode = normalizePracticeMode(body.practiceMode ?? body.isMorePractice);
 
   const rawTopic = (body.topic || body.prompt || body.text || '').trim();
   let subject = (body.subject || body.stream || '').trim();
@@ -141,7 +165,8 @@ export function extractQuestionHierarchy(body: any): {
     subject,
     chapter,
     subtopic,
-    difficulty
+    difficulty,
+    practiceMode
   };
 }
 
@@ -190,7 +215,7 @@ export function saveQuestionsBank(bank: Record<string, QuestionBankEntry>): void
 }
 
 /**
- * Searches the Question Bank for an exact 8-point profile match:
+ * Searches the Question Bank for an exact 9-point profile match:
  * 1. country
  * 2. examName
  * 3. grade
@@ -199,6 +224,7 @@ export function saveQuestionsBank(bank: Record<string, QuestionBankEntry>): void
  * 6. subtopic (supports "All Subjects / All Topics")
  * 7. feature (ai_quizzes vs ai_questions)
  * 8. difficulty
+ * 9. practiceMode (standard vs more_questions_to_practice)
  */
 export function findInQuestionBank(params: {
   country: string;
@@ -209,6 +235,7 @@ export function findInQuestionBank(params: {
   subtopic: string;
   feature: 'ai_quizzes' | 'ai_questions';
   difficulty: string;
+  practiceMode?: string | boolean;
   requestedCount?: number;
   avoidTexts?: string[];
 }): QuestionBankItem[] | null {
@@ -220,7 +247,7 @@ export function findInQuestionBank(params: {
     return null;
   }
 
-  // Exact 8-Point Match Verification
+  // Exact 9-Point Match Verification
   const isMatch =
     normalizeKeyPart(entry.country) === normalizeKeyPart(params.country) &&
     normalizeKeyPart(entry.examName) === normalizeKeyPart(params.examName) &&
@@ -229,7 +256,8 @@ export function findInQuestionBank(params: {
     normalizeKeyPart(entry.chapter) === normalizeKeyPart(params.chapter) &&
     normalizeKeyPart(entry.subtopic) === normalizeKeyPart(params.subtopic) &&
     normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) &&
-    normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty);
+    normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty) &&
+    normalizePracticeMode(entry.practiceMode) === normalizePracticeMode(params.practiceMode);
 
   if (!isMatch) {
     return null;
@@ -264,7 +292,7 @@ export function findInQuestionBank(params: {
 }
 
 /**
- * Saves or appends newly generated AI questions to the Question Bank under its exact 8-point profile.
+ * Saves or appends newly generated AI questions to the Question Bank under its exact 9-point profile.
  */
 export function saveToQuestionBank(params: {
   country: string;
@@ -275,6 +303,7 @@ export function saveToQuestionBank(params: {
   subtopic: string;
   feature: 'ai_quizzes' | 'ai_questions';
   difficulty: string;
+  practiceMode?: string | boolean;
   questions: QuestionBankItem[];
 }): void {
   if (!Array.isArray(params.questions) || params.questions.length === 0) return;
@@ -300,6 +329,8 @@ export function saveToQuestionBank(params: {
     mergedQuestions = [...params.questions];
   }
 
+  const finalPracticeMode = normalizePracticeMode(params.practiceMode);
+
   bank[key] = {
     country: params.country,
     examName: params.examName,
@@ -309,6 +340,7 @@ export function saveToQuestionBank(params: {
     subtopic: params.subtopic,
     feature: params.feature,
     difficulty: params.difficulty,
+    practiceMode: finalPracticeMode,
     totalQuestions: mergedQuestions.length,
     questions: mergedQuestions,
     createdAt: existing?.createdAt || new Date().toISOString(),
@@ -317,5 +349,5 @@ export function saveToQuestionBank(params: {
   };
 
   saveQuestionsBank(bank);
-  console.log(`[QuestionsBank] Saved ${mergedQuestions.length} questions for [${params.country} > ${params.examName} > ${params.subject} > ${params.chapter} > ${params.subtopic} (${params.feature})]. Key: ${key}`);
+  console.log(`[QuestionsBank] Saved ${mergedQuestions.length} questions for [${params.country} > ${params.examName} > ${params.subject} > ${params.chapter} > ${params.subtopic} (${params.feature} | mode: ${finalPracticeMode})]. Key: ${key}`);
 }

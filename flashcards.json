@@ -1,0 +1,25 @@
+{
+  "norway__vg2__11th__mathematics_a__statistiek__all_topics_card__ai_flashcards": {
+    "country": "Norway",
+    "exam": "VG2",
+    "grade": "11th",
+    "subject": "Mathematics A",
+    "chapter": "Statistiek",
+    "subtopic": "All Topics Card",
+    "feature": "AI Flashcards",
+    "totalCards": 2,
+    "flashcards": [
+      {
+        "question": "Hva er standardavvik?",
+        "answer": "Et mal pa spredningen av dataene rundt gjennomsnittet."
+      },
+      {
+        "question": "Hva er normalfordeling?",
+        "answer": "En symmetrisk klokkeformet sannsynlighetsfordeling."
+      }
+    ],
+    "createdAt": "2026-11-05T10:58:50.957Z",
+    "updatedAt": "2026-11-05T10:58:50.960Z",
+    "hitCount": 2
+  }
+}

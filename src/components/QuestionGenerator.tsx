@@ -721,7 +721,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
     setHistoryItems(prev => prev.map(item => item.id === id ? { ...item, isPdf: true } : item));
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (isMorePractice: boolean = false) => {
     // Check if user has at least 2 coins before starting, but do not deduct yet!
     const coins = getCoins();
     if (coins < 2) {
@@ -765,6 +765,8 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
           gradeLevel: profile.gradeLevel || gradeLevel,
           stream: profile.stream || stream,
           country: profile.country || country,
+          isMorePractice,
+          practiceMode: isMorePractice ? 'more_questions_to_practice' : 'standard',
           avoidPrompts: avoidList,
           avoidQuestions: avoidList,
           randomSeed: `${Date.now()}_${Math.random().toString(36).substring(7)}`
@@ -1740,7 +1742,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                   type="button"
                   onClick={() => {
                     triggerVibration(15);
-                    handleGenerate();
+                    handleGenerate(true);
                   }}
                   disabled={loading}
                   className="w-full py-4 bg-zinc-950 hover:bg-zinc-800 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
@@ -2251,7 +2253,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
               <div className="bg-white border border-zinc-200 rounded-[2rem] p-4 sm:p-5 shadow-sm">
                 <button
                   type="button"
-                  onClick={handleGenerate}
+                  onClick={() => handleGenerate(false)}
                   className="w-full py-4.5 bg-zinc-950 hover:bg-zinc-800 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300 fill-amber-300" />

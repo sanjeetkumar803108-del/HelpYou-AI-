@@ -531,6 +531,21 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
     let generatedCards: Flashcard[] = [];
     let lastErrorMsg = '';
 
+    const hierarchy = parseTopicHierarchy(topicToUse, profile.subject || 'General');
+
+    // Check whether it is full chapter deck or specific subtopic
+    const isFullChapterDeck = 
+      (curriculumMeta?.isCurriculum && (!curriculumMeta.topicName.includes(' - ') || curriculumMeta.topicName === hierarchy.chapter)) ||
+      hierarchy.subTopic === 'All' ||
+      !hierarchy.subTopic ||
+      /all (topics?|cards?|chapters?|units?)|full (chapter|deck|syllabus)/i.test(topicToUse);
+
+    const subtopicToUse = isFullChapterDeck ? 'All Topics Card' : hierarchy.subTopic;
+    const subjectToUse = curriculumMeta?.subjectTitle || hierarchy.subject || profile.subject || 'General';
+    const chapterToUse = (curriculumMeta?.isCurriculum && !curriculumMeta.topicName.includes(' - '))
+      ? curriculumMeta.topicName
+      : (hierarchy.chapter || 'All');
+
     // =========================================================================
     // LAYER 1: Ultra-Fast Primary Endpoint (/api/generate-flashcards) (35s timeout)
     // =========================================================================
@@ -538,7 +553,19 @@ export default function FlashcardGenerator({ onBack }: { onBack: () => void }) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 35000);
 
-      const requestPayload: any = { text: topicToUse, topic: topicToUse };
+      const requestPayload: any = {
+        text: topicToUse,
+        topic: topicToUse,
+        country: profile.country || safeGetItem('academic_country') || 'India',
+        exam: profile.targetExam || safeGetItem('academic_exam') || 'General',
+        targetExam: profile.targetExam || safeGetItem('academic_exam') || 'General',
+        grade: profile.gradeLevel || safeGetItem('academic_grade') || 'Standard',
+        gradeLevel: profile.gradeLevel || safeGetItem('academic_grade') || 'Standard',
+        subject: subjectToUse,
+        chapter: chapterToUse,
+        subtopic: subtopicToUse,
+        feature: 'AI Flashcards'
+      };
       if (selectedCount) {
         requestPayload.count = selectedCount;
       }
@@ -606,6 +633,20 @@ Return ONLY a valid JSON array of objects with keys "question" and "answer" (ans
           const extracted = extractCardsFromResponse(chatData);
           if (extracted.length > 0) {
             generatedCards = extracted;
+            fetch(getApiUrl('/api/save-flashcard-bank'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                country: profile.country || safeGetItem('academic_country') || 'India',
+                exam: profile.targetExam || safeGetItem('academic_exam') || 'General',
+                grade: profile.gradeLevel || safeGetItem('academic_grade') || 'Standard',
+                subject: subjectToUse,
+                chapter: chapterToUse,
+                subtopic: subtopicToUse,
+                feature: 'AI Flashcards',
+                flashcards: extracted
+              })
+            }).catch(() => {});
           }
         }
       } catch (chatErr: any) {

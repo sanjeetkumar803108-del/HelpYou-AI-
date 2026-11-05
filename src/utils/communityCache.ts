@@ -220,7 +220,7 @@ export function parseTopicHierarchy(rawTopic: string, fallbackSubject?: string):
     }
     return { subject: parts[0], chapter: parts[1], subTopic: 'All' };
   }
-  return { subject: fallbackSubject || 'General', chapter: parts[0] || 'All', subTopic: parts[0] || 'All' };
+  return { subject: fallbackSubject || 'General', chapter: parts[0] || 'All', subTopic: 'All' };
 }
 
 /**

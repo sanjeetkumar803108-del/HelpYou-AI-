@@ -95,13 +95,18 @@ export function extractFlashcardsHierarchy(body: any): {
       if (!chapter) chapter = parts[1];
       if (!subtopic) subtopic = parts.slice(2).join(' - ');
     } else if (parts.length === 2) {
-      if (!subject) subject = parts[0];
-      if (!chapter) chapter = parts[1];
-      if (!subtopic) subtopic = 'All Topics Card';
+      if (subject && subject.toLowerCase() !== parts[0].toLowerCase()) {
+        if (!chapter) chapter = parts[0];
+        if (!subtopic) subtopic = parts[1];
+      } else {
+        if (!subject) subject = parts[0];
+        if (!chapter) chapter = parts[1];
+        if (!subtopic) subtopic = 'All Topics Card';
+      }
     } else if (parts.length === 1) {
-      if (!subject) subject = parts[0];
       if (!chapter) chapter = parts[0];
       if (!subtopic) subtopic = 'All Topics Card';
+      if (!subject) subject = 'General Studies';
     }
   }
 

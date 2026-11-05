@@ -6,7 +6,9 @@ import {
   extractQuestionHierarchy,
   findInQuestionBank,
   saveToQuestionBank,
-  loadQuestionsBank
+  loadQuestionsBank,
+  getTopicCeilingLimit,
+  getTopicAccumulatedQuestions
 } from "./src/utils/questionsBank";
 import {
   extractFlashcardsHierarchy,
@@ -1474,28 +1476,6 @@ app.post("/api/scan", upload.single("image"), async (req, res) => {
     const stream = req.body.stream || req.body.academic_stream;
     const country = req.body.country || req.body.academic_country;
     const targetExam = req.body.targetExam || req.body.target_exam || req.body.exam;
-    const hierarchyFlashcards = extractFlashcardsHierarchy(req.body);
-    const cachedFlashcards = findInFlashcardsBank({
-      country: hierarchyFlashcards.country,
-      exam: hierarchyFlashcards.exam,
-      grade: hierarchyFlashcards.grade,
-      subject: hierarchyFlashcards.subject,
-      chapter: hierarchyFlashcards.chapter,
-      subtopic: hierarchyFlashcards.subtopic,
-      feature: 'AI Flashcards',
-      requestedCount: requestedCount || undefined
-    });
-
-    if (cachedFlashcards && cachedFlashcards.length > 0) {
-      console.log(`[FlashcardBank] HIT! Serving ${cachedFlashcards.length} cached flashcards for [${hierarchyFlashcards.country} > ${hierarchyFlashcards.exam} > ${hierarchyFlashcards.grade} > ${hierarchyFlashcards.subject} > ${hierarchyFlashcards.chapter} > ${hierarchyFlashcards.subtopic}] ($0 AI cost)`);
-      return res.json({
-        flashcards: cachedFlashcards,
-        cached: true,
-        source: "flashcards_bank"
-      });
-    }
-
-    console.log(`[FlashcardBank] MISS for [${hierarchyFlashcards.country} > ${hierarchyFlashcards.exam} > ${hierarchyFlashcards.grade} > ${hierarchyFlashcards.subject} > ${hierarchyFlashcards.chapter} > ${hierarchyFlashcards.subtopic}]. Generating via Gemini AI...`);
     const examBlueprint = req.body.examBlueprint || req.body.blueprint;
 
     const pedagogicalDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
@@ -3215,6 +3195,28 @@ app.post("/api/generate-flashcards", async (req, res) => {
     const hasExplicitCount = count !== undefined && count !== null && count !== '' && !isNaN(parseInt(count));
     const requestedCount = hasExplicitCount ? Math.min(Math.max(parseInt(count) || 10, 1), 30) : null;
     const targetExam = req.body.targetExam || req.body.target_exam || req.body.exam;
+    const hierarchyFlashcards = extractFlashcardsHierarchy(req.body);
+    const cachedFlashcards = findInFlashcardsBank({
+      country: hierarchyFlashcards.country,
+      exam: hierarchyFlashcards.exam,
+      grade: hierarchyFlashcards.grade,
+      subject: hierarchyFlashcards.subject,
+      chapter: hierarchyFlashcards.chapter,
+      subtopic: hierarchyFlashcards.subtopic,
+      feature: 'AI Flashcards',
+      requestedCount: requestedCount || undefined
+    });
+
+    if (cachedFlashcards && cachedFlashcards.length > 0) {
+      console.log(`[FlashcardBank] HIT! Serving ${cachedFlashcards.length} cached flashcards for [${hierarchyFlashcards.country} > ${hierarchyFlashcards.exam} > ${hierarchyFlashcards.grade} > ${hierarchyFlashcards.subject} > ${hierarchyFlashcards.chapter} > ${hierarchyFlashcards.subtopic}] ($0 AI cost)`);
+      return res.json({
+        flashcards: cachedFlashcards,
+        cached: true,
+        source: "flashcards_bank"
+      });
+    }
+
+    console.log(`[FlashcardBank] MISS for [${hierarchyFlashcards.country} > ${hierarchyFlashcards.exam} > ${hierarchyFlashcards.grade} > ${hierarchyFlashcards.subject} > ${hierarchyFlashcards.chapter} > ${hierarchyFlashcards.subtopic}]. Generating via Gemini AI...`);
     const examBlueprint = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam, examBlueprint, stream || text);
     const aiClient = getAI();
@@ -9168,6 +9170,7 @@ const sanitizeQuizItems = (quizList: any[]): any[] => {
 app.post("/api/generate-quiz", async (req, res) => {
   try {
     const { topic, gradeLevel, stream, country, count } = req.body;
+    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     if (!topic) {
       return res.status(400).json({ error: "Missing topic" });
     }
@@ -9213,7 +9216,6 @@ app.post("/api/generate-quiz", async (req, res) => {
 
     const difficultyDirective = difficulty === 'Easy' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: EASY (FOUNDATIONAL / DIRECT RECALL):\n- Every question must test fundamental textbook facts, core definitions, direct single-step formulas, and foundational concepts.\n- Language should be straightforward, crystal clear, and direct.\n- DO NOT use complex multi-step derivations, tricky edge cases, or confusing negative phrasing.\n- Distractors (incorrect options) must be realistic but clearly distinguishable for a student with basic understanding.\n` : difficulty === 'Hard' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: HARD (ADVANCED / COMPETITIVE & ANALYTICAL):\n- Every question must test deep conceptual mastery, multi-step analytical problem solving, and synthesis of multiple related principles (HOTS / Olympiad / Competitive exam level).\n- Include rigorous calculations, non-trivial mathematical derivations, subtle boundary cases, and questions that test common deceptive pitfalls.\n- Distractors (incorrect options) must be highly plausible, sophisticated, and reflect common student calculation errors or conceptual misconceptions.\n` : `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: MEDIUM (STANDARD BOARD / CURRICULUM LEVEL):\n- Balanced standard curriculum exam difficulty.\n- Combines direct conceptual understanding with moderate application (1 to 2 steps of reasoning or calculation).\n- Distractors should reflect standard student misconceptions.\n`;
 
-    const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
 

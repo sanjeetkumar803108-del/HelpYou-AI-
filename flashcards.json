@@ -19,7 +19,30 @@
       }
     ],
     "createdAt": "2026-11-05T10:58:50.957Z",
-    "updatedAt": "2026-11-05T10:58:50.960Z",
+    "updatedAt": "2026-11-05T12:01:21.493Z",
+    "hitCount": 4
+  },
+  "india__cbse__10th__biology__photosynthesis__all_topics_card__ai_flashcards": {
+    "country": "India",
+    "exam": "CBSE",
+    "grade": "10th",
+    "subject": "Biology",
+    "chapter": "Photosynthesis",
+    "subtopic": "All Topics Card",
+    "feature": "AI Flashcards",
+    "totalCards": 2,
+    "flashcards": [
+      {
+        "question": "What is the primary chemical equation for photosynthesis as taught in the CBSE curriculum?",
+        "answer": "The balanced equation is $6CO_2 + 12H_2O \\xrightarrow{light, chlorophyll} C_6H_{12}O_6 + 6O_2 + 6H_2O$, representing glucose synthesis from inorganic precursors."
+      },
+      {
+        "question": "What are the two distinct stages of photosynthesis and where do they occur in the chloroplast?",
+        "answer": "Light-dependent reactions occur in the thylakoid membranes, while the light-independent Calvin cycle takes place within the chloroplast stroma fluid."
+      }
+    ],
+    "createdAt": "2026-11-05T12:01:25.191Z",
+    "updatedAt": "2026-11-05T12:01:25.203Z",
     "hitCount": 2
   }
 }

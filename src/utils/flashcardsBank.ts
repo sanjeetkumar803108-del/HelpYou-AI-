@@ -1,5 +1,12 @@
 import path from 'path';
 import fs from 'fs';
+import {
+  canonicalizeCountry,
+  canonicalizeExam,
+  canonicalizeGrade,
+  canonicalizeSubject,
+  normalizeKeyPart
+} from './questionsBank';
 
 export interface FlashcardBankItem {
   id?: number | string;
@@ -50,10 +57,10 @@ export function generateFlashcardsBankKey(params: {
   subtopic?: string;
   feature?: string;
 }): string {
-  const c = normalizeFlashcardKeyPart(params.country, 'global');
-  const e = normalizeFlashcardKeyPart(params.exam, 'general');
-  const g = normalizeFlashcardKeyPart(params.grade, 'standard');
-  const s = normalizeFlashcardKeyPart(params.subject, 'general');
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.exam);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
   const ch = normalizeFlashcardKeyPart(params.chapter, 'all');
   const sub = normalizeFlashcardKeyPart(params.subtopic, 'all_topics_card');
   const f = normalizeFlashcardKeyPart(params.feature, 'ai_flashcards');
@@ -154,7 +161,14 @@ export function loadFlashcardsBank(): Record<string, FlashcardBankEntry> {
         }
         return memoryFlashcardsBank;
       } else if (parsed && typeof parsed === 'object') {
-        memoryFlashcardsBank = parsed;
+        memoryFlashcardsBank = {};
+        for (const [rawKey, item] of Object.entries(parsed as Record<string, FlashcardBankEntry>)) {
+          const canonicalKey = generateFlashcardsBankKey(item);
+          memoryFlashcardsBank[canonicalKey] = item;
+          if (canonicalKey !== rawKey) {
+            memoryFlashcardsBank[rawKey] = item;
+          }
+        }
         return memoryFlashcardsBank || {};
       }
     }
@@ -213,15 +227,23 @@ export function findInFlashcardsBank(params: {
     return null;
   }
 
-  // Exact 8-Point Match Verification
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.exam);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
+  const ch = normalizeFlashcardKeyPart(params.chapter, 'all');
+  const sub = normalizeFlashcardKeyPart(params.subtopic, 'all_topics_card');
+  const f = normalizeFlashcardKeyPart(params.feature || 'AI Flashcards', 'ai_flashcards');
+
+  // Exact 8-Point Match Verification against canonicalized criteria
   const isMatch =
-    normalizeFlashcardKeyPart(entry.country) === normalizeFlashcardKeyPart(params.country) &&
-    normalizeFlashcardKeyPart(entry.exam) === normalizeFlashcardKeyPart(params.exam) &&
-    normalizeFlashcardKeyPart(entry.grade) === normalizeFlashcardKeyPart(params.grade) &&
-    normalizeFlashcardKeyPart(entry.subject) === normalizeFlashcardKeyPart(params.subject) &&
-    normalizeFlashcardKeyPart(entry.chapter) === normalizeFlashcardKeyPart(params.chapter) &&
-    normalizeFlashcardKeyPart(entry.subtopic) === normalizeFlashcardKeyPart(params.subtopic) &&
-    normalizeFlashcardKeyPart(entry.feature) === normalizeFlashcardKeyPart(params.feature || 'AI Flashcards');
+    canonicalizeCountry(entry.country) === c &&
+    canonicalizeExam(entry.exam) === e &&
+    canonicalizeGrade(entry.grade) === g &&
+    canonicalizeSubject(entry.subject) === s &&
+    normalizeFlashcardKeyPart(entry.chapter, 'all') === ch &&
+    normalizeFlashcardKeyPart(entry.subtopic, 'all_topics_card') === sub &&
+    normalizeFlashcardKeyPart(entry.feature, 'ai_flashcards') === f;
 
   if (!isMatch) {
     return null;

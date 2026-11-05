@@ -1,4 +1,27 @@
 {
+  "norway__vg2__class_11__mathematics_a__statistiek__all_topics_card__ai_flashcards": {
+    "country": "Norway",
+    "exam": "VG2",
+    "grade": "11th",
+    "subject": "Mathematics A",
+    "chapter": "Statistiek",
+    "subtopic": "All Topics Card",
+    "feature": "AI Flashcards",
+    "totalCards": 2,
+    "flashcards": [
+      {
+        "question": "Hva er standardavvik?",
+        "answer": "Et mal pa spredningen av dataene rundt gjennomsnittet."
+      },
+      {
+        "question": "Hva er normalfordeling?",
+        "answer": "En symmetrisk klokkeformet sannsynlighetsfordeling."
+      }
+    ],
+    "createdAt": "2026-11-05T10:58:50.957Z",
+    "updatedAt": "2026-11-05T12:45:09.852Z",
+    "hitCount": 6
+  },
   "norway__vg2__11th__mathematics_a__statistiek__all_topics_card__ai_flashcards": {
     "country": "Norway",
     "exam": "VG2",
@@ -19,8 +42,31 @@
       }
     ],
     "createdAt": "2026-11-05T10:58:50.957Z",
-    "updatedAt": "2026-11-05T12:01:21.493Z",
-    "hitCount": 4
+    "updatedAt": "2026-11-05T12:45:09.852Z",
+    "hitCount": 6
+  },
+  "india__cbse__class_10__biology__photosynthesis__all_topics_card__ai_flashcards": {
+    "country": "India",
+    "exam": "CBSE",
+    "grade": "10th",
+    "subject": "Biology",
+    "chapter": "Photosynthesis",
+    "subtopic": "All Topics Card",
+    "feature": "AI Flashcards",
+    "totalCards": 2,
+    "flashcards": [
+      {
+        "question": "What is the primary chemical equation for photosynthesis as taught in the CBSE curriculum?",
+        "answer": "The balanced equation is $6CO_2 + 12H_2O \\xrightarrow{light, chlorophyll} C_6H_{12}O_6 + 6O_2 + 6H_2O$, representing glucose synthesis from inorganic precursors."
+      },
+      {
+        "question": "What are the two distinct stages of photosynthesis and where do they occur in the chloroplast?",
+        "answer": "Light-dependent reactions occur in the thylakoid membranes, while the light-independent Calvin cycle takes place within the chloroplast stroma fluid."
+      }
+    ],
+    "createdAt": "2026-11-05T12:01:25.191Z",
+    "updatedAt": "2026-11-05T12:01:25.203Z",
+    "hitCount": 2
   },
   "india__cbse__10th__biology__photosynthesis__all_topics_card__ai_flashcards": {
     "country": "India",
@@ -43,6 +89,156 @@
     ],
     "createdAt": "2026-11-05T12:01:25.191Z",
     "updatedAt": "2026-11-05T12:01:25.203Z",
+    "hitCount": 2
+  },
+  "india__neet__class_11__chemistry__some_basic_concepts_of_chemistry__all_topics_card__ai_flashcards": {
+    "country": "India",
+    "exam": "National Eligibility cum Entrance Test (Undergraduate)",
+    "grade": "Class_11",
+    "subject": "Chemistry",
+    "chapter": "Some Basic Concepts of Chemistry",
+    "subtopic": "All Topics Card",
+    "feature": "AI Flashcards",
+    "totalCards": 15,
+    "flashcards": [
+      {
+        "question": "Define the Law of Conservation of Mass as stated by Antoine Lavoisier.",
+        "answer": "Matter is neither created nor destroyed during a chemical reaction; the total mass of reactants equals the total mass of products."
+      },
+      {
+        "question": "State the Law of Definite Proportions.",
+        "answer": "A given chemical compound always contains exactly the same proportion of elements by mass, regardless of its source or preparation method."
+      },
+      {
+        "question": "What does the Law of Multiple Proportions imply?",
+        "answer": "When two elements combine to form more than one compound, the masses of one element combining with a fixed mass of another are in simple whole-number ratios."
+      },
+      {
+        "question": "Define the mole concept in terms of Avogadro's number.",
+        "answer": "One mole is the amount of substance containing exactly $6.022 \\times 10^{23}$ elementary entities, which is the number of atoms in 12 grams of Carbon-12."
+      },
+      {
+        "question": "How is molarity ($M$) defined mathematically?",
+        "answer": "Molarity is the number of moles of solute dissolved per liter of solution, expressed as $M = \\frac{n_{\\text{solute}}}{V_{\\text{solution(L)}}}$, with units of mol/L."
+      },
+      {
+        "question": "What is the difference between molality ($m$) and molarity ($M$)?",
+        "answer": "Molality is the moles of solute per kilogram of solvent, whereas molarity is the moles of solute per liter of total solution volume."
+      },
+      {
+        "question": "Define the empirical formula of a compound.",
+        "answer": "The empirical formula represents the simplest whole-number ratio of atoms of each element present in a molecule of the chemical compound."
+      },
+      {
+        "question": "What is a limiting reagent in a chemical reaction?",
+        "answer": "The limiting reagent is the reactant that is completely consumed first, thereby determining the maximum amount of product that can be formed."
+      },
+      {
+        "question": "How do you calculate the mass percent of an element in a compound?",
+        "answer": "Mass percent equals the mass of the element in one mole of the compound divided by the molar mass of the compound, multiplied by 100."
+      },
+      {
+        "question": "Define atomic mass unit (amu) relative to Carbon-12.",
+        "answer": "One atomic mass unit is defined as exactly one-twelfth the mass of one carbon-12 atom, approximately equal to $1.66 \\times 10^{-24}$ grams."
+      },
+      {
+        "question": "What is the significance of significant figures in scientific measurements?",
+        "answer": "Significant figures indicate the precision of a measurement, including all certain digits plus one uncertain digit determined by the measuring instrument's resolution."
+      },
+      {
+        "question": "State Gay-Lussac's Law of Gaseous Volumes.",
+        "answer": "When gases react, they do so in volumes which bear a simple ratio to one another and to the volume of gaseous products at constant temperature and pressure."
+      },
+      {
+        "question": "What is the formula for calculating mole fraction ($x_A$)?",
+        "answer": "The mole fraction of component A is the ratio of moles of A to the total number of moles of all components in the mixture."
+      },
+      {
+        "question": "Define density and its standard SI unit.",
+        "answer": "Density is the mass per unit volume of a substance, expressed in SI units as kilograms per cubic meter ($kg/m^3$)."
+      },
+      {
+        "question": "What is the difference between precision and accuracy?",
+        "answer": "Accuracy refers to the closeness of a measurement to the true value, while precision refers to the closeness of multiple measurements to each other."
+      }
+    ],
+    "createdAt": "2026-11-05T12:43:55.914Z",
+    "updatedAt": "2026-11-05T12:44:08.971Z",
+    "hitCount": 3
+  },
+  "india__neet__class_11__chemistry__structure_of_atom__all_topics_card__ai_flashcards": {
+    "country": "India",
+    "exam": "National Eligibility cum Entrance Test (Undergraduate)",
+    "grade": "Class_11",
+    "subject": "Chemistry",
+    "chapter": "Structure of Atom",
+    "subtopic": "All Topics Card",
+    "feature": "AI Flashcards",
+    "totalCards": 15,
+    "flashcards": [
+      {
+        "question": "What are the three fundamental subatomic particles and their relative charges?",
+        "answer": "Protons carry a positive charge, electrons carry a negative charge, and neutrons are electrically neutral subatomic particles."
+      },
+      {
+        "question": "State the formula for the number of neutrons in an atom.",
+        "answer": "The number of neutrons is calculated by subtracting the atomic number ($Z$) from the mass number ($A$), expressed as $n = A - Z$."
+      },
+      {
+        "question": "What is the significance of the Rutherford alpha-particle scattering experiment?",
+        "answer": "It revealed that the atom has a small, dense, positively charged nucleus surrounded by a vast empty space for electrons."
+      },
+      {
+        "question": "Define the Bohr model's postulate regarding electron orbits.",
+        "answer": "Electrons revolve in discrete, stationary circular orbits with fixed energy levels, where angular momentum is quantized as $mvr = nh/2\\pi$."
+      },
+      {
+        "question": "What is the de Broglie relationship for matter waves?",
+        "answer": "The wavelength of a particle is inversely proportional to its momentum, given by the equation $\\lambda = h/mv$."
+      },
+      {
+        "question": "State Heisenberg’s Uncertainty Principle.",
+        "answer": "It is impossible to determine simultaneously both the exact position and exact momentum of a subatomic particle, expressed as $\\Delta x \\cdot \\Delta p \\ge h/4\\pi$."
+      },
+      {
+        "question": "What does the principal quantum number ($n$) represent?",
+        "answer": "The principal quantum number $n$ determines the main energy shell and the average distance of the electron from the nucleus."
+      },
+      {
+        "question": "What is the physical significance of the azimuthal quantum number ($l$)?",
+        "answer": "The azimuthal quantum number $l$ defines the three-dimensional shape of the orbital and the subshell, ranging from $0$ to $n-1$."
+      },
+      {
+        "question": "Define the Pauli Exclusion Principle.",
+        "answer": "No two electrons in an atom can have the same set of all four quantum numbers; they must have opposite spins."
+      },
+      {
+        "question": "State Hund’s Rule of Maximum Multiplicity.",
+        "answer": "Electron pairing in degenerate orbitals occurs only after each orbital is singly occupied, ensuring maximum total spin and stability."
+      },
+      {
+        "question": "What is the Aufbau Principle?",
+        "answer": "Electrons fill atomic orbitals in increasing order of energy, starting from the lowest energy level to the highest energy level."
+      },
+      {
+        "question": "What is the difference between an orbital and an orbit?",
+        "answer": "An orbit is a defined circular path, whereas an orbital is a 3D region where the probability of finding electrons is maximum."
+      },
+      {
+        "question": "What is the energy of a photon according to Planck’s quantum theory?",
+        "answer": "The energy of a photon is directly proportional to its frequency, defined by the equation $E = h\\nu$ or $E = hc/\\lambda$."
+      },
+      {
+        "question": "What is the magnetic quantum number ($m_l$)?",
+        "answer": "The magnetic quantum number $m_l$ describes the spatial orientation of an orbital in a magnetic field, ranging from $-l$ to $+l$."
+      },
+      {
+        "question": "Why are half-filled and fully-filled subshells more stable?",
+        "answer": "Symmetry and increased exchange energy result in greater stability for configurations like $d^5$ or $d^{10}$ compared to partially filled subshells."
+      }
+    ],
+    "createdAt": "2026-11-05T12:44:44.125Z",
+    "updatedAt": "2026-11-05T12:44:45.747Z",
     "hitCount": 2
   }
 }

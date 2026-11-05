@@ -6955,6 +6955,160 @@ ${JSON.stringify(questions)}`;
   return questions;
 };
 
+export const scrubThinkingQ = (txt: string) => {
+  if (typeof txt !== "string") return txt;
+  return txt
+    .replace(/^(?:wait|hold on|let'?s (?:recheck|recalculate|adjust|verify)|recalculating|oops)[^.]*\.\s*/gi, "")
+    .replace(/\b(?:wait,?\s*(?:recalculate|let'?s re-evaluate|let me check)|let'?s adjust the options)\b/gi, "")
+    .trim();
+};
+
+const healLatexAndCurrencyQ = (txt: string) => {
+  if (typeof txt !== "string") return txt;
+  let s = txt.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$2");
+  const count = (s.match(/(^|[^\\])\$/g) || []).length;
+  if (count % 2 !== 0) s += "$";
+  return s;
+};
+
+export const sanitizeQuestions = (list: any[]) => list.map(q => {
+  if (typeof q === "string") {
+    const cleanQ = healLatexAndCurrencyQ(q.trim());
+    return {
+      question: cleanQ,
+      expectedAnswer: `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${cleanQ.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
+      keyRubricPoints: [
+        "[1 Mark] Accurate conceptual definition or formula",
+        "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
+        "[1 Mark] Final accurate conclusion or calculated value with units"
+      ]
+    };
+  }
+  const rawAns = q.expectedAnswer ?? q.answer ?? q.solution ?? q.modelAnswer ?? q.model_answer ?? q.expected_answer ?? q.detailedAnswer ?? q.explanation ?? "";
+  const rawRub = q.keyRubricPoints ?? q.rubric ?? q.rubricPoints ?? q.key_rubric_points ?? q.markingScheme ?? q.marking_scheme ?? [];
+  let questionText = healLatexAndCurrencyQ(String(q.question || q.title || q.prompt || "").trim());
+  const rawAnsStr = typeof rawAns === "string" ? rawAns.trim() : (Array.isArray(rawAns) ? rawAns.join("\n\n") : String(rawAns || ""));
+  const finalAns = scrubThinkingQ(healLatexAndCurrencyQ(rawAnsStr));
+  return {
+    ...q,
+    question: questionText,
+    expectedAnswer: finalAns || `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${questionText.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
+    keyRubricPoints: Array.isArray(rawRub) && rawRub.length > 0 ? rawRub.map((r: any) => String(r).trim()).filter(Boolean) : (typeof rawRub === "string" && rawRub.trim() ? [rawRub.trim()] : [
+      "[1 Mark] Accurate conceptual definition or formula",
+      "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
+      "[1 Mark] Final accurate conclusion or calculated value with units"
+    ])
+  };
+});
+
+function fallbackQuestions(topicName: string, countNum: number) {
+  const qList: any[] = [];
+  const cleanTopic = (topicName || "Core Academic Concepts").replace(/^([A-Za-z]+)\s*[-–:]\s*/i, '').trim();
+
+  const questionArchetypes = [
+    {
+      q: `State the fundamental laws and governing principles that define **${cleanTopic}**. Derive the primary mathematical equation relating its core variables (use standard LaTeX $...$), and outline the boundary conditions under which this relationship holds true.`,
+      sol: `Official Model Solution:\n• Core Principle: Define the foundational laws governing ${cleanTopic} with precise scientific terminology.\n• Mathematical Derivation: State the initial state equation, apply governing conservation/equilibrium principles, and show step-by-step algebraic manipulation to arrive at the standard formula.\n• Boundary Conditions: Specify constraints such as non-relativistic limits, adiabatic boundaries, or ideal behavior where the law applies.`,
+      rubric: [
+        "[1 Mark] Accurate statement of governing principle or definition",
+        "[2 Marks] Step-by-step mathematical proof and intermediate equation steps",
+        "[1 Mark] Explicit statement of governing constraints and final formula"
+      ]
+    },
+    {
+      q: `A particle of mass $m$ undergoes physical interaction governed by **${cleanTopic}**. Formulate the energy balance equation connecting work done, kinetic energy $\\frac{1}{2}mv^2$, and potential energy $U(x)$. If non-conservative dissipative forces act on the system, evaluate the resulting rate of mechanical energy loss.`,
+      sol: `Official Model Solution:\n• Core Principle: Apply the Work-Energy Theorem ($W_{\\text{net}} = \\Delta K$) and mechanical energy conservation ($E = K + U$).\n• Step-by-Step Analysis: Express total work as $W = W_{\\text{cons}} + W_{\\text{nc}}$. Substitute potential function $U(x) = -\\int F(x)\\,dx$ to show $\\Delta (K + U) = W_{\\text{nc}}$.\n• Dissipation Evaluation: Conclude with the negative work done by friction or damping, yielding total dissipated thermal energy.`,
+      rubric: [
+        "[1 Mark] Correct formulation of energy conservation equations",
+        "[2 Marks] Detailed derivation accounting for conservative and non-conservative components",
+        "[1 Mark] Accurate evaluation of mechanical energy dissipation"
+      ]
+    },
+    {
+      q: `An empirical experiment recorded structured trial measurements for **${cleanTopic}**. The observation data is organized in the following standard measurement table:\n\n| Trial | Time $t$ (s) | Measured Displacement $x$ (m) | Calculated Velocity $v$ (m/s) |\n| :---: | :---: | :---: | :---: |\n| 1 | 0.0 | 0.0 | 0.0 |\n| 2 | 1.0 | 2.5 | 5.0 |\n| 3 | 2.0 | 10.0 | 10.0 |\n| 4 | 3.0 | 22.5 | 15.0 |\n\n(a) Using the provided empirical table, evaluate whether the acceleration is uniform over the observed intervals.\n(b) Formulate the governing kinematic relation $x(t)$ and compute the net resultant force acting on a $2\\text{ kg}$ test mass.`,
+      sol: `Official Model Solution:\n• Acceleration Evaluation: Computing successive rate differences $\\Delta v / \\Delta t = \\frac{5.0 - 0.0}{1.0} = \\frac{10.0 - 5.0}{1.0} = 5.0\\text{ m/s}^2$ confirms constant acceleration.\n• Kinematic Equation: $x(t) = \\frac{1}{2}at^2 = 2.5t^2\\text{ m}$. Velocity function $v(t) = 5.0t\\text{ m/s}$.\n• Force Calculation: By Newton's Second Law, $F_{\\text{net}} = ma = (2\\text{ kg})(5.0\\text{ m/s}^2) = 10\\text{ N}$.`,
+      rubric: [
+        "[1 Mark] Step-by-step verification of uniform acceleration from the rate differentials",
+        "[2 Marks] Exact formulation of kinematic position and velocity equations",
+        "[1 Mark] Final net force calculation ($10\\text{ N}$) with correct SI units"
+      ]
+    },
+    {
+      q: `Analyze a practical engineering or technological application that relies fundamentally on **${cleanTopic}**. Contrast the ideal theoretical performance with actual observed real-world behavior, citing specific thermodynamic or structural loss mechanisms.`,
+      sol: `Official Model Solution:\n• Technological Application: Detail the working mechanism of the chosen real-world device or structure.\n• Ideal vs Real Comparison: Compare theoretical efficiency/output against experimental metrics, identifying friction, resistance, or parasitic losses.\n• Engineering Mitigation: Propose practical design adjustments (e.g. lubrication, regenerative systems, feedback loops) to optimize performance.`,
+      rubric: [
+        "[1 Mark] Clear description of the engineering application and working mechanism",
+        "[2 Marks] In-depth contrast between ideal theoretical model and real-world losses",
+        "[1 Mark] Feasible engineering optimization strategy"
+      ]
+    },
+    {
+      q: `A particle of mass $m = 2\\text{ kg}$ executes bounded motion under **${cleanTopic}** in a conservative potential well $U(x) = 2.0 x^2\\text{ J}$, with total mechanical energy $E = 50\\text{ J}$.\n\n(a) Using conservative force dynamics $F(x) = -\\frac{dU}{dx}$, deduce the governing restoring force as an algebraic function of displacement $x$.\n(b) Calculate the classical turning points of the motion where velocity vanishes.\n(c) Determine the maximum kinetic energy $K_{\\text{max}}$ and state the equilibrium position where it is attained.`,
+      sol: `Official Model Solution:\n• Restoring Force Derivation: In a conservative field, $F(x) = -\\frac{dU}{dx} = -\\frac{d}{dx}(2.0x^2) = -4.0x\\text{ N}$, indicating a linear harmonic restoring force.\n• Classical Turning Points: At the boundaries of motion, kinetic energy $K = 0$, requiring $U(x) = E$. Thus, $2.0x^2 = 50 \\implies x^2 = 25 \\implies x = \\pm 5.0\\text{ m}$.\n• Maximum Kinetic Energy: By energy conservation, $E = K + U$. Kinetic energy is maximized where potential energy is minimized ($x = 0$, $U(0) = 0\\text{ J}$). Hence, $K_{\\text{max}} = 50\\text{ J}$ at the origin.`,
+      rubric: [
+        "[1 Mark] Accurate differential derivation of restoring force $F(x) = -4.0x\\text{ N}$",
+        "[2 Marks] Rigorous algebraic solution for classical turning points ($x = \\pm 5.0\\text{ m}$)",
+        "[1 Mark] Determination of maximum kinetic energy ($50\\text{ J}$) at equilibrium ($x = 0$)"
+      ]
+    },
+    {
+      q: `A system operating under **${cleanTopic}** is subjected to an initial disturbance. Calculate the resulting response: (a) Formulate the equation of motion or governing equilibrium state. (b) Determine the numerical or algebraic value of the steady-state output with appropriate units.`,
+      sol: `Official Model Solution:\n• Equilibrium Formulation: State the net force, flux, or balance equation equal to zero.\n• Algebraic Substitution: Insert initial conditions and solve the differential or algebraic relation step by step.\n• Final Result: Express the final steady-state value clearly with dimensional units.`,
+      rubric: [
+        "[1 Mark] Accurate initial equilibrium or governing equation",
+        "[2 Marks] Step-by-step mathematical working without skipped algebraic operations",
+        "[1 Mark] Final correct quantitative result with proper dimensional units"
+      ]
+    },
+    {
+      q: `Explain how macroscopic observations in **${cleanTopic}** emerge from microscopic constituent interactions or molecular dynamics. Formulate the relationship connecting particle-level properties to observable bulk parameters.`,
+      sol: `Official Model Solution:\n• Microscopic Mechanism: Describe particle motion, intermolecular forces, or atomic charge distributions.\n• Statistical Emergence: Explain how averaging over vast numbers of constituents produces smooth macroscopic properties.\n• Quantitative Bridge: State the governing equation connecting microscopic constants to macroscopic parameters.`,
+      rubric: [
+        "[1 Mark] Clear description of microscopic constituent mechanisms",
+        "[2 Marks] Logical bridge connecting particle dynamics to bulk macroscopic phenomena",
+        "[1 Mark] Correct formula linking molecular parameters to bulk observables"
+      ]
+    },
+    {
+      q: `Carry out a rigorous dimensional analysis on the primary formula governing **${cleanTopic}** to verify dimensional homogeneity. Furthermore, if the measured parameters have percentage uncertainties of $\\pm 2\\%$, determine the maximum fractional uncertainty in the final calculated quantity.`,
+      sol: `Official Model Solution:\n• Dimensional Homogeneity: Express each term in SI base dimensions ($[M]$, $[L]$, $[T]$, $[I]$) to prove LHS $\\equiv$ RHS.\n• Error Propagation: Apply logarithmic differentiation $\\frac{\\Delta Q}{Q} = \\sum |n_i| \\frac{\\Delta x_i}{x_i}$ to compute total combined uncertainty.\n• Conclusion: State the final calculated percentage tolerance of the result.`,
+      rubric: [
+        "[1 Mark] Full dimensional derivation verifying both sides of the equation",
+        "[2 Marks] Correct application of uncertainty propagation rules",
+        "[1 Mark] Final accurate fractional and percentage error bounds"
+      ]
+    },
+    {
+      q: `Consider a scenario in which a fundamental governing parameter in **${cleanTopic}** is doubled while all other initial conditions remain constant. Predict and justify the quantitative and qualitative impact on the system's overall equilibrium and output.`,
+      sol: `Official Model Solution:\n• Causal Analysis: Identify whether the parameter has linear, inverse, or exponential scaling.\n• Quantitative Impact: Calculate the ratio of the new equilibrium value to the original value ($Q' / Q$).\n• System Consequence: Detail the broader practical ramifications on stability and operational lifespan.`,
+      rubric: [
+        "[1 Mark] Correct identification of scaling relationship",
+        "[2 Marks] Step-by-step quantitative recalculation under the doubled parameter",
+        "[1 Mark] Comprehensive physical justification of the new equilibrium"
+      ]
+    },
+    {
+      q: `Synthesize the governing principles of **${cleanTopic}** into a unified conceptual framework. Explain the critical interconnections between mathematical derivation, laboratory verification, and practical constraints in academic and competitive examinations.`,
+      sol: `Official Model Solution:\n• Theoretical Synthesis: Summarize governing laws, equations, and causal linkages in one coherent framework.\n• Experimental Validation: Correlate theoretical predictions with established experimental methodologies.\n• Contemporary Outlook: Discuss modern applications and ongoing technological frontiers related to ${cleanTopic}.`,
+      rubric: [
+        "[1 Mark] Comprehensive synthesis of theoretical laws and equations",
+        "[2 Marks] Clear correlation between theory and empirical measurement techniques",
+        "[1 Mark] Insightful discussion of modern practical applications"
+      ]
+    }
+  ];
+
+  for (let i = 0; i < countNum; i++) {
+    const arch = questionArchetypes[i % questionArchetypes.length];
+    qList.push({
+      question: arch.q,
+      expectedAnswer: arch.sol,
+      keyRubricPoints: arch.rubric
+    });
+  }
+  return qList;
+};
+
 app.post("/api/generate-questions", async (req, res) => {
   try {
     const topic = req.body.topic || req.body.prompt || req.body.text || "";
@@ -7208,51 +7362,8 @@ Return ONLY valid JSON:
       }
     }
 
-    const scrubThinkingQ = (txt: string) => {
-      if (typeof txt !== "string") return txt;
-      return txt
-        .replace(/^(?:wait|hold on|let'?s (?:recheck|recalculate|adjust|verify)|recalculating|oops)[^.]*\.\s*/gi, "")
-        .replace(/\b(?:wait,?\s*(?:recalculate|let'?s re-evaluate|let me check)|let'?s adjust the options)\b/gi, "")
-        .trim();
-    };
 
-    const healLatexAndCurrencyQ = (txt: string) => {
-      if (typeof txt !== "string") return txt;
-      let s = txt.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$$2");
-      const count = (s.match(/(^|[^\\])\$/g) || []).length;
-      if (count % 2 !== 0) s += "$";
-      return s;
-    };
 
-    const sanitizeQuestions = (list: any[]) => list.map(q => {
-      if (typeof q === "string") {
-        const cleanQ = healLatexAndCurrencyQ(q.trim());
-        return {
-          question: cleanQ,
-          expectedAnswer: `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${cleanQ.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
-          keyRubricPoints: [
-            "[1 Mark] Accurate conceptual definition or formula",
-            "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
-            "[1 Mark] Final accurate conclusion or calculated value with units"
-          ]
-        };
-      }
-      const rawAns = q.expectedAnswer ?? q.answer ?? q.solution ?? q.modelAnswer ?? q.model_answer ?? q.expected_answer ?? q.detailedAnswer ?? q.explanation ?? "";
-      const rawRub = q.keyRubricPoints ?? q.rubric ?? q.rubricPoints ?? q.key_rubric_points ?? q.markingScheme ?? q.marking_scheme ?? [];
-      let questionText = healLatexAndCurrencyQ(String(q.question || q.title || q.prompt || "").trim());
-      const rawAnsStr = typeof rawAns === "string" ? rawAns.trim() : (Array.isArray(rawAns) ? rawAns.join("\n\n") : String(rawAns || ""));
-      const finalAns = scrubThinkingQ(healLatexAndCurrencyQ(rawAnsStr));
-      return {
-        ...q,
-        question: questionText,
-        expectedAnswer: finalAns || `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${questionText.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
-        keyRubricPoints: Array.isArray(rawRub) && rawRub.length > 0 ? rawRub.map((r: any) => String(r).trim()).filter(Boolean) : (typeof rawRub === "string" && rawRub.trim() ? [rawRub.trim()] : [
-          "[1 Mark] Accurate conceptual definition or formula",
-          "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
-          "[1 Mark] Final accurate conclusion or calculated value with units"
-        ])
-      };
-    });
 
     const normalizeWords = (str: string) => {
       return new Set(
@@ -7331,113 +7442,7 @@ Return ONLY valid JSON:
       return uniqueBatch;
     };
 
-    const fallbackQuestions = (topicName: string, countNum: number) => {
-      const qList: any[] = [];
-      const cleanTopic = (topicName || "Core Academic Concepts").replace(/^([A-Za-z]+)\s*[-–:]\s*/i, '').trim();
 
-      const questionArchetypes = [
-        {
-          q: `State the fundamental laws and governing principles that define **${cleanTopic}**. Derive the primary mathematical equation relating its core variables (use standard LaTeX $...$), and outline the boundary conditions under which this relationship holds true.`,
-          sol: `Official Model Solution:\n• Core Principle: Define the foundational laws governing ${cleanTopic} with precise scientific terminology.\n• Mathematical Derivation: State the initial state equation, apply governing conservation/equilibrium principles, and show step-by-step algebraic manipulation to arrive at the standard formula.\n• Boundary Conditions: Specify constraints such as non-relativistic limits, adiabatic boundaries, or ideal behavior where the law applies.`,
-          rubric: [
-            "[1 Mark] Accurate statement of governing principle or definition",
-            "[2 Marks] Step-by-step mathematical proof and intermediate equation steps",
-            "[1 Mark] Explicit statement of governing constraints and final formula"
-          ]
-        },
-        {
-          q: `A particle of mass $m$ undergoes physical interaction governed by **${cleanTopic}**. Formulate the energy balance equation connecting work done, kinetic energy $\\frac{1}{2}mv^2$, and potential energy $U(x)$. If non-conservative dissipative forces act on the system, evaluate the resulting rate of mechanical energy loss.`,
-          sol: `Official Model Solution:\n• Core Principle: Apply the Work-Energy Theorem ($W_{\\text{net}} = \\Delta K$) and mechanical energy conservation ($E = K + U$).\n• Step-by-Step Analysis: Express total work as $W = W_{\\text{cons}} + W_{\\text{nc}}$. Substitute potential function $U(x) = -\\int F(x)\\,dx$ to show $\\Delta (K + U) = W_{\\text{nc}}$.\n• Dissipation Evaluation: Conclude with the negative work done by friction or damping, yielding total dissipated thermal energy.`,
-          rubric: [
-            "[1 Mark] Correct formulation of energy conservation equations",
-            "[2 Marks] Detailed derivation accounting for conservative and non-conservative components",
-            "[1 Mark] Accurate evaluation of mechanical energy dissipation"
-          ]
-        },
-        {
-          q: `An empirical experiment recorded structured trial measurements for **${cleanTopic}**. The observation data is organized in the following standard measurement table:\n\n| Trial | Time $t$ (s) | Measured Displacement $x$ (m) | Calculated Velocity $v$ (m/s) |\n| :---: | :---: | :---: | :---: |\n| 1 | 0.0 | 0.0 | 0.0 |\n| 2 | 1.0 | 2.5 | 5.0 |\n| 3 | 2.0 | 10.0 | 10.0 |\n| 4 | 3.0 | 22.5 | 15.0 |\n\n(a) Using the provided empirical table, evaluate whether the acceleration is uniform over the observed intervals.\n(b) Formulate the governing kinematic relation $x(t)$ and compute the net resultant force acting on a $2\\text{ kg}$ test mass.`,
-          sol: `Official Model Solution:\n• Acceleration Evaluation: Computing successive rate differences $\\Delta v / \\Delta t = \\frac{5.0 - 0.0}{1.0} = \\frac{10.0 - 5.0}{1.0} = 5.0\\text{ m/s}^2$ confirms constant acceleration.\n• Kinematic Equation: $x(t) = \\frac{1}{2}at^2 = 2.5t^2\\text{ m}$. Velocity function $v(t) = 5.0t\\text{ m/s}$.\n• Force Calculation: By Newton's Second Law, $F_{\\text{net}} = ma = (2\\text{ kg})(5.0\\text{ m/s}^2) = 10\\text{ N}$.`,
-          rubric: [
-            "[1 Mark] Step-by-step verification of uniform acceleration from the rate differentials",
-            "[2 Marks] Exact formulation of kinematic position and velocity equations",
-            "[1 Mark] Final net force calculation ($10\\text{ N}$) with correct SI units"
-          ]
-        },
-        {
-          q: `Analyze a practical engineering or technological application that relies fundamentally on **${cleanTopic}**. Contrast the ideal theoretical performance with actual observed real-world behavior, citing specific thermodynamic or structural loss mechanisms.`,
-          sol: `Official Model Solution:\n• Technological Application: Detail the working mechanism of the chosen real-world device or structure.\n• Ideal vs Real Comparison: Compare theoretical efficiency/output against experimental metrics, identifying friction, resistance, or parasitic losses.\n• Engineering Mitigation: Propose practical design adjustments (e.g. lubrication, regenerative systems, feedback loops) to optimize performance.`,
-          rubric: [
-            "[1 Mark] Clear description of the engineering application and working mechanism",
-            "[2 Marks] In-depth contrast between ideal theoretical model and real-world losses",
-            "[1 Mark] Feasible engineering optimization strategy"
-          ]
-        },
-        {
-          q: `A particle of mass $m = 2\\text{ kg}$ executes bounded motion under **${cleanTopic}** in a conservative potential well $U(x) = 2.0 x^2\\text{ J}$, with total mechanical energy $E = 50\\text{ J}$.\n\n(a) Using conservative force dynamics $F(x) = -\\frac{dU}{dx}$, deduce the governing restoring force as an algebraic function of displacement $x$.\n(b) Calculate the classical turning points of the motion where velocity vanishes.\n(c) Determine the maximum kinetic energy $K_{\\text{max}}$ and state the equilibrium position where it is attained.`,
-          sol: `Official Model Solution:\n• Restoring Force Derivation: In a conservative field, $F(x) = -\\frac{dU}{dx} = -\\frac{d}{dx}(2.0x^2) = -4.0x\\text{ N}$, indicating a linear harmonic restoring force.\n• Classical Turning Points: At the boundaries of motion, kinetic energy $K = 0$, requiring $U(x) = E$. Thus, $2.0x^2 = 50 \\implies x^2 = 25 \\implies x = \\pm 5.0\\text{ m}$.\n• Maximum Kinetic Energy: By energy conservation, $E = K + U$. Kinetic energy is maximized where potential energy is minimized ($x = 0$, $U(0) = 0\\text{ J}$). Hence, $K_{\\text{max}} = 50\\text{ J}$ at the origin.`,
-          rubric: [
-            "[1 Mark] Accurate differential derivation of restoring force $F(x) = -4.0x\\text{ N}$",
-            "[2 Marks] Rigorous algebraic solution for classical turning points ($x = \\pm 5.0\\text{ m}$)",
-            "[1 Mark] Determination of maximum kinetic energy ($50\\text{ J}$) at equilibrium ($x = 0$)"
-          ]
-        },
-        {
-          q: `A system operating under **${cleanTopic}** is subjected to an initial disturbance. Calculate the resulting response: (a) Formulate the equation of motion or governing equilibrium state. (b) Determine the numerical or algebraic value of the steady-state output with appropriate units.`,
-          sol: `Official Model Solution:\n• Equilibrium Formulation: State the net force, flux, or balance equation equal to zero.\n• Algebraic Substitution: Insert initial conditions and solve the differential or algebraic relation step by step.\n• Final Result: Express the final steady-state value clearly with dimensional units.`,
-          rubric: [
-            "[1 Mark] Accurate initial equilibrium or governing equation",
-            "[2 Marks] Step-by-step mathematical working without skipped algebraic operations",
-            "[1 Mark] Final correct quantitative result with proper dimensional units"
-          ]
-        },
-        {
-          q: `Explain how macroscopic observations in **${cleanTopic}** emerge from microscopic constituent interactions or molecular dynamics. Formulate the relationship connecting particle-level properties to observable bulk parameters.`,
-          sol: `Official Model Solution:\n• Microscopic Mechanism: Describe particle motion, intermolecular forces, or atomic charge distributions.\n• Statistical Emergence: Explain how averaging over vast numbers of constituents produces smooth macroscopic properties.\n• Quantitative Bridge: State the governing equation connecting microscopic constants to macroscopic parameters.`,
-          rubric: [
-            "[1 Mark] Clear description of microscopic constituent mechanisms",
-            "[2 Marks] Logical bridge connecting particle dynamics to bulk macroscopic phenomena",
-            "[1 Mark] Correct formula linking molecular parameters to bulk observables"
-          ]
-        },
-        {
-          q: `Carry out a rigorous dimensional analysis on the primary formula governing **${cleanTopic}** to verify dimensional homogeneity. Furthermore, if the measured parameters have percentage uncertainties of $\\pm 2\\%$, determine the maximum fractional uncertainty in the final calculated quantity.`,
-          sol: `Official Model Solution:\n• Dimensional Homogeneity: Express each term in SI base dimensions ($[M]$, $[L]$, $[T]$, $[I]$) to prove LHS $\\equiv$ RHS.\n• Error Propagation: Apply logarithmic differentiation $\\frac{\\Delta Q}{Q} = \\sum |n_i| \\frac{\\Delta x_i}{x_i}$ to compute total combined uncertainty.\n• Conclusion: State the final calculated percentage tolerance of the result.`,
-          rubric: [
-            "[1 Mark] Full dimensional derivation verifying both sides of the equation",
-            "[2 Marks] Correct application of uncertainty propagation rules",
-            "[1 Mark] Final accurate fractional and percentage error bounds"
-          ]
-        },
-        {
-          q: `Consider a scenario in which a fundamental governing parameter in **${cleanTopic}** is doubled while all other initial conditions remain constant. Predict and justify the quantitative and qualitative impact on the system's overall equilibrium and output.`,
-          sol: `Official Model Solution:\n• Causal Analysis: Identify whether the parameter has linear, inverse, or exponential scaling.\n• Quantitative Impact: Calculate the ratio of the new equilibrium value to the original value ($Q' / Q$).\n• System Consequence: Detail the broader practical ramifications on stability and operational lifespan.`,
-          rubric: [
-            "[1 Mark] Correct identification of scaling relationship",
-            "[2 Marks] Step-by-step quantitative recalculation under the doubled parameter",
-            "[1 Mark] Comprehensive physical justification of the new equilibrium"
-          ]
-        },
-        {
-          q: `Synthesize the governing principles of **${cleanTopic}** into a unified conceptual framework. Explain the critical interconnections between mathematical derivation, laboratory verification, and practical constraints in academic and competitive examinations.`,
-          sol: `Official Model Solution:\n• Theoretical Synthesis: Summarize governing laws, equations, and causal linkages in one coherent framework.\n• Experimental Validation: Correlate theoretical predictions with established experimental methodologies.\n• Contemporary Outlook: Discuss modern applications and ongoing technological frontiers related to ${cleanTopic}.`,
-          rubric: [
-            "[1 Mark] Comprehensive synthesis of theoretical laws and equations",
-            "[2 Marks] Clear correlation between theory and empirical measurement techniques",
-            "[1 Mark] Insightful discussion of modern practical applications"
-          ]
-        }
-      ];
-
-      for (let i = 0; i < countNum; i++) {
-        const arch = questionArchetypes[i % questionArchetypes.length];
-        qList.push({
-          question: arch.q,
-          expectedAnswer: arch.sol,
-          keyRubricPoints: arch.rubric
-        });
-      }
-      return qList;
-    };
 
     if (generatedText) {
       let rawQuestions: any[] = [];

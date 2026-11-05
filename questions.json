@@ -616,7 +616,97 @@
       }
     ],
     "createdAt": "2026-11-05T12:09:30.758Z",
-    "updatedAt": "2026-11-05T12:33:27.940Z",
+    "updatedAt": "2026-11-05T12:43:44.603Z",
+    "hitCount": 9
+  },
+  "india__neet__class_11__physics__physical_world_and_measurement__units_and_dimensions__ai_questions__medium__standard": {
+    "country": "India",
+    "examName": "neet",
+    "grade": "11th Grade (Junior)",
+    "subject": "Physics",
+    "chapter": "Physical World and Measurement",
+    "subtopic": "Units and Dimensions",
+    "feature": "ai_questions",
+    "difficulty": "Medium",
+    "practiceMode": "standard",
+    "totalQuestions": 5,
+    "questions": [
+      {
+        "question": "In a laboratory experiment to determine the value of a physical constant $K$, the following observations were recorded for variables $P$, $Q$, and $R$. If the relationship is defined as $K = \\frac{P^2 Q^{1/2}}{R^3}$, calculate the relative error in $K$ given the measurement uncertainties in the table below.\n\n| Variable | Measured Value | Absolute Uncertainty |\n| :---: | :---: | :---: |\n| $P$ | 4.0 | 0.04 |\n| $Q$ | 16.0 | 0.32 |\n| $R$ | 2.0 | 0.02 |",
+        "expectedAnswer": "The relative error $\\frac{\\Delta K}{K}$ is calculated using the propagation of errors formula: $\\frac{\\Delta K}{K} = 2\\left(\\frac{\\Delta P}{P}\\right) + \\frac{1}{2}\\left(\\frac{\\Delta Q}{Q}\\right) + 3\\left(\\frac{\\Delta R}{R}\\right)$. Substituting the given values: $\\frac{\\Delta P}{P} = \\frac{0.04}{4.0} = 0.01$; $\\frac{\\Delta Q}{Q} = \\frac{0.32}{16.0} = 0.02$; $\\frac{\\Delta R}{R} = \\frac{0.02}{2.0} = 0.01$. Thus, $\\frac{\\Delta K}{K} = 2(0.01) + 0.5(0.02) + 3(0.01) = 0.02 + 0.01 + 0.03 = 0.06$. The relative error in $K$ is 0.06 or 6%.",
+        "keyRubricPoints": [
+          "[1 Mark] Correct identification of the relative error formula.",
+          "[1 Mark] Accurate substitution of fractional uncertainties.",
+          "[1 Mark] Final correct calculation of total relative error."
+        ]
+      },
+      {
+        "question": "A student measures the time period of a simple pendulum to be $T = 2.0 \\text{ s}$ and its length to be $L = 1.0 \\text{ m}$. Using the principle of homogeneity, determine if the formula $T = 2\\pi \\sqrt{\\frac{g}{L}}$ is dimensionally consistent. If not, state the correct dimensionally consistent form relating $T$, $L$, and $g$.",
+        "expectedAnswer": "The dimensions of $T$ are $[T]$. The dimensions of $\\sqrt{\\frac{g}{L}}$ are $\\frac{[LT^{-2}]^{1/2}}{[L]^{1/2}} = \\frac{[L^{1/2}T^{-1}]}{[L^{1/2}]} = [T^{-1}]$. Since $[T] \\neq [T^{-1}]$, the formula $T = 2\\pi \\sqrt{\\frac{g}{L}}$ is dimensionally inconsistent. The correct dimensionally consistent form is $T = 2\\pi \\sqrt{\\frac{L}{g}}$, as the dimensions of $\\sqrt{\\frac{L}{g}}$ are $\\frac{[L]^{1/2}}{[LT^{-2}]^{1/2}} = \\frac{[L]^{1/2}}{[L^{1/2}T^{-1}]} = [T]$.",
+        "keyRubricPoints": [
+          "[1 Mark] Dimensional analysis of the given formula.",
+          "[1 Mark] Correct identification of inconsistency.",
+          "[1 Mark] Providing the dimensionally correct formula."
+        ]
+      },
+      {
+        "question": "If the units of force, energy, and velocity are taken as \\$2 \\text{ N}$, \\$2 \\text{ J}$, and \\$2 \\text{ m/s}$ respectively, find the units of mass, length, and time in this new system of measurement.$",
+        "expectedAnswer": "Given $F = 2 \\text{ N}$, $E = 2 \\text{ J}$, $V = 2 \\text{ m/s}$. Since $E = F \\cdot d$ (Energy = Force $\\times$ distance), the new unit of length $d = \\frac{E}{F} = \\frac{2}{2} = 1 \\text{ m}$. Since $V = \\frac{d}{t}$, the new unit of time $t = \\frac{d}{V} = \\frac{1}{2} = 0.5 \\text{ s}$. From $F = ma$, $m = \\frac{F}{a} = \\frac{F}{(V/t)} = \\frac{F \\cdot t}{V}$. Substituting, $m = \\frac{2 \\cdot 0.5}{2} = 0.5 \\text{ kg}$. The new units are: Mass = \\$2 \\text{ kg}$, Length = \\$2 \\text{ m}$, Time = \\$2 \\text{ s}$.$",
+        "keyRubricPoints": [
+          "[1 Mark] Derivation of length unit using $E$ and $F$.",
+          "[1 Mark] Derivation of time unit using $d$ and $V$.",
+          "[1 Mark] Derivation of mass unit using $F$, $V$, and $t$."
+        ]
+      },
+      {
+        "question": "A physical quantity $X$ is given by $X = \\frac{a^2 b^3}{c \\sqrt{d}}$. If the percentage errors in the measurement of $a, b, c,$ and $d$ are 2%, 3%, 4%, and 8% respectively, find the maximum percentage error in $X$.",
+        "expectedAnswer": "The maximum percentage error is calculated using the formula: $\\frac{\\Delta X}{X} \\times 100 = 2\\left(\\frac{\\Delta a}{a} \\times 100\\right) + 3\\left(\\frac{\\Delta b}{b} \\times 100\\right) + \\left(\\frac{\\Delta c}{c} \\times 100\\right) + 0.5\\left(\\frac{\\Delta d}{d} \\times 100\\right)$. Substituting the percentage errors: \\$2(2\\%) + 3(3\\%) + 4\\% + 0.5(8\\%) = 4\\% + 9\\% + 4\\% + 4\\% = 21\\%$. The maximum percentage error in $X$ is 21%.$",
+        "keyRubricPoints": [
+          "[1 Mark] Correct formulation of error propagation.",
+          "[1 Mark] Correct application of exponents to percentage errors.",
+          "[1 Mark] Accurate summation to find final percentage error."
+        ]
+      },
+      {
+        "question": "Check the dimensional validity of the equation $v^2 = u^2 + 2as$, where $v$ is final velocity, $u$ is initial velocity, $a$ is acceleration, and $s$ is displacement. Explain the significance of dimensional consistency in physical equations.",
+        "expectedAnswer": "Dimensions: $v^2$ and $u^2$ are $[LT^{-1}]^2 = [L^2T^{-2}]$. The term $2as$ has dimensions $[LT^{-2}] \\cdot [L] = [L^2T^{-2}]$. Since all terms have the same dimensions $[L^2T^{-2}]$, the equation is dimensionally consistent. The significance of dimensional consistency is that it acts as a primary check for the correctness of a physical formula; if dimensions do not match, the equation is necessarily incorrect, although consistency does not guarantee total correctness (as dimensionless constants might be wrong).",
+        "keyRubricPoints": [
+          "[1 Mark] Correct dimensional identification for all terms.",
+          "[1 Mark] Verification of dimensional homogeneity.",
+          "[1 Mark] Concise explanation of the principle of homogeneity."
+        ]
+      }
+    ],
+    "createdAt": "2026-11-05T12:38:57.531Z",
+    "updatedAt": "2026-11-05T12:43:44.750Z",
     "hitCount": 4
+  },
+  "india__neet__class_11__physics__physical_world_and_measurement__units_and_dimensions__ai_quizzes__medium__more_questions_to_practice": {
+    "country": "India",
+    "examName": "neet",
+    "grade": "11th Grade (Junior)",
+    "subject": "Physics",
+    "chapter": "Physical World and Measurement",
+    "subtopic": "Units and Dimensions",
+    "feature": "ai_quizzes",
+    "difficulty": "Medium",
+    "practiceMode": "more_questions_to_practice",
+    "totalQuestions": 1,
+    "questions": [
+      {
+        "question": "Which of the following physical quantities possesses the same dimensional formula as that of impulse?",
+        "options": [
+          "A) Linear momentum",
+          "B) Moment of force",
+          "C) Surface tension",
+          "D) Angular momentum"
+        ],
+        "correctAnswer": "A) Linear momentum",
+        "explanation": "Impulse is defined as the product of force and time, $J = F \\cdot \\Delta t$. Using the dimensional formula for force $[M^1 L^1 T^{-2}]$ and time $[T^1]$, the dimensions of impulse are $[M^1 L^1 T^{-1}]$. Linear momentum is defined as $p = m \\cdot v$, which yields $[M^1] \\cdot [L^1 T^{-1}] = [M^1 L^1 T^{-1}]$. Since both quantities share the same dimensions, they are equivalent in this context."
+      }
+    ],
+    "createdAt": "2026-11-05T12:44:37.418Z",
+    "updatedAt": "2026-11-05T12:44:37.418Z",
+    "hitCount": 1
   }
 }

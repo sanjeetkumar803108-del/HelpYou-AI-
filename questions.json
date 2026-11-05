@@ -38,5 +38,33 @@
     "createdAt": "2026-11-05T10:29:21.591Z",
     "updatedAt": "2026-11-05T10:29:21.594Z",
     "hitCount": 2
+  },
+  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__all_subjects_all_topics__all_subjects_all_topics__all_subjects_all_topics__ai_quizzes__hard": {
+    "country": "Norway",
+    "examName": "Norwegian Upper Secondary Exit Examinations",
+    "grade": "11th Grade",
+    "subject": "All Subjects",
+    "chapter": "All Chapters",
+    "subtopic": "All Subjects / All Topics",
+    "feature": "ai_quizzes",
+    "difficulty": "Hard",
+    "totalQuestions": 1,
+    "questions": [
+      {
+        "id": 1,
+        "question": "Which of the following is a comprehensive cross-subject principle?",
+        "options": [
+          "A) Conservation of Energy and Economic Scarcity",
+          "B) Linear variance",
+          "C) Null hypothesis",
+          "D) Random noise"
+        ],
+        "correctAnswer": "A) Conservation of Energy and Economic Scarcity",
+        "explanation": "Energy conservation in physics and resource scarcity in economics are foundational universal laws."
+      }
+    ],
+    "createdAt": "2026-11-05T10:33:20.590Z",
+    "updatedAt": "2026-11-05T10:33:20.592Z",
+    "hitCount": 2
   }
 }

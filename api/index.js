@@ -1585,7 +1585,11 @@ import path from "path";
 import fs from "fs";
 function normalizeKeyPart(str, fallback = "general") {
   if (!str || typeof str !== "string") return fallback;
-  const slug = str.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
+  const trimmed = str.trim();
+  if (/^(?:all\s*subjects?\s*(?:\/|&|-)?\s*all\s*topics?|all\s*subjects?|all\s*topics?|practice\s*entire\s*chapter|entire\s*chapter|all\s*chapters?|full\s*syllabus)$/i.test(trimmed)) {
+    return "all_subjects_all_topics";
+  }
+  const slug = trimmed.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
   return slug || fallback;
 }
 function generateQuestionBankKey(params) {
@@ -1594,7 +1598,7 @@ function generateQuestionBankKey(params) {
   const g = normalizeKeyPart(params.grade, "grade");
   const s = normalizeKeyPart(params.subject, "subject");
   const ch = normalizeKeyPart(params.chapter, "chapter");
-  const sub = normalizeKeyPart(params.subtopic, "all");
+  const sub = normalizeKeyPart(params.subtopic, "all_subjects_all_topics");
   const f = normalizeKeyPart(params.feature, "quiz");
   const d = normalizeKeyPart(params.difficulty, "medium");
   return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}`;
@@ -1610,6 +1614,8 @@ function extractQuestionHierarchy(body) {
   let subject = (body.subject || body.stream || "").trim();
   let chapter = (body.chapter || "").trim();
   let subtopic = (body.subtopic || "").trim();
+  const isAllSubjects = /all\s*subjects?|all-subjects?|every\s*subject|full\s*mock|full\s*syllabus\s*all\s*subjects/i.test(rawTopic) || /all\s*subjects?|all-subjects?/i.test(subject) || /all\s*subjects?|all-subjects?/i.test(subtopic);
+  const isAllTopics = isAllSubjects || /all\s*topics?|all-topics?|practice\s*entire\s*chapter|entire\s*chapter|all\s*chapters?|full\s*syllabus/i.test(rawTopic) || /all\s*topics?|all-topics?|practice\s*entire\s*chapter|entire\s*chapter/i.test(subtopic) || chapter && rawTopic.toLowerCase().endsWith(chapter.toLowerCase());
   if ((!subject || !chapter || !subtopic) && rawTopic) {
     const parts = rawTopic.split(/\s*[-–—:]\s*/).map((p) => p.trim()).filter(Boolean);
     if (parts.length >= 3) {
@@ -1619,16 +1625,23 @@ function extractQuestionHierarchy(body) {
     } else if (parts.length === 2) {
       if (!subject) subject = parts[0];
       if (!chapter) chapter = parts[1];
-      if (!subtopic) subtopic = "All Topics";
+      if (!subtopic) subtopic = isAllSubjects ? "All Subjects / All Topics" : "All Subjects / All Topics";
     } else if (parts.length === 1) {
       if (!subject) subject = parts[0];
       if (!chapter) chapter = parts[0];
-      if (!subtopic) subtopic = "All Topics";
+      if (!subtopic) subtopic = isAllSubjects ? "All Subjects / All Topics" : "All Subjects / All Topics";
     }
   }
-  if (!subject) subject = "General Studies";
-  if (!chapter) chapter = "Core Curriculum";
-  if (!subtopic) subtopic = "All Topics";
+  if (isAllSubjects) {
+    subject = subject && !/all\s*subjects?/i.test(subject) ? subject : "All Subjects";
+    chapter = chapter && !/all\s*chapters?/i.test(chapter) ? chapter : "All Chapters";
+    subtopic = "All Subjects / All Topics";
+  } else if (isAllTopics) {
+    subtopic = "All Subjects / All Topics";
+  }
+  if (!subject) subject = isAllSubjects ? "All Subjects" : "General Studies";
+  if (!chapter) chapter = isAllSubjects ? "All Chapters" : "Core Curriculum";
+  if (!subtopic) subtopic = isAllSubjects || isAllTopics ? "All Subjects / All Topics" : "All Subjects / All Topics";
   return {
     country,
     examName,

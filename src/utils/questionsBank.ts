@@ -30,9 +30,15 @@ export interface QuestionBankEntry {
 
 export function normalizeKeyPart(str: string | undefined, fallback: string = 'general'): string {
   if (!str || typeof str !== 'string') return fallback;
-  const slug = str
+  const trimmed = str.trim();
+
+  // Canonical normalization for "All Subjects / All Topics" requests
+  if (/^(?:all\s*subjects?\s*(?:\/|&|-)?\s*all\s*topics?|all\s*subjects?|all\s*topics?|practice\s*entire\s*chapter|entire\s*chapter|all\s*chapters?|full\s*syllabus)$/i.test(trimmed)) {
+    return 'all_subjects_all_topics';
+  }
+
+  const slug = trimmed
     .toLowerCase()
-    .trim()
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '_')
     .replace(/^_+|_+$/g, '');
@@ -54,7 +60,7 @@ export function generateQuestionBankKey(params: {
   const g = normalizeKeyPart(params.grade, 'grade');
   const s = normalizeKeyPart(params.subject, 'subject');
   const ch = normalizeKeyPart(params.chapter, 'chapter');
-  const sub = normalizeKeyPart(params.subtopic, 'all');
+  const sub = normalizeKeyPart(params.subtopic, 'all_subjects_all_topics');
   const f = normalizeKeyPart(params.feature, 'quiz');
   const d = normalizeKeyPart(params.difficulty, 'medium');
 
@@ -85,6 +91,18 @@ export function extractQuestionHierarchy(body: any): {
   let chapter = (body.chapter || '').trim();
   let subtopic = (body.subtopic || '').trim();
 
+  // Detect if user requested All Subjects or All Topics / Full Chapter
+  const isAllSubjects = 
+    /all\s*subjects?|all-subjects?|every\s*subject|full\s*mock|full\s*syllabus\s*all\s*subjects/i.test(rawTopic) ||
+    /all\s*subjects?|all-subjects?/i.test(subject) ||
+    /all\s*subjects?|all-subjects?/i.test(subtopic);
+
+  const isAllTopics = 
+    isAllSubjects ||
+    /all\s*topics?|all-topics?|practice\s*entire\s*chapter|entire\s*chapter|all\s*chapters?|full\s*syllabus/i.test(rawTopic) ||
+    /all\s*topics?|all-topics?|practice\s*entire\s*chapter|entire\s*chapter/i.test(subtopic) ||
+    (chapter && rawTopic.toLowerCase().endsWith(chapter.toLowerCase()));
+
   // Parse structured topic if subject, chapter, or subtopic are missing
   if ((!subject || !chapter || !subtopic) && rawTopic) {
     const parts = rawTopic.split(/\s*[-–—:]\s*/).map((p: string) => p.trim()).filter(Boolean);
@@ -95,17 +113,26 @@ export function extractQuestionHierarchy(body: any): {
     } else if (parts.length === 2) {
       if (!subject) subject = parts[0];
       if (!chapter) chapter = parts[1];
-      if (!subtopic) subtopic = 'All Topics';
+      if (!subtopic) subtopic = isAllSubjects ? 'All Subjects / All Topics' : 'All Subjects / All Topics';
     } else if (parts.length === 1) {
       if (!subject) subject = parts[0];
       if (!chapter) chapter = parts[0];
-      if (!subtopic) subtopic = 'All Topics';
+      if (!subtopic) subtopic = isAllSubjects ? 'All Subjects / All Topics' : 'All Subjects / All Topics';
     }
   }
 
-  if (!subject) subject = 'General Studies';
-  if (!chapter) chapter = 'Core Curriculum';
-  if (!subtopic) subtopic = 'All Topics';
+  if (isAllSubjects) {
+    subject = subject && !/all\s*subjects?/i.test(subject) ? subject : 'All Subjects';
+    chapter = chapter && !/all\s*chapters?/i.test(chapter) ? chapter : 'All Chapters';
+    subtopic = 'All Subjects / All Topics';
+  } else if (isAllTopics) {
+    // Single subject, but all topics / entire chapter
+    subtopic = 'All Subjects / All Topics';
+  }
+
+  if (!subject) subject = isAllSubjects ? 'All Subjects' : 'General Studies';
+  if (!chapter) chapter = isAllSubjects ? 'All Chapters' : 'Core Curriculum';
+  if (!subtopic) subtopic = isAllSubjects || isAllTopics ? 'All Subjects / All Topics' : 'All Subjects / All Topics';
 
   return {
     country,
@@ -169,7 +196,7 @@ export function saveQuestionsBank(bank: Record<string, QuestionBankEntry>): void
  * 3. grade
  * 4. subject
  * 5. chapter
- * 6. subtopic
+ * 6. subtopic (supports "All Subjects / All Topics")
  * 7. feature (ai_quizzes vs ai_questions)
  * 8. difficulty
  */

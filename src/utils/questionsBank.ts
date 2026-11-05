@@ -530,6 +530,32 @@ export function findInQuestionBank(params: {
 
   const count = params.requestedCount || candidateQuestions.length;
   if (candidateQuestions.length < count) {
+    // Check if the topic has accumulated enough questions across modes or reached saturation ceiling
+    const saturation = getTopicAccumulatedQuestions({
+      country: params.country,
+      examName: params.examName,
+      grade: params.grade,
+      subject: params.subject,
+      chapter: params.chapter,
+      subtopic: params.subtopic,
+      feature: params.feature,
+      difficulty: params.difficulty
+    });
+
+    if (saturation.isSaturated || saturation.totalCount >= count) {
+      let pool = saturation.questions;
+      if (Array.isArray(params.avoidTexts) && params.avoidTexts.length > 0) {
+        const avoidSet = new Set(params.avoidTexts.map(t => (t || '').toLowerCase().trim()));
+        const unasked = pool.filter(q => !avoidSet.has((q.question || '').toLowerCase().trim()));
+        if (unasked.length >= count) {
+          pool = unasked;
+        }
+      }
+      if (pool.length >= count) {
+        return pool.slice(0, count);
+      }
+    }
+
     // Bank doesn't have enough questions for this requested batch
     return null;
   }

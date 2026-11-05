@@ -1916,6 +1916,29 @@ function findInQuestionBank(params) {
   }
   const count = params.requestedCount || candidateQuestions.length;
   if (candidateQuestions.length < count) {
+    const saturation = getTopicAccumulatedQuestions({
+      country: params.country,
+      examName: params.examName,
+      grade: params.grade,
+      subject: params.subject,
+      chapter: params.chapter,
+      subtopic: params.subtopic,
+      feature: params.feature,
+      difficulty: params.difficulty
+    });
+    if (saturation.isSaturated || saturation.totalCount >= count) {
+      let pool = saturation.questions;
+      if (Array.isArray(params.avoidTexts) && params.avoidTexts.length > 0) {
+        const avoidSet = new Set(params.avoidTexts.map((t) => (t || "").toLowerCase().trim()));
+        const unasked = pool.filter((q) => !avoidSet.has((q.question || "").toLowerCase().trim()));
+        if (unasked.length >= count) {
+          pool = unasked;
+        }
+      }
+      if (pool.length >= count) {
+        return pool.slice(0, count);
+      }
+    }
     return null;
   }
   entry.hitCount = (entry.hitCount || 0) + 1;
@@ -2191,10 +2214,10 @@ function normalizeNotesKeyPart(str, fallback = "general") {
   return slug || fallback;
 }
 function generateNotesBankKey(params) {
-  const c = normalizeNotesKeyPart(params.country, "global");
-  const e = normalizeNotesKeyPart(params.exam, "general");
-  const g = normalizeNotesKeyPart(params.grade, "standard");
-  const s = normalizeNotesKeyPart(params.subject, "general");
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.exam);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
   const ch = normalizeNotesKeyPart(params.chapter, "all");
   const sub = normalizeNotesKeyPart(params.subtopic, "all_topics_notes");
   const t = normalizeNotesKeyPart(params.noteType, "detailed");
@@ -2270,7 +2293,14 @@ function loadNotesBank() {
         }
         return memoryNotesBank;
       } else if (parsed && typeof parsed === "object") {
-        memoryNotesBank = parsed;
+        memoryNotesBank = {};
+        for (const [rawKey, item] of Object.entries(parsed)) {
+          const canonicalKey = generateNotesBankKey(item);
+          memoryNotesBank[canonicalKey] = item;
+          if (canonicalKey !== rawKey) {
+            memoryNotesBank[rawKey] = item;
+          }
+        }
         return memoryNotesBank || {};
       }
     }
@@ -2306,13 +2336,26 @@ function findInNotesBank(params) {
   if (!Array.isArray(entry.notes.pages) || entry.notes.pages.length === 0) {
     return null;
   }
-  if (!entry.notes.pages[0] || !Array.isArray(entry.notes.pages[0].points)) {
+  if (!entry.notes.conceptMap) {
     return null;
   }
-  if (!entry.notes.conceptMap || !Array.isArray(entry.notes.conceptMap.branches)) {
-    return null;
+  for (const page of entry.notes.pages) {
+    if (!Array.isArray(page.points)) {
+      page.points = [];
+    }
   }
-  const isMatch = normalizeNotesKeyPart(entry.country) === normalizeNotesKeyPart(params.country) && normalizeNotesKeyPart(entry.exam) === normalizeNotesKeyPart(params.exam) && normalizeNotesKeyPart(entry.grade) === normalizeNotesKeyPart(params.grade) && normalizeNotesKeyPart(entry.subject) === normalizeNotesKeyPart(params.subject) && normalizeNotesKeyPart(entry.chapter) === normalizeNotesKeyPart(params.chapter) && normalizeNotesKeyPart(entry.subtopic) === normalizeNotesKeyPart(params.subtopic) && normalizeNotesKeyPart(entry.noteType) === normalizeNotesKeyPart(params.noteType) && normalizeNotesKeyPart(entry.feature) === normalizeNotesKeyPart(params.feature || "AI Notes");
+  if (!Array.isArray(entry.notes.conceptMap.branches)) {
+    entry.notes.conceptMap.branches = [];
+  }
+  const c = canonicalizeCountry(params.country);
+  const e = canonicalizeExam(params.exam);
+  const g = canonicalizeGrade(params.grade);
+  const s = canonicalizeSubject(params.subject);
+  const ch = normalizeNotesKeyPart(params.chapter, "all");
+  const sub = normalizeNotesKeyPart(params.subtopic, "all_topics_notes");
+  const t = normalizeNotesKeyPart(params.noteType, "detailed");
+  const f = normalizeNotesKeyPart(params.feature || "AI Notes", "ai_notes");
+  const isMatch = canonicalizeCountry(entry.country) === c && canonicalizeExam(entry.exam) === e && canonicalizeGrade(entry.grade) === g && canonicalizeSubject(entry.subject) === s && normalizeNotesKeyPart(entry.chapter, "all") === ch && normalizeNotesKeyPart(entry.subtopic, "all_topics_notes") === sub && normalizeNotesKeyPart(entry.noteType, "detailed") === t && normalizeNotesKeyPart(entry.feature, "ai_notes") === f;
   if (!isMatch) {
     return null;
   }
@@ -2323,8 +2366,15 @@ function findInNotesBank(params) {
 }
 function saveToNotesBank(params) {
   if (!params.notes || !Array.isArray(params.notes.pages) || params.notes.pages.length === 0) return;
-  if (!params.notes.pages[0] || !Array.isArray(params.notes.pages[0].points)) return;
-  if (!params.notes.conceptMap || !Array.isArray(params.notes.conceptMap.branches)) return;
+  if (!params.notes.conceptMap) return;
+  for (const page of params.notes.pages) {
+    if (!Array.isArray(page.points)) {
+      page.points = [];
+    }
+  }
+  if (!Array.isArray(params.notes.conceptMap.branches)) {
+    params.notes.conceptMap.branches = [];
+  }
   const bank = loadNotesBank();
   const key = generateNotesBankKey({
     ...params,

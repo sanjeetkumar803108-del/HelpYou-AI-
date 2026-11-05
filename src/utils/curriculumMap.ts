@@ -596,6 +596,12 @@ export const CURATED_CHAPTER_SUBTOPICS: Record<string, string[]> = {
   'ecology': ['Organisms & Environmental Abiotic Factors', 'Population Growth Models: Exponential & Logistic', 'Ecosystem Structure: Food Chains & Energy Pyramids', 'Nutrient Cycles & Biodiversity Conservation Strategies'],
 
   // Mathematics
+  'algebra': ['Polynomial Operations & Degree', 'Factoring Quadratics & Special Products', 'Remainder & Factor Theorems', 'Zeros & Graph Transformations'],
+  'polynomial': ['Polynomial Operations & Degree', 'Factoring Quadratics & Special Products', 'Remainder & Factor Theorems', 'Zeros & Graph Transformations'],
+  'linear': ['Linear Equations in One Variable', 'Systems of Linear Equations', 'Linear Inequalities & Graphs', 'Word Problem Formulations'],
+  'quadratic': ['Standard Form & Factoring', 'Completing the Square', 'Quadratic Formula & Discriminant', 'Vertex Form & Parabola Graphs'],
+  'functions': ['Domain, Range & Composite Functions', 'Inverse Functions & Invertibility', 'Even & Odd Symmetries', 'Function Transformations & Graphs'],
+  'trigonometry': ['Right Angle Ratios (Sin, Cos, Tan)', 'Trigonometric Identities & Proofs', 'Law of Sines & Cosines', 'Unit Circle & Radian Measures'],
   'limits': ['Intuitive & Epsilon-Delta Limit Concepts', 'Standard Trigonometric & Exponential Limits', 'L\'Hopital\'s Rule for Indeterminate Forms', 'Continuity on Intervals & Discontinuity Types'],
   'derivatives': ['First Principles Differentiation & Standard Formulas', 'Chain Rule, Product Rule & Implicit Differentiation', 'Logarithmic & Parametric Differentiation', 'Tangents, Normals & Mean Value Theorems (Rolle\'s/LMVT)', 'Monotonicity, Maxima & Minima Optimization'],
   'integrals': ['Indefinite Integration: Substitution & Partial Fractions', 'Integration by Parts (ILATE Rule)', 'Definite Integrals & Fundamental Theorem of Calculus', 'Properties of Definite Integrals (King\'s Property)', 'Area Under Curves & Area Between Two Curves'],
@@ -619,7 +625,7 @@ export function getSubTopicsForChapter(
   // 1. Direct match in researched blueprint
   if (blueprintSubTopics && typeof blueprintSubTopics === 'object') {
     if (Array.isArray(blueprintSubTopics[chapterTitle]) && blueprintSubTopics[chapterTitle].length > 0) {
-      initialTopics = blueprintSubTopics[chapterTitle].slice(0, 6);
+      initialTopics = blueprintSubTopics[chapterTitle].slice(0, 4);
     } else {
       const cleanChap = chapterTitle.toLowerCase().trim();
       const foundKey = Object.keys(blueprintSubTopics).find(k => {
@@ -627,7 +633,7 @@ export function getSubTopicsForChapter(
         return kClean === cleanChap || kClean.includes(cleanChap) || cleanChap.includes(kClean);
       });
       if (foundKey && Array.isArray(blueprintSubTopics[foundKey]) && blueprintSubTopics[foundKey].length > 0) {
-        initialTopics = blueprintSubTopics[foundKey].slice(0, 6);
+        initialTopics = blueprintSubTopics[foundKey].slice(0, 4);
       }
     }
   }
@@ -637,7 +643,7 @@ export function getSubTopicsForChapter(
     const searchStr = `${subjectTitle} ${chapterTitle}`.toLowerCase();
     for (const [key, subTopics] of Object.entries(CURATED_CHAPTER_SUBTOPICS)) {
       if (searchStr.includes(key)) {
-        initialTopics = subTopics.slice(0, 6);
+        initialTopics = subTopics.slice(0, 4);
         break;
       }
     }
@@ -645,13 +651,23 @@ export function getSubTopicsForChapter(
 
   // 3. Fallback: High-yield pedagogical structure tailored to the chapter title
   if (initialTopics.length === 0) {
-    const cleanTitle = chapterTitle.replace(/^CH\s*\d+\s*[:\-–]?\s*/i, '').trim();
-    initialTopics = [
-      `Foundations & Core Principles of ${cleanTitle}`,
-      `Theoretical Laws, Formulas & Derivations`,
-      `Analytical Problem Solving & Graphical Analysis`,
-      `High-Yield Examination Traps & Applications`
-    ];
+    const cleanTitle = chapterTitle.replace(/^CH\s*\d+\s*[:\-–—]?\s*/i, '').trim();
+    const parts = cleanTitle.split(/[,&/]/).map(p => p.trim()).filter(p => p.length > 2);
+    if (parts.length >= 3) {
+      initialTopics = [
+        `${parts[0]} Key Concepts`,
+        `${parts[1]} Mechanisms`,
+        `${parts[2]} Applications`,
+        "Analytical Problem Solving"
+      ];
+    } else {
+      initialTopics = [
+        "Foundational Definitions & Terminology",
+        "Core Equations & Governing Relations",
+        "Step-by-Step Analytical Applications",
+        "Common Examination Traps & Traps"
+      ];
+    }
   }
 
   // 4. Merge Community & User Verified Custom Topics for this Chapter
@@ -659,10 +675,50 @@ export function getSubTopicsForChapter(
   if (verifiedList && verifiedList.length > 0) {
     const existingLower = new Set(initialTopics.map(t => t.toLowerCase().trim()));
     const additional = verifiedList.filter(v => !existingLower.has(v.toLowerCase().trim()));
-    return [...initialTopics, ...additional];
+    initialTopics = [...initialTopics, ...additional];
   }
 
-  return initialTopics;
+  // Clean each subtopic: slice to 4, strip any repetitive chapter prefix or template suffixes
+  const cleanChapter = chapterTitle.replace(/^CH\s*\d+\s*[:\-–—]?\s*/i, '').trim().toLowerCase();
+  const searchStr = `${subjectTitle} ${chapterTitle}`.toLowerCase();
+  
+  let curatedFallback: string[] = [];
+  for (const [key, subTopics] of Object.entries(CURATED_CHAPTER_SUBTOPICS)) {
+    if (searchStr.includes(key)) {
+      curatedFallback = subTopics;
+      break;
+    }
+  }
+
+  const cleanedSubtopics = initialTopics.slice(0, 4).map((sub, idx) => {
+    let cleanSub = String(sub || '').trim();
+    cleanSub = cleanSub.replace(/^CH\s*\d+\s*[:\-–—]?\s*/i, '').trim();
+    if (cleanSub.toLowerCase().startsWith(cleanChapter)) {
+      cleanSub = cleanSub.slice(cleanChapter.length).replace(/^[\s:\-–—,]+/, '').trim();
+    }
+    cleanSub = cleanSub.replace(/\s*(?:Core Theory & Key Concepts|Fundamental Principles & Formulas|Problem Solving & Practical Applications|Analytical Methods|Examination Practice Problems)\s*/gi, '').trim();
+
+    // If stripped subtopic is empty, generic, or identical to chapter title, replace with authentic subtopic!
+    if (!cleanSub || cleanSub.length < 3 || /^(?:core|concepts|theory|formulas|practice)$/i.test(cleanSub) || cleanSub.toLowerCase() === cleanChapter) {
+      if (curatedFallback.length > 0) {
+        return curatedFallback[idx % curatedFallback.length];
+      }
+      const parts = cleanChapter.split(/[,&/]/).map(p => p.trim()).filter(p => p.length > 2);
+      if (parts.length >= 2) {
+        const fallbacks = [
+          `${parts[0]} Key Principles`,
+          `${parts[1]} Governing Mechanics`,
+          `${parts[0]} & ${parts[1]} Problem Solving`,
+          "Examination Application Traps"
+        ];
+        return fallbacks[idx % fallbacks.length];
+      }
+      return ["Foundations & Terminology", "Core Formulas & Laws", "Step-by-Step Problem Solving", "Exam Applications & Traps"][idx % 4];
+    }
+    return cleanSub;
+  });
+
+  return cleanedSubtopics.length > 0 ? cleanedSubtopics : initialTopics.slice(0, 4);
 }
 
 /**

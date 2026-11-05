@@ -41,7 +41,7 @@ import {
   Area 
 } from 'recharts';
 
-import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
+import { getScalableRelevantQuizzes, cleanSubjectTitle, getSubTopicsForChapter } from '../utils/curriculumMap';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
 import { parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 
@@ -716,6 +716,65 @@ const getReviewQuestionsForAttempt = (attempt: any): any[] => {
     }
   ];
 };
+
+
+export function isQuizOptionMatching(opt: string, ans: string): boolean {
+  if (!opt || !ans) return false;
+  if (opt === ans) return true;
+
+  const cleanOpt = String(opt).trim().toLowerCase();
+  const cleanAns = String(ans).trim().toLowerCase();
+  if (cleanOpt === cleanAns) return true;
+
+  // Normalize spaces, escaped chars, and common LaTeX syntax
+  const normalizeMath = (s: string) =>
+    s
+      .replace(/\\?\$/g, '')
+      .replace(/\\(?:text|mathrm|mathbf)\{([^}]+)\}/g, '$1')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const normOpt = normalizeMath(cleanOpt);
+  const normAns = normalizeMath(cleanAns);
+  if (normOpt === normAns) return true;
+
+  // Extract letter indicators: A), (A), [A], Option A, etc.
+  const extractLetter = (s: string) => {
+    const m = s.match(/^(?:option\s*)?\(?([a-d])\)?[\.\:\)\s\-]/i) ||
+              s.match(/^([a-d])$/i) ||
+              s.match(/^option\s*([a-d])$/i);
+    return m ? m[1].toLowerCase() : null;
+  };
+
+  const optLetter = extractLetter(cleanOpt);
+  const ansLetter = extractLetter(cleanAns);
+  if (optLetter && ansLetter && optLetter === ansLetter) return true;
+
+  // Strip option prefix (A), B), Option C:, etc.) and compare the substantive body
+  const stripPrefix = (s: string) =>
+    normalizeMath(
+      s.replace(/^(?:(?:option\s*)?\(?[a-d]\)?[\.\:\)\s\-]+)+/i, '')
+    );
+
+  const bodyOpt = stripPrefix(cleanOpt);
+  const bodyAns = stripPrefix(cleanAns);
+
+  if (bodyOpt && bodyAns) {
+    if (bodyOpt === bodyAns) return true;
+    // Mathematical equivalence without whitespace: "x = 5" vs "x=5"
+    const noSpaceOpt = bodyOpt.replace(/\s+/g, '');
+    const noSpaceAns = bodyAns.replace(/\s+/g, '');
+    if (noSpaceOpt === noSpaceAns) return true;
+
+    if (bodyOpt.length > 3 && bodyAns.length > 3) {
+      if (bodyOpt.startsWith(bodyAns) || bodyAns.startsWith(bodyOpt)) return true;
+    }
+  }
+
+  return false;
+}
 
 export default function QuizGenerator({ onBack }: { onBack: () => void }) {
   const { deepFocus } = useSettings();
@@ -1903,7 +1962,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     const correctAnswer = currentQuestion?.correctAnswer || "";
     
     // Strict match against the correct answer string
-    const isCorrect = option === correctAnswer;
+    const isCorrect = isQuizOptionMatching(option, correctAnswer);
 
     setCorrectAnswers((prev) => [...prev, isCorrect]);
 
@@ -2745,7 +2804,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                                         {(subject.topics || []).map((topicItem, index) => {
                                           const chapterKey = `${cleanSubjectTitle(subject.title)}__${topicItem}`;
                                           const isChapterOpen = expandedChapter === chapterKey;
-                                          const subTopicsList = (subject.chapterSubTopics && subject.chapterSubTopics[topicItem]) || [];
+                                          const subTopicsList = getSubTopicsForChapter(cleanSubjectTitle(subject.title), topicItem, subject.chapterSubTopics).slice(0, 4);
 
                                           return (
                                             <div key={index} className="rounded-2xl border border-zinc-200/80 bg-white overflow-hidden shadow-xs transition-all">
@@ -3468,7 +3527,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                   const rawCorrect = (Array.isArray(activeQuiz.correctAnswers) && activeQuiz.correctAnswers.length > 0)
                     ? activeQuiz.correctAnswers
                     : (activeQuiz.questions && Array.isArray(activeQuiz.questions))
-                      ? activeQuiz.questions.map((q: any) => q.isCorrect !== undefined ? q.isCorrect : (q.userAnswer === q.correctAnswer))
+                      ? activeQuiz.questions.map((q: any) => q.isCorrect !== undefined ? q.isCorrect : isQuizOptionMatching(q.userAnswer, q.correctAnswer))
                       : Array(rawDurations.length).fill(true);
 
                   const questionChartData = rawDurations.map((duration: number, idx: number) => {
@@ -3800,7 +3859,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
               {(quiz[currentIndex]?.options || []).map((option, idx) => {
                 const isSelected = selectedOption === option;
                 const correctAnswer = quiz[currentIndex]?.correctAnswer || "";
-                const isCorrectAnswer = option === correctAnswer;
+                const isCorrectAnswer = isQuizOptionMatching(option, correctAnswer);
                 
                 let btnStyle = 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300';
                 if (isAnswered) {
@@ -4104,7 +4163,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {getReviewQuestionsForAttempt(reviewingAttempt).map((q: any, idx: number) => {
                   const userAnswer = q.userAnswer || "";
-                  const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userAnswer === q.correctAnswer);
+                  const isCorrect = q.isCorrect !== undefined ? q.isCorrect : isQuizOptionMatching(userAnswer, q.correctAnswer);
                   
                   return (
                     <div key={idx} className="p-5 rounded-3xl border border-zinc-150/80 bg-zinc-50/10 space-y-4">
@@ -4123,8 +4182,8 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                       {/* Options Grid */}
                       <div className="grid grid-cols-1 gap-2 pl-8.5">
                         {q.options?.map((option: string, oIdx: number) => {
-                          const isOptionUserAnswer = option === userAnswer;
-                          const isOptionCorrect = option === q.correctAnswer;
+                          const isOptionUserAnswer = option === userAnswer || isQuizOptionMatching(option, userAnswer);
+                          const isOptionCorrect = option === q.correctAnswer || isQuizOptionMatching(option, q.correctAnswer);
                           
                           let optStyle = "border-zinc-200/60 bg-white text-zinc-700";
                           if (isOptionCorrect) {

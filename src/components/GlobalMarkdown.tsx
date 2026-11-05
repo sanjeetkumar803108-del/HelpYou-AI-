@@ -371,6 +371,12 @@ function healQuizOption(line: string): string {
   const prefix = optionPrefixMatch ? optionPrefixMatch[0] : '';
   let body = optionPrefixMatch ? l.slice(prefix.length).trim() : l;
 
+  // Strip any nested/repeated secondary prefixes e.g. "A) ", "(A) ", "Option A: "
+  body = body.replace(/^(?:(?:option\s*[a-d][:.)\s]*|[a-d][.:)\s\-]+|\([a-d]\)\s*)+)/i, '').trim();
+
+  // Escape currency amounts so $50 does not open KaTeX math mode
+  body = body.replace(/(^|\s)\$([0-9]+(?:\.[0-9]{1,2})?)(?=\s|$|[.,;:!])/g, (_m, p1, p2) => `${p1}\\$${p2}`);
+
   // Convert any block math $$ to single inline $
   body = body.replace(/\$\$/g, '$');
 
@@ -401,6 +407,13 @@ function healQuizOption(line: string): string {
     cleanBody = replaceOutsideMath(cleanBody, /([a-zA-Z0-9)\]]+)\^(\{[^{}]+\}|-?[0-9]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1^$2$$');
     cleanBody = replaceOutsideMath(cleanBody, /([a-zA-Z0-9)\]]+)_(\{[^{}]+\}|[0-9]+|[a-zA-Z](?![a-zA-Z]))/g, '$$$1_$2$$');
     cleanBody = cleanBody.replace(/\$\$+/g, '$').replace(/\$\s*\$/g, ' ');
+    // Balance single dollar signs
+    const dc = (cleanBody.match(/(?<!\\)\$/g) || []).length;
+    if (dc % 2 !== 0) {
+      if (cleanBody.endsWith('$')) cleanBody = cleanBody.slice(0, -1);
+      else if (cleanBody.includes('$')) cleanBody = cleanBody + '$';
+      else cleanBody = cleanBody.replace(/(?<!\\)\$(?=[^$]*$)/, '');
+    }
     return `${prefix}${cleanBody}`;
   }
 
@@ -539,8 +552,27 @@ function healSingleQuizLine(line: string): string {
  */
 export function formatQuizMath(content: string): string {
   if (!content) return '';
-  const text = cleanMarkdownMath(String(content)).trim();
+  let text = cleanMarkdownMath(String(content)).trim();
   if (text.includes('```')) return text;
+
+  // Client-side fail-safe: scrub any leaked AI scratchpad monologue
+  const sentences = text.split(/(?<=[.!?\n])\s+/);
+  const filtered = sentences.filter(s => {
+    const trimmed = s.trim();
+    if (!trimmed) return false;
+    if (/^(?:wait\b|hold on\b|let'?s (?:recalculate|adjust|check|change|verify|see)|recalculating\b|actually,?\s*let'?s\b)/i.test(trimmed)) {
+      return false;
+    }
+    if (/\b(?:let'?s adjust (?:the )?options?|wait,?\s*recalculate|wait,?\s*let'?s|wait,?\s*checking)\b/i.test(trimmed)) {
+      return false;
+    }
+    return true;
+  });
+  text = filtered.join(' ');
+  text = text.replace(/\b(?:wait,\s*recalculate[:.]?|let'?s\s*adjust\s*(?:the\s*)?options?[:.]?|wait,\s*let'?s\s*(?:recalculate|adjust|check)[:.]?|wait,\s*checking[:.]?)\b/gi, '');
+  text = text.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
+  text = text.replace(/^[.,;:\s]+/, '').trim();
+  if (text.length > 0) text = text.charAt(0).toUpperCase() + text.slice(1);
 
   // If content is an option (starts with option prefix or is a single short option choice):
   const isOption = /^((?:Option\s+[A-Da-d]:?|[A-Da-d][\)\.]|\([A-Da-d]\)))\s*/i.test(text) ||

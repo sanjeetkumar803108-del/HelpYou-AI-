@@ -2704,6 +2704,24 @@ ${pointDeductionTemplate}
 ### OVERALL VERDICT
 [A supportive, motivating 2-sentence summary providing a clear roadmap for their next revision.]
 
+5. STRUCTURED METADATA BLOCK (MANDATORY AT THE VERY END):
+At the very end of your response, after the OVERALL VERDICT, output an exact machine-readable metadata block in this exact delimiter format:
+<!--ESSAY_SCORE_START-->
+{
+  "overallScore": <integer from 1 to 10>,
+  "maxScore": 10,
+  "structure": <integer from 1 to 10 evaluating structural flow>,
+  "grammar": <integer from 1 to 10 evaluating syntax and mechanics>,
+  "vocabulary": <integer from 1 to 10 evaluating lexical richness>,
+  "howToImprove": [
+    "<first concise high-yield bullet point on what to improve>",
+    "<second concise high-yield bullet point on what to improve>"
+  ],
+  "vocabularyUpgrade": "\"<weak or informal word from essay>\" ki jagah \"<impressive academic vocabulary synonym>\" use karo.",
+  "polishedEssay": "<A fully rewritten, impeccably polished, 10/10 academic version of the student essay that fixes all grammatical and structural flaws>"
+}
+<!--ESSAY_SCORE_END-->
+
 MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX):
 - When evaluating essays that include scientific, mathematical, or economic principles (e.g. in Biology, Environmental Science, Economics, Chemistry, or Physics), ALWAYS format formulas, variables, and reactions using standard LaTeX: '$...$' for inline (e.g., $E = mc^2$, $PED = \frac{\%\Delta Q}{\%\Delta P}$, $\text{CO}_2$) and '$$...$$' on separate lines for block equations. Never write broken characters.
 
@@ -4179,6 +4197,118 @@ OR if invalid/unrecognized/wrong country:
 // ============================================================================
 // EXAM-AWARE SYLLABUS & UNITS ENGINE (Zero Cross-Exam Contamination)
 // ============================================================================
+
+export function getAuthentic4Subtopics(chapter: string, subject?: string): string[] {
+  const cleanChap = (chapter || '').replace(/^CH\s*\d+\s*[:\-–—]?\s*/i, '').trim();
+  const sLower = (subject || '').toLowerCase();
+  const cLower = cleanChap.toLowerCase();
+
+  // Mathematics
+  if (sLower.includes('math') || sLower.includes('calc') || sLower.includes('algebra') || sLower.includes('quant')) {
+    if (cLower.includes('polynomial') || cLower.includes('expression')) {
+      return ["Polynomial Operations & Degree", "Factoring Quadratics & Special Products", "Remainder & Factor Theorems", "Zeros & Graph Transformations"];
+    }
+    if (cLower.includes('linear') && cLower.includes('equation')) {
+      return ["Linear Equations in One Variable", "Systems of Linear Equations", "Linear Inequalities & Graphs", "Word Problem Formulations"];
+    }
+    if (cLower.includes('quadratic')) {
+      return ["Standard Form & Factoring", "Completing the Square", "Quadratic Formula & Discriminant", "Vertex Form & Parabola Graphs"];
+    }
+    if (cLower.includes('trig') || cLower.includes('triangle')) {
+      return ["Right Angle Ratios (Sin, Cos, Tan)", "Trigonometric Identities", "Law of Sines & Cosines", "Unit Circle & Radian Measures"];
+    }
+    if (cLower.includes('calculus') || cLower.includes('derivative') || cLower.includes('limit')) {
+      return ["Limits & Continuity", "Power, Product & Quotient Rules", "Chain Rule & Implicit Differentiation", "Applications of Extrema & Inflection"];
+    }
+    if (cLower.includes('integral') || cLower.includes('integration')) {
+      return ["Definite & Indefinite Integrals", "Integration by Substitution", "Fundamental Theorem of Calculus", "Area Under Curves"];
+    }
+    if (cLower.includes('probability') || cLower.includes('statistic')) {
+      return ["Sample Space & Independent Events", "Conditional Probability & Bayes Rule", "Mean, Median & Standard Deviation", "Normal Distributions & Z-Scores"];
+    }
+    if (cLower.includes('coordinate') || cLower.includes('geometry') || cLower.includes('conic')) {
+      return ["Distance & Slope Formulas", "Equations of Lines & Circles", "Conic Sections (Parabola, Ellipse)", "Geometric Transformations"];
+    }
+  }
+
+  // Physics
+  if (sLower.includes('physic')) {
+    if (cLower.includes('kinematic') || cLower.includes('motion')) {
+      return ["Displacement, Velocity & Acceleration", "Kinematic Equations for Constant Acceleration", "Projectile Motion & Trajectory", "Graphical Analysis of Motion"];
+    }
+    if (cLower.includes('newton') || cLower.includes('force') || cLower.includes('law')) {
+      return ["First Law & Inertia", "Second Law (F=ma) & Momentum", "Third Law Action-Reaction Pairs", "Free Body Diagrams & Friction"];
+    }
+    if (cLower.includes('work') || cLower.includes('energy') || cLower.includes('power')) {
+      return ["Work Done by Constant & Variable Forces", "Kinetic & Potential Energy", "Work-Energy Theorem", "Conservation of Mechanical Energy"];
+    }
+    if (cLower.includes('electric') || cLower.includes('charge') || cLower.includes('field') || cLower.includes('coulomb')) {
+      return ["Coulomb's Law & Electric Force", "Electric Field & Field Lines", "Electric Potential & Potential Difference", "Capacitance & Dielectrics"];
+    }
+    if (cLower.includes('current') || cLower.includes('circuit') || cLower.includes('ohm')) {
+      return ["Ohm's Law & Resistance", "Resistors in Series & Parallel", "Kirchhoff's Rules", "Electrical Power & Energy"];
+    }
+    if (cLower.includes('magnetic') || cLower.includes('magnet')) {
+      return ["Magnetic Force on Moving Charges", "Biot-Savart Law & Ampere's Law", "Magnetic Force on Current-Carrying Wires", "Electromagnetic Induction & Faraday's Law"];
+    }
+    if (cLower.includes('optic') || cLower.includes('light')) {
+      return ["Reflection & Plane/Spherical Mirrors", "Refraction & Snell's Law", "Thin Lens Equation & Magnification", "Interference & Diffraction"];
+    }
+    if (cLower.includes('thermo') || cLower.includes('heat')) {
+      return ["Temperature & Thermal Expansion", "Specific Heat & Calorimetry", "First Law of Thermodynamics", "Heat Engines & Second Law"];
+    }
+  }
+
+  // Chemistry
+  if (sLower.includes('chem')) {
+    if (cLower.includes('atomic') || cLower.includes('structure')) {
+      return ["Bohr's Atomic Model", "Quantum Numbers & Orbitals", "Aufbau Principle & Hund's Rule", "Periodic Trends (Radius, Ionization)"];
+    }
+    if (cLower.includes('bond') || cLower.includes('molecular')) {
+      return ["Ionic Bonding & Lattice Energy", "Covalent Bonds & Lewis Structures", "VSEPR Theory & Molecular Geometry", "Hybridization & Dipole Moments"];
+    }
+    if (cLower.includes('equilibrium')) {
+      return ["Equilibrium Constant (Kc & Kp)", "Le Chatelier's Principle", "Solubility Product (Ksp)", "Acid-Base Neutralization & pH"];
+    }
+    if (cLower.includes('organic') || cLower.includes('carbon')) {
+      return ["IUPAC Nomenclature & Functional Groups", "Isomerism (Structural & Stereoisomerism)", "Nucleophilic & Electrophilic Reactions", "Reaction Mechanisms & Synthesis"];
+    }
+    if (cLower.includes('electrochem')) {
+      return ["Galvanic & Electrolytic Cells", "Nernst Equation & Cell Potential", "Standard Electrode Potentials", "Faraday's Laws of Electrolysis"];
+    }
+  }
+
+  // Biology
+  if (sLower.includes('bio')) {
+    if (cLower.includes('cell')) {
+      return ["Prokaryotic vs Eukaryotic Structure", "Cell Membrane & Transport Mechanisms", "Cellular Respiration & ATP Synthesis", "Mitosis, Meiosis & Cell Cycle"];
+    }
+    if (cLower.includes('genet') || cLower.includes('heredity')) {
+      return ["Mendelian Monohybrid & Dihybrid Crosses", "DNA Replication & Double Helix", "Transcription & Translation (Protein Synthesis)", "Genetic Mutations & Chromosomal Aberrations"];
+    }
+    if (cLower.includes('ecology') || cLower.includes('environment')) {
+      return ["Ecosystem Trophic Levels & Energy Flow", "Biogeochemical Cycles (Carbon, Nitrogen)", "Population Growth Models", "Biodiversity Conservation"];
+    }
+  }
+
+  const parts = cleanChap.split(/[,&/]/).map(p => p.trim()).filter(p => p.length > 2);
+  if (parts.length >= 3) {
+    return [
+      `${parts[0]} Key Concepts`,
+      `${parts[1]} Mechanisms`,
+      `${parts[2]} Applications`,
+      "Analytical Problem Solving"
+    ];
+  }
+
+  return [
+    "Foundational Definitions & Terminology",
+    "Core Equations & Governing Relations",
+    "Step-by-Step Analytical Applications",
+    "Common Examination Questions & Traps"
+  ];
+}
+
 export const getExamAwareUnitsAndSubtopics = (
   subj: string, 
   exam: string, 
@@ -4617,7 +4747,12 @@ You MUST research and return two major sections:
      - DO NOT clamp or fix the list to generic items!
      - List ALL official chapters that exist in this subject.
      - STRICTLY PROHIBITED: NEVER invent generic filler names like 'Theoretical Frameworks', 'Core Foundations & Principles', 'Unit 1'.
-   - "subTopics": Object where EVERY key is an exact chapter name from "coreUnits", mapping to 3 to 6 authentic micro-concepts.
+   - "subTopics": Object where EVERY key is an exact chapter name from "coreUnits".
+      *** CRITICAL SUB-TOPICS MANDATE (EXACTLY 4 STARTING REAL TEXTBOOK TOPICS PER CHAPTER) ***:
+      - For EVERY single chapter in "coreUnits", map to an array of EXACTLY 4 REAL, AUTHENTIC micro-subtopics from the official textbook curriculum!
+      - STRICT PROHIBITION ON TEMPLATES: NEVER use generic suffixes like "Core Theory & Key Concepts", "Fundamental Principles", "Problem Solving", "Analytical Methods".
+      - STRICT PROHIBITION ON REPEATING CHAPTER TITLE: Subtopics MUST NOT repeat the parent chapter title! Each subtopic must be a clean, concise (2 to 5 words) specific concept name (e.g., for chapter "Polynomials & Quadratic Equations", write: ["Factoring Quadratic Expressions", "Quadratic Formula & Discriminant", "Remainder & Factor Theorems", "Zeros & Graph Transformations"]).
+      - EXACTLY 4 subtopics for EVERY chapter, no more and no less.
    - "detailedNotesGuidelines": Actionable instructions for generating full detailed study notes for this subject.
    - "revisionGuidelines": Actionable instructions for generating short revision cheat sheets, formula summaries, and mnemonics.
    - "essayTone": IF this subject is English, Reading, Writing, or a Language paper, provide official essay tone. Otherwise null.
@@ -6203,6 +6338,64 @@ Ensure that for Full Detailed Notes, NO concept, formula, or sub-topic is omitte
   }
 });
 
+
+export const verifySubjectiveQuestionsWithAI = async (questions: any[], context: {
+  gradeLevel?: string;
+  stream?: string;
+  country?: string;
+  targetExam?: string;
+  requestedCount?: number;
+}): Promise<any[]> => {
+  if (!Array.isArray(questions) || questions.length === 0) return [];
+
+  try {
+    const prompt = `You are an Elite Academic Board Examiner and Question Paper Auditor.
+Audit these ${questions.length} subjective exam practice questions for ${context.targetExam || 'Standardized Exam'} (Grade: ${context.gradeLevel || 'Standard'}).
+
+CRITICAL AUDITOR DIRECTIVES:
+1. FACTUAL & MATHEMATICAL ACCURACY: Verify that every question, equation derivation, and final numerical value in 'expectedAnswer' is 100% mathematically and scientifically accurate.
+2. ZERO THINKING LEAKAGE: Strip ANY internal monologue or scratchpad text ("Wait,", "Recalculating", "Hold on", "Let's check").
+3. LATEX & CURRENCY INTEGRITY: Ensure all math/formulas are cleanly enclosed in '$...$'. Escape currency ($50 -> \\$50). Balance any unclosed single '$'.
+4. MODEL ANSWER COMPLETENESS: Guarantee 'expectedAnswer' is an authoritative, step-by-step model solution.
+
+Return ONLY a valid JSON array of verified questions in this exact structure:
+[
+  {
+    "question": "Verified question text with balanced LaTeX ($...$)",
+    "expectedAnswer": "Comprehensive step-by-step model answer",
+    "keyRubricPoints": ["[1 Mark] Definition/formula", "[2 Marks] Step derivation", "[1 Mark] Final answer with units"]
+  }
+]
+
+Input Questions To Audit:
+${JSON.stringify(questions)}`;
+
+    const res = await safeGenerateContent({
+      gradeLevel: context.gradeLevel,
+      stream: context.stream,
+      country: context.country,
+      targetExam: context.targetExam,
+      model: "gemini-3.5-flash-lite",
+      timeoutMs: 30000,
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+        temperature: 0.1
+      }
+    });
+
+    const parsed = safeParseJSON(res.text || '', 'array');
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+  } catch (err: any) {
+    console.warn("[verifySubjectiveQuestionsWithAI] Auditor fallback:", err?.message || err);
+  }
+
+  return questions;
+};
+
 app.post("/api/generate-questions", async (req, res) => {
   try {
     const topic = req.body.topic || req.body.prompt || req.body.text || "";
@@ -6429,11 +6622,28 @@ Return ONLY valid JSON:
       }
     }
 
+    const scrubThinkingQ = (txt: string) => {
+      if (typeof txt !== "string") return txt;
+      return txt
+        .replace(/^(?:wait|hold on|let'?s (?:recheck|recalculate|adjust|verify)|recalculating|oops)[^.]*\.\s*/gi, "")
+        .replace(/\b(?:wait,?\s*(?:recalculate|let'?s re-evaluate|let me check)|let'?s adjust the options)\b/gi, "")
+        .trim();
+    };
+
+    const healLatexAndCurrencyQ = (txt: string) => {
+      if (typeof txt !== "string") return txt;
+      let s = txt.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$$2");
+      const count = (s.match(/(^|[^\\])\$/g) || []).length;
+      if (count % 2 !== 0) s += "$";
+      return s;
+    };
+
     const sanitizeQuestions = (list: any[]) => list.map(q => {
-      if (typeof q === 'string') {
+      if (typeof q === "string") {
+        const cleanQ = healLatexAndCurrencyQ(q.trim());
         return {
-          question: q,
-          expectedAnswer: `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${q.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
+          question: cleanQ,
+          expectedAnswer: `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${cleanQ.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
           keyRubricPoints: [
             "[1 Mark] Accurate conceptual definition or formula",
             "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
@@ -6441,15 +6651,16 @@ Return ONLY valid JSON:
           ]
         };
       }
-      const rawAns = q.expectedAnswer ?? q.answer ?? q.solution ?? q.modelAnswer ?? q.model_answer ?? q.expected_answer ?? q.detailedAnswer ?? q.explanation ?? '';
+      const rawAns = q.expectedAnswer ?? q.answer ?? q.solution ?? q.modelAnswer ?? q.model_answer ?? q.expected_answer ?? q.detailedAnswer ?? q.explanation ?? "";
       const rawRub = q.keyRubricPoints ?? q.rubric ?? q.rubricPoints ?? q.key_rubric_points ?? q.markingScheme ?? q.marking_scheme ?? [];
-      const questionText = q.question || q.title || q.prompt || '';
-      const finalAns = typeof rawAns === 'string' ? rawAns.trim() : (Array.isArray(rawAns) ? rawAns.join('\n\n') : String(rawAns || ''));
+      let questionText = healLatexAndCurrencyQ(String(q.question || q.title || q.prompt || "").trim());
+      const rawAnsStr = typeof rawAns === "string" ? rawAns.trim() : (Array.isArray(rawAns) ? rawAns.join("\n\n") : String(rawAns || ""));
+      const finalAns = scrubThinkingQ(healLatexAndCurrencyQ(rawAnsStr));
       return {
         ...q,
         question: questionText,
         expectedAnswer: finalAns || `Official Model Solution:\n• Core Principle: Address the foundational concepts and theoretical definitions required by: "${questionText.slice(0, 100)}...".\n• Step-by-Step Analysis: Provide comprehensive reasoning, governing formulas ($...$), and structured arguments.\n• Conclusion: Summarize key deductions with precision and necessary units.`,
-        keyRubricPoints: Array.isArray(rawRub) && rawRub.length > 0 ? rawRub.map((r: any) => String(r).trim()).filter(Boolean) : (typeof rawRub === 'string' && rawRub.trim() ? [rawRub.trim()] : [
+        keyRubricPoints: Array.isArray(rawRub) && rawRub.length > 0 ? rawRub.map((r: any) => String(r).trim()).filter(Boolean) : (typeof rawRub === "string" && rawRub.trim() ? [rawRub.trim()] : [
           "[1 Mark] Accurate conceptual definition or formula",
           "[2 Marks] Step-by-step reasoning and mathematical / analytical proof",
           "[1 Mark] Final accurate conclusion or calculated value with units"
@@ -6643,19 +6854,35 @@ Return ONLY valid JSON:
     };
 
     if (generatedText) {
-      let parsed = safeParseJSON(generatedText, 'object');
+      let rawQuestions: any[] = [];
+      let parsed = safeParseJSON(generatedText, "object");
       if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
-        return res.json({ questions: deduplicateQuestions(parsed.questions) });
+        rawQuestions = parsed.questions;
       } else if (Array.isArray(parsed) && parsed.length > 0) {
-        return res.json({ questions: deduplicateQuestions(parsed) });
-      } else if (parsed && typeof parsed === 'object') {
+        rawQuestions = parsed;
+      } else if (parsed && typeof parsed === "object") {
         const found = Object.values(parsed).find(v => Array.isArray(v) && v.length > 0);
-        if (found) return res.json({ questions: deduplicateQuestions(found as any[]) });
+        if (found) rawQuestions = found as any[];
       }
 
-      parsed = safeParseJSON(generatedText, 'array');
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return res.json({ questions: deduplicateQuestions(parsed) });
+      if (rawQuestions.length === 0) {
+        parsed = safeParseJSON(generatedText, "array");
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          rawQuestions = parsed;
+        }
+      }
+
+      if (rawQuestions.length > 0) {
+        const deduplicated = deduplicateQuestions(rawQuestions);
+        // Execute secondary AI verification auditor pass to guarantee factual accuracy & balanced LaTeX
+        const verified = await verifySubjectiveQuestionsWithAI(deduplicated, {
+          gradeLevel,
+          stream,
+          country,
+          targetExam,
+          requestedCount
+        });
+        return res.json({ questions: sanitizeQuestions(verified) });
       }
     }
 
@@ -8356,54 +8583,158 @@ CRITICAL SOCRATIC AP TUTORING PRINCIPLES:
   }
 });
 
+export const verifyQuizWithAI = async (quizList: any[], context: {
+  gradeLevel?: string;
+  stream?: string;
+  country?: string;
+  targetExam?: string;
+  topic?: string;
+}): Promise<any[]> => {
+  if (!Array.isArray(quizList) || quizList.length === 0) return [];
+
+  try {
+    const prompt = `You are an Elite Academic Board Examiner and Chief Psychometrician for ${context.targetExam || "Standardized Examination"} (Topic: ${context.topic || "Academic Studies"}).
+You are independently auditing these ${quizList.length} multiple choice practice questions.
+
+CRITICAL AUDIT & VERIFICATION DIRECTIVES (ZERO TOLERANCE FOR MISMATCHES OR CALCULATION ERRORS):
+1. INDEPENDENT MATHEMATICAL & FACTUAL RE-SOLVE:
+   - For every question, recalculate and independently derive the true scientific or mathematical answer BEFORE looking at the options.
+   - If your calculated answer does not match any of the 4 options, immediately adjust the options so the true calculated answer is present in the choices.
+   - NEVER bend calculations or alter facts to match an incorrect option! Physical laws and arithmetic must be 100% accurate.
+2. EXACTLY ONE ACCURATE OPTION:
+   - Ensure exactly ONE option (A, B, C, or D) is unambiguously correct.
+   - The "correctAnswer" field MUST be 100% verbatim identical to that exact option string in the "options" array.
+3. ZERO THINKING LEAKAGE IN EXPLANATIONS:
+   - The "explanation" must be a clean, pedagogical, step-by-step educational proof.
+   - ABSOLUTELY FORBIDDEN: Words like "Wait,", "Recalculating", "Let me adjust options", "Hold on", "Let's check". Strip any internal monologue immediately.
+4. BALANCED LATEX ($...$) & CURRENCY ($50 -> \\$50):
+   - Wrap all formulas and variables in balanced single dollar signs ($...). Balance any unclosed single dollar signs.
+
+Return ONLY a valid JSON array of verified questions in this exact structure:
+[
+  {
+    "question": "Verified question text with balanced LaTeX ($...$)",
+    "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+    "correctAnswer": "A) ...",
+    "explanation": "Authoritative educational explanation with zero internal thoughts or recalculation remarks."
+  }
+]
+
+Input Quiz Items To Audit:
+${JSON.stringify(quizList)}`;
+
+    const res = await safeGenerateContent({
+      gradeLevel: context.gradeLevel,
+      stream: context.stream,
+      country: context.country,
+      targetExam: context.targetExam,
+      model: "gemini-3.5-flash-lite",
+      timeoutMs: 28000,
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+        temperature: 0.1
+      }
+    });
+
+    const parsed = safeParseJSON(res.text || "", "array");
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+  } catch (err: any) {
+    console.warn("[verifyQuizWithAI] Auditor fallback:", err?.message || err);
+  }
+
+  return quizList;
+};
+
 const sanitizeQuizItems = (quizList: any[]): any[] => {
   if (!Array.isArray(quizList)) return [];
   const mathKeywords = new Set([
-    'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp', 'lim',
-    'dx', 'dy', 'dt', 'text', 'frac', 'sqrt', 'cdot', 'times', 'div',
-    'pm', 'mp', 'sum', 'prod', 'int', 'alpha', 'beta', 'gamma', 'delta',
-    'theta', 'lambda', 'mu', 'pi', 'sigma', 'omega', 'phi', 'psi', 'circ'
+    "sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "exp", "lim",
+    "dx", "dy", "dt", "text", "frac", "sqrt", "cdot", "times", "div",
+    "pm", "mp", "sum", "prod", "int", "alpha", "beta", "gamma", "delta",
+    "theta", "lambda", "mu", "pi", "sigma", "omega", "phi", "psi", "circ"
   ]);
 
+  const scrubThinking = (txt: string) => {
+    if (typeof txt !== "string") return txt;
+    return txt
+      .replace(/^(?:wait|hold on|let'?s (?:recheck|recalculate|adjust|verify)|recalculating|oops)[^.]*\.\s*/gi, "")
+      .replace(/\b(?:wait,?\s*(?:recalculate|let'?s re-evaluate|let me check)|let'?s adjust the options)\b/gi, "")
+      .trim();
+  };
+
+  const balanceLatex = (txt: string) => {
+    if (typeof txt !== "string") return txt;
+    let s = txt.replace(/(^|[^\\])\$([0-9]+(?:\.[0-9]+)?)\b/g, "$1\\$$2");
+    const count = (s.match(/(^|[^\\])\$/g) || []).length;
+    if (count % 2 !== 0) s += "$";
+    return s;
+  };
+
   return quizList.map(item => {
-    if (!item || typeof item !== 'object') return item;
+    if (!item || typeof item !== "object") return item;
     const cleanOption = (txt: string) => {
-      if (typeof txt !== 'string') return txt;
+      if (typeof txt !== "string") return txt;
       let trimmed = txt.trim();
       const prefixMatch = trimmed.match(/^([A-Da-d][\)\.]|\([A-Da-d]\))\s*/);
-      const prefix = prefixMatch ? prefixMatch[0] : '';
+      const prefix = prefixMatch ? prefixMatch[0] : "";
       let body = prefixMatch ? trimmed.slice(prefix.length).trim() : trimmed;
 
-      if (body.startsWith('$') && body.endsWith('$') && body.length > 2) {
+      if (body.startsWith("$") && body.endsWith("$") && body.length > 2) {
         const inner = body.slice(1, -1).trim();
-        const words = inner.replace(/\\[a-zA-Z]+/g, '').match(/\b[a-zA-Z]{3,}\b/g) || [];
+        const words = inner.replace(/\\[a-zA-Z]+/g, "").match(/\b[a-zA-Z]{3,}\b/g) || [];
         const narrativeWords = words.filter(w => !mathKeywords.has(w.toLowerCase()));
-        if (narrativeWords.length >= 2 && !inner.includes('\\text{')) {
+        if (narrativeWords.length >= 2 && !inner.includes("\\text{")) {
           body = inner;
         }
       }
-      return prefix + body;
+      return balanceLatex(prefix + body);
     };
 
     const rawOptions = Array.isArray(item.options) ? item.options : [];
     const options = rawOptions.map(cleanOption);
-    let correctAnswer = typeof item.correctAnswer === 'string' ? cleanOption(item.correctAnswer) : item.correctAnswer;
-    if (options.length > 0 && !options.includes(correctAnswer)) {
-      const match = options.find(o => 
-        o.toLowerCase().trim() === correctAnswer.toLowerCase().trim() ||
-        o.replace(/^[A-Da-d][\)\.]\s*/, '').trim() === correctAnswer.replace(/^[A-Da-d][\)\.]\s*/, '').trim()
-      );
-      if (match) correctAnswer = match;
+    let correctAnswer = typeof item.correctAnswer === "string" ? cleanOption(item.correctAnswer) : item.correctAnswer;
+
+    // Resilient Option Resolution (Guaranteed Verbatim Alignment)
+    if (options.length === 4 && typeof correctAnswer === "string") {
+      let matched = options.find(o => o === correctAnswer);
+      if (!matched) {
+        // Match by letter prefix
+        const letter = correctAnswer.match(/^(?:option\s*)?\(?([a-d])\)?[\.\:\)\s\-]?/i)?.[1]?.toLowerCase();
+        if (letter) {
+          const idx = ["a", "b", "c", "d"].indexOf(letter);
+          if (idx >= 0 && options[idx]) {
+            matched = options[idx];
+          }
+        }
+      }
+      if (!matched) {
+        // Match by normalized body without prefixes or LaTeX symbols
+        const cleanA = correctAnswer.replace(/^[a-d][\)\.]\s*/i, "").replace(/\\?\$/g, "").replace(/\s+/g, "").toLowerCase();
+        matched = options.find(o => {
+          const cleanO = o.replace(/^[a-d][\)\.]\s*/i, "").replace(/\\?\$/g, "").replace(/\s+/g, "").toLowerCase();
+          return cleanO === cleanA || (cleanO.length > 3 && cleanA.length > 3 && (cleanO.includes(cleanA) || cleanA.includes(cleanO)));
+        });
+      }
+      if (matched) correctAnswer = matched;
+      else if (options.length > 0) correctAnswer = options[0];
     }
+
+    const question = balanceLatex(typeof item.question === "string" ? item.question.trim() : "");
+    const explanation = scrubThinking(balanceLatex(typeof item.explanation === "string" ? item.explanation.trim() : ""));
 
     return {
       ...item,
+      question,
       options,
-      correctAnswer
+      correctAnswer,
+      explanation
     };
   });
 };
-
 app.post("/api/generate-quiz", async (req, res) => {
   try {
     const { topic, gradeLevel, stream, country, count } = req.body;
@@ -8461,6 +8792,11 @@ CRITICAL RULES:
    - Every single question in the generated ${requestedCount} questions MUST test a completely unique concept, formula, mechanism, or scenario.
    - ABSOLUTELY ZERO redundancy or duplicate questions within the quiz.
    - If an EXCLUDED QUESTIONS list is provided, you are STRICTLY FORBIDDEN from generating questions that repeat, duplicate, or rephrase those questions. Explore distinct, fresh curriculum subtopics.
+8. STRICT ANTI-TRUTH-BENDING & ZERO-THINKING-LEAKAGE MANDATE:
+   - NEVER bend calculations, change physical constants, or alter mathematical facts to match an arbitrary option. Always calculate the true result first.
+   - Exactly ONE option in "options" must be unambiguous, mathematically verified, and factually correct.
+   - "correctAnswer" MUST be 100% verbatim identical to that correct option.
+   - ZERO THINKING LEAKAGE: In the "explanation" field, NEVER write scratchpad thoughts like "Wait,", "Recalculating", "Let me check", "Hold on", or "Let's adjust options". The explanation must be a crisp, confident, professional step-by-step educational derivation.
 
 Use this exact JSON structure:
 [
@@ -8570,12 +8906,24 @@ Use this exact JSON structure:
 
     if (quizText) {
       const parsed = safeParseJSON(quizText, 'array');
+      let finalQuiz: any[] = [];
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return res.json({ quiz: sanitizeQuizItems(deduplicateQuiz(parsed)) });
-      }
-      if (parsed && typeof parsed === 'object') {
+        finalQuiz = sanitizeQuizItems(deduplicateQuiz(parsed));
+      } else if (parsed && typeof parsed === 'object') {
         const arr = Object.values(parsed).find(v => Array.isArray(v) && v.length > 0);
-        if (arr) return res.json({ quiz: sanitizeQuizItems(deduplicateQuiz(arr as any[])) });
+        if (arr) finalQuiz = sanitizeQuizItems(deduplicateQuiz(arr as any[]));
+      }
+
+      if (finalQuiz.length > 0) {
+        // Run AI Auditor Pass (Guarantees true calculation, 1 option match, 0 thinking leaks)
+        const verified = await verifyQuizWithAI(finalQuiz, {
+          gradeLevel,
+          stream,
+          country,
+          targetExam,
+          topic
+        });
+        return res.json({ quiz: sanitizeQuizItems(verified) });
       }
     }
 

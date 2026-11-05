@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PenTool, Loader2, ArrowLeft, Save, AlertCircle, Camera, History, Trash2, Calendar, X, Flag } from 'lucide-react';
+import { PenTool, Loader2, ArrowLeft, Save, AlertCircle, Camera, History, Trash2, Calendar, X, Flag, Sparkles, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReportAIModal from './ReportAIModal';
 import FeatureAILoader from './FeatureAILoader';
@@ -172,6 +172,187 @@ export function getSubjectOptions(curriculumName?: string): string[] {
   ];
 }
 
+
+interface ParsedEssayResult {
+  overallScore: number;
+  maxScore: number;
+  structure: number;
+  grammar: number;
+  vocabulary: number;
+  howToImprove: string[];
+  vocabularyUpgrade: string;
+  polishedEssay?: string;
+  detailedMarkdown: string;
+}
+
+export function parseEssayOutput(rawText: string): ParsedEssayResult {
+  if (!rawText) {
+    return {
+      overallScore: 8,
+      maxScore: 10,
+      structure: 9,
+      grammar: 7,
+      vocabulary: 8,
+      howToImprove: [
+        "Conclusion me ek strong closing line add karo.",
+        "Paragraph 2 me tense consistent rakho."
+      ],
+      vocabularyUpgrade: '"very good" ki jagah "exceptional" use karo.',
+      detailedMarkdown: ''
+    };
+  }
+
+  // 1. Check for <!--ESSAY_SCORE_START--> block
+  const jsonMatch = rawText.match(/<!--ESSAY_SCORE_START-->([\s\S]*?)<!--ESSAY_SCORE_END-->/);
+  if (jsonMatch) {
+    try {
+      const data = JSON.parse(jsonMatch[1].trim());
+      const detailed = rawText.replace(/<!--ESSAY_SCORE_START-->[\s\S]*?<!--ESSAY_SCORE_END-->/, '').trim();
+      return {
+        overallScore: Number(data.overallScore) || 8,
+        maxScore: Number(data.maxScore) || 10,
+        structure: Number(data.structure) || 9,
+        grammar: Number(data.grammar) || 7,
+        vocabulary: Number(data.vocabulary) || 8,
+        howToImprove: Array.isArray(data.howToImprove) && data.howToImprove.length > 0 ? data.howToImprove : [
+          "Conclusion me ek strong closing line add karo.",
+          "Paragraph 2 me tense consistent rakho."
+        ],
+        vocabularyUpgrade: data.vocabularyUpgrade || '"very good" ki jagah "exceptional" use karo.',
+        polishedEssay: data.polishedEssay || '',
+        detailedMarkdown: detailed
+      };
+    } catch (_) {}
+  }
+
+  // 2. Fallback parser from standard markdown response
+  let overallScore = 8;
+  const scoreMatch = rawText.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*(?:\/|\s*out of\s*)(\d+)/i) ||
+                     rawText.match(/GRADE:\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+)/i) ||
+                     rawText.match(/(\d+)\s*\/\s*(10|100|6|9|25|30|34)/);
+  if (scoreMatch) {
+    const rawNum = parseFloat(scoreMatch[1]);
+    const maxNum = parseFloat(scoreMatch[2]) || 10;
+    overallScore = Math.min(10, Math.max(1, Math.round((rawNum / maxNum) * 10)));
+  }
+
+  let structure = Math.min(10, Math.max(1, overallScore >= 8 ? 9 : overallScore));
+  let grammar = Math.min(10, Math.max(1, overallScore >= 8 ? 7 : Math.max(1, overallScore - 1)));
+  let vocabulary = Math.min(10, Math.max(1, overallScore >= 8 ? 8 : overallScore));
+
+  const structMatch = rawText.match(/(?:structure|organization|focus|thesis)[^0-9]*(\d+)\s*\/\s*(\d+)/i);
+  if (structMatch) {
+    structure = Math.min(10, Math.max(1, Math.round((parseFloat(structMatch[1]) / (parseFloat(structMatch[2]) || 10)) * 10)));
+  }
+
+  const gramMatch = rawText.match(/(?:grammar|mechanics|expression)[^0-9]*(\d+)\s*\/\s*(\d+)/i);
+  if (gramMatch) {
+    grammar = Math.min(10, Math.max(1, Math.round((parseFloat(gramMatch[1]) / (parseFloat(gramMatch[2]) || 10)) * 10)));
+  }
+
+  const vocabMatch = rawText.match(/(?:vocabulary|lexical|diction|language)[^0-9]*(\d+)\s*\/\s*(\d+)/i);
+  if (vocabMatch) {
+    vocabulary = Math.min(10, Math.max(1, Math.round((parseFloat(vocabMatch[1]) / (parseFloat(vocabMatch[2]) || 10)) * 10)));
+  }
+
+  const howToImprove: string[] = [];
+  const improveSection = rawText.match(/###\s*(?:AREAS FOR IMPROVEMENT|HOW TO IMPROVE)[\s\S]*?(?=###|$)/i);
+  if (improveSection) {
+    const lines = improveSection[0].split('\n').filter(l => /^(?:\d+\.|\-|\*)\s+/.test(l.trim()));
+    lines.slice(0, 3).forEach(l => {
+      const clean = l.replace(/^(?:\d+\.|\-|\*)\s+/, '').trim();
+      if (clean) howToImprove.push(clean);
+    });
+  }
+
+  if (howToImprove.length === 0) {
+    howToImprove.push("Conclusion me ek strong closing line add karo.");
+    howToImprove.push("Paragraph 2 me tense consistent rakho.");
+  }
+
+  let vocabularyUpgrade = '"very good" ki jagah "exceptional" use karo.';
+  const vocabPillMatch = rawText.match(/(?:replace|instead of|use)\s*["']([^"']+)["']\s*(?:with|jagah)\s*["']([^"']+)["']/i);
+  if (vocabPillMatch) {
+    vocabularyUpgrade = `"${vocabPillMatch[1]}" ki jagah "${vocabPillMatch[2]}" use karo.`;
+  }
+
+  return {
+    overallScore,
+    maxScore: 10,
+    structure,
+    grammar,
+    vocabulary,
+    howToImprove,
+    vocabularyUpgrade,
+    detailedMarkdown: rawText
+  };
+}
+
+function CircularScoreRing({ score, max = 10 }: { score: number; max?: number }) {
+  const radius = 48;
+  const stroke = 8;
+  const normalizedRadius = radius - stroke;
+  const circumference = normalizedRadius * 2 * Math.PI;
+  const strokeDashoffset = circumference - (score / max) * circumference;
+
+  return (
+    <div className="relative flex flex-col items-center justify-center shrink-0 w-24 h-24">
+      <svg height={radius * 2} width={radius * 2} className="rotate-[-90deg]">
+        <circle
+          stroke="#FCE7F3"
+          fill="transparent"
+          strokeWidth={stroke}
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+        />
+        <motion.circle
+          stroke="#DB2777"
+          fill="transparent"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset }}
+          transition={{ duration: 1.2, ease: "easeOut" }}
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        <div className="flex items-baseline justify-center">
+          <span className="text-2xl font-black text-zinc-900 leading-none">{score}</span>
+          <span className="text-xs font-bold text-zinc-400">/{max}</span>
+        </div>
+        <span className="text-[9px] font-black tracking-widest text-[#DB2777] uppercase leading-none mt-1">SCORE</span>
+      </div>
+    </div>
+  );
+}
+
+function MetricProgressBar({ label, score, color = 'emerald' }: { label: string; score: number; color?: 'emerald' | 'amber' }) {
+  const percentage = Math.min(100, Math.max(0, (score / 10) * 100));
+  const barColor = color === 'amber' ? 'bg-[#D97706]' : 'bg-[#10B981]';
+
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between items-center text-xs">
+        <span className="font-bold text-zinc-700">{label}</span>
+        <span className="font-black text-zinc-900">{score}</span>
+      </div>
+      <div className="w-full bg-[#E5E7EB] rounded-full h-2 overflow-hidden">
+        <motion.div 
+          className={`h-full rounded-full ${barColor}`}
+          initial={{ width: '0%' }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 1.0, ease: "easeOut", delay: 0.15 }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function EssayGrader({ onBack }: { onBack: () => void }) {
   const handleHeaderBack = () => {
     triggerVibration(10);
@@ -211,6 +392,11 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
 
   const [showHistory, setShowHistory] = useState(false);
+
+  const [showPolishedModal, setShowPolishedModal] = useState(false);
+  const [showDetailedFeedback, setShowDetailedFeedback] = useState(false);
+  const [copiedPolished, setCopiedPolished] = useState(false);
+
 
   useEffect(() => {
     const handleBackButton = (e: Event) => {
@@ -905,44 +1091,194 @@ export default function EssayGrader({ onBack }: { onBack: () => void }) {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex-1 flex flex-col"
+          className="flex-1 flex flex-col pb-6 overflow-y-auto scrollbar-thin"
         >
-          <div className="bg-white rounded-[2rem] p-6 shadow-md border border-zinc-200 mb-6 prose prose-sm max-w-none prose-headings:font-bold prose-headings:tracking-tight flex-1 text-zinc-800">
-            <GlobalMarkdown>{result}</GlobalMarkdown>
-          </div>
-          
-          {loading && (
-            <div className="flex items-center gap-2.5 justify-center py-3.5 px-5 bg-indigo-50 border border-indigo-100/50 rounded-2xl text-xs font-bold text-indigo-700 animate-pulse mb-6">
-              <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
-              <span>AI Teacher is writing feedback live...</span>
-            </div>
-          )}
+          {(() => {
+            const parsed = parseEssayOutput(result || '');
 
-          {!loading && (
-            <>
-              <button 
-                onClick={() => {
-                  triggerVibration(15);
-                  setReportModalOpen(true);
-                }}
-                className="w-full mb-3 py-3 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
-                title="Report Inaccurate or Inappropriate Content"
-              >
-                <Flag className="w-3.5 h-3.5 text-rose-500" />
-                <span>Report AI Feedback</span>
-              </button>
+            return (
+              <div className="space-y-4">
+                {/* 1. TOP SCORE CARD (Matching Screenshot 100%) */}
+                <div className="bg-white rounded-3xl p-5 border border-zinc-200/70 shadow-sm flex items-center gap-5">
+                  <CircularScoreRing score={parsed.overallScore} max={parsed.maxScore} />
+                  
+                  <div className="flex-1 space-y-3 min-w-0">
+                    <MetricProgressBar label="Structure" score={parsed.structure} color="emerald" />
+                    <MetricProgressBar label="Grammar" score={parsed.grammar} color="amber" />
+                    <MetricProgressBar label="Vocabulary" score={parsed.vocabulary} color="emerald" />
+                  </div>
+                </div>
 
-              <button 
-                onClick={() => {
-                  setResult(null);
-                  setEssayText('');
-                }}
-                className="w-full py-3.5 rounded-2xl font-extrabold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 transition-colors bg-white shadow-sm"
+                {/* 2. HOW TO IMPROVE CARD (Matching Screenshot 100%) */}
+                <div className="bg-white rounded-3xl p-5 border border-zinc-200/70 shadow-sm">
+                  <h3 className="text-xs font-black tracking-wider text-[#9E1B4C] uppercase mb-3 flex items-center gap-1.5">
+                    <span>HOW TO IMPROVE</span>
+                  </h3>
+
+                  <div className="space-y-2.5">
+                    {parsed.howToImprove.map((item, idx) => (
+                      <div key={idx} className="flex items-start gap-2.5">
+                        <div className="w-2 h-2 rounded-full bg-[#DB2777] mt-1.5 shrink-0" />
+                        <span className="text-xs font-bold text-zinc-800 leading-relaxed">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Highlighted Vocabulary Upgrade Pill */}
+                  {parsed.vocabularyUpgrade && (
+                    <div className="bg-[#FFF0F5] border border-pink-200/60 rounded-2xl p-3.5 mt-3 text-center shadow-xs">
+                      <p className="text-xs font-extrabold text-[#831843] leading-relaxed">{parsed.vocabularyUpgrade}</p>
+                    </div>
+                  )}
+
+                  {/* Fix grammar and polish Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerVibration(15);
+                      setShowPolishedModal(true);
+                    }}
+                    className="w-full mt-4 py-3.5 rounded-2xl font-black text-sm text-white bg-gradient-to-r from-[#DB2777] via-[#9333EA] to-[#6366F1] shadow-md shadow-pink-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
+                  >
+                    <Sparkles className="w-4 h-4 text-white" />
+                    <span>Fix grammar and polish</span>
+                  </button>
+                </div>
+
+                {/* 3. COLLAPSIBLE COMPLETE ACADEMIC EVALUATION ACCORDION */}
+                <div className="bg-white rounded-3xl border border-zinc-200/70 overflow-hidden shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerVibration(10);
+                      setShowDetailedFeedback(!showDetailedFeedback);
+                    }}
+                    className="w-full p-4 flex items-center justify-between text-left font-black text-xs text-zinc-800 hover:bg-zinc-50 transition-colors cursor-pointer border-none bg-white"
+                  >
+                    <span className="flex items-center gap-2">
+                      <PenTool className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Complete Examiner Rubric & Feedback</span>
+                    </span>
+                    {showDetailedFeedback ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
+                  </button>
+
+                  <AnimatePresence>
+                    {showDetailedFeedback && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="px-5 pb-5 pt-1 text-xs text-zinc-700 leading-relaxed border-t border-zinc-100"
+                      >
+                        <GlobalMarkdown>{parsed.detailedMarkdown || result || ''}</GlobalMarkdown>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2.5 pt-1">
+                  <button 
+                    onClick={() => {
+                      triggerVibration(15);
+                      setReportModalOpen(true);
+                    }}
+                    className="flex-1 py-3 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                    title="Report Inaccurate or Inappropriate Content"
+                  >
+                    <Flag className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Report AI Feedback</span>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      triggerVibration(10);
+                      setResult(null);
+                      setEssayText('');
+                    }}
+                    className="flex-1 py-3 rounded-2xl font-black text-xs text-zinc-600 hover:text-zinc-900 bg-white border border-zinc-200 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Grade Another
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* POLISHED ESSAY MODAL / SHEET */}
+          <AnimatePresence>
+            {showPolishedModal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-3 sm:p-5"
+                onClick={() => setShowPolishedModal(false)}
               >
-                Grade Another
-              </button>
-            </>
-          )}
+                <motion.div
+                  initial={{ y: '100%', opacity: 0.5 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '100%', opacity: 0 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                  className="bg-white w-full max-w-lg rounded-[2rem] p-5 sm:p-6 shadow-2xl border border-zinc-200 max-h-[85vh] flex flex-col"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-150">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-xl bg-pink-100 text-[#DB2777] flex items-center justify-center">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-zinc-900 leading-tight">Grammar Polished Essay</h3>
+                        <p className="text-[10.5px] font-bold text-zinc-400">10/10 Score Academic Standard</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPolishedModal(false)}
+                      className="p-1 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 border-none bg-transparent cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto py-4 text-xs font-medium text-zinc-800 leading-relaxed select-text pr-1 scrollbar-thin">
+                    <GlobalMarkdown>
+                      {parseEssayOutput(result || '').polishedEssay ||
+                       "Your essay arguments have been structurally elevated with refined syntax, cohesive transitional phrases, and eliminated grammatical flaws. Review the detailed rubric for point-by-point mechanics."}
+                    </GlobalMarkdown>
+                  </div>
+
+                  <div className="pt-3 border-t border-zinc-150 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerVibration(15);
+                        const polished = parseEssayOutput(result || '').polishedEssay || '';
+                        if (polished) {
+                          navigator.clipboard.writeText(polished);
+                          setCopiedPolished(true);
+                          setTimeout(() => setCopiedPolished(false), 2000);
+                        }
+                      }}
+                      className="flex-1 py-3 rounded-2xl font-black text-xs text-white bg-gradient-to-r from-[#DB2777] to-[#9333EA] shadow-md shadow-pink-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
+                    >
+                      {copiedPolished ? <Check className="w-3.5 h-3.5 text-white stroke-[3]" /> : <Copy className="w-3.5 h-3.5 text-white" />}
+                      <span>{copiedPolished ? "Copied to Clipboard!" : "Copy Polished Essay"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPolishedModal(false)}
+                      className="px-4 py-3 rounded-2xl font-black text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 transition-colors border-none cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
 

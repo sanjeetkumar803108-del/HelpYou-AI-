@@ -14,7 +14,7 @@ import { triggerVibration } from '../utils/vibrate';
 import { safeGetItem, safeSetItem } from '../utils/storage';
 import { getUserProfileData, getProfilePayload } from '../utils/profile';
 import { getStoredExamBlueprint, saveStoredExamBlueprint } from '../utils/academicBlueprint';
-import { getScalableRelevantQuizzes, cleanSubjectTitle } from '../utils/curriculumMap';
+import { getScalableRelevantQuizzes, cleanSubjectTitle, getSubTopicsForChapter } from '../utils/curriculumMap';
 import { parseTopicHierarchy, isValidAcademicTopicInput, registerVerifiedChapterSubTopic, verifySubTopicWithAI, removeCustomChapterSubTopic, getVerifiedChapterSubTopics } from '../utils/communityCache';
 import { REGIONAL_TRACKS } from './AcademicSetup';
 import jsPDF from 'jspdf';
@@ -281,13 +281,15 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
               country: profile.country,
               examName: currentTargetExam || 'Standardized Examination',
               subjects: missing,
+              grade: profile.gradeLevel,
               gradeLevel: profile.gradeLevel
             })
           });
           if (res.ok) {
             const data = await res.json();
-            if (data && data.blueprint && typeof data.blueprint === 'object') {
-              const updated = { ...(currentBp || {}), ...data.blueprint };
+            const bp = data?.subjectsBlueprint || data?.blueprint || data;
+            if (bp && typeof bp === 'object') {
+              const updated = { ...(currentBp || {}), ...bp };
               saveStoredExamBlueprint(updated, uid);
               if (isMounted) {
                 setBlueprintRevision(prev => prev + 1);
@@ -1869,7 +1871,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                     const cleanSubj = cleanSubjectTitle(subject.title);
                                     const chapterKey = `${cleanSubj}__${topicItem}`;
                                     const isChapterOpen = expandedChapter === chapterKey;
-                                    const subTopicsList = (subject.chapterSubTopics && subject.chapterSubTopics[topicItem]) || [];
+                                    const subTopicsList = getSubTopicsForChapter(cleanSubj, topicItem, subject.chapterSubTopics).slice(0, 4);
                                     const topicTargetStr = `${cleanSubj} - ${topicItem}`;
                                     const isSelected = customTopic === topicItem || customTopic === topicTargetStr || (customTopic || '').startsWith(`${topicTargetStr} - `);
 

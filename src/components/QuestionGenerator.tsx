@@ -1974,7 +1974,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                 {subTopicsList.map((sub, sIdx) => {
                                                   const subTarget = `${topicTargetStr} - ${sub}`;
                                                   const isSubSelected = customTopic === subTarget;
-                                                  const verifiedCustoms = getVerifiedChapterSubTopics(topicTargetStr, topicItem);
+                                                  const verifiedCustoms = getVerifiedChapterSubTopics(cleanSubj, topicItem);
                                                   const isUserAdded = verifiedCustoms.some(vc => vc.toLowerCase().trim() === sub.toLowerCase().trim());
 
                                                   return (
@@ -2017,7 +2017,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                             onClick={(e) => {
                                                               e.stopPropagation();
                                                               triggerVibration(20);
-                                                              removeCustomChapterSubTopic(topicTargetStr, topicItem, sub);
+                                                              removeCustomChapterSubTopic(cleanSubj, topicItem, sub);
                                                             }}
                                                             className="p-1 text-zinc-400 hover:text-rose-500 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
                                                           >
@@ -2055,7 +2055,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                             const profile = getUserProfileData();
                                                             const targetExam = profile.targetExam || safeGetItem('academic_exam') || 'General';
                                                             const country = profile.country || safeGetItem('academic_country') || 'India';
-                                                            const check = await verifySubTopicWithAI(topicTargetStr, topicItem, val, targetExam, country);
+                                                            const check = await verifySubTopicWithAI(cleanSubj, topicItem, val, targetExam, country);
                                                             setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: false }));
                                                             if (!check.isValid) {
                                                               triggerVibration([30, 50, 30]);
@@ -2066,7 +2066,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                             setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                             setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: '' }));
                                                             triggerVibration(15);
-                                                            registerVerifiedChapterSubTopic(topicTargetStr, topicItem, finalTitle);
+                                                            registerVerifiedChapterSubTopic(cleanSubj, topicItem, finalTitle);
                                                             setCustomTopic(`${topicTargetStr} - ${finalTitle}`);
                                                           }
                                                         }}
@@ -2088,7 +2088,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                           const profile = getUserProfileData();
                                                           const targetExam = profile.targetExam || safeGetItem('academic_exam') || 'General';
                                                           const country = profile.country || safeGetItem('academic_country') || 'India';
-                                                          const check = await verifySubTopicWithAI(topicTargetStr, topicItem, val, targetExam, country);
+                                                          const check = await verifySubTopicWithAI(cleanSubj, topicItem, val, targetExam, country);
                                                           setIsVerifyingSubTopic(prev => ({ ...prev, [chapterKey]: false }));
                                                           if (!check.isValid) {
                                                             triggerVibration([30, 50, 30]);
@@ -2099,7 +2099,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                                                           setCustomInputError(prev => ({ ...prev, [chapterKey]: '' }));
                                                           setCustomSubTopicInput(prev => ({ ...prev, [chapterKey]: '' }));
                                                           triggerVibration(15);
-                                                          registerVerifiedChapterSubTopic(topicTargetStr, topicItem, finalTitle);
+                                                          registerVerifiedChapterSubTopic(cleanSubj, topicItem, finalTitle);
                                                           setCustomTopic(`${topicTargetStr} - ${finalTitle}`);
                                                         }}
                                                         className="px-3 py-2 bg-purple-600 text-white font-bold text-xs rounded-xl hover:bg-purple-700 transition-all shrink-0 cursor-pointer flex items-center gap-1.5 disabled:opacity-60"

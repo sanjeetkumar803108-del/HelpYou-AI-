@@ -1589,7 +1589,7 @@ function normalizeKeyPart(str, fallback = "general") {
   if (/^(?:all\s*subjects?\s*(?:\/|&|-)?\s*all\s*topics?|all\s*subjects?|all\s*topics?|practice\s*entire\s*chapter|entire\s*chapter|all\s*chapters?|full\s*syllabus)$/i.test(trimmed)) {
     return "all_subjects_all_topics";
   }
-  const slug = trimmed.toLowerCase().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
+  const slug = trimmed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
   return slug || fallback;
 }
 function normalizePracticeMode(mode) {
@@ -1631,13 +1631,18 @@ function extractQuestionHierarchy(body) {
       if (!chapter) chapter = parts[1];
       if (!subtopic) subtopic = parts.slice(2).join(" - ");
     } else if (parts.length === 2) {
-      if (!subject) subject = parts[0];
-      if (!chapter) chapter = parts[1];
-      if (!subtopic) subtopic = isAllSubjects ? "All Subjects / All Topics" : "All Subjects / All Topics";
+      if (!subject) {
+        subject = parts[0];
+        if (!chapter) chapter = parts[1];
+        if (!subtopic) subtopic = isAllTopics ? "All Subjects / All Topics" : parts[1];
+      } else {
+        if (!chapter) chapter = parts[0];
+        if (!subtopic) subtopic = isAllTopics ? "All Subjects / All Topics" : parts[1];
+      }
     } else if (parts.length === 1) {
-      if (!subject) subject = parts[0];
+      if (!subject) subject = "General Studies";
       if (!chapter) chapter = parts[0];
-      if (!subtopic) subtopic = isAllSubjects ? "All Subjects / All Topics" : "All Subjects / All Topics";
+      if (!subtopic) subtopic = isAllTopics ? "All Subjects / All Topics" : parts[0];
     }
   }
   if (isAllSubjects) {
@@ -1649,7 +1654,7 @@ function extractQuestionHierarchy(body) {
   }
   if (!subject) subject = isAllSubjects ? "All Subjects" : "General Studies";
   if (!chapter) chapter = isAllSubjects ? "All Chapters" : "Core Curriculum";
-  if (!subtopic) subtopic = isAllSubjects || isAllTopics ? "All Subjects / All Topics" : "All Subjects / All Topics";
+  if (!subtopic) subtopic = isAllSubjects || isAllTopics ? "All Subjects / All Topics" : rawTopic || "General Topic";
   return {
     country,
     examName,

@@ -40,6 +40,8 @@ export function normalizeKeyPart(str: string | undefined, fallback: string = 'ge
 
   const slug = trimmed
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '_')
     .replace(/^_+|_+$/g, '');
@@ -135,13 +137,18 @@ export function extractQuestionHierarchy(body: any): {
       if (!chapter) chapter = parts[1];
       if (!subtopic) subtopic = parts.slice(2).join(' - ');
     } else if (parts.length === 2) {
-      if (!subject) subject = parts[0];
-      if (!chapter) chapter = parts[1];
-      if (!subtopic) subtopic = isAllSubjects ? 'All Subjects / All Topics' : 'All Subjects / All Topics';
+      if (!subject) {
+        subject = parts[0];
+        if (!chapter) chapter = parts[1];
+        if (!subtopic) subtopic = isAllTopics ? 'All Subjects / All Topics' : parts[1];
+      } else {
+        if (!chapter) chapter = parts[0];
+        if (!subtopic) subtopic = isAllTopics ? 'All Subjects / All Topics' : parts[1];
+      }
     } else if (parts.length === 1) {
-      if (!subject) subject = parts[0];
+      if (!subject) subject = 'General Studies';
       if (!chapter) chapter = parts[0];
-      if (!subtopic) subtopic = isAllSubjects ? 'All Subjects / All Topics' : 'All Subjects / All Topics';
+      if (!subtopic) subtopic = isAllTopics ? 'All Subjects / All Topics' : parts[0];
     }
   }
 
@@ -156,7 +163,7 @@ export function extractQuestionHierarchy(body: any): {
 
   if (!subject) subject = isAllSubjects ? 'All Subjects' : 'General Studies';
   if (!chapter) chapter = isAllSubjects ? 'All Chapters' : 'Core Curriculum';
-  if (!subtopic) subtopic = isAllSubjects || isAllTopics ? 'All Subjects / All Topics' : 'All Subjects / All Topics';
+  if (!subtopic) subtopic = isAllSubjects || isAllTopics ? 'All Subjects / All Topics' : (rawTopic || 'General Topic');
 
   return {
     country,

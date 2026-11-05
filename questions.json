@@ -109,5 +109,34 @@
     "createdAt": "2026-11-05T10:57:12.743Z",
     "updatedAt": "2026-11-05T10:57:12.762Z",
     "hitCount": 2
+  },
+  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__poisson_verdeling__ai_quizzes__medium__standard": {
+    "country": "Norway",
+    "examName": "Norwegian Upper Secondary Exit Examinations",
+    "grade": "11th Grade",
+    "subject": "Mathematics A",
+    "chapter": "Statistiek",
+    "subtopic": "Poisson verdeling",
+    "feature": "ai_quizzes",
+    "difficulty": "Medium",
+    "practiceMode": "standard",
+    "totalQuestions": 1,
+    "questions": [
+      {
+        "id": 1,
+        "question": "Wat is de kansformule van de Poisson-verdeling?",
+        "options": [
+          "P(X=k) = (λ^k * e^-λ) / k!",
+          "P(X=k) = (n kies k) * p^k * (1-p)^(n-k)",
+          "P(X=k) = 1 / (b - a)",
+          "P(X=k) = e^-λk"
+        ],
+        "correctAnswer": "P(X=k) = (λ^k * e^-λ) / k!",
+        "explanation": "Dit is de standaard definitie van de Poisson kansfunctie."
+      }
+    ],
+    "createdAt": "2026-11-05T11:32:45.791Z",
+    "updatedAt": "2026-11-05T11:32:45.792Z",
+    "hitCount": 2
   }
 }

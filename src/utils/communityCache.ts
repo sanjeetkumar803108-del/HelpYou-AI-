@@ -215,9 +215,12 @@ export function parseTopicHierarchy(rawTopic: string, fallbackSubject?: string):
     return { subject: parts[0], chapter: parts[1], subTopic: parts.slice(2).join(' - ') };
   }
   if (parts.length === 2) {
+    if (fallbackSubject && fallbackSubject.toLowerCase() !== parts[0].toLowerCase()) {
+      return { subject: fallbackSubject, chapter: parts[0], subTopic: parts[1] };
+    }
     return { subject: parts[0], chapter: parts[1], subTopic: 'All' };
   }
-  return { subject: fallbackSubject || 'General', chapter: parts[0] || 'All', subTopic: 'All' };
+  return { subject: fallbackSubject || 'General', chapter: parts[0] || 'All', subTopic: parts[0] || 'All' };
 }
 
 /**

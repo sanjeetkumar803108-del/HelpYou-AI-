@@ -5625,23 +5625,282 @@ var getExamAwareUnitsAndSubtopics = (subj, exam, country) => {
     ];
     const subTopics2 = {};
     units2.forEach((u) => {
-      subTopics2[u] = [`${u} Core Rules & Conventions`, `${u} Passage Analysis`, `${u} Error Identification & Polishing`];
+      subTopics2[u] = getAuthentic4Subtopics(u, subj);
+    });
+    return { units: units2, subTopics: subTopics2 };
+  }
+  if (lowerSubj.includes("samfunn") || lowerSubj.includes("social") || lowerSubj.includes("civic") || lowerSubj.includes("sociolog") || lowerSubj.includes("politi")) {
+    const units2 = [
+      "Individual, Society and Community (Individ og samfunn)",
+      "Working Life, Welfare State and Economics (Arbeidsliv og \xF8konomi)",
+      "Politics, Democracy and Citizenship (Politikk og demokrati)",
+      "Human Rights, Rule of Law and Sustainable Societies (Menneskerettigheter og rettsstat)",
+      "International Relations, Global Challenges and Cooperation (Internasjonale forhold)"
+    ];
+    const subTopics2 = {};
+    units2.forEach((u) => {
+      subTopics2[u] = getAuthentic4Subtopics(u, subj);
+    });
+    return { units: units2, subTopics: subTopics2 };
+  }
+  if (lowerSubj.includes("historie") || lowerSubj.includes("history") || lowerSubj.includes("filosofi") || lowerSubj.includes("philosophy")) {
+    const units2 = [
+      "Historieforst\xE5else og filosofiens opprinnelse (Origins of Philosophy)",
+      "Antikken og klassisk filosofi: Kunnskap og moral (Antiquity)",
+      "Middelalderen og renessansen (Middle Ages & Renaissance)",
+      "Opplysningstid og revolusjoner (Enlightenment & Revolutions)",
+      "Det moderne prosjektet og dets kritikere (Modern Ideologies)",
+      "Demokrati, makt og rettferdighet i samtiden (Contemporary Ethics)"
+    ];
+    const subTopics2 = {};
+    units2.forEach((u) => {
+      subTopics2[u] = getAuthentic4Subtopics(u, subj);
+    });
+    return { units: units2, subTopics: subTopics2 };
+  }
+  if (lowerSubj.includes("econ") || lowerSubj.includes("business") || lowerSubj.includes("commerce") || lowerSubj.includes("finance")) {
+    const units2 = [
+      "Microeconomics: Supply, Demand and Market Equilibrium",
+      "Market Structures, Elasticity and Consumer Theory",
+      "Macroeconomics: National Income, Inflation and Unemployment",
+      "Monetary and Fiscal Policies & Central Banking",
+      "International Trade, Globalization and Exchange Rates",
+      "Business Finance, Investment and Capital Markets"
+    ];
+    const subTopics2 = {};
+    units2.forEach((u) => {
+      subTopics2[u] = getAuthentic4Subtopics(u, subj);
+    });
+    return { units: units2, subTopics: subTopics2 };
+  }
+  if (lowerSubj.includes("comp") || lowerSubj.includes("informati") || lowerSubj.includes("program") || lowerSubj.includes("software")) {
+    const units2 = [
+      "Computational Thinking & Algorithm Design",
+      "Data Structures, Arrays and Recursion",
+      "Object-Oriented Programming & Software Design",
+      "Database Systems, SQL and Data Modeling",
+      "Computer Networks, Protocols and Internet Security",
+      "Societal Impacts of Technology, Ethics and AI"
+    ];
+    const subTopics2 = {};
+    units2.forEach((u) => {
+      subTopics2[u] = getAuthentic4Subtopics(u, subj);
+    });
+    return { units: units2, subTopics: subTopics2 };
+  }
+  if (lowerSubj.includes("geog") || lowerSubj.includes("environ") || lowerSubj.includes("earth")) {
+    const units2 = [
+      "Physical Geography, Tectonics and Landforms",
+      "Atmospheric Systems, Weather and Climate Dynamics",
+      "Hydrology, Water Resources and Ocean Systems",
+      "Human Geography, Demographics and Urbanization",
+      "Economic Geography, Resource Management and Sustainability",
+      "Global Environmental Issues, Climate Change and Geopolitics"
+    ];
+    const subTopics2 = {};
+    units2.forEach((u) => {
+      subTopics2[u] = getAuthentic4Subtopics(u, subj);
+    });
+    return { units: units2, subTopics: subTopics2 };
+  }
+  if (lowerSubj.includes("psych")) {
+    const units2 = [
+      "Biological Bases of Behavior and Brain Anatomy",
+      "Sensation, Perception and Cognitive Processes",
+      "Learning Theories, Conditioning and Memory Systems",
+      "Human Development Across the Life Span",
+      "Personality Theories and Psychological Testing",
+      "Psychological Disorders, Clinical Diagnosis and Treatments"
+    ];
+    const subTopics2 = {};
+    units2.forEach((u) => {
+      subTopics2[u] = getAuthentic4Subtopics(u, subj);
     });
     return { units: units2, subTopics: subTopics2 };
   }
   const units = [
-    `${subj} Core Concepts & Terminology`,
-    `${subj} Principles, Theories & Frameworks`,
-    `${subj} Methodologies & Analytical Procedures`,
-    `${subj} Practical Applications & Problem Solving`,
-    `${subj} Evaluation, Critical Review & Case Studies`
+    "Foundational Principles & Core Frameworks",
+    "Evolution, Core Models & Theoretical Paradigms",
+    "Structural Analysis & Methodologies",
+    "Applied Problem Solving & Practical Systems",
+    "Critical Evaluation, Advanced Topics & Case Studies"
   ];
   const subTopics = {};
   units.forEach((u) => {
-    subTopics[u] = [`${u} Foundations & Rules`, `${u} Real-World Case Studies`, `${u} Review Exercises & Assessments`];
+    subTopics[u] = getAuthentic4Subtopics(u, subj);
   });
   return { units, subTopics };
 };
+async function researchSingleSubjectBlueprint(subjectName, examName, country, grade) {
+  const normSubject = subjectName.trim();
+  const normExam = (examName || "Standardized Examination").trim();
+  const normCountry = sanitizeCountry(country, "Global");
+  const normGrade = (grade || "Senior Secondary").trim();
+  const promptText = `
+User Selected Country / Region: "${normCountry}"
+User Target Examination: "${normExam}"
+Student Grade / Level: "${normGrade}"
+Subject to Research: "${normSubject}"
+
+TASK:
+You are an authoritative global educational curriculum and assessment researcher.
+Conduct deep web research strictly using the official examination authority guidelines (e.g. Udir for Norway, CBSE/NTA for India, CollegeBoard for USA, Ofqual/Cambridge for UK, etc.).
+
+CRITICAL RESEARCH MANDATE:
+1. Research the official, authentic syllabus of "${normSubject}" for "${normExam}" in "${normCountry}" for Grade "${normGrade}".
+2. Extract the complete, exhaustive list of official textbook chapters/units taught and tested.
+   - ZERO GENERIC FILLERS: NEVER output names like "${normSubject} Core Concepts & Terminology", "Principles, Theories & Frameworks", "Methodologies & Analytical Procedures", "Unit 1".
+   - Every single chapter MUST be the real, official recognized textbook chapter title (e.g., in Norwegian Samfunnskunnskap: "Individ og samfunn", "Politikk og demokrati", "Arbeidsliv og \xF8konomi", "Internasjonale forhold").
+3. For EVERY single chapter in "coreUnits", provide an array of EXACTLY 4 REAL, AUTHENTIC micro-subtopics (2 to 5 words each).
+   - ZERO REPETITION: Subtopics MUST NOT repeat the parent chapter title!
+   - ZERO TEMPLATES: NEVER use suffixes like "Core Theory & Key Concepts", "Fundamental Principles", "Problem Solving".
+   - Each subtopic must be a clean, concise specific concept name.
+4. Output the complete blueprint structure with marks, question counts, question formats, nomenclature ("Chapters" or "Units" or "Domains").
+
+OUTPUT REQUIREMENT:
+Output ONLY a single valid JSON object. No markdown outside JSON.
+Format:
+{
+  "subjectName": "${normSubject}",
+  "totalMarks": 100,
+  "totalQuestions": 30,
+  "attemptRequired": 30,
+  "markingScheme": "+1 correct, 0 unattempted",
+  "negativeMarking": 0,
+  "marksPerCorrect": 1,
+  "questionFormats": ["Multiple Choice", "Structured Analysis", "Essay"],
+  "mcqStyle": { "optionsCount": 4, "style": "Conceptual & Analytical", "negativePenalty": "0" },
+  "subjectiveStyle": { "hasSubjective": true, "format": "Analytical response & essay", "wordLimits": "200-400 words", "markingRubric": "Step marking & criteria" },
+  "nomenclature": "Chapters",
+  "coreUnits": ["Real Official Chapter 1", "Real Official Chapter 2"],
+  "subTopics": {
+    "Real Official Chapter 1": ["Micro Concept 1", "Micro Concept 2", "Micro Concept 3", "Micro Concept 4"],
+    "Real Official Chapter 2": ["Micro Concept 1", "Micro Concept 2", "Micro Concept 3", "Micro Concept 4"]
+  },
+  "detailedNotesGuidelines": "Core concepts, frameworks, and case studies.",
+  "revisionGuidelines": "Key terms, historical timelines, and summary sheet.",
+  "essayTone": null,
+  "examTone": "Official standard for ${normExam}",
+  "officialSource": "Official Curriculum Guidelines"
+}
+`;
+  try {
+    const response = await safeGenerateContent({
+      model: "gemini-2.5-flash",
+      contents: { parts: [{ text: promptText }] },
+      config: {
+        systemInstruction: {
+          parts: [{
+            text: `You are an authoritative global educational curriculum and assessment researcher.
+CRITICAL MANDATE: Research the authentic official textbook syllabus of "${normSubject}" for "${normExam}" in "${normCountry}".
+Strictly output genuine chapter titles and 4 real micro-subtopics per chapter without generic templates.
+Output ONLY a single valid JSON object.`
+          }]
+        },
+        tools: [{ googleSearch: {} }],
+        temperature: 0.1,
+        maxOutputTokens: 8192
+      }
+    });
+    let rawText = (response.text || "").trim();
+    if (rawText.startsWith("```json")) rawText = rawText.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+    else if (rawText.startsWith("```")) rawText = rawText.replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+    let parsed = safeParseJSON(rawText, "object");
+    if (parsed?.blueprint && typeof parsed.blueprint === "object") {
+      parsed = parsed.blueprint;
+    }
+    const examAware = getExamAwareUnitsAndSubtopics(normSubject, normExam, normCountry);
+    if (!parsed || !Array.isArray(parsed.coreUnits) || parsed.coreUnits.length < 2) {
+      return {
+        subjectName: normSubject,
+        totalMarks: 50,
+        totalQuestions: 25,
+        attemptRequired: 25,
+        markingScheme: "+2 correct, -0.50 incorrect",
+        negativeMarking: -0.5,
+        marksPerCorrect: 2,
+        questionFormats: ["Multiple Choice Questions", "Conceptual Verification"],
+        mcqStyle: { optionsCount: 4, style: `Standard assessment for ${normExam}`, negativePenalty: "-0.50 marks" },
+        subjectiveStyle: { hasSubjective: false, format: "N/A - Objective CBT Only", wordLimits: "N/A", markingRubric: "N/A" },
+        nomenclature: "Chapters",
+        coreUnits: examAware.units,
+        subTopics: examAware.subTopics,
+        detailedNotesGuidelines: "Formulas, theorems, standard derivations, and exam traps.",
+        revisionGuidelines: "High-yield formula cheat sheet and shortcut summary.",
+        essayTone: null,
+        examTone: `Official curriculum standard for ${normExam}`,
+        officialSource: `${normExam} Guidelines`
+      };
+    }
+    if (!parsed.subTopics || typeof parsed.subTopics !== "object") {
+      parsed.subTopics = {};
+    }
+    parsed.coreUnits.forEach((u) => {
+      const existingSubs = parsed.subTopics[u];
+      if (!Array.isArray(existingSubs) || existingSubs.length < 2) {
+        parsed.subTopics[u] = getAuthentic4Subtopics(u, normSubject);
+      } else {
+        parsed.subTopics[u] = existingSubs.slice(0, 4).map((sub) => {
+          let cSub = String(sub || "").trim();
+          if (cSub.toLowerCase().startsWith(u.toLowerCase())) {
+            cSub = cSub.slice(u.length).replace(/^[\s:\-–—,]+/, "").trim();
+          }
+          cSub = cSub.replace(/\s*(?:Core Theory & Key Concepts|Fundamental Principles & Formulas|Problem Solving & Practical Applications|Foundations & Rules)\s*/gi, "").trim();
+          return cSub.length >= 2 ? cSub : u;
+        });
+        while (parsed.subTopics[u].length < 4) {
+          const fallbackSubs = getAuthentic4Subtopics(u, normSubject);
+          const nextSub = fallbackSubs[parsed.subTopics[u].length % fallbackSubs.length];
+          if (!parsed.subTopics[u].includes(nextSub)) parsed.subTopics[u].push(nextSub);
+          else break;
+        }
+      }
+    });
+    return {
+      subjectName: parsed.subjectName || normSubject,
+      totalMarks: parsed.totalMarks || 100,
+      totalQuestions: parsed.totalQuestions || 30,
+      attemptRequired: parsed.attemptRequired || 30,
+      markingScheme: parsed.markingScheme || "+1 correct, 0 unattempted",
+      negativeMarking: typeof parsed.negativeMarking === "number" ? parsed.negativeMarking : 0,
+      marksPerCorrect: typeof parsed.marksPerCorrect === "number" ? parsed.marksPerCorrect : 1,
+      questionFormats: Array.isArray(parsed.questionFormats) ? parsed.questionFormats : ["Multiple Choice", "Conceptual Verification"],
+      mcqStyle: parsed.mcqStyle || { optionsCount: 4, style: `Standard assessment for ${normExam}`, negativePenalty: "0" },
+      subjectiveStyle: parsed.subjectiveStyle || { hasSubjective: false, format: "N/A", wordLimits: "N/A", markingRubric: "N/A" },
+      nomenclature: parsed.nomenclature || "Chapters",
+      coreUnits: parsed.coreUnits,
+      subTopics: parsed.subTopics,
+      detailedNotesGuidelines: parsed.detailedNotesGuidelines || "Comprehensive concepts, standard formulas, and exam traps.",
+      revisionGuidelines: parsed.revisionGuidelines || "High-yield revision cheat sheets and mnemonics.",
+      essayTone: parsed.essayTone || null,
+      examTone: parsed.examTone || `Official curriculum standard for ${normExam}`,
+      officialSource: parsed.officialSource || "Official Curriculum Guidelines"
+    };
+  } catch (err) {
+    console.error(`[researchSingleSubjectBlueprint] Error researching ${normSubject}:`, err);
+    const examAware = getExamAwareUnitsAndSubtopics(normSubject, normExam, normCountry);
+    return {
+      subjectName: normSubject,
+      totalMarks: 50,
+      totalQuestions: 25,
+      attemptRequired: 25,
+      markingScheme: "+2 correct, -0.50 incorrect",
+      negativeMarking: -0.5,
+      marksPerCorrect: 2,
+      questionFormats: ["Multiple Choice Questions", "Conceptual Verification"],
+      mcqStyle: { optionsCount: 4, style: `Standard assessment for ${normExam}`, negativePenalty: "-0.50 marks" },
+      subjectiveStyle: { hasSubjective: false, format: "N/A - Objective CBT Only", wordLimits: "N/A", markingRubric: "N/A" },
+      nomenclature: "Chapters",
+      coreUnits: examAware.units,
+      subTopics: examAware.subTopics,
+      detailedNotesGuidelines: "Formulas, theorems, standard derivations, and exam traps.",
+      revisionGuidelines: "High-yield formula cheat sheet and shortcut summary.",
+      essayTone: null,
+      examTone: `Official curriculum standard for ${normExam}`,
+      officialSource: `${normExam} Guidelines`
+    };
+  }
+}
 app.post("/api/deep-research-exam-blueprint", async (req, res) => {
   try {
     const { country, examName, grade, subjects } = req.body;
@@ -5840,55 +6099,91 @@ Output ONLY a single valid JSON object.`
         officialSourceNote: parsed.examOverview.examSchedule.officialSourceNote || fallbackSchedule.officialSourceNote
       };
     }
-    if (parsed && parsed.subjectsBlueprint && typeof parsed.subjectsBlueprint === "object") {
-      const normalizedBlueprint = {};
-      Object.keys(parsed.subjectsBlueprint).forEach((rawKey) => {
-        let cleanKey = rawKey.trim();
-        cleanKey = cleanKey.replace(/^[^(:]+\([^)]*\)\s*:\s*/i, "");
-        if (cleanKey.includes(":")) {
-          const parts = cleanKey.split(":");
-          if (parts[parts.length - 1].trim().length >= 2) cleanKey = parts[parts.length - 1].trim();
-        }
-        cleanKey = cleanKey.replace(/^[^(–—\-]+\([^)]*\)\s*[–—\-]\s*/i, "");
-        if (cleanKey.includes(" - ") || cleanKey.includes(" \u2013 ") || cleanKey.includes(" \u2014 ")) {
-          const parts = cleanKey.split(/\s+[–—\-]\s+/);
-          if (parts[parts.length - 1].trim().length >= 2) cleanKey = parts[parts.length - 1].trim();
-        }
-        cleanKey = cleanKey.replace(/\s*\([^)]*(?:Exam|Examination|Board|Level|Grade|Colloquium|Curriculum)[^)]*\)\s*/gi, " ").trim();
-        const subjData = parsed.subjectsBlueprint[rawKey];
-        if (subjData && Array.isArray(subjData.coreUnits)) {
-          const hasGenericPlaceholders = subjData.coreUnits.some(
-            (u) => /core foundations|theoretical frameworks|applied systems|critical evaluation|high-yield examination traps/i.test(u)
-          );
-          if (hasGenericPlaceholders || subjData.coreUnits.length === 0) {
-            const fallback = getExamAwareUnitsAndSubtopics(cleanKey || rawKey, normExam, normCountry);
-            subjData.coreUnits = fallback.units;
-            subjData.subTopics = fallback.subTopics;
+    const rawBlueprint = parsed.subjectsBlueprint;
+    const finalSubjectsBlueprint = {};
+    const isGenericOrIncomplete = (data) => {
+      if (!data) return true;
+      if (!Array.isArray(data.coreUnits) || data.coreUnits.length < 2) return true;
+      const genericChapterRegex = /core concepts & terminology|principles, theories & frameworks|methodologies & analytical procedures|practical applications & problem solving|evaluation, critical review & case studies|core foundations|theoretical frameworks|applied systems|critical evaluation|high-yield examination traps/i;
+      if (data.coreUnits.some((u) => genericChapterRegex.test(u))) return true;
+      if (!data.subTopics || typeof data.subTopics !== "object" || Object.keys(data.subTopics).length === 0) return true;
+      for (const unit of data.coreUnits) {
+        const subs = data.subTopics[unit];
+        if (!Array.isArray(subs) || subs.length === 0) return true;
+        if (subs.some((s) => /core theory & key concepts|fundamental principles & formulas|problem solving & practical applications|foundations & rules/i.test(s))) return true;
+      }
+      return false;
+    };
+    cleanSubjects.forEach((subj, idx) => {
+      let matchedData = null;
+      if (rawBlueprint && typeof rawBlueprint === "object") {
+        const directKey = Object.keys(rawBlueprint).find((k) => k.toLowerCase() === subj.toLowerCase());
+        if (directKey) {
+          matchedData = rawBlueprint[directKey];
+        } else {
+          const cleanSubjNorm = subj.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const alphaKey = Object.keys(rawBlueprint).find((k) => k.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanSubjNorm);
+          if (alphaKey) {
+            matchedData = rawBlueprint[alphaKey];
           } else {
-            if (!subjData.subTopics || typeof subjData.subTopics !== "object") {
-              subjData.subTopics = {};
-            }
-            subjData.coreUnits.forEach((unit) => {
-              if (!Array.isArray(subjData.subTopics[unit]) || subjData.subTopics[unit].length === 0) {
-                subjData.subTopics[unit] = [
-                  `${unit} Core Theory & Key Concepts`,
-                  `${unit} Fundamental Principles & Formulas`,
-                  `${unit} Problem Solving & Practical Applications`
-                ];
-              }
+            const bySubjNameKey = Object.keys(rawBlueprint).find((k) => {
+              const item = rawBlueprint[k];
+              const sName = item?.subjectName || "";
+              return sName.toLowerCase() === subj.toLowerCase() || sName.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanSubjNorm;
             });
+            if (bySubjNameKey) {
+              matchedData = rawBlueprint[bySubjNameKey];
+            } else {
+              const partialKey = Object.keys(rawBlueprint).find((k) => {
+                const kLower = k.toLowerCase();
+                const sLower = subj.toLowerCase();
+                if (kLower.length > 3 && sLower.includes(kLower)) return true;
+                if (sLower.length > 3 && kLower.includes(sLower)) return true;
+                const parensK = k.match(/\(([^)]+)\)/)?.[1]?.toLowerCase();
+                const parensS = subj.match(/\(([^)]+)\)/)?.[1]?.toLowerCase();
+                if (parensK && parensS && parensK === parensS) return true;
+                return false;
+              });
+              if (partialKey) {
+                matchedData = rawBlueprint[partialKey];
+              } else if (rawBlueprint[idx] || rawBlueprint[String(idx)]) {
+                matchedData = rawBlueprint[idx] || rawBlueprint[String(idx)];
+              }
+            }
           }
         }
-        normalizedBlueprint[cleanKey || rawKey] = subjData;
+      }
+      if (matchedData && typeof matchedData === "object") {
+        matchedData.subjectName = subj;
+        finalSubjectsBlueprint[subj] = matchedData;
+      }
+    });
+    console.log(`[deep-research-exam-blueprint] Auditing ${cleanSubjects.length} subjects for zero generic placeholders...`);
+    const subjectsNeedingHealing = cleanSubjects.filter((subj) => isGenericOrIncomplete(finalSubjectsBlueprint[subj]));
+    if (subjectsNeedingHealing.length > 0) {
+      console.log(`[deep-research-exam-blueprint] ${subjectsNeedingHealing.length} subjects require deep verification: ${JSON.stringify(subjectsNeedingHealing)}`);
+      const healingPromises = subjectsNeedingHealing.map(
+        (subj) => researchSingleSubjectBlueprint(subj, normExam, normCountry, normGrade).then((verified) => ({ subj, verified })).catch((err) => {
+          console.error(`[deep-research-exam-blueprint] Failed healing for ${subj}:`, err);
+          return { subj, verified: null };
+        })
+      );
+      const healingResults = await Promise.allSettled(healingPromises);
+      healingResults.forEach((res2) => {
+        if (res2.status === "fulfilled" && res2.value && res2.value.verified) {
+          const { subj, verified } = res2.value;
+          if (Array.isArray(verified.coreUnits) && verified.coreUnits.length >= 2) {
+            finalSubjectsBlueprint[subj] = verified;
+            console.log(`[deep-research-exam-blueprint] Successfully verified authentic chapters for "${subj}" (${verified.coreUnits.length} chapters)`);
+          }
+        }
       });
-      parsed.subjectsBlueprint = normalizedBlueprint;
     }
     cleanSubjects.forEach((subj) => {
-      const match = Object.keys(parsed.subjectsBlueprint).find((k) => k.toLowerCase() === subj.toLowerCase());
-      if (!match) {
+      if (!finalSubjectsBlueprint[subj] || isGenericOrIncomplete(finalSubjectsBlueprint[subj])) {
         const isEnglish = /english|language|reading|verbal|literature/i.test(subj);
         const examAware = getExamAwareUnitsAndSubtopics(subj, normExam, normCountry);
-        parsed.subjectsBlueprint[subj] = catalogMatch?.subjects[subj] || {
+        finalSubjectsBlueprint[subj] = catalogMatch?.subjects[subj] || {
           subjectName: subj,
           totalMarks: 50,
           totalQuestions: 25,
@@ -5918,7 +6213,33 @@ Output ONLY a single valid JSON object.`
           officialSource: `${normExam} Guidelines`
         };
       }
+      const data = finalSubjectsBlueprint[subj];
+      if (data && Array.isArray(data.coreUnits)) {
+        if (!data.subTopics || typeof data.subTopics !== "object") data.subTopics = {};
+        data.coreUnits.forEach((u) => {
+          const existingSubs = data.subTopics[u];
+          if (!Array.isArray(existingSubs) || existingSubs.length < 2) {
+            data.subTopics[u] = getAuthentic4Subtopics(u, subj);
+          } else {
+            data.subTopics[u] = existingSubs.slice(0, 4).map((sub) => {
+              let cSub = String(sub || "").trim();
+              if (cSub.toLowerCase().startsWith(u.toLowerCase())) {
+                cSub = cSub.slice(u.length).replace(/^[\s:\-–—,]+/, "").trim();
+              }
+              cSub = cSub.replace(/\s*(?:Core Theory & Key Concepts|Fundamental Principles & Formulas|Problem Solving & Practical Applications|Foundations & Rules)\s*/gi, "").trim();
+              return cSub.length >= 2 ? cSub : u;
+            });
+            while (data.subTopics[u].length < 4) {
+              const fallbackSubs = getAuthentic4Subtopics(u, subj);
+              const nextSub = fallbackSubs[data.subTopics[u].length % fallbackSubs.length];
+              if (!data.subTopics[u].includes(nextSub)) data.subTopics[u].push(nextSub);
+              else break;
+            }
+          }
+        });
+      }
     });
+    parsed.subjectsBlueprint = finalSubjectsBlueprint;
     return res.json(parsed);
   } catch (error) {
     console.error("[deep-research-exam-blueprint] Error:", error);
@@ -6171,11 +6492,7 @@ Output ONLY a single valid JSON object.`
           }
           parsed.blueprint.coreUnits.forEach((unit) => {
             if (!Array.isArray(parsed.blueprint.subTopics[unit]) || parsed.blueprint.subTopics[unit].length === 0) {
-              parsed.blueprint.subTopics[unit] = [
-                `${unit} Core Theory & Key Concepts`,
-                `${unit} Fundamental Principles & Formulas`,
-                `${unit} Problem Solving & Practical Applications`
-              ];
+              parsed.blueprint.subTopics[unit] = getAuthentic4Subtopics(unit, standardizedTitle);
             }
           });
         }
@@ -11416,6 +11733,7 @@ export {
   server_default as default,
   getAuthentic4Subtopics,
   getExamAwareUnitsAndSubtopics,
+  researchSingleSubjectBlueprint,
   verifyQuizWithAI,
   verifySubjectiveQuestionsWithAI
 };

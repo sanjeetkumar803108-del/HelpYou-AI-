@@ -2122,68 +2122,6 @@ app.use((req, res, next) => {
   res.on("close", purgeFiles);
   next();
 });
-function pcmToWav(pcmBuffer, sampleRate = 24e3, numChannels = 1, bitsPerSample = 16) {
-  const wavHeader = Buffer.alloc(44);
-  const numBytes = pcmBuffer.length;
-  wavHeader.write("RIFF", 0);
-  wavHeader.writeUInt32LE(36 + numBytes, 4);
-  wavHeader.write("WAVE", 8);
-  wavHeader.write("fmt ", 12);
-  wavHeader.writeUInt32LE(16, 16);
-  wavHeader.writeUInt16LE(1, 20);
-  wavHeader.writeUInt16LE(numChannels, 22);
-  wavHeader.writeUInt32LE(sampleRate, 24);
-  wavHeader.writeUInt32LE(sampleRate * numChannels * bitsPerSample / 8, 28);
-  wavHeader.writeUInt16LE(numChannels * bitsPerSample / 8, 32);
-  wavHeader.writeUInt16LE(bitsPerSample, 34);
-  wavHeader.write("data", 36);
-  wavHeader.writeUInt32LE(numBytes, 40);
-  return Buffer.concat([wavHeader, pcmBuffer]);
-}
-function cleanTextForSpeech(rawText) {
-  if (!rawText) return "";
-  return rawText.replace(/^#+\s+/gm, "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/`([^`]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[-*•]\s+/g, "").replace(/\$\$(.*?)\$\$/gs, "$1").replace(/\$(.*?)\$/g, "$1").replace(/```[\s\S]*?```/g, "").replace(/\n{3,}/g, "\n\n").trim();
-}
-function splitTextForTTS(text, maxChunkSize = 2200) {
-  const cleaned = cleanTextForSpeech(text);
-  if (!cleaned) return [];
-  if (cleaned.length <= maxChunkSize) return [cleaned];
-  const chunks = [];
-  const paragraphs = cleaned.split(/\n+/);
-  let currentChunk = "";
-  for (const para of paragraphs) {
-    const trimmedPara = para.trim();
-    if (!trimmedPara) continue;
-    if (currentChunk.length + trimmedPara.length + 1 <= maxChunkSize) {
-      currentChunk = currentChunk ? `${currentChunk}
-${trimmedPara}` : trimmedPara;
-    } else {
-      if (currentChunk) {
-        chunks.push(currentChunk);
-        currentChunk = "";
-      }
-      if (trimmedPara.length > maxChunkSize) {
-        const sentences = trimmedPara.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) || [trimmedPara];
-        for (const sentence of sentences) {
-          const trimmedSentence = sentence.trim();
-          if (!trimmedSentence) continue;
-          if (currentChunk.length + trimmedSentence.length + 1 <= maxChunkSize) {
-            currentChunk = currentChunk ? `${currentChunk} ${trimmedSentence}` : trimmedSentence;
-          } else {
-            if (currentChunk) chunks.push(currentChunk);
-            currentChunk = trimmedSentence;
-          }
-        }
-      } else {
-        currentChunk = trimmedPara;
-      }
-    }
-  }
-  if (currentChunk) {
-    chunks.push(currentChunk);
-  }
-  return chunks;
-}
 var ai = null;
 function getAI() {
   if (!ai) {
@@ -2551,16 +2489,18 @@ ${text}`.trim() },
   const respMime = clonedParams?.config?.responseMimeType || "";
   const isAudioModel = isTtsModel || !!clonedParams.config?.speechConfig || !!clonedParams.config?.responseModalities?.includes(Modality.AUDIO);
   const isSpecialtyModel = isAudioModel || params.model && (params.model.includes("image") || params.model.includes("video") || params.model.includes("veo") || params.model.includes("lyria") || params.model.includes("clip"));
-  let requestedModel = isAudioModel ? params.model || "gemini-2.5-flash-preview-tts" : params.model || "gemini-3.5-flash-lite";
-  if (!isAudioModel && requestedModel && (requestedModel.includes("1.5") || requestedModel.includes("2.0") || requestedModel.includes("2.5-flash") || requestedModel.includes("preview") || requestedModel.includes("3.6") || requestedModel.includes("3.7"))) {
-    requestedModel = "gemini-3.5-flash-lite";
+  let requestedModel = params.model || "gemini-3.5-flash-lite";
+  if (requestedModel !== "gemini-3.5-flash-lite" && requestedModel !== "gemini-3.1-flash-lite") {
+    if (requestedModel.includes("3.1") || requestedModel.includes("lite") || requestedModel.includes("flash-lite")) {
+      requestedModel = "gemini-3.1-flash-lite";
+    } else {
+      requestedModel = "gemini-3.5-flash-lite";
+    }
   }
-  let modelsToTry = isAudioModel ? [requestedModel, "gemini-2.5-flash-preview-tts"].filter(Boolean) : isSpecialtyModel ? [requestedModel] : [
+  let modelsToTry = [
     requestedModel,
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-latest"
-  ].filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
+    requestedModel === "gemini-3.5-flash-lite" ? "gemini-3.1-flash-lite" : "gemini-3.5-flash-lite"
+  ];
   if (!isSpecialtyModel) {
     const now = Date.now();
     const activeModels = [];
@@ -2888,7 +2828,7 @@ THE "MASTER EDUCATOR" TEACHING PROTOCOL & 3-PILLAR FORMATTING MANDATE:
       profileContext,
       targetExam: targetExam2,
       examBlueprint: examBlueprint2,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: [{ parts: [imagePart, textPart] }],
       config: {
         responseMimeType: "application/json",
@@ -3134,10 +3074,8 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
     }
     if (shouldStream) {
       let modelsToTry = [
-        "gemini-flash-lite-latest",
         "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-flash-latest"
+        "gemini-3.1-flash-lite"
       ];
       const now = Date.now();
       const activeModels = [];
@@ -3200,7 +3138,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-3.5-flash-lite",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3274,7 +3212,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
             stream: effectiveStream,
             country,
             profileContext,
-            model: "gemini-flash-lite-latest",
+            model: "gemini-3.5-flash-lite",
             contents,
             config: {
               systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3308,7 +3246,7 @@ The user is asking for real-time, live, or current up-to-date data (e.g., curren
         stream: effectiveStream,
         country,
         profileContext,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents,
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -3616,9 +3554,8 @@ ${extractedText}` };
       return res.status(400).json({ error: "Document content is too short or empty to process." });
     }
     const summarizeModels = [
-      "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
-      "gemini-3.7-flash"
+      "gemini-3.5-flash-lite"
     ];
     let summaryText = "";
     let summarizeError = null;
@@ -3685,62 +3622,7 @@ ${extractedText}` };
   }
 });
 app.post("/api/tts", async (req, res) => {
-  try {
-    const { text, voice } = req.body;
-    if (!text || !text.trim()) {
-      return res.status(400).json({ error: "No text provided" });
-    }
-    const chunks = splitTextForTTS(text, 2200);
-    if (chunks.length === 0) {
-      return res.status(400).json({ error: "Text is empty after cleaning" });
-    }
-    const selectedVoice = voice || "Kore";
-    const chunkPromises = chunks.map(async (chunkText, i) => {
-      try {
-        const response = await safeGenerateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: `Please speak the following text naturally, clearly, and engagingly:
-
-${chunkText}` }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice } }
-            }
-          }
-        });
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (base64Audio) {
-          return { index: i, buffer: Buffer.from(base64Audio, "base64") };
-        } else {
-          console.warn(`TTS: No audio returned for chunk ${i + 1}/${chunks.length}`);
-          return null;
-        }
-      } catch (chunkErr) {
-        console.error(`TTS error on chunk ${i + 1}/${chunks.length}:`, chunkErr);
-        if (chunkErr.message === "GEMINI_QUOTA_EXHAUSTED") {
-          throw chunkErr;
-        }
-        return null;
-      }
-    });
-    const chunkResults = await Promise.all(chunkPromises);
-    const validBuffers = chunkResults.filter((r) => r !== null).sort((a, b) => a.index - b.index).map((r) => r.buffer);
-    if (validBuffers.length === 0) {
-      return res.status(500).json({ error: "Failed to synthesize complete audio" });
-    }
-    const fullPcmBuffer = Buffer.concat(validBuffers);
-    const wavBuffer = pcmToWav(fullPcmBuffer);
-    const base64Wav = wavBuffer.toString("base64");
-    res.json({ audio: base64Wav, mimeType: "audio/wav" });
-  } catch (error) {
-    if (error.message === "GEMINI_QUOTA_EXHAUSTED") {
-      console.warn("TTS quota exceeded:", error.message);
-      return res.status(429).json({ error: "API quota limit exceeded for audio conversion. Please try again in 60 seconds." });
-    }
-    console.error("TTS error:", error);
-    res.status(500).json({ error: error.message || "Failed to generate audio" });
-  }
+  return res.status(200).json({ disabled: true, message: "AI Voice tutor is not enabled" });
 });
 app.post("/api/grade-essay", async (req, res) => {
   try {
@@ -3946,11 +3828,10 @@ MATHEMATICAL & SCIENTIFIC FORMULAS (KaTeX):
 
 GIBBERISH / RANDOM TYPING GUARD:
 - If the submitted text consists of random typing, keyboard mashing, or lacks coherent sentences, output under the score header: "The submitted text does not contain a coherent essay or recognizable arguments. Please submit a valid written essay to receive full rubric assessment and constructive feedback."`;
-    const originalModel = "gemini-flash-lite-latest";
+    const originalModel = "gemini-3.1-flash-lite";
     let modelsToTry = [
-      "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
-      "gemini-3.7-flash"
+      "gemini-3.5-flash-lite"
     ];
     const now = Date.now();
     const activeModels = [];
@@ -4065,7 +3946,7 @@ GIBBERISH / RANDOM TYPING GUARD:
           stream,
           country,
           profileContext,
-          model: "gemini-flash-lite-latest",
+          model: "gemini-3.1-flash-lite",
           contents: [{
             parts: [
               ...contentParts,
@@ -4123,7 +4004,7 @@ app.post("/api/scan-essay", upload.single("image"), async (req, res) => {
       }
     };
     const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.1-flash-lite",
       contents: [
         {
           parts: [
@@ -4243,7 +4124,7 @@ Return ONLY valid raw JSON conforming strictly to this schema:
   ]
 }`;
     const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: [
         {
           parts: [
@@ -4342,7 +4223,7 @@ app.post("/api/scan-images", upload.array("images", 5), async (req, res) => {
       }
     }));
     const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.1-flash-lite",
       contents: [
         {
           parts: [
@@ -4442,7 +4323,7 @@ ${text}`;
       country,
       targetExam: targetExam2,
       examBlueprint: examBlueprint2,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.1-flash-lite",
       contents: [{
         role: "user",
         parts: [{ text: userPromptText }]
@@ -4538,7 +4419,7 @@ Format:
       country,
       targetExam,
       examBlueprint,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.1-flash-lite",
       contents: [{
         parts: [
           pdfPart,
@@ -4855,7 +4736,7 @@ ${previousSummary}
 Student's Request: "${followUp}"`;
       const response2 = await safeGenerateContent({
         gradeLevel,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.1-flash-lite",
         contents: { parts: [{ text: promptText }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] }
@@ -4914,7 +4795,7 @@ At the very end of your notes, always include 3 helpful interactive study sugges
 \`[SUGGESTION: Deep dive into the first half]\``;
     const response = await safeGenerateContent({
       gradeLevel,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.1-flash-lite",
       contents: { parts: [{ text: transcriptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -5786,7 +5667,7 @@ Format:
 `;
   try {
     const response = await safeGenerateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: {
@@ -5992,7 +5873,7 @@ OUTPUT REQUIREMENT:
 Output ONLY a single valid JSON object. No markdown outside JSON.
 `;
     const response = await safeGenerateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: {
@@ -6418,7 +6299,7 @@ Format when invalid:
 }
 `;
     const response = await safeGenerateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: {
@@ -6587,7 +6468,7 @@ or when invalid:
 }
 `;
     const response = await safeGenerateContent({
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.1-flash-lite",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: {
@@ -6857,7 +6738,7 @@ CRITICAL EXECUTION:
       country,
       targetExam: targetExam2,
       examBlueprint: examBlueprint2,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.1-flash-lite",
       contents: { parts: [{ text: promptText }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -6955,9 +6836,8 @@ You must return your output strictly in JSON format matching the following schem
     const targetText = trimmed || "Please read the text inside the attached image(s), correct any grammatical errors, and enhance it according to the chosen mode.";
     contentParts.push({ text: targetText });
     const grammarModels = [
-      "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
-      "gemini-3.7-flash"
+      "gemini-3.5-flash-lite"
     ];
     let response = null;
     let grammarError = null;
@@ -7209,7 +7089,6 @@ OUTPUT QUALITY & MATHEMATICAL FORMULAS (KaTeX):
 ${conclusion}`;
     }
     const textSumModels = [
-      "gemini-flash-lite-latest",
       "gemini-3.1-flash-lite",
       "gemini-3.5-flash-lite"
     ];
@@ -7486,7 +7365,7 @@ Ensure that for Full Detailed Notes, NO concept, formula, or sub-topic is omitte
       country,
       targetExam: targetExam2,
       examBlueprint: examBlueprint2,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: [{ parts: [{ text: userPrompt }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -7740,7 +7619,7 @@ For each question, provide:
         country,
         targetExam: targetExam2,
         examBlueprint: examBlueprint2,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         timeoutMs: 45e3,
         contents: { parts: [{ text: userPrompt }] },
         config: {
@@ -8675,7 +8554,7 @@ Return ONLY a valid JSON array of objects with this exact structure:
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-flash-lite-latest",
+            model: "gemini-3.5-flash-lite",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Multiple Choice Questions (MCQs) for this batch.
@@ -8894,7 +8773,7 @@ NEVER include multiple-choice options A/B/C/D in subjective output.`;
         const makeCall = async (seed) => {
           const response = await safeGenerateContent({
             gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-            model: "gemini-flash-lite-latest",
+            model: "gemini-3.5-flash-lite",
             timeoutMs: 9e4,
             contents: { parts: [{ text: `Subject: ${subject}. Unit/Topic: ${targetTopic}. Batch Seed: ${seed}.
 Generate exactly ${batchCount} authentic College Board AP Exam Free Response / Subjective Questions for this batch.
@@ -9025,7 +8904,7 @@ STRICT JSON OUTPUT FORMAT:
 }`;
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: { parts: [{ text: `Question: ${questionPrompt || "AP Question"}
 Student Chose / Mistake: ${wrongInput || "Distractor Trap"}
 Correct Concept / Target: ${correctConcept || "CED Standard"}
@@ -9131,7 +9010,7 @@ STRICT JSON OUTPUT FORMAT (WHEN VALID):
       contentParts.push({ text: customQuestion || "Analyze this AP multiple-choice question and expose every trap option." });
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: { parts: contentParts },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction2 }] },
@@ -9243,7 +9122,7 @@ Step 4 (Interpretation): This value represents the total path length traveled by
 ]`;
       const response2 = await safeGenerateContent({
         gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: { parts: [{ text: `Generate ${requestedCount2} authentic AP ${subject} Free Response Trap Radar questions for ${targetTopic}.` }] },
         config: {
           systemInstruction: { parts: [{ text: subjectiveSystemInstruction }] },
@@ -9368,7 +9247,7 @@ Return ONLY a valid JSON array of question objects:
 ]`;
     const response = await safeGenerateContent({
       gradeLevel: gradeLevel || "AP High School (Advanced Placement)",
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: `Generate ${requestedCount} authentic AP ${subject} Trap Radar questions for ${targetTopic}.` }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -9521,7 +9400,7 @@ ${image ? "IMPORTANT: The student has provided an attached photo containing thei
     });
     const response = await safeGenerateContent({
       gradeLevel: userGrade,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: [{ role: "user", parts }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] }
@@ -9639,7 +9518,7 @@ Disarm Secret Note: ${disarmStrategy}
 ${promptGoal}`;
     const response = await safeGenerateContent({
       gradeLevel: "AP High School (Advanced Placement)",
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: userPrompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -9899,7 +9778,7 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
         country,
         targetExam: targetExam2,
         examBlueprint: examBlueprint2,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.5-flash-lite",
         contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -10105,7 +9984,7 @@ Organize your derivation strictly as numbered, point-wise steps:
       gradeLevel: effectiveGrade,
       stream: effectiveStream,
       country: effectiveCountry,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: { parts: [{ text: userPrompt }] },
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -10251,7 +10130,7 @@ Generate exactly ${requestedCount} comprehensive multiple-choice practice questi
             stream,
             country,
             timeoutMs: 3e4,
-            model: "gemini-flash-latest",
+            model: "gemini-3.1-flash-lite",
             contents: [{
               parts: [{ text: `DOCUMENT CORE CONCEPTS:
 ${distilledText.slice(0, 12e3)}
@@ -10435,7 +10314,7 @@ Use this exact JSON structure:
       country,
       targetExam,
       examBlueprint,
-      model: "gemini-flash-lite-latest",
+      model: "gemini-3.5-flash-lite",
       contents: [{ parts: [imagePart, { text: `Analyze this textbook page image and generate exactly ${requestedCount} multiple choice questions for a student in Grade: ${gradeLevel || "Standard"}.` }] }],
       config: {
         systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -10970,7 +10849,7 @@ Return strictly a valid JSON object matching the requested schema with exactly $
         gradeLevel: studentGrade,
         stream: studentStream,
         country: studentCountry,
-        model: "gemini-flash-lite-latest",
+        model: "gemini-3.1-flash-lite",
         contents: [{ parts: [{ text: promptText }] }],
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },

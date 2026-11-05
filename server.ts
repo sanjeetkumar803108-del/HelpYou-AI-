@@ -359,6 +359,8 @@ app.get("/api/questions-bank/stats", (_req, res) => {
         feature: bank[k].feature,
         difficulty: bank[k].difficulty,
         questionsCount: bank[k].questions?.length || 0,
+        ceiling: getTopicCeilingLimit(bank[k].subtopic),
+        isSaturated: (bank[k].questions?.length || 0) >= getTopicCeilingLimit(bank[k].subtopic),
         hitCount: bank[k].hitCount || 0
       }))
     });

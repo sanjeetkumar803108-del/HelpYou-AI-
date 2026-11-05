@@ -48,6 +48,65 @@ export function normalizeKeyPart(str: string | undefined, fallback: string = 'ge
   return slug || fallback;
 }
 
+
+export function getTopicCeilingLimit(subtopic?: string): number {
+  const norm = normalizeKeyPart(subtopic);
+  if (norm === 'all_subjects_all_topics') {
+    return 30; // Max 30 questions for Entire Chapter / All Topics
+  }
+  return 20; // Max 20 questions for Single Subtopic
+}
+
+export function getTopicAccumulatedQuestions(params: {
+  country?: string;
+  examName?: string;
+  grade?: string;
+  subject?: string;
+  chapter?: string;
+  subtopic?: string;
+  feature: 'ai_quizzes' | 'ai_questions';
+  difficulty?: string;
+}): { totalCount: number; ceiling: number; isSaturated: boolean; questions: QuestionBankItem[] } {
+  const bank = loadQuestionsBank();
+  const c = normalizeKeyPart(params.country, 'global');
+  const e = normalizeKeyPart(params.examName, 'exam');
+  const g = normalizeKeyPart(params.grade, 'grade');
+  const s = normalizeKeyPart(params.subject, 'subject');
+  const ch = normalizeKeyPart(params.chapter, 'chapter');
+  const sub = normalizeKeyPart(params.subtopic, 'all_subjects_all_topics');
+  const f = normalizeKeyPart(params.feature, 'quiz');
+  const d = normalizeKeyPart(params.difficulty, 'medium');
+
+  const basePrefix = `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}__`;
+  const ceiling = getTopicCeilingLimit(params.subtopic);
+
+  const seenTexts = new Set<string>();
+  const accumulated: QuestionBankItem[] = [];
+
+  for (const k of Object.keys(bank)) {
+    if (k.startsWith(basePrefix)) {
+      const entry = bank[k];
+      if (Array.isArray(entry.questions)) {
+        for (const q of entry.questions) {
+          const text = (q.question || '').toLowerCase().trim();
+          if (text && !seenTexts.has(text)) {
+            seenTexts.add(text);
+            accumulated.push(q);
+          }
+        }
+      }
+    }
+  }
+
+  const isSaturated = accumulated.length >= ceiling;
+  return {
+    totalCount: accumulated.length,
+    ceiling,
+    isSaturated,
+    questions: accumulated
+  };
+}
+
 export function normalizePracticeMode(mode: string | boolean | undefined): 'standard' | 'more_questions_to_practice' {
   if (mode === true || mode === 'true' || mode === 'more_questions_to_practice' || mode === 'more_practice') {
     return 'more_questions_to_practice';
@@ -315,9 +374,27 @@ export function saveToQuestionBank(params: {
 }): void {
   if (!Array.isArray(params.questions) || params.questions.length === 0) return;
 
+  const ceiling = getTopicCeilingLimit(params.subtopic);
+  const saturation = getTopicAccumulatedQuestions({
+    country: params.country,
+    examName: params.examName,
+    grade: params.grade,
+    subject: params.subject,
+    chapter: params.chapter,
+    subtopic: params.subtopic,
+    feature: params.feature,
+    difficulty: params.difficulty
+  });
+
   const bank = loadQuestionsBank();
   const key = generateQuestionBankKey(params);
   const existing = bank[key];
+
+  // If topic has already reached ceiling and this entry already exists, do not allow further bloat
+  if (saturation.totalCount >= ceiling && existing && existing.questions?.length > 0) {
+    console.log(`[QuestionsBank] Topic already saturated (${saturation.totalCount}/${ceiling}). No extra questions needed for [${key}].`);
+    return;
+  }
 
   let mergedQuestions: QuestionBankItem[] = [];
 
@@ -334,6 +411,13 @@ export function saveToQuestionBank(params: {
     }
   } else {
     mergedQuestions = [...params.questions];
+  }
+
+  // Cap to ensure total accumulated across entries never exceeds ceiling
+  const otherEntriesCount = saturation.totalCount - (existing?.questions?.length || 0);
+  const allowedForThisEntry = Math.max(1, ceiling - otherEntriesCount);
+  if (mergedQuestions.length > allowedForThisEntry) {
+    mergedQuestions = mergedQuestions.slice(0, allowedForThisEntry);
   }
 
   const finalPracticeMode = normalizePracticeMode(params.practiceMode);

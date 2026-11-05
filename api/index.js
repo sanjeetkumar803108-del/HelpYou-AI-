@@ -1592,6 +1592,49 @@ function normalizeKeyPart(str, fallback = "general") {
   const slug = trimmed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
   return slug || fallback;
 }
+function getTopicCeilingLimit2(subtopic) {
+  const norm = normalizeKeyPart(subtopic);
+  if (norm === "all_subjects_all_topics") {
+    return 30;
+  }
+  return 20;
+}
+function getTopicAccumulatedQuestions(params) {
+  const bank = loadQuestionsBank();
+  const c = normalizeKeyPart(params.country, "global");
+  const e = normalizeKeyPart(params.examName, "exam");
+  const g = normalizeKeyPart(params.grade, "grade");
+  const s = normalizeKeyPart(params.subject, "subject");
+  const ch = normalizeKeyPart(params.chapter, "chapter");
+  const sub = normalizeKeyPart(params.subtopic, "all_subjects_all_topics");
+  const f = normalizeKeyPart(params.feature, "quiz");
+  const d = normalizeKeyPart(params.difficulty, "medium");
+  const basePrefix = `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}__`;
+  const ceiling = getTopicCeilingLimit2(params.subtopic);
+  const seenTexts = /* @__PURE__ */ new Set();
+  const accumulated = [];
+  for (const k of Object.keys(bank)) {
+    if (k.startsWith(basePrefix)) {
+      const entry = bank[k];
+      if (Array.isArray(entry.questions)) {
+        for (const q of entry.questions) {
+          const text = (q.question || "").toLowerCase().trim();
+          if (text && !seenTexts.has(text)) {
+            seenTexts.add(text);
+            accumulated.push(q);
+          }
+        }
+      }
+    }
+  }
+  const isSaturated = accumulated.length >= ceiling;
+  return {
+    totalCount: accumulated.length,
+    ceiling,
+    isSaturated,
+    questions: accumulated
+  };
+}
 function normalizePracticeMode(mode) {
   if (mode === true || mode === "true" || mode === "more_questions_to_practice" || mode === "more_practice") {
     return "more_questions_to_practice";
@@ -1736,9 +1779,24 @@ function findInQuestionBank(params) {
 }
 function saveToQuestionBank(params) {
   if (!Array.isArray(params.questions) || params.questions.length === 0) return;
+  const ceiling = getTopicCeilingLimit2(params.subtopic);
+  const saturation = getTopicAccumulatedQuestions({
+    country: params.country,
+    examName: params.examName,
+    grade: params.grade,
+    subject: params.subject,
+    chapter: params.chapter,
+    subtopic: params.subtopic,
+    feature: params.feature,
+    difficulty: params.difficulty
+  });
   const bank = loadQuestionsBank();
   const key = generateQuestionBankKey(params);
   const existing = bank[key];
+  if (saturation.totalCount >= ceiling && existing && existing.questions?.length > 0) {
+    console.log(`[QuestionsBank] Topic already saturated (${saturation.totalCount}/${ceiling}). No extra questions needed for [${key}].`);
+    return;
+  }
   let mergedQuestions = [];
   if (existing && Array.isArray(existing.questions)) {
     const existingTexts = new Set(existing.questions.map((q) => (q.question || "").toLowerCase().trim()));
@@ -1752,6 +1810,11 @@ function saveToQuestionBank(params) {
     }
   } else {
     mergedQuestions = [...params.questions];
+  }
+  const otherEntriesCount = saturation.totalCount - (existing?.questions?.length || 0);
+  const allowedForThisEntry = Math.max(1, ceiling - otherEntriesCount);
+  if (mergedQuestions.length > allowedForThisEntry) {
+    mergedQuestions = mergedQuestions.slice(0, allowedForThisEntry);
   }
   const finalPracticeMode = normalizePracticeMode(params.practiceMode);
   bank[key] = {
@@ -2223,6 +2286,8 @@ app.get("/api/questions-bank/stats", (_req, res) => {
         feature: bank[k].feature,
         difficulty: bank[k].difficulty,
         questionsCount: bank[k].questions?.length || 0,
+        ceiling: getTopicCeilingLimit(bank[k].subtopic),
+        isSaturated: (bank[k].questions?.length || 0) >= getTopicCeilingLimit(bank[k].subtopic),
         hitCount: bank[k].hitCount || 0
       }))
     });

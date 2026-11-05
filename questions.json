@@ -1,0 +1,42 @@
+{
+  "norway__norwegian_upper_secondary_exit_examinations__11th_grade__mathematics_a__statistiek__normale_verdeling_berekeningen__ai_quizzes__medium": {
+    "country": "Norway",
+    "examName": "Norwegian Upper Secondary Exit Examinations",
+    "grade": "11th Grade",
+    "subject": "Mathematics A",
+    "chapter": "Statistiek",
+    "subtopic": "Normale verdeling berekeningen",
+    "feature": "ai_quizzes",
+    "difficulty": "Medium",
+    "totalQuestions": 2,
+    "questions": [
+      {
+        "id": 1,
+        "question": "Gegeven is een normale verdeling met μ = 50 en σ = 5. Wat is de z-score voor x = 60?",
+        "options": [
+          "A) z = 1.0",
+          "B) z = 2.0",
+          "C) z = 2.5",
+          "D) z = 0.5"
+        ],
+        "correctAnswer": "B) z = 2.0",
+        "explanation": "z = (60 - 50) / 5 = 2.0."
+      },
+      {
+        "id": 2,
+        "question": "Wat stelt de standaardafwijking (σ) voor in een normale verdeling?",
+        "options": [
+          "A) De spreiding rond het gemiddelde",
+          "B) Het maximum",
+          "C) De mediaan",
+          "D) De steekproefgrootte"
+        ],
+        "correctAnswer": "A) De spreiding rond het gemiddelde",
+        "explanation": "De standaardafwijking meet de spreiding van de waarnemingen."
+      }
+    ],
+    "createdAt": "2026-11-05T10:29:21.591Z",
+    "updatedAt": "2026-11-05T10:29:21.594Z",
+    "hitCount": 2
+  }
+}

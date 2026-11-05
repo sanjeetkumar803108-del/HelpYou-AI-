@@ -1,0 +1,294 @@
+import path from 'path';
+import fs from 'fs';
+
+export interface QuestionBankItem {
+  id?: number | string;
+  question: string;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+  expectedAnswer?: string;
+  keyRubricPoints?: string[];
+  [key: string]: any;
+}
+
+export interface QuestionBankEntry {
+  country: string;
+  examName: string;
+  grade: string;
+  subject: string;
+  chapter: string;
+  subtopic: string;
+  feature: 'ai_quizzes' | 'ai_questions';
+  difficulty: string;
+  totalQuestions: number;
+  questions: QuestionBankItem[];
+  createdAt: string;
+  updatedAt: string;
+  hitCount: number;
+}
+
+export function normalizeKeyPart(str: string | undefined, fallback: string = 'general'): string {
+  if (!str || typeof str !== 'string') return fallback;
+  const slug = str
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return slug || fallback;
+}
+
+export function generateQuestionBankKey(params: {
+  country?: string;
+  examName?: string;
+  grade?: string;
+  subject?: string;
+  chapter?: string;
+  subtopic?: string;
+  feature: 'ai_quizzes' | 'ai_questions';
+  difficulty?: string;
+}): string {
+  const c = normalizeKeyPart(params.country, 'global');
+  const e = normalizeKeyPart(params.examName, 'exam');
+  const g = normalizeKeyPart(params.grade, 'grade');
+  const s = normalizeKeyPart(params.subject, 'subject');
+  const ch = normalizeKeyPart(params.chapter, 'chapter');
+  const sub = normalizeKeyPart(params.subtopic, 'all');
+  const f = normalizeKeyPart(params.feature, 'quiz');
+  const d = normalizeKeyPart(params.difficulty, 'medium');
+
+  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}`;
+}
+
+export function extractQuestionHierarchy(body: any): {
+  country: string;
+  examName: string;
+  grade: string;
+  subject: string;
+  chapter: string;
+  subtopic: string;
+  difficulty: string;
+} {
+  const rawCountry = (body.country || body.academic_country || 'Global').trim();
+  const country = rawCountry.toLowerCase() === 'others' || rawCountry.toLowerCase() === 'other'
+    ? (body.customCountry || 'Global')
+    : rawCountry;
+
+  const examName = (body.targetExam || body.target_exam || body.exam || body.academic_exam || 'Standardized Examination').trim();
+  const grade = (body.gradeLevel || body.grade || body.userGrade || 'Senior Secondary').trim();
+  const rawDifficulty = (body.difficulty || body.difficultyLevel || 'Medium').trim();
+  const difficulty = rawDifficulty ? (rawDifficulty.charAt(0).toUpperCase() + rawDifficulty.slice(1).toLowerCase()) : 'Medium';
+
+  const rawTopic = (body.topic || body.prompt || body.text || '').trim();
+  let subject = (body.subject || body.stream || '').trim();
+  let chapter = (body.chapter || '').trim();
+  let subtopic = (body.subtopic || '').trim();
+
+  // Parse structured topic if subject, chapter, or subtopic are missing
+  if ((!subject || !chapter || !subtopic) && rawTopic) {
+    const parts = rawTopic.split(/\s*[-–—:]\s*/).map((p: string) => p.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[1];
+      if (!subtopic) subtopic = parts.slice(2).join(' - ');
+    } else if (parts.length === 2) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[1];
+      if (!subtopic) subtopic = 'All Topics';
+    } else if (parts.length === 1) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[0];
+      if (!subtopic) subtopic = 'All Topics';
+    }
+  }
+
+  if (!subject) subject = 'General Studies';
+  if (!chapter) chapter = 'Core Curriculum';
+  if (!subtopic) subtopic = 'All Topics';
+
+  return {
+    country,
+    examName,
+    grade,
+    subject,
+    chapter,
+    subtopic,
+    difficulty
+  };
+}
+
+const QUESTIONS_FILE_PATH = path.join(process.cwd(), 'questions.json');
+const TMP_QUESTIONS_FILE_PATH = path.join('/tmp', 'questions.json');
+
+let memoryQuestionsBank: Record<string, QuestionBankEntry> | null = null;
+
+export function loadQuestionsBank(): Record<string, QuestionBankEntry> {
+  if (memoryQuestionsBank) {
+    return memoryQuestionsBank;
+  }
+
+  try {
+    if (fs.existsSync(TMP_QUESTIONS_FILE_PATH)) {
+      const content = fs.readFileSync(TMP_QUESTIONS_FILE_PATH, 'utf-8');
+      memoryQuestionsBank = JSON.parse(content);
+      return memoryQuestionsBank || {};
+    }
+    if (fs.existsSync(QUESTIONS_FILE_PATH)) {
+      const content = fs.readFileSync(QUESTIONS_FILE_PATH, 'utf-8');
+      memoryQuestionsBank = JSON.parse(content);
+      return memoryQuestionsBank || {};
+    }
+  } catch (err) {
+    console.warn('[QuestionsBank] Notice reading questions.json:', err);
+  }
+
+  memoryQuestionsBank = {};
+  return memoryQuestionsBank;
+}
+
+export function saveQuestionsBank(bank: Record<string, QuestionBankEntry>): void {
+  memoryQuestionsBank = bank;
+  const content = JSON.stringify(bank, null, 2);
+
+  try {
+    fs.writeFileSync(QUESTIONS_FILE_PATH, content, 'utf-8');
+  } catch (err) {
+    try {
+      fs.writeFileSync(TMP_QUESTIONS_FILE_PATH, content, 'utf-8');
+    } catch (tmpErr) {
+      console.warn('[QuestionsBank] Warning writing questions to /tmp:', tmpErr);
+    }
+  }
+}
+
+/**
+ * Searches the Question Bank for an exact 8-point profile match:
+ * 1. country
+ * 2. examName
+ * 3. grade
+ * 4. subject
+ * 5. chapter
+ * 6. subtopic
+ * 7. feature (ai_quizzes vs ai_questions)
+ * 8. difficulty
+ */
+export function findInQuestionBank(params: {
+  country: string;
+  examName: string;
+  grade: string;
+  subject: string;
+  chapter: string;
+  subtopic: string;
+  feature: 'ai_quizzes' | 'ai_questions';
+  difficulty: string;
+  requestedCount?: number;
+  avoidTexts?: string[];
+}): QuestionBankItem[] | null {
+  const bank = loadQuestionsBank();
+  const key = generateQuestionBankKey(params);
+  const entry = bank[key];
+
+  if (!entry || !Array.isArray(entry.questions) || entry.questions.length === 0) {
+    return null;
+  }
+
+  // Exact 8-Point Match Verification
+  const isMatch =
+    normalizeKeyPart(entry.country) === normalizeKeyPart(params.country) &&
+    normalizeKeyPart(entry.examName) === normalizeKeyPart(params.examName) &&
+    normalizeKeyPart(entry.grade) === normalizeKeyPart(params.grade) &&
+    normalizeKeyPart(entry.subject) === normalizeKeyPart(params.subject) &&
+    normalizeKeyPart(entry.chapter) === normalizeKeyPart(params.chapter) &&
+    normalizeKeyPart(entry.subtopic) === normalizeKeyPart(params.subtopic) &&
+    normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) &&
+    normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty);
+
+  if (!isMatch) {
+    return null;
+  }
+
+  // Filter out any questions the user already answered if avoidTexts is provided
+  let candidateQuestions = entry.questions;
+  if (Array.isArray(params.avoidTexts) && params.avoidTexts.length > 0) {
+    const avoidSet = new Set(params.avoidTexts.map(t => (t || '').toLowerCase().trim()));
+    const unasked = candidateQuestions.filter(q => {
+      const qText = (q.question || '').toLowerCase().trim();
+      return !avoidSet.has(qText);
+    });
+    // If we have enough unasked questions, use them
+    if (unasked.length >= (params.requestedCount || 1)) {
+      candidateQuestions = unasked;
+    }
+  }
+
+  const count = params.requestedCount || candidateQuestions.length;
+  if (candidateQuestions.length < count) {
+    // Bank doesn't have enough questions for this requested batch
+    return null;
+  }
+
+  // Update usage stats
+  entry.hitCount = (entry.hitCount || 0) + 1;
+  entry.updatedAt = new Date().toISOString();
+  saveQuestionsBank(bank);
+
+  return candidateQuestions.slice(0, count);
+}
+
+/**
+ * Saves or appends newly generated AI questions to the Question Bank under its exact 8-point profile.
+ */
+export function saveToQuestionBank(params: {
+  country: string;
+  examName: string;
+  grade: string;
+  subject: string;
+  chapter: string;
+  subtopic: string;
+  feature: 'ai_quizzes' | 'ai_questions';
+  difficulty: string;
+  questions: QuestionBankItem[];
+}): void {
+  if (!Array.isArray(params.questions) || params.questions.length === 0) return;
+
+  const bank = loadQuestionsBank();
+  const key = generateQuestionBankKey(params);
+  const existing = bank[key];
+
+  let mergedQuestions: QuestionBankItem[] = [];
+
+  if (existing && Array.isArray(existing.questions)) {
+    const existingTexts = new Set(existing.questions.map(q => (q.question || '').toLowerCase().trim()));
+    mergedQuestions = [...existing.questions];
+
+    for (const q of params.questions) {
+      const qText = (q.question || '').toLowerCase().trim();
+      if (!existingTexts.has(qText)) {
+        existingTexts.add(qText);
+        mergedQuestions.push(q);
+      }
+    }
+  } else {
+    mergedQuestions = [...params.questions];
+  }
+
+  bank[key] = {
+    country: params.country,
+    examName: params.examName,
+    grade: params.grade,
+    subject: params.subject,
+    chapter: params.chapter,
+    subtopic: params.subtopic,
+    feature: params.feature,
+    difficulty: params.difficulty,
+    totalQuestions: mergedQuestions.length,
+    questions: mergedQuestions,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    hitCount: (existing?.hitCount || 0) + 1
+  };
+
+  saveQuestionsBank(bank);
+  console.log(`[QuestionsBank] Saved ${mergedQuestions.length} questions for [${params.country} > ${params.examName} > ${params.subject} > ${params.chapter} > ${params.subtopic} (${params.feature})]. Key: ${key}`);
+}

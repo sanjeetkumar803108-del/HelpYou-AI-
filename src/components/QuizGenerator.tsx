@@ -1166,6 +1166,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
   // Custom count configuration states
   const [showConfig, setShowConfig] = useState(false);
   const [configCount, setConfigCount] = useState<number>(10);
+  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [customCountInput, setCustomCountInput] = useState<string>('');
   const [isCustomCount, setIsCustomCount] = useState(false);
   const [topicToGenerate, setTopicToGenerate] = useState<string>('');
@@ -1271,7 +1272,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     return () => window.removeEventListener('appBackButton', handleBackButton);
   }, [reviewingAttempt, showHistory, quizState, selectedHistoryItem, activeTab, showConfig, showShareModal]);
 
-  const saveInitialQuizToHistory = async (generatedQuestions: Question[], topicName: string) => {
+  const saveInitialQuizToHistory = async (generatedQuestions: Question[], topicName: string, quizDifficulty: string = difficulty) => {
     const quizQuestions = generatedQuestions.map((q) => ({
       question: q.question,
       options: q.options || [],
@@ -1290,6 +1291,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
       localHistory.push({
         id: localId,
         topic: quizTopic,
+        difficulty: quizDifficulty,
         score: 0,
         totalQuestions: generatedQuestions.length,
         accuracy: 0,
@@ -1309,6 +1311,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
         const docRef = await addDoc(collection(db, 'quiz_results'), {
           userId: auth.currentUser.uid,
           topic: quizTopic,
+          difficulty: quizDifficulty,
           score: 0,
           totalQuestions: generatedQuestions.length,
           accuracy: 0,
@@ -1653,7 +1656,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     setCustomCountInput('');
   };
 
-  const handlePDFUploadReal = async (file: File, selectedCount: number) => {
+  const handlePDFUploadReal = async (file: File, selectedCount: number, selectedDifficulty: 'Easy' | 'Medium' | 'Hard' = difficulty) => {
     // Check if user has at least 2 coins before starting, but do not deduct yet!
     const coins = getCoins();
     if (coins < 2) {
@@ -1693,6 +1696,8 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
 
       const formData = new FormData();
       formData.append("count", String(selectedCount));
+      formData.append("difficulty", selectedDifficulty);
+      formData.append("difficultyLevel", selectedDifficulty);
       const profile = getUserProfileData();
       formData.append("gradeLevel", profile.gradeLevel);
       if (profile.stream) formData.append("stream", profile.stream);
@@ -1736,7 +1741,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
         setQuizState('playing');
         setCurrentIndex(0);
         setQuestionStartTime(Date.now());
-        saveInitialQuizToHistory(data.quiz, topic || "PDF Quiz");
+        saveInitialQuizToHistory(data.quiz, topic || "PDF Quiz", selectedDifficulty);
       } else {
         throw new Error('Invalid quiz response from server');
       }
@@ -1752,7 +1757,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     }
   };
 
-  const handlePhotoUploadReal = async (file: File, selectedCount: number) => {
+  const handlePhotoUploadReal = async (file: File, selectedCount: number, selectedDifficulty: 'Easy' | 'Medium' | 'Hard' = difficulty) => {
     // Check if user has at least 2 coins before starting, but do not deduct yet!
     const coins = getCoins();
     if (coins < 2) {
@@ -1781,6 +1786,8 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
       const formData = new FormData();
       formData.append("image", file);
       formData.append("count", String(selectedCount));
+      formData.append("difficulty", selectedDifficulty);
+      formData.append("difficultyLevel", selectedDifficulty);
       const profile = getUserProfileData();
       formData.append("gradeLevel", profile.gradeLevel);
       if (profile.stream) formData.append("stream", profile.stream);
@@ -1807,7 +1814,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
         setQuizState('playing');
         setCurrentIndex(0);
         setQuestionStartTime(Date.now());
-        saveInitialQuizToHistory(data.quiz, topic || "Photo Quiz");
+        saveInitialQuizToHistory(data.quiz, topic || "Photo Quiz", selectedDifficulty);
       } else {
         throw new Error('Invalid quiz response from server');
       }
@@ -1823,7 +1830,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     }
   };
 
-  const handleGenerateReal = async (selectedTopic: string, selectedCount: number) => {
+  const handleGenerateReal = async (selectedTopic: string, selectedCount: number, selectedDifficulty: 'Easy' | 'Medium' | 'Hard' = difficulty) => {
     const activeTopic = selectedTopic.trim();
     if (!activeTopic) return;
 
@@ -1888,6 +1895,11 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
         body: JSON.stringify(getProfilePayload({
           topic: activeTopic,
           count: selectedCount,
+          difficulty: selectedDifficulty,
+          difficultyLevel: selectedDifficulty,
+          subject: hierarchy.subject,
+          chapter: hierarchy.chapter,
+          subtopic: hierarchy.subTopic,
           avoidPrompts: uniqueAvoid,
           avoidQuestions: uniqueAvoid,
           randomSeed: `${Date.now()}_${Math.random().toString(36).substring(7)}`
@@ -1921,7 +1933,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
         setQuizState('playing');
         setCurrentIndex(0);
         setQuestionStartTime(Date.now());
-        saveInitialQuizToHistory(data.quiz, activeTopic);
+        saveInitialQuizToHistory(data.quiz, activeTopic, selectedDifficulty);
       } else {
         throw new Error('Invalid quiz response from server');
       }
@@ -1933,15 +1945,15 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     }
   };
 
-  const handleExecuteReal = async (selectedCount: number) => {
+  const handleExecuteReal = async (selectedCount: number, selectedDifficulty: 'Easy' | 'Medium' | 'Hard' = difficulty) => {
     if (pendingGeneratorType === 'pdf') {
       if (!pendingFile) return;
-      await handlePDFUploadReal(pendingFile, selectedCount);
+      await handlePDFUploadReal(pendingFile, selectedCount, selectedDifficulty);
     } else if (pendingGeneratorType === 'image') {
       if (!pendingFile) return;
-      await handlePhotoUploadReal(pendingFile, selectedCount);
+      await handlePhotoUploadReal(pendingFile, selectedCount, selectedDifficulty);
     } else {
-      await handleGenerateReal(topicToGenerate, selectedCount);
+      await handleGenerateReal(topicToGenerate, selectedCount, selectedDifficulty);
     }
   };
 
@@ -2508,7 +2520,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
               animate={{ opacity: 1, scale: 1 }}
               className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full py-4"
             >
-              <div className="bg-white rounded-3xl border border-zinc-200/80 p-6 shadow-xl shadow-zinc-100 flex flex-col gap-6 relative overflow-hidden">
+              <div className="bg-white rounded-3xl border border-zinc-200/80 p-6 shadow-xl shadow-zinc-100 flex flex-col gap-5 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl opacity-60 pointer-events-none" />
                 
                 {/* Header */}
@@ -2543,6 +2555,74 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Difficulty Level Selector */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                      Difficulty Level
+                    </span>
+                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                      difficulty === 'Easy' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                      difficulty === 'Hard' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                      'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    }`}>
+                      {difficulty === 'Easy' ? '🌱 Easy' : difficulty === 'Hard' ? '🔥 Hard' : '⚡ Medium'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {(['Easy', 'Medium', 'Hard'] as const).map((lvl) => {
+                      const isSelected = difficulty === lvl;
+                      const levelConfig = {
+                        Easy: {
+                          icon: '🌱',
+                          sub: 'Basic',
+                          active: 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-600/20',
+                          subActive: 'text-emerald-100'
+                        },
+                        Medium: {
+                          icon: '⚡',
+                          sub: 'Balanced',
+                          active: 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-600/20',
+                          subActive: 'text-indigo-100'
+                        },
+                        Hard: {
+                          icon: '🔥',
+                          sub: 'Advanced',
+                          active: 'bg-rose-600 border-rose-600 text-white shadow-lg shadow-rose-600/20',
+                          subActive: 'text-rose-100'
+                        }
+                      }[lvl];
+
+                      return (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => {
+                            triggerVibration(10);
+                            setDifficulty(lvl);
+                          }}
+                          className={`py-3 rounded-2xl font-black text-sm border transition-all active:scale-[0.97] cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                            isSelected
+                              ? levelConfig.active
+                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm select-none">{levelConfig.icon}</span>
+                            <span className="text-sm font-black">{lvl}</span>
+                          </div>
+                          <span className={`text-[8px] font-bold uppercase tracking-wider mt-0.5 ${
+                            isSelected ? levelConfig.subActive : 'text-zinc-400'
+                          }`}>
+                            {levelConfig.sub}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Topic Metadata Description & Inline Validation */}
@@ -2598,7 +2678,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                               return;
                             }
                             triggerVibration(20);
-                            handleExecuteReal(configCount);
+                            handleExecuteReal(configCount, difficulty);
                           }}
                           className={`flex-[2] py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 border ${
                             validation.isValid
@@ -3638,9 +3718,18 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
           <div className="flex-1 flex flex-col">
             {/* Progress indicator */}
             <div className="flex justify-between items-center mb-6">
-              <span className="text-xs font-extrabold uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-full shadow-sm">
-                Question {currentIndex + 1} of {quiz.length}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-full shadow-sm">
+                  Question {currentIndex + 1} of {quiz.length}
+                </span>
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                  difficulty === 'Easy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  difficulty === 'Hard' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                  'bg-indigo-50 text-indigo-700 border-indigo-200'
+                }`}>
+                  {difficulty === 'Easy' ? '🌱 Easy' : difficulty === 'Hard' ? '🔥 Hard' : '⚡ Medium'}
+                </span>
+              </div>
               <span className="text-xs font-bold text-zinc-500">
                 Score: {score}/{currentIndex + (isAnswered ? 1 : 0)}
               </span>

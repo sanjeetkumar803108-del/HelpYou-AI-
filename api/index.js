@@ -1580,11 +1580,176 @@ function findPreVerifiedExam(inputExam, userCountry) {
   return null;
 }
 
+// src/utils/questionsBank.ts
+import path from "path";
+import fs from "fs";
+function normalizeKeyPart(str, fallback = "general") {
+  if (!str || typeof str !== "string") return fallback;
+  const slug = str.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "_").replace(/^_+|_+$/g, "");
+  return slug || fallback;
+}
+function generateQuestionBankKey(params) {
+  const c = normalizeKeyPart(params.country, "global");
+  const e = normalizeKeyPart(params.examName, "exam");
+  const g = normalizeKeyPart(params.grade, "grade");
+  const s = normalizeKeyPart(params.subject, "subject");
+  const ch = normalizeKeyPart(params.chapter, "chapter");
+  const sub = normalizeKeyPart(params.subtopic, "all");
+  const f = normalizeKeyPart(params.feature, "quiz");
+  const d = normalizeKeyPart(params.difficulty, "medium");
+  return `${c}__${e}__${g}__${s}__${ch}__${sub}__${f}__${d}`;
+}
+function extractQuestionHierarchy(body) {
+  const rawCountry = (body.country || body.academic_country || "Global").trim();
+  const country = rawCountry.toLowerCase() === "others" || rawCountry.toLowerCase() === "other" ? body.customCountry || "Global" : rawCountry;
+  const examName = (body.targetExam || body.target_exam || body.exam || body.academic_exam || "Standardized Examination").trim();
+  const grade = (body.gradeLevel || body.grade || body.userGrade || "Senior Secondary").trim();
+  const rawDifficulty = (body.difficulty || body.difficultyLevel || "Medium").trim();
+  const difficulty = rawDifficulty ? rawDifficulty.charAt(0).toUpperCase() + rawDifficulty.slice(1).toLowerCase() : "Medium";
+  const rawTopic = (body.topic || body.prompt || body.text || "").trim();
+  let subject = (body.subject || body.stream || "").trim();
+  let chapter = (body.chapter || "").trim();
+  let subtopic = (body.subtopic || "").trim();
+  if ((!subject || !chapter || !subtopic) && rawTopic) {
+    const parts = rawTopic.split(/\s*[-–—:]\s*/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[1];
+      if (!subtopic) subtopic = parts.slice(2).join(" - ");
+    } else if (parts.length === 2) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[1];
+      if (!subtopic) subtopic = "All Topics";
+    } else if (parts.length === 1) {
+      if (!subject) subject = parts[0];
+      if (!chapter) chapter = parts[0];
+      if (!subtopic) subtopic = "All Topics";
+    }
+  }
+  if (!subject) subject = "General Studies";
+  if (!chapter) chapter = "Core Curriculum";
+  if (!subtopic) subtopic = "All Topics";
+  return {
+    country,
+    examName,
+    grade,
+    subject,
+    chapter,
+    subtopic,
+    difficulty
+  };
+}
+var QUESTIONS_FILE_PATH = path.join(process.cwd(), "questions.json");
+var TMP_QUESTIONS_FILE_PATH = path.join("/tmp", "questions.json");
+var memoryQuestionsBank = null;
+function loadQuestionsBank() {
+  if (memoryQuestionsBank) {
+    return memoryQuestionsBank;
+  }
+  try {
+    if (fs.existsSync(TMP_QUESTIONS_FILE_PATH)) {
+      const content = fs.readFileSync(TMP_QUESTIONS_FILE_PATH, "utf-8");
+      memoryQuestionsBank = JSON.parse(content);
+      return memoryQuestionsBank || {};
+    }
+    if (fs.existsSync(QUESTIONS_FILE_PATH)) {
+      const content = fs.readFileSync(QUESTIONS_FILE_PATH, "utf-8");
+      memoryQuestionsBank = JSON.parse(content);
+      return memoryQuestionsBank || {};
+    }
+  } catch (err) {
+    console.warn("[QuestionsBank] Notice reading questions.json:", err);
+  }
+  memoryQuestionsBank = {};
+  return memoryQuestionsBank;
+}
+function saveQuestionsBank(bank) {
+  memoryQuestionsBank = bank;
+  const content = JSON.stringify(bank, null, 2);
+  try {
+    fs.writeFileSync(QUESTIONS_FILE_PATH, content, "utf-8");
+  } catch (err) {
+    try {
+      fs.writeFileSync(TMP_QUESTIONS_FILE_PATH, content, "utf-8");
+    } catch (tmpErr) {
+      console.warn("[QuestionsBank] Warning writing questions to /tmp:", tmpErr);
+    }
+  }
+}
+function findInQuestionBank(params) {
+  const bank = loadQuestionsBank();
+  const key = generateQuestionBankKey(params);
+  const entry = bank[key];
+  if (!entry || !Array.isArray(entry.questions) || entry.questions.length === 0) {
+    return null;
+  }
+  const isMatch = normalizeKeyPart(entry.country) === normalizeKeyPart(params.country) && normalizeKeyPart(entry.examName) === normalizeKeyPart(params.examName) && normalizeKeyPart(entry.grade) === normalizeKeyPart(params.grade) && normalizeKeyPart(entry.subject) === normalizeKeyPart(params.subject) && normalizeKeyPart(entry.chapter) === normalizeKeyPart(params.chapter) && normalizeKeyPart(entry.subtopic) === normalizeKeyPart(params.subtopic) && normalizeKeyPart(entry.feature) === normalizeKeyPart(params.feature) && normalizeKeyPart(entry.difficulty) === normalizeKeyPart(params.difficulty);
+  if (!isMatch) {
+    return null;
+  }
+  let candidateQuestions = entry.questions;
+  if (Array.isArray(params.avoidTexts) && params.avoidTexts.length > 0) {
+    const avoidSet = new Set(params.avoidTexts.map((t) => (t || "").toLowerCase().trim()));
+    const unasked = candidateQuestions.filter((q) => {
+      const qText = (q.question || "").toLowerCase().trim();
+      return !avoidSet.has(qText);
+    });
+    if (unasked.length >= (params.requestedCount || 1)) {
+      candidateQuestions = unasked;
+    }
+  }
+  const count = params.requestedCount || candidateQuestions.length;
+  if (candidateQuestions.length < count) {
+    return null;
+  }
+  entry.hitCount = (entry.hitCount || 0) + 1;
+  entry.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  saveQuestionsBank(bank);
+  return candidateQuestions.slice(0, count);
+}
+function saveToQuestionBank(params) {
+  if (!Array.isArray(params.questions) || params.questions.length === 0) return;
+  const bank = loadQuestionsBank();
+  const key = generateQuestionBankKey(params);
+  const existing = bank[key];
+  let mergedQuestions = [];
+  if (existing && Array.isArray(existing.questions)) {
+    const existingTexts = new Set(existing.questions.map((q) => (q.question || "").toLowerCase().trim()));
+    mergedQuestions = [...existing.questions];
+    for (const q of params.questions) {
+      const qText = (q.question || "").toLowerCase().trim();
+      if (!existingTexts.has(qText)) {
+        existingTexts.add(qText);
+        mergedQuestions.push(q);
+      }
+    }
+  } else {
+    mergedQuestions = [...params.questions];
+  }
+  bank[key] = {
+    country: params.country,
+    examName: params.examName,
+    grade: params.grade,
+    subject: params.subject,
+    chapter: params.chapter,
+    subtopic: params.subtopic,
+    feature: params.feature,
+    difficulty: params.difficulty,
+    totalQuestions: mergedQuestions.length,
+    questions: mergedQuestions,
+    createdAt: existing?.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    hitCount: (existing?.hitCount || 0) + 1
+  };
+  saveQuestionsBank(bank);
+  console.log(`[QuestionsBank] Saved ${mergedQuestions.length} questions for [${params.country} > ${params.examName} > ${params.subject} > ${params.chapter} > ${params.subtopic} (${params.feature})]. Key: ${key}`);
+}
+
 // server.ts
 import dotenv from "dotenv";
 import express from "express";
-import path from "path";
-import fs from "fs";
+import path2 from "path";
+import fs2 from "fs";
 import multer from "multer";
 import cors from "cors";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -1638,11 +1803,11 @@ var apiLimiter = rateLimit({
   validate: { xForwardedForHeader: false, default: false }
 });
 app.use("/api/", apiLimiter);
-var SUBS_FILE_PATH = path.join(process.cwd(), "subscriptions.json");
+var SUBS_FILE_PATH = path2.join(process.cwd(), "subscriptions.json");
 function getStoredSubscriptions() {
   try {
-    if (fs.existsSync(SUBS_FILE_PATH)) {
-      return JSON.parse(fs.readFileSync(SUBS_FILE_PATH, "utf-8"));
+    if (fs2.existsSync(SUBS_FILE_PATH)) {
+      return JSON.parse(fs2.readFileSync(SUBS_FILE_PATH, "utf-8"));
     }
   } catch (error) {
     console.error("Error reading subscriptions from file:", error);
@@ -1651,7 +1816,7 @@ function getStoredSubscriptions() {
 }
 function writeStoredSubscriptions(subs) {
   try {
-    fs.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
+    fs2.writeFileSync(SUBS_FILE_PATH, JSON.stringify(subs, null, 2), "utf-8");
   } catch (error) {
     console.error("Error saving subscriptions to file:", error);
   }
@@ -1671,12 +1836,12 @@ function isClientPro(clientId, req) {
 }
 var DAILY_LIMIT_PRO = 150;
 var DAILY_LIMIT_MAX = 100;
-var DAILY_USAGE_FILE_PATH = process.env.VERCEL ? path.join("/tmp", "ai_daily_usage.json") : path.join(process.cwd(), "ai_daily_usage.json");
+var DAILY_USAGE_FILE_PATH = process.env.VERCEL ? path2.join("/tmp", "ai_daily_usage.json") : path2.join(process.cwd(), "ai_daily_usage.json");
 var dailyUsageStore = /* @__PURE__ */ new Map();
 function loadDailyUsageStore() {
   try {
-    if (fs.existsSync(DAILY_USAGE_FILE_PATH)) {
-      const raw = fs.readFileSync(DAILY_USAGE_FILE_PATH, "utf-8");
+    if (fs2.existsSync(DAILY_USAGE_FILE_PATH)) {
+      const raw = fs2.readFileSync(DAILY_USAGE_FILE_PATH, "utf-8");
       const data = JSON.parse(raw);
       const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
       for (const [key, record] of Object.entries(data)) {
@@ -1704,7 +1869,7 @@ function scheduleSaveDailyUsage() {
           data[key] = record;
         }
       }
-      fs.writeFileSync(DAILY_USAGE_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+      fs2.writeFileSync(DAILY_USAGE_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
     } catch (err) {
       console.error("[DailyLimit] Error saving daily usage to disk:", err);
     }
@@ -1836,6 +2001,35 @@ app.get("/api/daily-usage", (req, res) => {
     remaining: Math.max(0, userDailyLimit - used),
     resetsAt: "midnight (00:00:00 UTC)"
   });
+});
+app.get("/api/questions-bank/stats", (_req, res) => {
+  try {
+    const bank = loadQuestionsBank();
+    const keys = Object.keys(bank);
+    let totalQuestionsCount = 0;
+    keys.forEach((k) => {
+      totalQuestionsCount += bank[k]?.questions?.length || 0;
+    });
+    res.json({
+      totalSets: keys.length,
+      totalQuestions: totalQuestionsCount,
+      entries: keys.map((k) => ({
+        key: k,
+        country: bank[k].country,
+        examName: bank[k].examName,
+        grade: bank[k].grade,
+        subject: bank[k].subject,
+        chapter: bank[k].chapter,
+        subtopic: bank[k].subtopic,
+        feature: bank[k].feature,
+        difficulty: bank[k].difficulty,
+        questionsCount: bank[k].questions?.length || 0,
+        hitCount: bank[k].hitCount || 0
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || "Failed to load questions bank stats" });
+  }
 });
 app.all(["/api/health", "/health", "/api/status"], (req, res) => {
   res.json({
@@ -4283,10 +4477,6 @@ CRITICAL COMPREHENSIVE CHAPTER / UNIT COVERAGE MANDATE:
 - Typically, thoroughly covering a chapter or unit requires between 10 to 25+ comprehensive flashcards. Generate as many as required to cover all key subtopics completely.
 `;
     const systemInstruction = `${gradeDirective}
-${examBlueprintDirective ? `
-OFFICIAL EXAM CALIBRATION DIRECTIVE:
-${examBlueprintDirective}
-` : ""}
 ${allChaptersDirective}
 
 Act as an Elite Cognitive Scientist and Active Recall Specialist.
@@ -7467,6 +7657,27 @@ app.post("/api/generate-questions", async (req, res) => {
     const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream);
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || "academic curriculum"}`;
+    const hierarchyQ = extractQuestionHierarchy({
+      ...req.body,
+      topic: topicText,
+      difficulty
+    });
+    const avoidTextsQ = Array.isArray(req.body.avoidQuestions) ? req.body.avoidQuestions : Array.isArray(req.body.avoidPrompts) ? req.body.avoidPrompts : [];
+    const cachedQuestions = findInQuestionBank({
+      ...hierarchyQ,
+      feature: "ai_questions",
+      difficulty,
+      requestedCount,
+      avoidTexts: avoidTextsQ
+    });
+    if (cachedQuestions && cachedQuestions.length >= requestedCount) {
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuestions.length} cached Subjective Questions for [${hierarchyQ.country} > ${hierarchyQ.examName} > ${hierarchyQ.subject} > ${hierarchyQ.chapter} > ${hierarchyQ.subtopic}] ($0 AI cost)`);
+      return res.json({
+        questions: sanitizeQuestions(cachedQuestions.slice(0, requestedCount)),
+        cached: true,
+        source: "questions_bank"
+      });
+    }
     const isAllChaptersQ = /all (chapter|unit|domain|topic)|comprehensive|full syllabus/i.test(topicText) || stream && topicText.toLowerCase() === stream.toLowerCase();
     const allChaptersDirectiveQ = isAllChaptersQ ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
@@ -7954,7 +8165,14 @@ Return ONLY valid JSON:
           targetExam: targetExam2,
           requestedCount
         });
-        return res.json({ questions: sanitizeQuestions(verified) });
+        const sanitized = sanitizeQuestions(verified);
+        saveToQuestionBank({
+          ...hierarchyQ,
+          feature: "ai_questions",
+          difficulty,
+          questions: sanitized
+        });
+        return res.json({ questions: sanitized, cached: false, source: "ai_generated" });
       }
     }
     return res.json({ questions: fallbackQuestions2(topicText, requestedCount) });
@@ -9704,6 +9922,46 @@ app.post("/api/generate-quiz", async (req, res) => {
     const targetExam2 = req.body.targetExam || req.body.target_exam || req.body.exam;
     const examBlueprint2 = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam2, examBlueprint2, stream || topic);
+    const rawDifficulty = (req.body.difficulty || req.body.difficultyLevel || "Medium").toString().trim();
+    const difficulty = /easy/i.test(rawDifficulty) ? "Easy" : /hard/i.test(rawDifficulty) ? "Hard" : "Medium";
+    const hierarchyQuiz = extractQuestionHierarchy({
+      ...req.body,
+      topic,
+      difficulty
+    });
+    const avoidTextsQuiz = Array.isArray(req.body.avoidQuestions) ? req.body.avoidQuestions : Array.isArray(req.body.avoidPrompts) ? req.body.avoidPrompts : [];
+    const cachedQuiz = findInQuestionBank({
+      ...hierarchyQuiz,
+      feature: "ai_quizzes",
+      difficulty,
+      requestedCount,
+      avoidTexts: avoidTextsQuiz
+    });
+    if (cachedQuiz && cachedQuiz.length >= requestedCount) {
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic}] ($0 AI cost)`);
+      return res.json({
+        quiz: sanitizeQuizItems(cachedQuiz.slice(0, requestedCount)),
+        cached: true,
+        source: "questions_bank"
+      });
+    }
+    const difficultyDirective = difficulty === "Easy" ? `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: EASY (FOUNDATIONAL / DIRECT RECALL):
+- Every question must test fundamental textbook facts, core definitions, direct single-step formulas, and foundational concepts.
+- Language should be straightforward, crystal clear, and direct.
+- DO NOT use complex multi-step derivations, tricky edge cases, or confusing negative phrasing.
+- Distractors (incorrect options) must be realistic but clearly distinguishable for a student with basic understanding.
+` : difficulty === "Hard" ? `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: HARD (ADVANCED / COMPETITIVE & ANALYTICAL):
+- Every question must test deep conceptual mastery, multi-step analytical problem solving, and synthesis of multiple related principles (HOTS / Olympiad / Competitive exam level).
+- Include rigorous calculations, non-trivial mathematical derivations, subtle boundary cases, and questions that test common deceptive pitfalls.
+- Distractors (incorrect options) must be highly plausible, sophisticated, and reflect common student calculation errors or conceptual misconceptions.
+` : `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: MEDIUM (STANDARD BOARD / CURRICULUM LEVEL):
+- Balanced standard curriculum exam difficulty.
+- Combines direct conceptual understanding with moderate application (1 to 2 steps of reasoning or calculation).
+- Distractors should reflect standard student misconceptions.
+`;
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
@@ -9715,6 +9973,7 @@ CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 - ABSOLUTELY STRICT SUBJECT ISOLATION: ALL ${requestedCount} questions MUST be strictly and exclusively from THIS subject. DO NOT include questions, concepts, or formulas from any other unrelated subject!
 ` : "";
     const systemInstruction = `${gradeDirective}
+${difficultyDirective}
 ${examBlueprintDirective ? `
 OFFICIAL EXAM CALIBRATION DIRECTIVE:
 ${examBlueprintDirective}
@@ -9779,7 +10038,7 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
         targetExam: targetExam2,
         examBlueprint: examBlueprint2,
         model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
+        contents: { parts: [{ text: `Topic: ${topic}. DIFFICULTY LEVEL: ${difficulty}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions strictly matching ${difficulty} difficulty in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
@@ -9870,7 +10129,14 @@ ${avoidList.map((p, i) => `  [EXCLUDED ${i + 1}] ${p.replace(/\s+/g, " ").slice(
           targetExam: targetExam2,
           topic
         });
-        return res.json({ quiz: sanitizeQuizItems(verified) });
+        const sanitized = sanitizeQuizItems(verified);
+        saveToQuestionBank({
+          ...hierarchyQuiz,
+          feature: "ai_quizzes",
+          difficulty,
+          questions: sanitized
+        });
+        return res.json({ quiz: sanitized, cached: false, source: "ai_generated" });
       }
     }
     return res.json({ quiz: sanitizeQuizItems(fallbackQuiz(topic, requestedCount)) });
@@ -10064,11 +10330,27 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
         console.warn("[PDF Quiz API] Failed to parse PDF locally with pdf-parse:", parseError);
       }
     }
+    const rawDifficulty = (req.body.difficulty || req.body.difficultyLevel || "Medium").toString().trim();
+    const difficulty = /easy/i.test(rawDifficulty) ? "Easy" : /hard/i.test(rawDifficulty) ? "Hard" : "Medium";
+    const difficultyDirective = difficulty === "Easy" ? `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: EASY (FOUNDATIONAL / DIRECT RECALL):
+- Every question must test fundamental textbook facts, core definitions, direct single-step formulas, and foundational concepts.
+- Language should be straightforward, crystal clear, and direct.
+- Distractors must be realistic but clearly distinguishable for a student with basic understanding.
+` : difficulty === "Hard" ? `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: HARD (ADVANCED / COMPETITIVE & ANALYTICAL):
+- Every question must test deep conceptual mastery, multi-step analytical problem solving, and synthesis of multiple related principles.
+- Distractors must be highly plausible and reflect subtle conceptual misconceptions.
+` : `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: MEDIUM (STANDARD CURRICULUM LEVEL):
+- Balanced standard curriculum exam difficulty.
+`;
     const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const rawCleanName = req.file?.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "";
     const detectedTopic = extractTopicFromPdfText(extractedText, topic || rawCleanName);
     const systemInstruction = `${gradeDirective}
+${difficultyDirective}
 
 You are an expert curriculum exam creator. Analyze the provided study material and extract the most high-yield concepts across the document. Generate exactly ${requestedCount} multiple choice questions based strictly on this text/document, calibrated for a student in Grade: ${gradeLevel || "Standard"}. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
 
@@ -10275,9 +10557,23 @@ app.post("/api/generate-image-quiz", upload.single("image"), async (req, res) =>
         data: req.file.buffer.toString("base64")
       }
     };
+    const rawDifficulty = (req.body.difficulty || req.body.difficultyLevel || "Medium").toString().trim();
+    const difficulty = /easy/i.test(rawDifficulty) ? "Easy" : /hard/i.test(rawDifficulty) ? "Hard" : "Medium";
+    const difficultyDirective = difficulty === "Easy" ? `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: EASY (FOUNDATIONAL / DIRECT RECALL):
+- Every question must test fundamental textbook facts, core definitions, direct single-step formulas, and foundational concepts.
+- Language should be straightforward, crystal clear, and direct.
+` : difficulty === "Hard" ? `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: HARD (ADVANCED / COMPETITIVE & ANALYTICAL):
+- Every question must test deep conceptual mastery, multi-step analytical problem solving, and synthesis of multiple related principles.
+` : `
+CRITICAL DIFFICULTY CALIBRATION \u2014 LEVEL: MEDIUM (STANDARD CURRICULUM LEVEL):
+- Balanced standard curriculum exam difficulty.
+`;
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const systemInstruction = `${gradeDirective}
+${difficultyDirective}
 
 You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate exactly ${requestedCount} multiple choice questions based strictly on the content of that textbook page, calibrated for a student in Grade: ${gradeLevel || "Standard"}.
     
@@ -11511,28 +11807,28 @@ app.post("/api/revenuecat-webhook", async (req, res) => {
   }
 });
 async function startServer() {
-  const distPath = path.join(process.cwd(), "dist");
-  const hasDist = fs.existsSync(path.join(distPath, "index.html"));
+  const distPath = path2.join(process.cwd(), "dist");
+  const hasDist = fs2.existsSync(path2.join(distPath, "index.html"));
   const isDevExplicit = (process.env.NODE_ENV || "").toLowerCase() === "development";
   if (hasDist && !isDevExplicit) {
     console.log("[Server] Serving production static frontend from:", distPath);
     app.use("/assets", (req, res, next) => {
-      const assetDir = path.join(distPath, "assets");
+      const assetDir = path2.join(distPath, "assets");
       const cleanPath = req.path.replace(/^\//, "");
-      const requestedFile = path.join(assetDir, cleanPath);
-      if (fs.existsSync(requestedFile)) {
+      const requestedFile = path2.join(assetDir, cleanPath);
+      if (fs2.existsSync(requestedFile)) {
         return next();
       }
-      const filename = path.basename(req.path);
+      const filename = path2.basename(req.path);
       const match = filename.match(/^([A-Za-z0-9_-]+?)-[A-Za-z0-9_-]+\.(js|css|map)$/);
-      if (match && fs.existsSync(assetDir)) {
+      if (match && fs2.existsSync(assetDir)) {
         const prefix = match[1];
         const ext = match[2];
         try {
-          const files = fs.readdirSync(assetDir);
+          const files = fs2.readdirSync(assetDir);
           const matchingFiles = files.filter((f) => f.startsWith(`${prefix}-`) && f.endsWith(`.${ext}`)).map((f) => {
             try {
-              return { name: f, time: fs.statSync(path.join(assetDir, f)).mtimeMs };
+              return { name: f, time: fs2.statSync(path2.join(assetDir, f)).mtimeMs };
             } catch (_) {
               return { name: f, time: 0 };
             }
@@ -11548,7 +11844,7 @@ async function startServer() {
       }
       next();
     });
-    app.use("/assets", express.static(path.join(distPath, "assets"), {
+    app.use("/assets", express.static(path2.join(distPath, "assets"), {
       maxAge: "1y",
       immutable: true
     }));
@@ -11560,12 +11856,12 @@ async function startServer() {
       }
     }));
     app.get("*", (req, res) => {
-      const ext = path.extname(req.path);
+      const ext = path2.extname(req.path);
       if (ext || req.path.startsWith("/src") || req.path.startsWith("/api")) {
         return res.status(404).send("Not Found");
       }
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path2.join(distPath, "index.html"));
     });
   } else {
     try {

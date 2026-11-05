@@ -2,6 +2,12 @@ import { ALLOWED_ORIGINS } from "./ALLOWED_ORIGINS";
 import { findCatalogExamBlueprint } from "./src/utils/examSyllabusCatalog";
 import { resolveCatalogExamSchedule, computeDaysRemaining } from "./src/utils/examSchedule";
 import { findPreVerifiedExam, PRE_VERIFIED_EXAMS, PreVerifiedExam } from "./src/utils/preVerifiedExams";
+import {
+  extractQuestionHierarchy,
+  findInQuestionBank,
+  saveToQuestionBank,
+  loadQuestionsBank
+} from "./src/utils/questionsBank";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -323,6 +329,36 @@ app.get('/api/daily-usage', (req, res) => {
     remaining: Math.max(0, userDailyLimit - used),
     resetsAt: "midnight (00:00:00 UTC)"
   });
+});
+
+app.get("/api/questions-bank/stats", (_req, res) => {
+  try {
+    const bank = loadQuestionsBank();
+    const keys = Object.keys(bank);
+    let totalQuestionsCount = 0;
+    keys.forEach(k => {
+      totalQuestionsCount += bank[k]?.questions?.length || 0;
+    });
+    res.json({
+      totalSets: keys.length,
+      totalQuestions: totalQuestionsCount,
+      entries: keys.map(k => ({
+        key: k,
+        country: bank[k].country,
+        examName: bank[k].examName,
+        grade: bank[k].grade,
+        subject: bank[k].subject,
+        chapter: bank[k].chapter,
+        subtopic: bank[k].subtopic,
+        feature: bank[k].feature,
+        difficulty: bank[k].difficulty,
+        questionsCount: bank[k].questions?.length || 0,
+        hitCount: bank[k].hitCount || 0
+      }))
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to load questions bank stats" });
+  }
 });
 
 app.all(["/api/health", "/health", "/api/status"], (req, res) => {
@@ -3178,7 +3214,6 @@ CRITICAL COMPREHENSIVE CHAPTER / UNIT COVERAGE MANDATE:
 `;
 
     const systemInstruction = `${gradeDirective}
-${examBlueprintDirective ? `\nOFFICIAL EXAM CALIBRATION DIRECTIVE:\n${examBlueprintDirective}\n` : ''}
 ${allChaptersDirective}
 
 Act as an Elite Cognitive Scientist and Active Recall Specialist.
@@ -6712,6 +6747,33 @@ app.post("/api/generate-questions", async (req, res) => {
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const topicText = topic && topic.trim() ? topic.trim() : `important core concepts in ${stream || 'academic curriculum'}`;
 
+    // 🔍 QUESTION BANK CHECK: 8-Point Hierarchical Match (Country, Exam, Grade, Subject, Chapter, Subtopic, Feature, Difficulty)
+    const hierarchyQ = extractQuestionHierarchy({
+      ...req.body,
+      topic: topicText,
+      difficulty
+    });
+    const avoidTextsQ = Array.isArray(req.body.avoidQuestions)
+      ? req.body.avoidQuestions
+      : Array.isArray(req.body.avoidPrompts)
+        ? req.body.avoidPrompts
+        : [];
+    const cachedQuestions = findInQuestionBank({
+      ...hierarchyQ,
+      feature: 'ai_questions',
+      difficulty,
+      requestedCount,
+      avoidTexts: avoidTextsQ
+    });
+    if (cachedQuestions && cachedQuestions.length >= requestedCount) {
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuestions.length} cached Subjective Questions for [${hierarchyQ.country} > ${hierarchyQ.examName} > ${hierarchyQ.subject} > ${hierarchyQ.chapter} > ${hierarchyQ.subtopic}] ($0 AI cost)`);
+      return res.json({
+        questions: sanitizeQuestions(cachedQuestions.slice(0, requestedCount)),
+        cached: true,
+        source: "questions_bank"
+      });
+    }
+
     const isAllChaptersQ = /all (chapter|unit|domain|topic)|comprehensive|full syllabus/i.test(topicText) || (stream && topicText.toLowerCase() === stream.toLowerCase());
     const allChaptersDirectiveQ = isAllChaptersQ ? `
 CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
@@ -7178,7 +7240,14 @@ Return ONLY valid JSON:
           targetExam,
           requestedCount
         });
-        return res.json({ questions: sanitizeQuestions(verified) });
+        const sanitized = sanitizeQuestions(verified);
+        saveToQuestionBank({
+          ...hierarchyQ,
+          feature: 'ai_questions',
+          difficulty,
+          questions: sanitized
+        });
+        return res.json({ questions: sanitized, cached: false, source: "ai_generated" });
       }
     }
 
@@ -9047,6 +9116,38 @@ app.post("/api/generate-quiz", async (req, res) => {
     const examBlueprint = req.body.examBlueprint || req.body.blueprint;
     const examBlueprintDirective = getExamBlueprintDirective(targetExam, examBlueprint, stream || topic);
 
+    const rawDifficulty = (req.body.difficulty || req.body.difficultyLevel || 'Medium').toString().trim();
+    const difficulty = /easy/i.test(rawDifficulty) ? 'Easy' : (/hard/i.test(rawDifficulty) ? 'Hard' : 'Medium');
+
+    // 🔍 QUESTION BANK CHECK: 8-Point Hierarchical Match (Country, Exam, Grade, Subject, Chapter, Subtopic, Feature, Difficulty)
+    const hierarchyQuiz = extractQuestionHierarchy({
+      ...req.body,
+      topic,
+      difficulty
+    });
+    const avoidTextsQuiz = Array.isArray(req.body.avoidQuestions)
+      ? req.body.avoidQuestions
+      : Array.isArray(req.body.avoidPrompts)
+        ? req.body.avoidPrompts
+        : [];
+    const cachedQuiz = findInQuestionBank({
+      ...hierarchyQuiz,
+      feature: 'ai_quizzes',
+      difficulty,
+      requestedCount,
+      avoidTexts: avoidTextsQuiz
+    });
+    if (cachedQuiz && cachedQuiz.length >= requestedCount) {
+      console.log(`[QuestionsBank] HIT! Serving ${cachedQuiz.length} cached MCQs for [${hierarchyQuiz.country} > ${hierarchyQuiz.examName} > ${hierarchyQuiz.subject} > ${hierarchyQuiz.chapter} > ${hierarchyQuiz.subtopic}] ($0 AI cost)`);
+      return res.json({
+        quiz: sanitizeQuizItems(cachedQuiz.slice(0, requestedCount)),
+        cached: true,
+        source: "questions_bank"
+      });
+    }
+
+    const difficultyDirective = difficulty === 'Easy' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: EASY (FOUNDATIONAL / DIRECT RECALL):\n- Every question must test fundamental textbook facts, core definitions, direct single-step formulas, and foundational concepts.\n- Language should be straightforward, crystal clear, and direct.\n- DO NOT use complex multi-step derivations, tricky edge cases, or confusing negative phrasing.\n- Distractors (incorrect options) must be realistic but clearly distinguishable for a student with basic understanding.\n` : difficulty === 'Hard' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: HARD (ADVANCED / COMPETITIVE & ANALYTICAL):\n- Every question must test deep conceptual mastery, multi-step analytical problem solving, and synthesis of multiple related principles (HOTS / Olympiad / Competitive exam level).\n- Include rigorous calculations, non-trivial mathematical derivations, subtle boundary cases, and questions that test common deceptive pitfalls.\n- Distractors (incorrect options) must be highly plausible, sophisticated, and reflect common student calculation errors or conceptual misconceptions.\n` : `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: MEDIUM (STANDARD BOARD / CURRICULUM LEVEL):\n- Balanced standard curriculum exam difficulty.\n- Combines direct conceptual understanding with moderate application (1 to 2 steps of reasoning or calculation).\n- Distractors should reflect standard student misconceptions.\n`;
+
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const aiClient = getAI();
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
@@ -9061,6 +9162,7 @@ CRITICAL COMPREHENSIVE SUBJECT-LOCKED DISTRIBUTION MANDATE:
 ` : '';
 
     const systemInstruction = `${gradeDirective}
+${difficultyDirective}
 ${examBlueprintDirective ? `\nOFFICIAL EXAM CALIBRATION DIRECTIVE:\n${examBlueprintDirective}\n` : ''}
 ${allChaptersDirective}
 
@@ -9122,7 +9224,7 @@ Use this exact JSON structure:
         targetExam,
         examBlueprint,
         model: "gemini-3.5-flash-lite",
-        contents: { parts: [{ text: `Topic: ${topic}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
+        contents: { parts: [{ text: `Topic: ${topic}. DIFFICULTY LEVEL: ${difficulty}. CRITICAL COUNT MANDATE: Generate EXACTLY ${requestedCount} multiple choice questions strictly matching ${difficulty} difficulty in the JSON array now. Random Variation Seed: ${Date.now()}.${avoidDirective}` }] },
         config: {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           responseMimeType: "application/json",
@@ -9219,7 +9321,14 @@ Use this exact JSON structure:
           targetExam,
           topic
         });
-        return res.json({ quiz: sanitizeQuizItems(verified) });
+        const sanitized = sanitizeQuizItems(verified);
+        saveToQuestionBank({
+          ...hierarchyQuiz,
+          feature: 'ai_quizzes',
+          difficulty,
+          questions: sanitized
+        });
+        return res.json({ quiz: sanitized, cached: false, source: "ai_generated" });
       }
     }
 
@@ -9440,6 +9549,11 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
       }
     }
 
+    const rawDifficulty = (req.body.difficulty || req.body.difficultyLevel || 'Medium').toString().trim();
+    const difficulty = /easy/i.test(rawDifficulty) ? 'Easy' : (/hard/i.test(rawDifficulty) ? 'Hard' : 'Medium');
+
+    const difficultyDirective = difficulty === 'Easy' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: EASY (FOUNDATIONAL / DIRECT RECALL):\n- Every question must test fundamental textbook facts, core definitions, direct single-step formulas, and foundational concepts.\n- Language should be straightforward, crystal clear, and direct.\n- Distractors must be realistic but clearly distinguishable for a student with basic understanding.\n` : difficulty === 'Hard' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: HARD (ADVANCED / COMPETITIVE & ANALYTICAL):\n- Every question must test deep conceptual mastery, multi-step analytical problem solving, and synthesis of multiple related principles.\n- Distractors must be highly plausible and reflect subtle conceptual misconceptions.\n` : `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: MEDIUM (STANDARD CURRICULUM LEVEL):\n- Balanced standard curriculum exam difficulty.\n`;
+
     const requestedCount = Math.min(Math.max(parseInt(count) || 10, 1), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
     const rawCleanName = req.file?.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "";
@@ -9447,6 +9561,7 @@ app.post("/api/generate-pdf-quiz", upload.single("pdf"), async (req, res) => {
 
     // Build system instruction
     const systemInstruction = `${gradeDirective}
+${difficultyDirective}
 
 You are an expert curriculum exam creator. Analyze the provided study material and extract the most high-yield concepts across the document. Generate exactly ${requestedCount} multiple choice questions based strictly on this text/document, calibrated for a student in Grade: ${gradeLevel || 'Standard'}. Output your response STRICTLY in JSON format as an array of objects. Each object must have the following keys: 'question' (string), 'options' (an array of exactly 4 strings), 'correctAnswer' (string, must exactly match one of the options), and 'explanation' (string, detailing why the answer is correct).
 
@@ -9658,10 +9773,16 @@ app.post("/api/generate-image-quiz", upload.single("image"), async (req, res) =>
       },
     };
 
+    const rawDifficulty = (req.body.difficulty || req.body.difficultyLevel || 'Medium').toString().trim();
+    const difficulty = /easy/i.test(rawDifficulty) ? 'Easy' : (/hard/i.test(rawDifficulty) ? 'Hard' : 'Medium');
+
+    const difficultyDirective = difficulty === 'Easy' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: EASY (FOUNDATIONAL / DIRECT RECALL):\n- Every question must test fundamental textbook facts, core definitions, direct single-step formulas, and foundational concepts.\n- Language should be straightforward, crystal clear, and direct.\n` : difficulty === 'Hard' ? `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: HARD (ADVANCED / COMPETITIVE & ANALYTICAL):\n- Every question must test deep conceptual mastery, multi-step analytical problem solving, and synthesis of multiple related principles.\n` : `\nCRITICAL DIFFICULTY CALIBRATION — LEVEL: MEDIUM (STANDARD CURRICULUM LEVEL):\n- Balanced standard curriculum exam difficulty.\n`;
+
     const requestedCount = Math.min(Math.max(parseInt(count) || 5, 1), 30);
     const gradeDirective = getGradePedagogicalDirective(gradeLevel, stream, country);
 
     const systemInstruction = `${gradeDirective}
+${difficultyDirective}
 
 You are an expert exam creator and visual analyzer. Analyze the textbook page, question sheet, or study material in the provided image. Identify the key academic topics, concepts, or exercises shown on the page. Generate exactly ${requestedCount} multiple choice questions based strictly on the content of that textbook page, calibrated for a student in Grade: ${gradeLevel || 'Standard'}.
     

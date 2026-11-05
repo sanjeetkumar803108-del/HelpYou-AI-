@@ -1734,16 +1734,30 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
                 </button>
               </div>
 
-              {/* Generate New Button */}
-              <div className="pt-4 pb-4">
+              {/* More Questions to Practice Button */}
+              <div className="pt-4 pb-4 space-y-2.5">
                 <button
+                  type="button"
+                  onClick={() => {
+                    triggerVibration(15);
+                    handleGenerate();
+                  }}
+                  disabled={loading}
+                  className="w-full py-4 bg-zinc-950 hover:bg-zinc-800 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span>More Questions to Practice</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => {
                     triggerVibration(10);
                     setQuestions(null);
                   }}
-                  className="w-full py-4 bg-zinc-950 hover:bg-zinc-800 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all active:scale-98"
+                  className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold text-xs rounded-xl transition-all active:scale-98 text-center cursor-pointer"
                 >
-                  Generate Another Set
+                  Pick Different Topic
                 </button>
               </div>
 

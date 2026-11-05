@@ -1170,6 +1170,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
   const [customCountInput, setCustomCountInput] = useState<string>('');
   const [isCustomCount, setIsCustomCount] = useState(false);
   const [topicToGenerate, setTopicToGenerate] = useState<string>('');
+  const lastTestedTopicRef = useRef<string>('');
   const [pendingGeneratorType, setPendingGeneratorType] = useState<'standard' | 'pdf' | 'image' | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   
@@ -1833,6 +1834,7 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
   const handleGenerateReal = async (selectedTopic: string, selectedCount: number, selectedDifficulty: 'Easy' | 'Medium' | 'Hard' = difficulty) => {
     const activeTopic = selectedTopic.trim();
     if (!activeTopic) return;
+    lastTestedTopicRef.current = activeTopic;
 
     // Academic Concept & Chatter Guardrail
     const hierarchy = parseTopicHierarchy(activeTopic);
@@ -2308,6 +2310,28 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
     setSaved(false);
     setCoinsEarned(0);
     setUserAnswers({});
+  };
+
+  const handlePracticeMoreQuiz = () => {
+    triggerVibration(15);
+    const targetTopic = topic || lastTestedTopicRef.current;
+    if (!targetTopic) {
+      restartQuiz();
+      return;
+    }
+
+    // Save all current quiz questions to persistent seen pool so they are strictly excluded
+    if (Array.isArray(quiz) && quiz.length > 0) {
+      try {
+        const stored = JSON.parse(safeGetItem('helpyou_seen_quiz_questions_pool') || '[]');
+        const currentTexts = quiz.map((q: any) => (q.question || '').trim()).filter(Boolean);
+        const combined = Array.from(new Set([...currentTexts, ...(Array.isArray(stored) ? stored : [])])).slice(0, 100);
+        safeSetItem('helpyou_seen_quiz_questions_pool', JSON.stringify(combined));
+      } catch (_) {}
+    }
+
+    const countToUse = quiz.length > 0 ? quiz.length : 10;
+    handleGenerateReal(targetTopic, countToUse, difficulty);
   };
 
   const safeHistory = Array.isArray(history) ? history : [];
@@ -4068,19 +4092,32 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
 
             {/* Buttons stack */}
             <div className="w-full space-y-3">
+              {/* Primary Action: More Questions to Practice */}
               <button
+                type="button"
+                onClick={handlePracticeMoreQuiz}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-800 text-white py-4 rounded-2xl font-black text-sm transition-all active:scale-98 border border-indigo-400/40 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                <span>More Questions to Practice</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleOpenShareModal}
-                className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-98 border border-emerald-500/30 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10"
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3.5 rounded-2xl font-bold text-sm transition-all active:scale-98 border border-emerald-500/30 flex items-center justify-center gap-2 shadow-md shadow-emerald-500/10 cursor-pointer"
               >
                 <Share2 className="w-4 h-4" />
                 <span>Share Performance Card</span>
               </button>
 
               <button
+                type="button"
                 onClick={restartQuiz}
-                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-4 rounded-2xl font-bold text-sm transition-all active:scale-98 border border-indigo-500/30 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/10"
+                className="w-full bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 py-3 rounded-2xl font-bold text-xs transition-all active:scale-98 border border-zinc-200 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5 text-zinc-500" />
                 <span>Try Another Quiz</span>
               </button>
 
@@ -4092,10 +4129,10 @@ Explain: ${isHint ? 'Give guided conceptual clues without revealing the answer.'
                   setReportSnippet(quizSnippet);
                   setReportModalOpen(true);
                 }}
-                className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 shadow-xs flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-xl font-medium text-xs bg-rose-50/70 hover:bg-rose-100 text-rose-700 border border-rose-200/50 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
                 title="Report Inaccurate or Inappropriate Content"
               >
-                <Flag className="w-3.5 h-3.5 text-rose-500" />
+                <Flag className="w-3 h-3 text-rose-500" />
                 <span>Report AI Quiz</span>
               </button>
             </div>

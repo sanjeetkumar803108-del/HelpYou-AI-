@@ -1,5 +1,5 @@
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { safeGetItem, safeSetItem } from './storage';
 import { getApiUrl } from './api';
 
@@ -16,6 +16,12 @@ function slugify(text: string | undefined, fallback: string = 'general'): string
     .replace(/^_+|_+$/g, ''); // trim leading/trailing underscores
   return slug || fallback;
 }
+
+function getSubtopicStorageKey(cleanSubj: string, cleanChap: string): string {
+  const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
+  return uid ? `verified_subtopics_${uid}_${cleanSubj}__${cleanChap}` : `verified_subtopics_${cleanSubj}__${cleanChap}`;
+}
+
 
 const COMMON_NON_ACADEMIC_PATTERNS = [
   /^(thik|theek|sahi|accha|acha|mast|badhiya)\s*(hai|h|he)?(\s*bhai|\s*bro|\s*yaar|\s*sir)?$/i,
@@ -222,7 +228,7 @@ export function getVerifiedChapterSubTopics(subject: string, chapter: string): s
   try {
     const cleanSubj = slugify(subject);
     const cleanChap = slugify(chapter);
-    const storageKey = `verified_subtopics_${cleanSubj}__${cleanChap}`;
+    const storageKey = getSubtopicStorageKey(cleanSubj, cleanChap);
     const raw = safeGetItem(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -246,7 +252,7 @@ export function removeCustomChapterSubTopic(subject: string, chapter: string, su
   if (!subject || !chapter || !subTopic) return;
   const cleanSubj = slugify(subject);
   const cleanChap = slugify(chapter);
-  const storageKey = `verified_subtopics_${cleanSubj}__${cleanChap}`;
+  const storageKey = getSubtopicStorageKey(cleanSubj, cleanChap);
 
   try {
     const current = getVerifiedChapterSubTopics(subject, chapter);
@@ -275,7 +281,7 @@ export function registerVerifiedChapterSubTopic(subject: string, chapter: string
 
   const cleanSubj = slugify(subject);
   const cleanChap = slugify(chapter);
-  const storageKey = `verified_subtopics_${cleanSubj}__${cleanChap}`;
+  const storageKey = getSubtopicStorageKey(cleanSubj, cleanChap);
 
   try {
     const current = getVerifiedChapterSubTopics(subject, chapter);
@@ -284,16 +290,19 @@ export function registerVerifiedChapterSubTopic(subject: string, chapter: string
       const updated = [...current, trimmed];
       safeSetItem(storageKey, JSON.stringify(updated));
 
-      // Asynchronously sync subtopic definition to Cloud Firestore
-      const firestoreKey = `${cleanSubj}__${cleanChap}`;
-      setDoc(doc(db, 'global_curriculum_subtopics', firestoreKey), {
-        subject,
-        chapter,
-        subTopics: updated,
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch((err) => {
-        console.warn('[communityCache] Cloud subtopic sync notice:', err);
-      });
+      // Asynchronously sync subtopic definition strictly to User's private Firestore space
+      const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
+      if (uid) {
+        const firestoreKey = `${cleanSubj}__${cleanChap}`;
+        setDoc(doc(db, `users/${uid}/customSubtopics`, firestoreKey), {
+          subject,
+          chapter,
+          subTopics: updated,
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch((err) => {
+          console.warn('[communityCache] User subtopic sync notice:', err);
+        });
+      }
 
       // Dispatch event to re-render all curriculum accordions across the app
       if (typeof window !== 'undefined') {

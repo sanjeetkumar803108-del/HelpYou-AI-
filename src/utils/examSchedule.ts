@@ -329,11 +329,13 @@ export function resolveCatalogExamSchedule(examName: string, country = ''): Exam
  * Recalculates live days-remaining on every call to guarantee accurate daily countdowns.
  */
 export function getStoredExamSchedule(targetExam?: string, country = '', uid?: string): ExamScheduleData | null {
-  const cleanExam = (targetExam || safeGetItem('target_exam') || safeGetItem('academic_exam') || '').trim();
+  const cleanExam = (targetExam 
+    || (uid ? (safeGetItem(`target_exam_${uid}`) || safeGetItem(`academic_exam_${uid}`)) : null)
+    || (!uid ? (safeGetItem('target_exam') || safeGetItem('academic_exam')) : '')
+    || '').trim();
   if (!cleanExam) return null;
 
-  const userKey = uid ? `_${uid}` : '';
-  const storedJson = safeGetItem(`exam_schedule${userKey}`) || safeGetItem('exam_schedule');
+  const storedJson = uid ? safeGetItem(`exam_schedule_${uid}`) : safeGetItem('exam_schedule');
 
   if (storedJson) {
     try {
@@ -351,7 +353,7 @@ export function getStoredExamSchedule(targetExam?: string, country = '', uid?: s
   }
 
   // Check in exam_overview
-  const overviewJson = safeGetItem(`exam_overview${userKey}`) || safeGetItem('exam_overview');
+  const overviewJson = uid ? safeGetItem(`exam_overview_${uid}`) : safeGetItem('exam_overview');
   if (overviewJson) {
     try {
       const overview = JSON.parse(overviewJson);
@@ -368,16 +370,18 @@ export function getStoredExamSchedule(targetExam?: string, country = '', uid?: s
   }
 
   // Fallback to authoritative catalog
-  const catalogSchedule = resolveCatalogExamSchedule(cleanExam, country || safeGetItem('academic_country') || '');
+  const effectiveCountry = country || (uid ? safeGetItem(`academic_country_${uid}`) : null) || safeGetItem('academic_country') || '';
+  const catalogSchedule = resolveCatalogExamSchedule(cleanExam, effectiveCountry);
   return catalogSchedule;
 }
 
 export function saveExamSchedule(schedule: ExamScheduleData, uid?: string): void {
   try {
     const str = JSON.stringify(schedule);
-    safeSetItem('exam_schedule', str);
     if (uid) {
       safeSetItem(`exam_schedule_${uid}`, str);
+    } else {
+      safeSetItem('exam_schedule', str);
     }
   } catch (_) {}
 }

@@ -228,9 +228,10 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
   useEffect(() => {
     let isMounted = true;
     const conductLiveSyllabusResearch = async () => {
-      const profile = getUserProfileData();
-      const currentBp = getStoredExamBlueprint();
-      const currentTargetExam = profile.targetExam || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
+      const uid = auth.currentUser?.uid || safeGetItem('last_logged_in_user') || '';
+      const profile = getUserProfileData(uid);
+      const currentBp = getStoredExamBlueprint(uid);
+      const currentTargetExam = profile.targetExam || (uid ? (safeGetItem(`academic_exam_${uid}`) || safeGetItem(`target_exam_${uid}`)) : null) || safeGetItem('academic_exam') || safeGetItem('target_exam') || '';
 
       const chosenSubjects: string[] = [];
       if (Array.isArray(profile.subjects) && profile.subjects.length > 0) {
@@ -287,7 +288,7 @@ export default function QuestionGenerator({ onBack, onNavigateToTab }: QuestionG
             const data = await res.json();
             if (data && data.blueprint && typeof data.blueprint === 'object') {
               const updated = { ...(currentBp || {}), ...data.blueprint };
-              saveStoredExamBlueprint(updated);
+              saveStoredExamBlueprint(updated, uid);
               if (isMounted) {
                 setBlueprintRevision(prev => prev + 1);
                 setSyllabusResearchState('completed');

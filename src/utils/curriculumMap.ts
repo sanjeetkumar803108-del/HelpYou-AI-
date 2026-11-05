@@ -827,8 +827,8 @@ export function getScalableRelevantQuizzes(grade: string, track: string, country
 
       const curated = getCuratedUnitsForSubject(cleanTitle);
 
-      // Prefer live-researched coreUnits from blueprint if available and has >= 4 units; otherwise use curated units
-      const topics = (bpMatch && Array.isArray(bpMatch.coreUnits) && bpMatch.coreUnits.length >= 4)
+      // Prefer live-researched coreUnits from blueprint if available and has > 0 units; otherwise use curated units
+      const topics = (bpMatch && Array.isArray(bpMatch.coreUnits) && bpMatch.coreUnits.length > 0)
         ? bpMatch.coreUnits
         : curated.units;
 

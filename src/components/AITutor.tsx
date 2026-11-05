@@ -1,4 +1,4 @@
-import { getProfileContext, getUserProfileData } from "../utils/profile";
+import { getProfileContext, getUserProfileData, appendProfileToFormData } from "../utils/profile";
 import { getStoredExamBlueprint } from "../utils/academicBlueprint";
 import { safeGetItem, safeSetItem } from "../utils/storage";
 import { getUserHistory, saveUserHistory, getCurrentUserIdentifier } from "../utils/userHistory";
@@ -764,7 +764,7 @@ const getDynamicTutorPrompts = () => {
   let blueprint: any = null;
   try {
     if (typeof getStoredExamBlueprint === 'function') {
-      blueprint = getStoredExamBlueprint();
+      blueprint = getStoredExamBlueprint(profile.userId || auth.currentUser?.uid);
     }
   } catch (_) {}
   if (blueprint && typeof blueprint === 'object') {
@@ -1529,10 +1529,7 @@ Please evaluate this answer strictly according to your system rubric.`;
         ? SYSTEM_INSTRUCTION_NURSERY + personaSuffix + scannerRoutingInstructions
         : SYSTEM_INSTRUCTION_TEXT_CHAT + personaSuffix;
       formData.append('customSystemInstruction', baseSystemInstruction);
-      formData.append('profileContext', getProfileContext(currentActiveSubject));
-      formData.append('subject', currentActiveSubject);
-      formData.append('stream', currentActiveSubject);
-      formData.append('gradeLevel', safeGetItem('academic_grade') || '11th Grade (Junior)');
+      appendProfileToFormData(formData, currentActiveSubject);
 
       // Optimize history: Keep last 6 turns and prune distant massive JSON payloads to eliminate latency on long inputs
       const recentMessages = messages.slice(-6);

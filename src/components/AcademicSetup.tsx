@@ -538,6 +538,12 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
       ]
     : verifiedExamSubjects;
 
+  const selectedSubjectTitles = selectedSubjectIds.map(id => {
+    if (id === 'Other') return (customSubject || '').trim() || 'Other Subjects';
+    const match = [...verifiedExamSubjects, ...DEFAULT_SUBJECTS].find(s => s.id === id);
+    return match?.title || id;
+  });
+
   const handleFinish = async () => {
     triggerVibration(25);
     
@@ -582,19 +588,22 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
     // Start 11-Stage Comprehensive Deep Research
     setIsDeepResearching(true);
     setResearchStage(1);
-    setResearchMessage(`Verifying official conducting authority & jurisdiction for ${finalExam}...`);
+    setResearchMessage(`Verifying official conducting authority & jurisdiction for ${finalExam} in ${finalCountry}...`);
 
     const stageTimers: NodeJS.Timeout[] = [];
+    const primarySubj = finalSubjectsList[0] || 'primary subject';
+    const totalSubjs = finalSubjectsList.length;
+
     const researchSchedule = [
-      { stage: 2, delay: 650, msg: `Accessing official curriculum repository for Grade ${selectedGrade}...` },
-      { stage: 3, delay: 1350, msg: `Analyzing official paper structure, question formats & test mode...` },
-      { stage: 4, delay: 2150, msg: `Curating authentic chapters for ${finalSubjectsList[0] || 'primary subject'}...` },
-      { stage: 5, delay: 3000, msg: `Deep-indexing micro-topics & concept hierarchy for ${finalSubjectsList[0] || 'primary subject'}...` },
-      { stage: 6, delay: 4000, msg: `Extracting authentic chapters across all ${finalSubjectsList.length} chosen subjects...` },
-      { stage: 7, delay: 5100, msg: `Cataloging micro-subtopics & concept hierarchy across all subjects...` },
-      { stage: 8, delay: 6300, msg: `Formulating exact scoring scheme, weightage & negative marking rules...` },
-      { stage: 9, delay: 7600, msg: `Researching official testing window, upcoming exam dates & countdown...` },
-      { stage: 10, delay: 9000, msg: `Enforcing zero generic fillers; verifying authentic textbook chapter names...` }
+      { stage: 2, delay: 900, msg: `Establishing live bridge to official educational board syllabus repository...` },
+      { stage: 3, delay: 2000, msg: `Analyzing real exam classification, paper mode (CBT / Written / OMR) & total marks...` },
+      { stage: 4, delay: 3500, msg: `Extracting authentic official chapters & units for ${primarySubj}...` },
+      { stage: 5, delay: 5200, msg: `Deep-indexing official micro-subtopics & concept hierarchy for ${primarySubj}...` },
+      { stage: 6, delay: 7200, msg: `Extracting authentic official chapters & units for all ${totalSubjs} chosen subjects...` },
+      { stage: 7, delay: 9500, msg: `Deep-indexing micro-subtopics & concept hierarchy across all selected subjects...` },
+      { stage: 8, delay: 12000, msg: `Auditing official negative marking rules & marks-per-question formulas...` },
+      { stage: 9, delay: 14800, msg: `Verifying upcoming official exam cycle dates, start schedule & countdown clock...` },
+      { stage: 10, delay: 17800, msg: `Cross-checking for zero generic placeholders (guaranteeing 100% real textbook chapter names)...` }
     ];
 
     researchSchedule.forEach(({ stage, delay, msg }) => {
@@ -1376,17 +1385,17 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
               {/* 11 Progress Stages Checklist (Scrollable on Mobile) */}
               <div className="space-y-1.5 mb-2.5 flex-1 min-h-0 overflow-y-auto max-h-[210px] pr-1 scrollbar-thin">
                 {[
-                  { num: 1, label: '1. Official Authority & Jurisdiction', desc: `Handshake with official authority for ${targetExam}` },
-                  { num: 2, label: '2. Official Syllabus Repository', desc: 'Connecting to accredited board syllabus standards' },
-                  { num: 3, label: '3. Exam Format & Paper Structure', desc: 'Analyzing CBT/OMR modes, duration & total marks' },
-                  { num: 4, label: '4. Primary Subject Curriculum', desc: `Extracting authentic chapters for ${selectedSubjects[0] || 'primary subject'}` },
-                  { num: 5, label: '5. Deep-Index Concept Hierarchy', desc: `Mapping core units & sub-topics for ${selectedSubjects[0] || 'primary subject'}` },
-                  { num: 6, label: '6. Extract All Chosen Subjects', desc: `Curating syllabus for all ${selectedSubjects.length} selected subjects` },
-                  { num: 7, label: '7. Micro-Topics & Subtopics Index', desc: 'Cataloging micro-concept breakdown and textbook alignments' },
-                  { num: 8, label: '8. Scoring Scheme & Penalties', desc: 'Formulating exact marks-per-question & negative rules' },
-                  { num: 9, label: '9. Official Examination Schedule', desc: 'Resolving official start dates, cycle & countdown' },
-                  { num: 10, label: '10. Zero-Generic Verification', desc: 'Verifying authentic textbook chapter names; zero placeholders' },
-                  { num: 11, label: '11. Lock Permanent Academic DNA', desc: 'Permanently secured to your personal student workspace' }
+                  { num: 1, label: '1. Official Authority & Jurisdiction', desc: `Handshake with official conducting authority for ${targetExam || officialExamTitle || 'your exam'}` },
+                  { num: 2, label: '2. Official Syllabus Repository', desc: 'Establishing live bridge to official educational board syllabus repository' },
+                  { num: 3, label: '3. Exam Format & Paper Structure', desc: 'Analyzing real exam classification, paper mode (CBT / Written / OMR) & total marks' },
+                  { num: 4, label: '4. Primary Subject Curriculum', desc: `Extracting authentic official chapters & units for ${selectedSubjectTitles[0] || 'primary subject'}` },
+                  { num: 5, label: '5. Deep-Index Concept Hierarchy', desc: `Deep-indexing official micro-subtopics & concept hierarchy for ${selectedSubjectTitles[0] || 'primary subject'}` },
+                  { num: 6, label: '6. Extract All Chosen Subjects', desc: `Extracting authentic official chapters & units for all ${selectedSubjectTitles.length} chosen subjects` },
+                  { num: 7, label: '7. Micro-Topics & Subtopics Index', desc: 'Deep-indexing micro-subtopics & concept hierarchy across all selected subjects' },
+                  { num: 8, label: '8. Scoring Scheme & Penalties', desc: 'Auditing official negative marking rules & marks-per-question formulas' },
+                  { num: 9, label: '9. Official Examination Schedule', desc: 'Verifying upcoming official exam cycle dates, start schedule & countdown clock' },
+                  { num: 10, label: '10. Zero-Generic Verification', desc: 'Cross-checking for zero generic placeholders (guaranteeing 100% real textbook chapter names)' },
+                  { num: 11, label: '11. Lock Permanent Academic DNA', desc: 'Encrypting & permanently binding the isolated Academic Syllabus DNA to user profile' }
                 ].map((st) => {
                   const isDone = researchStage > st.num || (researchStage === 11 && st.num === 11);
                   const isCurrent = researchStage === st.num && researchStage < 11;

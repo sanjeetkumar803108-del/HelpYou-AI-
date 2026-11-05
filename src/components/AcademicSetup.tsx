@@ -368,51 +368,9 @@ export default function AcademicSetup({ userId, onComplete, onCancel }: Academic
         ? ((customCountry || '').trim() || 'India') 
         : countryObj.name;
 
-      // 0. FAST-PATH: Instant sub-millisecond check for recognized national & global exams (100% offline & network-proof for APK)
-      const preVerified = findPreVerifiedExam(trimmed, finalCountry);
-      if (preVerified) {
-        const officialName = preVerified.officialExamName || trimmed;
-        const shortName = preVerified.shortName || (trimmed.length <= 15 ? trimmed : officialName);
-        setOfficialExamTitle(officialName);
-        setTargetExam(shortName);
-
-        if (Array.isArray(preVerified.subjects) && preVerified.subjects.length > 0) {
-          const mapped = preVerified.subjects.map((s, idx) => ({
-            id: s.id || s.title,
-            title: s.title || s.id,
-            subtitle: s.subtitle || 'Official Exam Syllabus Topic',
-            icon: s.icon || '📚',
-            color: SUBJECT_COLORS[idx % SUBJECT_COLORS.length]
-          }));
-          setVerifiedExamSubjects(mapped);
-          safeSetItem(`cached_exam_subjects_${userId}`, JSON.stringify(mapped));
-          const hasElectivesBool = Boolean(preVerified.hasElectives);
-          setExamHasElectives(hasElectivesBool);
-          safeSetItem(`cached_exam_has_electives_${userId}`, String(hasElectivesBool));
-          setSelectedSubjectIds(mapped.map(m => m.id));
-        }
-        if (Array.isArray(preVerified.grades) && preVerified.grades.length > 0) {
-          const mappedGrades = preVerified.grades.map(g => ({
-            id: g.id || g.label,
-            label: g.label || g.id,
-            desc: g.desc || 'Exam preparation grade level',
-            isCollege: Boolean(g.isCollege)
-          }));
-          setVerifiedExamGrades(mappedGrades);
-          safeSetItem(`cached_exam_grades_${userId}`, JSON.stringify(mappedGrades));
-          safeSetItem('cached_exam_grades', JSON.stringify(mappedGrades));
-          if (!mappedGrades.some(g => g.id === selectedGrade)) {
-            setSelectedGrade(mappedGrades[0].id);
-          }
-        }
-        setIsVerifyingExam(false);
-        setStep(3);
-        return;
-      }
-
       try {
         const abortController = new AbortController();
-        const timeoutId = setTimeout(() => abortController.abort(), 25000);
+        const timeoutId = setTimeout(() => abortController.abort(), 35000);
         const res = await fetch(getApiUrl('/api/verify-and-research-exam'), {
           signal: abortController.signal,
           method: 'POST',

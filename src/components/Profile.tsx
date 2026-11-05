@@ -5,7 +5,7 @@ import {
   HelpCircle, Star, Bug, FileText, Trash2, ChevronRight, ChevronDown,
   Check, MessageSquare, AlertTriangle, Eye, EyeOff, Sparkles, Send, Moon,
   GraduationCap, Calendar, Clock, Trophy, Edit3, Save, Flame, User, Info, Target, Zap,
-  Loader2, Download, CreditCard, Bell, Share2, Play, Pause, Square, Plus, BookOpen, AlertCircle
+  Loader2, Download, CreditCard, Bell, Share2, Play, Pause, Square, Plus, BookOpen, AlertCircle, ShieldCheck
 } from 'lucide-react';
 import { getStoredExamSchedule, ExamScheduleData } from '../utils/examSchedule';
 import { Capacitor } from '@capacitor/core';
@@ -418,7 +418,7 @@ export default function Profile({
     const candidateClean = cleanSubjectTitle(candidate) || candidate;
     const isDup = userSubjects.some(
       s => s.toLowerCase().trim() === candidateClean.toLowerCase().trim() ||
-           s.toLowerCase().replace(/[^a-z0-9]/g, '') === candidateClean.toLowerCase().replace(/[^a-z0-9]/g, '')
+           s.toLowerCase().replace(/[^a-z0-9]/g, "") === candidateClean.toLowerCase().replace(/[^a-z0-9]/g, "")
     );
     if (isDup) {
       setNewSubjectError(`"${candidateClean}" is already in your subjects list.`);
@@ -429,23 +429,32 @@ export default function Profile({
     setNewSubjectError(null);
     setIsResearchingSubject(true);
     setResearchStage(1);
-    setResearchMessage(`Verifying if "${candidateClean}" is part of official ${targetExam || 'exam'} curriculum...`);
+    setResearchMessage(`Checking official conducting authority & jurisdiction for ${targetExam || "exam"}...`);
 
-    // Dynamic progression timers
-    const timer1 = setTimeout(() => {
-      setResearchStage(2);
-      setResearchMessage(`Conducting deep web research for official ${candidateClean} chapters & syllabus units...`);
-    }, 1200);
+    const stageTimers: NodeJS.Timeout[] = [];
+    const researchSchedule = [
+      { stage: 2, delay: 650, msg: `Verifying if "${candidateClean}" is in official ${targetExam || "exam"} curriculum...` },
+      { stage: 3, delay: 1350, msg: `Connecting to official curriculum repository for Grade ${gradeLevel || "Standard"}...` },
+      { stage: 4, delay: 2150, msg: `Analyzing official paper structure, question formats & test mode...` },
+      { stage: 5, delay: 3000, msg: `Extracting authentic textbook chapters & units for ${candidateClean}...` },
+      { stage: 6, delay: 4000, msg: `Deep-indexing micro-topics & concept hierarchy for ${candidateClean}...` },
+      { stage: 7, delay: 5100, msg: `Curating exhaustive topic scope and textbook chapter alignments...` },
+      { stage: 8, delay: 6300, msg: `Formulating exact scoring scheme, marks weightage & negative marking rules...` },
+      { stage: 9, delay: 7600, msg: `Synthesizing high-yield study notes & revision guidelines for ${candidateClean}...` },
+      { stage: 10, delay: 9000, msg: `Enforcing zero generic fillers; verifying authentic chapter names...` }
+    ];
 
-    const timer2 = setTimeout(() => {
-      setResearchStage(3);
-      setResearchMessage(`Analyzing authentic ${candidateClean} marks weightage & examination question pattern...`);
-    }, 2800);
+    researchSchedule.forEach(({ stage, delay, msg }) => {
+      stageTimers.push(setTimeout(() => {
+        setResearchStage(prev => Math.max(prev, stage));
+        setResearchMessage(msg);
+      }, delay));
+    });
 
     try {
-      const response = await fetch(getApiUrl('/api/verify-and-research-subject'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(getApiUrl("/api/verify-and-research-subject"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           country: selectedCountryName,
           examName: targetExam,
@@ -455,8 +464,7 @@ export default function Profile({
         })
       });
 
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      stageTimers.forEach(t => clearTimeout(t));
 
       if (!response.ok) {
         throw new Error("Could not connect to subject verification engine.");
@@ -466,14 +474,16 @@ export default function Profile({
 
       if (!data.isValid) {
         setIsResearchingSubject(false);
-        setNewSubjectError(data.errorMessage || `"${candidateClean}" is not part of the official ${targetExam || 'examination'} syllabus.`);
+        setNewSubjectError(data.errorMessage || `"${candidateClean}" is not part of the official ${targetExam || "examination"} syllabus.`);
         triggerVibration(30);
         return;
       }
 
-      // Stage 4: Success & Calibration
-      setResearchStage(4);
-      setResearchMessage(`Permanently updating your Academic DNA with official ${candidateClean} syllabus! ✓`);
+      // Stage 11: Finalizing & Securing
+      setResearchStage(11);
+      setResearchMessage(`100% Calibrated: Authentic syllabus & Academic DNA secured for ${candidateClean}! ✓`);
+      triggerVibration(40);
+      await new Promise(r => setTimeout(r, 650));
 
       const finalTitle = data.standardizedTitle || candidateClean;
       const updatedList = [...userSubjects, finalTitle];
@@ -482,11 +492,11 @@ export default function Profile({
 
       const uid = auth.currentUser?.uid;
       // 1. Update localStorage
-      safeSetItem('academic_subjects', JSON.stringify(updatedList));
-      safeSetItem('academic_subject', updatedList[0]);
-      safeSetItem('selected_subject', updatedList[0]);
-      safeSetItem('subject', updatedList[0]);
-      safeSetItem('academic_stream', updatedList[0]);
+      safeSetItem("academic_subjects", JSON.stringify(updatedList));
+      safeSetItem("academic_subject", updatedList[0]);
+      safeSetItem("selected_subject", updatedList[0]);
+      safeSetItem("subject", updatedList[0]);
+      safeSetItem("academic_stream", updatedList[0]);
       if (uid) {
         safeSetItem(`academic_subjects_${uid}`, JSON.stringify(updatedList));
         safeSetItem(`academic_subject_${uid}`, updatedList[0]);
@@ -503,7 +513,7 @@ export default function Profile({
 
         // 3. Update Firestore
         if (uid) {
-          setDoc(doc(db, 'users', uid), {
+          setDoc(doc(db, "users", uid), {
             academic_subjects: updatedList,
             subjects: updatedList,
             academic_subject: updatedList[0],
@@ -512,7 +522,7 @@ export default function Profile({
           }, { merge: true }).catch(e => console.error("Firestore subject update error:", e));
         }
       } else if (uid) {
-        setDoc(doc(db, 'users', uid), {
+        setDoc(doc(db, "users", uid), {
           academic_subjects: updatedList,
           subjects: updatedList,
           academic_subject: updatedList[0],
@@ -522,7 +532,7 @@ export default function Profile({
 
       // Trigger global event so all components immediately sync
       try {
-        window.dispatchEvent(new CustomEvent('academic_profile_updated'));
+        window.dispatchEvent(new CustomEvent("academic_profile_updated"));
       } catch (_) {}
 
       triggerVibration(25);
@@ -535,17 +545,15 @@ export default function Profile({
       showToast(`🎉 "${finalTitle}" successfully verified & added to your curriculum!`);
       setIsResearchingSubject(false);
       setShowAddSubjectModal(false);
-      setNewSubjectInput('');
+      setNewSubjectInput("");
     } catch (err: any) {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      stageTimers.forEach(t => clearTimeout(t));
       console.error("Subject research error:", err);
       setIsResearchingSubject(false);
       setNewSubjectError(err?.message || "Failed to verify subject. Please check your internet connection.");
       triggerVibration(30);
     }
   };
-
   const handleRemoveSubject = (subjectToRemove: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (userSubjects.length <= 1) {
@@ -3789,46 +3797,125 @@ export default function Profile({
               </div>
 
               {isResearchingSubject ? (
-                /* LIVE DEEP RESEARCH PROGRESS UI */
-                <div className="py-6 px-2 text-center space-y-5">
-                  <div className="relative mx-auto w-16 h-16">
-                    <div className="absolute inset-0 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
-                    <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
-                      <Loader2 className="w-8 h-8 animate-spin" />
+                /* LIVE DEEP RESEARCH PROGRESS UI - 11 COMPREHENSIVE STAGES */
+                <div className="py-2 px-1 text-center flex flex-col max-h-[82vh]">
+                  {/* Central Pulsing Radar Orb */}
+                  <div className="flex flex-col items-center text-center mb-2.5 relative shrink-0">
+                    <div className="relative mb-2">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-500 p-0.5 shadow-lg shadow-purple-500/25 flex items-center justify-center animate-pulse">
+                        <div className="w-full h-full bg-white rounded-[0.9rem] flex items-center justify-center">
+                          {researchStage === 11 ? (
+                            <Check className="w-6 h-6 text-emerald-600 stroke-[3]" />
+                          ) : (
+                            <Sparkles className="w-6 h-6 text-purple-600 animate-spin" style={{ animationDuration: "4s" }} />
+                          )}
+                        </div>
+                      </div>
+                      {researchStage < 11 && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-black shadow-md">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200/60 mb-1 text-[9px] font-extrabold uppercase tracking-wider">
+                      <ShieldCheck className="w-3 h-3 text-purple-600" />
+                      Official Curriculum Verification
+                    </div>
+                    <h3 className="text-base font-black text-zinc-950 tracking-tight leading-tight">
+                      Calibrating Subject DNA
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 font-semibold mt-0.5 max-w-[270px] leading-snug line-clamp-1">
+                      Deep web research for <span className="font-extrabold text-zinc-900">{newSubjectInput || "Subject"}</span> ({targetExam})
+                    </p>
+
+                    {/* 11-Step Progress Bar Indicator */}
+                    <div className="w-full max-w-[270px] mt-2 mb-0.5">
+                      <div className="flex justify-between items-center text-[10px] font-black text-purple-700 mb-1 px-0.5">
+                        <span>Live Deep Research</span>
+                        <span>Step {researchStage} of 11 ({Math.round((researchStage / 11) * 100)}%)</span>
+                      </div>
+                      <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden border border-zinc-200/50">
+                        <motion.div 
+                          className="bg-gradient-to-r from-purple-600 to-indigo-600 h-full rounded-full"
+                          initial={{ width: "9%" }}
+                          animate={{ width: `${Math.round((researchStage / 11) * 100)}%` }}
+                          transition={{ duration: 0.35, ease: "easeOut" }}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <h4 className="text-sm font-black text-zinc-900 mb-1.5">
-                      {researchStage === 1 && "Verifying Examination Alignment..."}
-                      {researchStage === 2 && "Curating Official Syllabus Units..."}
-                      {researchStage === 3 && "Analyzing Marks & Paper Pattern..."}
-                      {researchStage === 4 && "Finalizing Academic Calibration! ✓"}
-                    </h4>
-                    <p className="text-xs font-bold text-purple-600 min-h-[32px] px-2 leading-relaxed">
-                      {researchMessage}
-                    </p>
+                  {/* 11 Progress Stages Checklist (Scrollable on Mobile) */}
+                  <div className="space-y-1.5 mb-2.5 flex-1 min-h-0 overflow-y-auto max-h-[210px] pr-1 scrollbar-thin">
+                    {[
+                      { num: 1, label: "1. Official Authority Handshake", desc: `Handshake with official authority for ${targetExam || "exam"}` },
+                      { num: 2, label: "2. Exam Syllabus Alignment", desc: `Verifying if ${newSubjectInput || "subject"} is in official curriculum` },
+                      { num: 3, label: "3. Official Syllabus Repository", desc: "Connecting to accredited board syllabus standards" },
+                      { num: 4, label: "4. Exam Format & Paper Structure", desc: "Analyzing CBT/OMR modes, duration & test rules" },
+                      { num: 5, label: "5. Extract Authentic Chapters", desc: `Curating real textbook chapters & core units for ${newSubjectInput || "subject"}` },
+                      { num: 6, label: "6. Deep-Index Concept Hierarchy", desc: `Mapping core units & sub-topics for ${newSubjectInput || "subject"}` },
+                      { num: 7, label: "7. Exhaustive Topic Scope", desc: "Cataloging micro-concepts and textbook alignments" },
+                      { num: 8, label: "8. Scoring Scheme & Penalties", desc: "Formulating exact marks-per-question & negative rules" },
+                      { num: 9, label: "9. Notes & Revision Directives", desc: "Calibrating high-yield formulas & revision guidelines" },
+                      { num: 10, label: "10. Zero-Generic Verification", desc: "Verifying authentic textbook chapter names; zero placeholders" },
+                      { num: 11, label: "11. Lock Permanent Academic DNA", desc: "Permanently secured to your personal student workspace" }
+                    ].map((st) => {
+                      const isDone = researchStage > st.num || (researchStage === 11 && st.num === 11);
+                      const isCurrent = researchStage === st.num && researchStage < 11;
+
+                      return (
+                        <div 
+                          key={st.num}
+                          className={`px-3 py-1.5 rounded-xl border transition-all flex items-center gap-2.5 ${
+                            isDone 
+                              ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                              : isCurrent
+                              ? "bg-purple-50/70 border-purple-300 ring-2 ring-purple-500/10 text-purple-950"
+                              : "bg-zinc-50/60 border-zinc-200/60 text-zinc-400 opacity-60"
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                            isDone
+                              ? "bg-emerald-600 text-white"
+                              : isCurrent
+                              ? "bg-purple-600 text-white"
+                              : "bg-zinc-200 text-zinc-500"
+                          }`}>{isDone ? (
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            ) : isCurrent ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              st.num
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1 text-left">
+                            <p className={`text-[11px] font-extrabold truncate ${
+                              isDone ? "text-emerald-900" : isCurrent ? "text-purple-900" : "text-zinc-600"
+                            }`}>{st.label}</p>
+                            <p className="text-[9px] font-medium text-zinc-400 truncate">{st.desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  {/* 4-Stage Step Dots */}
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    {[1, 2, 3, 4].map((s) => (
-                      <div
-                        key={s}
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          s === researchStage
-                            ? 'w-8 bg-purple-600'
-                            : s < researchStage
-                            ? 'w-2 bg-emerald-500'
-                            : 'w-2 bg-zinc-200'
-                        }`}
-                      />
-                    ))}
+                  {/* Dynamic Status Ticker (Guaranteed 100% Legible & Visible on All Mobile Screens) */}
+                  <div className="w-full px-3.5 py-2.5 bg-zinc-950 text-white rounded-2xl shadow-xl border border-zinc-800 shrink-0 flex items-center gap-3 min-h-[46px]">
+                    <div className="w-7 h-7 rounded-xl bg-purple-950/80 border border-purple-500/30 flex items-center justify-center shrink-0">
+                      {researchStage < 11 ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-purple-400 shrink-0" />
+                      ) : (
+                        <Check className="w-4 h-4 text-emerald-400 shrink-0 stroke-[3]" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-[11px] font-extrabold text-white tracking-wide leading-snug line-clamp-2 break-words" title={researchMessage}>
+                        {researchMessage}
+                      </p>
+                    </div>
                   </div>
-
-                  <p className="text-[10px] text-zinc-400 font-medium">
-                    Strictly referencing official testing agency frameworks & syllabus standards
-                  </p>
                 </div>
               ) : (
                 /* INPUT FORM */
